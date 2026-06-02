@@ -1,5 +1,5 @@
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import { LayoutGrid, Phone, Settings as SettingsIcon, BarChart3, BookOpen, Users } from 'lucide-react'
+import { LayoutGrid, Phone, Settings as SettingsIcon, BarChart3, BookOpen, Users, Rocket } from 'lucide-react'
 
 // One shared tab bar for the entire Reseller portal. Every agency page renders
 // it so the tabs are always present and consistent - previously each page had
@@ -8,6 +8,7 @@ import { LayoutGrid, Phone, Settings as SettingsIcon, BarChart3, BookOpen, Users
 // URL-driven (?tab=) so they can be linked to from any agency route.
 const TABS = [
   { key: 'overview', label: 'Overview', icon: LayoutGrid, to: '/agency' },
+  { key: 'saas-mode', label: 'SaaS Mode', icon: Rocket, to: '/agency/saas-mode' },
   { key: 'phone', label: 'Phone Numbers', icon: Phone, to: '/agency?tab=phone' },
   { key: 'settings', label: 'Settings', icon: SettingsIcon, to: '/agency?tab=settings' },
   { key: 'analytics', label: 'Analytics', icon: BarChart3, to: '/agency/analytics' },
@@ -21,7 +22,8 @@ export default function AgencyTabs() {
 
   // Active tab: a dedicated sub-route wins; otherwise the ?tab on /agency.
   const active =
-    pathname.startsWith('/agency/analytics') ? 'analytics'
+    pathname.startsWith('/agency/saas-mode') ? 'saas-mode'
+    : pathname.startsWith('/agency/analytics') ? 'analytics'
     : pathname.startsWith('/agency/knowledge-base') ? 'knowledge-base'
     : pathname.startsWith('/agency/team') ? 'team'
     : params.get('tab') || 'overview'

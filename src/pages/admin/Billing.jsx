@@ -7,6 +7,15 @@ import { StatCard, Table, Badge, money, stop } from '../../components/admin/ui'
 
 const MRR_PER_ACTIVE = PRICING.directPractice // $997/mo per active practice
 
+// Deep-link to a customer in the Chargebee dashboard. Needs the site name
+// (VITE_CHARGEBEE_SITE); falls back to the Chargebee login if it isn't set.
+const CHARGEBEE_SITE = import.meta.env.VITE_CHARGEBEE_SITE || ''
+function chargebeeCustomerUrl(customerId) {
+  if (!CHARGEBEE_SITE) return 'https://app.chargebee.com'
+  const base = `https://${CHARGEBEE_SITE}.chargebee.com`
+  return customerId ? `${base}/d/customers/${customerId}` : base
+}
+
 export default function AdminBilling() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -17,7 +26,7 @@ export default function AdminBilling() {
     setLoading(true)
     const { data } = await supabase
       .from('practices')
-      .select('id, name, subscription_status, next_billing_date, trial_ends_at, ls_customer_id, agency:agency_accounts(name)')
+      .select('id, name, subscription_status, next_billing_date, trial_ends_at, chargebee_customer_id, agency:agency_accounts(name)')
       .order('name')
     setRows(data || [])
     setLoading(false)
@@ -105,10 +114,10 @@ export default function AdminBilling() {
         </button>
         <button onClick={() => extendTrial(r, 14)} disabled={busy} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-slate-300 transition hover:bg-surface-700" title="Extend trial 14 days">+14</button>
         <a
-          href={r.ls_customer_id ? `https://app.lemonsqueezy.com/customers/${r.ls_customer_id}` : 'https://app.lemonsqueezy.com'}
+          href={chargebeeCustomerUrl(r.chargebee_customer_id)}
           target="_blank" rel="noopener noreferrer"
-          className={`rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs transition hover:bg-surface-700 ${r.ls_customer_id ? 'text-slate-300' : 'text-slate-600'}`}
-          title="View in Lemon Squeezy"
+          className={`rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs transition hover:bg-surface-700 ${r.chargebee_customer_id ? 'text-slate-300' : 'text-slate-600'}`}
+          title="View in Chargebee"
         >
           <ExternalLink className="h-3.5 w-3.5" />
         </a>

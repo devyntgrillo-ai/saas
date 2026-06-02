@@ -75,23 +75,22 @@ create policy "audit_logs_select_own_practice" on public.audit_logs
 
 
 -- ════════════════════════════════════════════════════════════════════════
--- >>> migrations/20260529010000_billing_columns.sql
+-- >>> migrations/20260602010000_chargebee_billing_columns.sql
 -- ════════════════════════════════════════════════════════════════════════
 -- ============================================================================
--- Billing columns on practices (Lemon Squeezy). Idempotent.
+-- Billing columns on practices (Chargebee). Idempotent.
 -- Run in the Supabase SQL editor (project eymgqjeudrmeofytnwgs).
 -- ============================================================================
-alter table public.practices add column if not exists subscription_status text default 'trial';
-alter table public.practices add column if not exists ls_subscription_id   text;
-alter table public.practices add column if not exists ls_customer_id       text;
-alter table public.practices add column if not exists ls_variant_id        text;
-alter table public.practices add column if not exists trial_ends_at        timestamptz;
-alter table public.practices add column if not exists current_period_end   timestamptz;
--- next_billing_date is already written by ls-webhook; keep it for back-compat.
-alter table public.practices add column if not exists next_billing_date    date;
+alter table public.practices add column if not exists subscription_status      text default 'trial';
+alter table public.practices add column if not exists chargebee_customer_id     text;
+alter table public.practices add column if not exists chargebee_subscription_id text;
+alter table public.practices add column if not exists trial_ends_at             timestamptz;
+alter table public.practices add column if not exists current_period_end        timestamptz;
+-- next_billing_date is written by chargebee-webhook for display.
+alter table public.practices add column if not exists next_billing_date         date;
 
-create index if not exists idx_practices_ls_subscription on public.practices(ls_subscription_id);
-create index if not exists idx_practices_ls_customer     on public.practices(ls_customer_id);
+create index if not exists idx_practices_chargebee_customer     on public.practices(chargebee_customer_id);
+create index if not exists idx_practices_chargebee_subscription on public.practices(chargebee_subscription_id);
 
 
 -- ════════════════════════════════════════════════════════════════════════

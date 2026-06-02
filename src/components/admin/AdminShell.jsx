@@ -10,9 +10,11 @@ import { AdminProvider, useAdmin } from '../../context/AdminContext'
 const TABS = [
   { to: '/admin', label: 'Overview', end: true },
   { to: '/admin/agencies', label: 'Resellers' },
+  { to: '/admin/resellers', label: 'SaaS' },
   { to: '/admin/practices', label: 'Practices' },
   { to: '/admin/revenue', label: 'Revenue' },
   { to: '/admin/billing', label: 'Billing' },
+  { to: '/admin/referrals', label: 'Referrals' },
 ]
 
 // Breadcrumb segments are derived from the path; detail pages can override the

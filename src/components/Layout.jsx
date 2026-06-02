@@ -69,6 +69,10 @@ export default function Layout() {
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
   const showPaywall = Boolean(practiceId) && needsPaywall(practice)
+  // Reseller wholesale billing failed → their account is suspended, so their
+  // client subaccounts show a "service paused" banner until the reseller pays.
+  const resellerSuspended =
+    Boolean(practiceId) && (practice?.agency?.status === 'suspended' || practice?.agency?.active === false)
   // Full-bleed pages own the entire content area (no padding/max-width/scroll)
   // so they can manage their own internal scrolling - e.g. the chat view.
   const fullBleed = location.pathname === '/conversations'
@@ -193,6 +197,22 @@ export default function Layout() {
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* Service paused - the reseller behind this practice is past due on
+            their Hope AI wholesale bill, so their subaccounts are paused. */}
+        {resellerSuspended && (
+          <div
+            className={`flex flex-wrap items-center gap-2 border-b px-4 py-2.5 text-sm ${
+              isLight ? 'border-rose-200 bg-rose-50 text-rose-900' : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+            }`}
+          >
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>
+              Service is temporarily paused. Please contact{' '}
+              <span className="font-semibold">{practice?.agency?.company_name || practice?.agency?.name || 'your provider'}</span> to restore access.
+            </span>
+          </div>
+        )}
+
         {/* Soft paywall - trial ended / subscription not active. Access is not
             blocked yet; this is a persistent upgrade nudge. */}
         {showPaywall && (

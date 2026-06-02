@@ -1,34 +1,24 @@
 // ============================================================================
-// create-checkout - start a Lemon Squeezy checkout for a practice's Hope AI
-// subscription.
+// create-checkout - start a Chargebee hosted-page checkout for a practice's
+// Hope AI subscription.
 //
 // Flow:
-//   0. Guard: if LEMONSQUEEZY_API_KEY is missing, return a clean 503 immediately
-//      (never touch the LS API).
+//   0. Guard: if Chargebee isn't configured (CHARGEBEE_SITE / CHARGEBEE_API_KEY
+//      / CHARGEBEE_PLAN_ID missing) return a clean 503 immediately.
 //   1. Authenticate the caller (JWT) and resolve them to a practice (RLS).
-//   2. Create a Lemon Squeezy hosted checkout for the Hope AI variant via the
-//      REST API directly (no SDK - avoids import/init failures in Deno), tagging
-//      it with custom.practice_id so `ls-webhook` can map the subscription back.
-//   3. Return the hosted checkout URL + whether it's a test-mode checkout.
-//
-// Test vs live mode is determined entirely by the API key: a Lemon Squeezy
-// test-mode key only sees test-mode data and produces test-mode checkouts (no
-// per-request flag needed). Note that variant IDs differ between test and live
-// mode, so the variant must match the key's mode.
+//   2. Create or reuse a Chargebee customer for the practice.
+//   3. Persist chargebee_customer_id on the practice (service-role) so the
+//      webhook can map events back to it.
+//   4. Create a hosted-page checkout for the Hope AI plan and return its URL.
 //
 // Secrets (server-side only):
-//   LEMONSQUEEZY_API_KEY     - required. Test-mode key while the account is in review.
-//   LEMONSQUEEZY_STORE_ID    - optional. Falls back to the Hope AI store id below.
-//   LEMONSQUEEZY_VARIANT_ID  - optional. Falls back to the id below; set this to the
-//                              TEST-mode variant id while using a test-mode key.
+//   CHARGEBEE_SITE     - required. Chargebee site name, e.g. "hopeai".
+//   CHARGEBEE_API_KEY  - required. API key from the Chargebee dashboard.
+//   CHARGEBEE_PLAN_ID  - required. Plan id for the Hope AI subscription.
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
-
-// Hope AI store + plan in Lemon Squeezy. Overridable via secrets so test/live
-// switching is a config change, not a code change.
-const STORE_ID = Deno.env.get("LEMONSQUEEZY_STORE_ID")?.trim() || "390825";
-const VARIANT_ID = Deno.env.get("LEMONSQUEEZY_VARIANT_ID")?.trim() || "1718899";
+import { chargebeeConfig, chargebeeRequest } from "../_shared/chargebee.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,25 +32,30 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+// Best-effort split of a practice's contact name into first/last for Chargebee.
+function splitName(practice: { doctor_first?: string; doctor_last?: string; name?: string }): {
+  first_name: string;
+  last_name: string;
+} {
+  if (practice.doctor_first || practice.doctor_last) {
+    return { first_name: practice.doctor_first ?? "", last_name: practice.doctor_last ?? "" };
+  }
+  const parts = (practice.name ?? "").trim().split(/\s+/);
+  return { first_name: parts[0] ?? "", last_name: parts.slice(1).join(" ") };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
-  // Guard FIRST - no key means billing isn't configured. Clean 503, no crash.
-  // .trim() defends against a trailing newline/space in the stored secret, which
-  // is a common cause of a 401 from LS even though the key looks correct.
-  const apiKey = Deno.env.get("LEMONSQUEEZY_API_KEY")?.trim();
-  if (!apiKey) {
-    return json({ error: "Billing isn't configured yet (LEMONSQUEEZY_API_KEY is not set)." }, 503);
+  const cfg = chargebeeConfig();
+  const planId = Deno.env.get("CHARGEBEE_PLAN_ID")?.trim();
+  if (!cfg || !planId) {
+    return json(
+      { error: "Billing isn't configured yet (Chargebee secrets are not set)." },
+      503,
+    );
   }
-  // Diagnostic (prefix only - never log the full key). A Lemon Squeezy *personal
-  // API key* is a long opaque token; a value starting with "eyJ" is a JWT (wrong
-  // key type) and will 401.
-  console.log(
-    "LS key prefix:", apiKey.slice(0, 8),
-    "len:", apiKey.length,
-    apiKey.startsWith("eyJ") ? "(looks like a JWT - likely the WRONG key type)" : "",
-  );
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -77,97 +72,63 @@ Deno.serve(async (req: Request) => {
     if (userErr || !user) return json({ error: "Unauthorized" }, 401);
 
     const body = await req.json().catch(() => ({}));
-    // mode_check: a lightweight probe that creates a checkout purely to read its
-    // test_mode flag (the only reliable signal of the API key's mode), then
-    // discards it. Used by the billing UI to decide whether to show the test-mode
-    // banner. It needs no practice and no redirect.
-    const modeCheck: boolean = body.mode_check === true;
     const practiceId: string | undefined = body.practice_id;
-    const email: string | undefined = body.email ?? user.email ?? undefined;
+    if (!practiceId) return json({ error: "Missing 'practice_id'" }, 400);
+
+    // RLS only returns the practice if the caller belongs to it.
+    const { data: practice, error: practiceErr } = await supabase
+      .from("practices")
+      .select("id, name, email, doctor_first, doctor_last, chargebee_customer_id")
+      .eq("id", practiceId)
+      .maybeSingle();
+    if (practiceErr) throw practiceErr;
+    if (!practice) return json({ error: "Practice not found or not accessible" }, 403);
+
+    const email: string | undefined = body.email ?? practice.email ?? user.email ?? undefined;
     if (!email) return json({ error: "Missing 'email'" }, 400);
 
-    let practice: { id: string; name?: string } | null = null;
-    if (!modeCheck) {
-      if (!practiceId) return json({ error: "Missing 'practice_id'" }, 400);
-      // RLS only returns the practice if the caller belongs to it.
-      const { data, error: practiceErr } = await supabase
-        .from("practices")
-        .select("id, name")
-        .eq("id", practiceId)
-        .maybeSingle();
-      if (practiceErr) throw practiceErr;
-      if (!data) return json({ error: "Practice not found or not accessible" }, 403);
-      practice = data;
+    // Service-role client to persist the customer id (bypasses RLS write rules).
+    const admin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    );
+
+    // --- Create or reuse the Chargebee customer. ---
+    let customerId = practice.chargebee_customer_id as string | null;
+    if (!customerId) {
+      const { first_name, last_name } = splitName(practice);
+      const created = await chargebeeRequest(cfg, "/customers", "POST", {
+        email,
+        first_name,
+        last_name,
+        company: practice.name ?? "",
+      });
+      customerId = created?.customer?.id ?? null;
+      if (!customerId) return json({ error: "Chargebee did not return a customer id." }, 502);
+      await admin.from("practices").update({ chargebee_customer_id: customerId }).eq("id", practice.id);
     }
 
     const origin = req.headers.get("origin") || "";
     const redirectUrl =
       body.redirect_url || (origin ? `${origin}/settings/billing?success=true` : undefined);
 
-    // Lemon Squeezy Checkouts API (JSON:API). custom values must be strings.
-    // For a mode_check probe we omit custom (it's never completed, so the webhook
-    // would never map it) and the redirect.
-    const attributes: Record<string, unknown> = {
-      checkout_data: practice
-        ? { email, custom: { practice_id: String(practice.id) } }
-        : { email },
-      checkout_options: { embed: false },
-    };
-    if (!modeCheck) {
-      attributes.product_options = {
-        redirect_url: redirectUrl,
-        receipt_button_text: "Return to Hope AI",
-      };
-    }
-    const payload = {
-      data: {
-        type: "checkouts",
-        attributes,
-        relationships: {
-          store: { data: { type: "stores", id: String(STORE_ID) } },
-          variant: { data: { type: "variants", id: String(VARIANT_ID) } },
-        },
-      },
-    };
-
-    const lsRes = await fetch("https://api.lemonsqueezy.com/v1/checkouts", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        Accept: "application/vnd.api+json",
-        "Content-Type": "application/vnd.api+json",
-      },
-      body: JSON.stringify(payload),
+    // --- Create the hosted-page checkout (Product Catalog 2.0). ---
+    // PC 2.0 uses /checkout_new_for_items with subscription_items[item_price_id][N];
+    // the {0:...} objects encode as the bracketed list indices Chargebee expects
+    // (subscription_items[item_price_id][0], subscription_items[quantity][0]).
+    // CHARGEBEE_PLAN_ID holds the item price id for the Hope AI plan.
+    const checkout = await chargebeeRequest(cfg, "/hosted_pages/checkout_new_for_items", "POST", {
+      subscription_items: { item_price_id: { 0: planId }, quantity: { 0: 1 } },
+      customer: { id: customerId },
+      redirect_url: redirectUrl,
+      // Carried back on the hosted_page; a secondary mapping signal for the webhook.
+      pass_thru_content: JSON.stringify({ practice_id: String(practice.id) }),
     });
 
-    const raw = await lsRes.text();
-    if (!lsRes.ok) {
-      let detail = raw;
-      try {
-        const errs = JSON.parse(raw)?.errors;
-        if (Array.isArray(errs) && errs.length) detail = errs[0].detail || errs[0].title || raw;
-      } catch { /* keep raw */ }
-      console.error(`Lemon Squeezy checkout error ${lsRes.status}:`, raw);
-      return json({ error: `Lemon Squeezy rejected the checkout (${lsRes.status}): ${detail}` }, 502);
-    }
-
-    let url: string | undefined;
-    let testMode = false;
-    try {
-      const attrs = JSON.parse(raw)?.data?.attributes;
-      url = attrs?.url;
-      testMode = attrs?.test_mode === true;
-    } catch { /* fall through */ }
-
-    // Surface the mode so the caller (and logs) can confirm the full flow is
-    // running against test mode before going live.
-    console.log("LS checkout", modeCheck ? "probe" : "created", "test_mode:", testMode, "store:", STORE_ID, "variant:", VARIANT_ID);
-
-    // Probe: return only the mode; the throwaway checkout is left to expire.
-    if (modeCheck) return json({ test_mode: testMode });
-
+    const url = checkout?.hosted_page?.url;
     if (!url) return json({ error: "Checkout created but no URL was returned." }, 502);
-    return json({ url, test_mode: testMode });
+    return json({ url });
   } catch (e) {
     console.error("create-checkout error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
