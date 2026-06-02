@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<title>Schedule a Hope AI Demo</title>
+<meta name="description" content="Book a 30-minute Hope AI demo. See it live, get a custom ROI projection for your practice, and we'll buy you a coffee just for showing up." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --red: #0EA5E9; --red-dark: #0284c7; --black: #0a0f1e; --ink: #1d1d1f;
+    --gray: #6e6e73; --gray-light: #86868b; --line: #e5e5e7; --bg-light: #f5f5f7;
+    --white: #ffffff; --radius: 20px; --maxw: 1040px; --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif; color: var(--ink); background: var(--bg-light); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; line-height: 1.5; }
+  a { color: inherit; text-decoration: none; }
+  .wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; font-size: 16px; line-height: 1; padding: 16px 30px; border-radius: 999px; cursor: pointer; border: none; transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease), background 0.25s var(--ease); }
+  .btn-red { background: var(--red); color: #fff; box-shadow: 0 8px 24px rgba(14, 165, 233,0.32); }
+  .btn-red:hover { transform: scale(1.025); background: var(--red-dark); box-shadow: 0 12px 32px rgba(14, 165, 233,0.42); }
+
+  nav { position: sticky; top: 0; z-index: 100; background: rgba(10,10,10,0.92); backdrop-filter: saturate(180%) blur(18px); -webkit-backdrop-filter: saturate(180%) blur(18px); }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+  .logo { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 19px; letter-spacing: -0.02em; color: #fff; }
+  .logo-mark { width: 28px; height: 28px; flex-shrink: 0; display: block; }
+  .beta { font-size: 9.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--red); background: rgba(14, 165, 233,0.14); border: 1px solid rgba(14, 165, 233,0.4); padding: 2px 6px; border-radius: 5px; line-height: 1; align-self: center; }
+  .pulse { width: 11px; height: 11px; border-radius: 50%; background: var(--red); position: relative; flex-shrink: 0; }
+  .pulse::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--red); animation: pulse 2s infinite var(--ease); }
+  @keyframes pulse { 0% { transform: scale(1); opacity: 0.7; } 70% { transform: scale(2.6); opacity: 0; } 100% { opacity: 0; } }
+  .nav-back { font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.85); }
+  .nav-back:hover { color: #fff; }
+
+  .head { background: var(--black); color: #fff; text-align: center; padding: 80px 0 110px; position: relative; overflow: hidden; }
+  .head-bg { position: absolute; inset: 0; background: radial-gradient(60% 60% at 50% 0%, rgba(14, 165, 233,0.20), transparent 65%); }
+  .head .wrap { position: relative; z-index: 1; }
+  .head .pill { display: inline-block; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #38bdf8; background: rgba(14, 165, 233,0.14); border: 1px solid rgba(14, 165, 233,0.3); padding: 7px 16px; border-radius: 999px; margin-bottom: 22px; }
+  .head h1 { font-size: clamp(30px, 5vw, 46px); font-weight: 800; letter-spacing: -0.035em; line-height: 1.08; margin-bottom: 16px; }
+  .head p { font-size: 18px; color: rgba(255,255,255,0.72); max-width: 560px; margin: 0 auto; line-height: 1.55; }
+
+  .layout { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 28px; margin: -64px auto 80px; position: relative; z-index: 2; align-items: start; }
+
+  .form-card { background: #fff; border: 1px solid var(--line); border-radius: 24px; box-shadow: 0 30px 70px rgba(0,0,0,0.10); padding: 40px 40px 44px; }
+  .form-card h2 { font-size: 23px; font-weight: 800; letter-spacing: -0.025em; margin-bottom: 6px; }
+  .form-card .sub { font-size: 15px; color: var(--gray); margin-bottom: 28px; }
+  .field { margin-bottom: 22px; }
+  .field label.lbl { display: block; font-size: 14.5px; font-weight: 600; color: var(--ink); margin-bottom: 9px; }
+  .field .req { color: var(--red); }
+  .field input[type=text], .field input[type=email], .field input[type=tel], .field textarea {
+    width: 100%; font-family: inherit; font-size: 15.5px; color: var(--ink); background: var(--bg-light);
+    border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; transition: border-color 0.2s, background 0.2s; resize: vertical;
+  }
+  .field input:focus, .field textarea:focus { outline: none; border-color: var(--red); background: #fff; }
+  .submit-row { margin-top: 30px; }
+  .submit-row .btn { width: 100%; font-size: 17px; padding: 18px; }
+  .form-note { text-align: center; font-size: 13px; color: var(--gray-light); margin-top: 16px; }
+
+  .side { display: flex; flex-direction: column; gap: 16px; }
+  .side-card { background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 30px 28px; }
+  .side-card h3 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 20px; }
+  .expect { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 18px; }
+  .expect:last-child { margin-bottom: 0; }
+  .expect .ico { width: 40px; height: 40px; flex-shrink: 0; border-radius: 11px; background: linear-gradient(135deg,#eff6ff,#e0f2fe); display: flex; align-items: center; justify-content: center; font-size: 19px; }
+  .expect .t strong { display: block; font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+  .expect .t span { font-size: 13.5px; color: var(--gray); line-height: 1.5; }
+  .coffee-card { background: var(--ink); color: #fff; border-radius: 20px; padding: 26px 28px; display: flex; gap: 15px; align-items: center; }
+  .coffee-card .cup { font-size: 30px; flex-shrink: 0; }
+  .coffee-card strong { display: block; font-size: 15.5px; font-weight: 700; margin-bottom: 4px; }
+  .coffee-card span { font-size: 13.5px; color: rgba(255,255,255,0.7); line-height: 1.5; }
+
+  .success { display: none; }
+  .success.show { display: block; }
+  .success-inner { background: #fff; border: 1px solid var(--line); border-radius: 24px; box-shadow: 0 30px 70px rgba(0,0,0,0.10); padding: 56px 40px; text-align: center; max-width: 560px; margin: -64px auto 80px; position: relative; z-index: 2; }
+  .success-inner .check-ico { width: 64px; height: 64px; border-radius: 50%; background: rgba(40,200,64,0.14); color: #28c840; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 22px; }
+  .success-inner h2 { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 12px; }
+  .success-inner p { font-size: 16px; color: var(--gray); max-width: 440px; margin: 0 auto 26px; line-height: 1.6; }
+
+  footer { background: #070b16; color: rgba(255,255,255,0.45); padding: 36px 0; text-align: center; font-size: 13px; }
+
+  @media (max-width: 820px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    .form-card { padding: 30px 22px 34px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="/landing.html" class="logo"><svg class="logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="hopeGradNav" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0EA5E9"/><stop offset="1" stop-color="#6366F1"/></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#hopeGradNav)"/><path d="M10 8 V24 M22 8 V24" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M10 16 H12.8 L14.2 12 L16.4 20 L18 16 H22" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>Hope&nbsp;AI<span class="beta">Beta</span></a>
+    <a href="/landing.html" class="nav-back">← Back to Hope AI</a>
+  </div>
+</nav>
+
+<header class="head">
+  <div class="head-bg"></div>
+  <div class="wrap">
+    <div class="pill">Now booking demos</div>
+    <h1>Schedule your Hope AI demo</h1>
+    <p>A 30-minute call where we show you Hope AI live, build a custom ROI projection for your practice, and buy you a coffee just for showing up. ☕</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="layout" id="layout">
+    <div class="form-card">
+      <h2>Pick a time that works</h2>
+      <p class="sub">Drop your details and we'll reach out right away to lock in a time. No commitment, no pressure.</p>
+      <form id="demoForm" novalidate>
+        <div class="field">
+          <label class="lbl" for="name">Full name <span class="req">*</span></label>
+          <input type="text" id="name" name="name" autocomplete="name" required />
+        </div>
+        <div class="field">
+          <label class="lbl" for="practice">Practice name <span class="req">*</span></label>
+          <input type="text" id="practice" name="practice" autocomplete="organization" required />
+        </div>
+        <div class="field">
+          <label class="lbl" for="email">Email <span class="req">*</span></label>
+          <input type="email" id="email" name="email" autocomplete="email" required />
+        </div>
+        <div class="field">
+          <label class="lbl" for="phone">Phone <span class="req">*</span></label>
+          <input type="tel" id="phone" name="phone" autocomplete="tel" required />
+        </div>
+        <div class="field">
+          <label class="lbl" for="times">Best days and times to reach you</label>
+          <input type="text" id="times" name="times" placeholder="e.g. weekday mornings, Tue/Thu afternoons" />
+        </div>
+        <div class="field">
+          <label class="lbl" for="notes">Anything you'd like us to cover?</label>
+          <textarea id="notes" name="notes" rows="3" placeholder="Treatments you focus on, questions, goals…"></textarea>
+        </div>
+        <div class="submit-row">
+          <button type="submit" class="btn btn-red">Book My Demo</button>
+          <p class="form-note">30-minute call · custom ROI projection · coffee on us ☕</p>
+        </div>
+      </form>
+    </div>
+
+    <div class="side">
+      <div class="side-card">
+        <h3>What to expect on the call</h3>
+        <div class="expect">
+          <div class="ico">🎥</div>
+          <div class="t"><strong>See it live</strong><span>A real walkthrough of Hope AI on actual consult examples.</span></div>
+        </div>
+        <div class="expect">
+          <div class="ico">📊</div>
+          <div class="t"><strong>Your custom ROI</strong><span>We build a projection around your case mix and volume.</span></div>
+        </div>
+        <div class="expect">
+          <div class="ico">🤝</div>
+          <div class="t"><strong>Zero pressure</strong><span>30 minutes, straight answers, no obligation to buy.</span></div>
+        </div>
+      </div>
+      <div class="coffee-card">
+        <div class="cup">☕</div>
+        <div>
+          <strong>Coffee's on us</strong>
+          <span>Show up for the call and we'll send a little something to enjoy while we talk.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="success" id="success">
+    <div class="success-inner">
+      <div class="check-ico">✓</div>
+      <h2>You're on the list</h2>
+      <p>Thanks! We've got your details and we'll reach out within one business day to confirm a time. Keep an eye on your inbox for your coffee, too. ☕</p>
+      <a href="/landing.html" class="btn btn-red">Back to Hope AI</a>
+    </div>
+  </div>
+</main>
+
+<footer>© 2026 Hope AI by The Implant Initiative. All rights reserved. · HIPAA Compliant · SOC 2 Type II</footer>
+
+<script>
+  const form = document.getElementById('demoForm');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const required = ['name', 'practice', 'email', 'phone'];
+    let ok = true;
+    required.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el.value.trim()) { el.style.borderColor = '#0EA5E9'; ok = false; }
+      else { el.style.borderColor = ''; }
+    });
+    if (!ok) return;
+    document.getElementById('layout').style.display = 'none';
+    document.getElementById('success').classList.add('show');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+</script>
+</body>
+</html>

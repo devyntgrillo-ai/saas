@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<title>Hope AI Partner Program | For Marketing Agencies</title>
+<meta name="description" content="Become an exclusive Hope AI reseller. Add a high-value AI product to your stack, convert more of the leads you generate, and keep your dental clients longer." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --red: #0EA5E9; --red-dark: #0284c7; --black: #0a0f1e; --ink: #1d1d1f;
+    --gray: #6e6e73; --gray-light: #86868b; --line: #e5e5e7; --bg-light: #f5f5f7;
+    --white: #ffffff; --radius: 20px; --maxw: 1180px; --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif; color: var(--ink); background: var(--white); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; line-height: 1.5; overflow-x: hidden; }
+  a { color: inherit; text-decoration: none; }
+  .wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+  section { position: relative; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; font-size: 16px; line-height: 1; padding: 16px 30px; border-radius: 999px; cursor: pointer; border: none; white-space: nowrap; transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease), background 0.25s var(--ease); }
+  .btn-red { background: var(--red); color: #fff; box-shadow: 0 8px 24px rgba(14, 165, 233,0.32); }
+  .btn-red:hover { transform: scale(1.045); background: var(--red-dark); box-shadow: 0 12px 32px rgba(14, 165, 233,0.42); }
+  .btn-outline { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.35); }
+  .btn-outline:hover { transform: scale(1.045); border-color: #fff; background: rgba(255,255,255,0.08); }
+  .btn-sm { padding: 11px 22px; font-size: 15px; }
+
+  nav { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; transition: background 0.4s var(--ease), box-shadow 0.4s var(--ease); }
+  nav.scrolled { background: rgba(255,255,255,0.72); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); box-shadow: 0 1px 0 rgba(0,0,0,0.06); }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .logo { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 19px; letter-spacing: -0.02em; color: #fff; transition: color 0.4s var(--ease); }
+  nav.scrolled .logo { color: var(--ink); }
+  .logo-mark { width: 28px; height: 28px; flex-shrink: 0; display: block; }
+  .logo .tag { font-size: 12px; font-weight: 600; color: var(--red); border: 1px solid rgba(14, 165, 233,0.5); padding: 3px 8px; border-radius: 6px; letter-spacing: 0.02em; }
+  .beta { font-size: 9.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--red); background: rgba(14, 165, 233,0.14); border: 1px solid rgba(14, 165, 233,0.4); padding: 2px 6px; border-radius: 5px; line-height: 1; align-self: center; }
+  .pulse { width: 11px; height: 11px; border-radius: 50%; background: var(--red); position: relative; flex-shrink: 0; }
+  .pulse::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--red); animation: pulse 2s infinite var(--ease); }
+  @keyframes pulse { 0% { transform: scale(1); opacity: 0.7; } 70% { transform: scale(2.6); opacity: 0; } 100% { opacity: 0; } }
+  .nav-links { display: flex; align-items: center; gap: 32px; }
+  .nav-links a.link { font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.85); transition: color 0.4s var(--ease), opacity 0.2s; }
+  nav.scrolled .nav-links a.link { color: var(--ink); }
+  .nav-links a.link:hover { opacity: 0.6; }
+  .nav-cta-wrap { display: flex; align-items: center; gap: 20px; }
+  .nav-back { font-size: 15px; font-weight: 600; color: #fff; transition: color 0.4s var(--ease), opacity 0.2s; white-space: nowrap; }
+  nav.scrolled .nav-back { color: var(--ink); }
+  .nav-back:hover { opacity: 0.6; }
+  .hamburger { display: none; flex-direction: column; gap: 5px; background: none; border: none; cursor: pointer; padding: 8px; }
+  .hamburger span { display: block; width: 24px; height: 2px; background: #fff; border-radius: 2px; transition: 0.3s var(--ease); }
+  nav.scrolled .hamburger span { background: var(--ink); }
+  .mobile-menu { position: fixed; top: 64px; left: 0; right: 0; z-index: 999; background: rgba(10,10,10,0.96); backdrop-filter: blur(20px); transform: translateY(-120%); transition: transform 0.45s var(--ease); padding: 24px; display: flex; flex-direction: column; gap: 8px; }
+  .mobile-menu.open { transform: translateY(0); }
+  .mobile-menu a { color: #fff; font-size: 18px; font-weight: 500; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  .mobile-menu .btn { margin-top: 14px; }
+
+  .hero { background: var(--black); color: #fff; position: relative; overflow: hidden; padding: 172px 0 120px; text-align: center; }
+  .hero-bg { position: absolute; inset: 0; z-index: 0; opacity: 0.9; background: radial-gradient(60% 50% at 20% 10%, rgba(14, 165, 233,0.22), transparent 60%), radial-gradient(55% 45% at 85% 25%, rgba(99, 102, 241,0.16), transparent 60%), radial-gradient(70% 60% at 50% 100%, rgba(14, 165, 233,0.10), transparent 70%); animation: drift 18s ease-in-out infinite alternate; }
+  @keyframes drift { 0% { transform: translate3d(0,0,0) scale(1); } 100% { transform: translate3d(0,-30px,0) scale(1.08); } }
+  .hero .wrap { position: relative; z-index: 1; }
+  .badge { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 500; color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); padding: 8px 16px; border-radius: 999px; margin-bottom: 28px; }
+  .badge .dot { width: 7px; height: 7px; background: var(--red); border-radius: 50%; }
+  h1.hero-title { font-size: clamp(34px, 5.4vw, 60px); font-weight: 800; letter-spacing: -0.035em; line-height: 1.07; max-width: 880px; margin: 0 auto 26px; }
+  h1.hero-title .accent { color: var(--red); }
+  .hero-sub { font-size: clamp(17px, 2.1vw, 21px); color: rgba(255,255,255,0.72); font-weight: 400; max-width: 700px; margin: 0 auto 38px; line-height: 1.5; }
+  .hero-ctas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 28px; }
+  .hero-trust { font-size: 14px; color: rgba(255,255,255,0.55); }
+
+  .sec { padding: 110px 0; }
+  .sec-dark { background: var(--black); color: #fff; }
+  .sec-light { background: var(--bg-light); }
+  .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--red); margin-bottom: 16px; }
+  h2.sec-title { font-size: clamp(28px, 4vw, 46px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; max-width: 760px; margin-bottom: 18px; }
+  .sec-center { text-align: center; }
+  .sec-center h2.sec-title, .sec-center .sec-lead { margin-left: auto; margin-right: auto; }
+  .sec-lead { font-size: 18px; color: var(--gray); max-width: 640px; line-height: 1.55; }
+  .sec-dark .sec-lead { color: rgba(255,255,255,0.65); }
+
+  .val-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; margin-top: 60px; }
+  .val-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 36px 30px; transition: transform 0.4s var(--ease), box-shadow 0.4s var(--ease); }
+  .val-card:hover { transform: translateY(-8px); box-shadow: 0 24px 50px rgba(0,0,0,0.09); }
+  .val-ico { width: 56px; height: 56px; border-radius: 15px; background: linear-gradient(135deg, #eff6ff, #e0f2fe); display: flex; align-items: center; justify-content: center; font-size: 26px; margin-bottom: 22px; }
+  .val-card h3 { font-size: 21px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 10px; }
+  .val-card p { font-size: 15.5px; color: var(--gray); line-height: 1.6; }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+  .split-text h2 { font-size: clamp(26px, 3.6vw, 40px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.12; margin-bottom: 18px; }
+  .split-text p { font-size: 17px; color: rgba(255,255,255,0.7); line-height: 1.6; margin-bottom: 16px; }
+  .split-text p:last-child { margin-bottom: 0; }
+  .split-text strong { color: #fff; }
+  .stat-feature { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius); padding: 38px; }
+  .stat-feature .big { font-size: clamp(46px, 6vw, 68px); font-weight: 800; letter-spacing: -0.04em; color: var(--red); line-height: 1; margin-bottom: 14px; }
+  .stat-feature .big small { font-size: 24px; color: #fff; }
+  .stat-feature p { font-size: 16px; color: rgba(255,255,255,0.7); line-height: 1.55; }
+  .stat-feature hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 26px 0; }
+
+  .ben-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 60px; }
+  .ben-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 32px 28px; transition: transform 0.4s var(--ease), box-shadow 0.4s var(--ease); }
+  .ben-card:hover { transform: translateY(-8px); box-shadow: 0 24px 50px rgba(0,0,0,0.09); }
+  .ben-ico { width: 50px; height: 50px; border-radius: 13px; background: rgba(14, 165, 233,0.1); display: flex; align-items: center; justify-content: center; font-size: 23px; margin-bottom: 20px; }
+  .ben-card h3 { font-size: 18.5px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 9px; }
+  .ben-card p { font-size: 14.5px; color: var(--gray); line-height: 1.6; }
+
+  .steps { margin-top: 64px; position: relative; max-width: 760px; margin-left: auto; margin-right: auto; }
+  .steps::before { content: ''; position: absolute; left: 31px; top: 30px; bottom: 30px; width: 2px; background: linear-gradient(var(--red), rgba(14, 165, 233,0.12)); }
+  .step { display: flex; gap: 26px; padding: 22px 0; position: relative; }
+  .step-num { width: 64px; height: 64px; flex-shrink: 0; border-radius: 50%; background: var(--white); border: 2px solid var(--red); color: var(--red); font-weight: 800; font-size: 22px; display: flex; align-items: center; justify-content: center; position: relative; z-index: 1; box-shadow: 0 6px 18px rgba(14, 165, 233,0.18); }
+  .step-body { padding-top: 9px; }
+  .step-body h3 { font-size: 21px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 7px; }
+  .step-body p { font-size: 16px; color: var(--gray); line-height: 1.55; max-width: 560px; }
+  .sec-dark .step-num { background: var(--black); }
+  .sec-dark .step-body h3 { color: #fff; }
+  .sec-dark .step-body p { color: rgba(255,255,255,0.65); }
+
+  .who-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 56px; }
+  .who-card { text-align: center; border: 1px solid var(--line); border-radius: 16px; padding: 30px 18px; background: #fff; transition: transform 0.35s var(--ease), border-color 0.35s; }
+  .who-card:hover { transform: translateY(-5px); border-color: var(--red); }
+  .who-ico { font-size: 30px; margin-bottom: 14px; }
+  .who-card h4 { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 6px; }
+  .who-card p { font-size: 13.5px; color: var(--gray); line-height: 1.5; }
+
+  .final-cta { background: var(--black); color: #fff; text-align: center; padding: 120px 0; position: relative; overflow: hidden; }
+  .final-cta .glow { position: absolute; inset: 0; background: radial-gradient(50% 60% at 50% 50%, rgba(14, 165, 233,0.20), transparent 70%); }
+  .final-cta .wrap { position: relative; z-index: 1; }
+  .final-cta h2 { font-size: clamp(30px, 4.5vw, 52px); font-weight: 800; letter-spacing: -0.035em; margin-bottom: 18px; }
+  .final-cta p { font-size: 19px; color: rgba(255,255,255,0.7); max-width: 580px; margin: 0 auto 36px; }
+  .final-cta .btn { font-size: 18px; padding: 19px 42px; }
+  .final-note { margin-top: 22px; font-size: 14px; color: rgba(255,255,255,0.45); }
+
+  footer { background: #070b16; color: rgba(255,255,255,0.6); padding: 64px 0 40px; }
+  .foot-top { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 32px; padding-bottom: 40px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .foot-brand { max-width: 320px; }
+  .foot-brand .logo { color: #fff; margin-bottom: 14px; }
+  .foot-brand p { font-size: 14.5px; line-height: 1.6; }
+  .foot-links { display: flex; gap: 30px; flex-wrap: wrap; align-items: flex-start; }
+  .foot-links a { font-size: 14.5px; transition: color 0.2s; }
+  .foot-links a:hover { color: #fff; }
+  .foot-bottom { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 14px; padding-top: 28px; font-size: 13px; }
+  .foot-badges { color: rgba(255,255,255,0.4); }
+
+  .reveal { opacity: 0; transform: translateY(40px); transition: opacity 0.9s var(--ease), transform 0.9s var(--ease); }
+  .reveal.in { opacity: 1; transform: translateY(0); }
+  .reveal-left { opacity: 0; transform: translateX(-60px); transition: opacity 0.9s var(--ease), transform 0.9s var(--ease); }
+  .reveal-left.in { opacity: 1; transform: translateX(0); }
+  .reveal-right { opacity: 0; transform: translateX(60px); transition: opacity 0.9s var(--ease), transform 0.9s var(--ease); }
+  .reveal-right.in { opacity: 1; transform: translateX(0); }
+  [data-delay="1"]{ transition-delay: 0.08s; } [data-delay="2"]{ transition-delay: 0.16s; }
+  [data-delay="3"]{ transition-delay: 0.24s; } [data-delay="4"]{ transition-delay: 0.32s; }
+  .hero-anim { opacity: 0; transform: translateY(30px); animation: heroIn 1s var(--ease) forwards; }
+  .hero-anim.d1 { animation-delay: 0.05s; } .hero-anim.d2 { animation-delay: 0.18s; }
+  .hero-anim.d3 { animation-delay: 0.31s; } .hero-anim.d4 { animation-delay: 0.44s; }
+  @keyframes heroIn { to { opacity: 1; transform: translateY(0); } }
+
+  @media (max-width: 900px) {
+    .val-grid, .ben-grid { grid-template-columns: repeat(2, 1fr); }
+    .who-grid { grid-template-columns: repeat(2, 1fr); }
+    .split { grid-template-columns: 1fr; gap: 32px; }
+  }
+  @media (max-width: 760px) {
+    .nav-links { display: none; }
+    .hamburger { display: flex; }
+    .sec { padding: 76px 0; }
+    .hero { padding: 132px 0 84px; }
+    .val-grid, .ben-grid, .who-grid { grid-template-columns: 1fr; }
+    .foot-top { flex-direction: column; }
+    .hero-ctas .btn { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<nav id="nav">
+  <div class="wrap nav-inner">
+    <a href="/landing.html" class="logo"><svg class="logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="hopeGradNav" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0EA5E9"/><stop offset="1" stop-color="#6366F1"/></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#hopeGradNav)"/><path d="M10 8 V24 M22 8 V24" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M10 16 H12.8 L14.2 12 L16.4 20 L18 16 H22" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>Hope&nbsp;AI<span class="beta">Beta</span> <span class="tag">Partners</span></a>
+    <div class="nav-links">
+      <a href="#why" class="link">Why Partner</a>
+      <a href="#benefits" class="link">Benefits</a>
+      <a href="#how" class="link">How It Works</a>
+      <a href="#who" class="link">Who It's For</a>
+    </div>
+    <div class="nav-cta-wrap">
+      <a href="/landing.html" class="nav-back">← Hope AI</a>
+      <a href="https://theimplantinitiative.com/partners" class="btn btn-red btn-sm">Become a Partner</a>
+      <button class="hamburger" id="hamburger" aria-label="Menu"><span></span><span></span><span></span></button>
+    </div>
+  </div>
+</nav>
+
+<div class="mobile-menu" id="mobileMenu">
+  <a href="#why">Why Partner</a>
+  <a href="#benefits">Benefits</a>
+  <a href="#how">How It Works</a>
+  <a href="#who">Who It's For</a>
+  <a href="/landing.html">← Back to Hope AI</a>
+  <a href="https://theimplantinitiative.com/partners" class="btn btn-red">Become a Partner</a>
+</div>
+
+<header class="hero" id="top">
+  <div class="hero-bg"></div>
+  <div class="wrap">
+    <div class="badge hero-anim d1"><span class="dot"></span>Exclusive Partner Program · For marketing agencies &amp; consultants</div>
+    <h1 class="hero-title hero-anim d2">Give your dental clients an unfair advantage, and become the partner they can't replace.</h1>
+    <p class="hero-sub hero-anim d3">Resell Hope AI as an exclusive partner. Add a high-value AI product to your stack, convert more of the leads you already generate, and keep your clients longer.</p>
+    <div class="hero-ctas hero-anim d4">
+      <a href="https://theimplantinitiative.com/partners" class="btn btn-red">Schedule a Partner Call</a>
+      <a href="#benefits" class="btn btn-outline">See the benefits</a>
+    </div>
+    <div class="hero-trust hero-anim d4">Limited exclusive territories · Recurring revenue · Done-with-you onboarding</div>
+  </div>
+</header>
+
+<section class="sec sec-light" id="value">
+  <div class="wrap sec-center">
+    <div class="eyebrow reveal">The partner advantage</div>
+    <h2 class="sec-title reveal" data-delay="1">Three reasons agencies are adding Hope AI</h2>
+    <p class="sec-lead reveal" data-delay="2">You bring the leads. Hope AI makes sure your clients actually close them, so your work looks better and your clients stay longer.</p>
+  </div>
+  <div class="wrap">
+    <div class="val-grid">
+      <div class="val-card reveal" data-delay="1">
+        <div class="val-ico">💎</div>
+        <h3>Add more value to your clients</h3>
+        <p>Hand your clients an AI recovery system that pays for itself. You go from "the marketing vendor" to the partner driving real production, a tangible product alongside your services.</p>
+      </div>
+      <div class="val-card reveal" data-delay="2">
+        <div class="val-ico">🔒</div>
+        <h3>Retain clients longer</h3>
+        <p>Clients churn when results feel invisible. Hope AI ties your name to recovered revenue they can measure, which makes your agency far harder to cut and dramatically lowers churn.</p>
+      </div>
+      <div class="val-card reveal" data-delay="3">
+        <div class="val-ico">📈</div>
+        <h3>Convert more of the leads you generate</h3>
+        <p>The leads you deliver don't all close same-day. Hope AI recovers the ones that slip through, so the campaigns you run produce more booked cases and a better ROI story.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec sec-dark" id="why">
+  <div class="wrap">
+    <div class="split">
+      <div class="split-text reveal-left">
+        <div class="eyebrow">Why it works</div>
+        <h2>The leads were never the problem. The follow-up was.</h2>
+        <p>You generate quality leads. They book. They show up. And then nearly half walk out of the high-value consult without saying yes, and most are never followed up with again.</p>
+        <p>That gap makes <strong>your</strong> campaigns look weaker than they are. When your clients can't close the leads you send, they blame the marketing.</p>
+        <p>Hope AI closes that gap. Your clients recover production, attribute it back to the leads you generated, and credit <strong>you</strong> for the result.</p>
+      </div>
+      <div class="stat-feature reveal-right">
+        <div class="big">47<small>%</small></div>
+        <p>of high-value consults don't close same-day. Hope AI recovers the ones that would have slipped away, turning leads you already delivered into closed cases.</p>
+        <hr />
+        <div class="big">3<small>×</small></div>
+        <p>the stickiness. Clients who can measure recovered production from your leads renew far more often than clients running ads alone.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="benefits">
+  <div class="wrap sec-center">
+    <div class="eyebrow reveal">Partner benefits</div>
+    <h2 class="sec-title reveal" data-delay="1">A program built to make you money and make you essential</h2>
+  </div>
+  <div class="wrap">
+    <div class="ben-grid">
+      <div class="ben-card reveal" data-delay="1"><div class="ben-ico">🗺️</div><h3>Exclusive territory</h3><p>Lock down your market. We limit partners by region so you're the only agency offering Hope AI to practices in your area.</p></div>
+      <div class="ben-card reveal" data-delay="2"><div class="ben-ico">💰</div><h3>Recurring revenue share</h3><p>Earn ongoing revenue on every practice you bring on, a new high-margin line that compounds with your roster.</p></div>
+      <div class="ben-card reveal" data-delay="3"><div class="ben-ico">🏷️</div><h3>Co-branded &amp; white-label ready</h3><p>Present Hope AI under your brand. Your clients see your agency as the source of their results.</p></div>
+      <div class="ben-card reveal" data-delay="1"><div class="ben-ico">🤝</div><h3>Done-with-you onboarding</h3><p>We onboard your clients alongside you and train their TCs, so you get the credit without the operational load.</p></div>
+      <div class="ben-card reveal" data-delay="2"><div class="ben-ico">📉</div><h3>Lower client churn</h3><p>Measurable recovered production makes your retainer impossible to cut. Stickier clients, longer lifetime value.</p></div>
+      <div class="ben-card reveal" data-delay="3"><div class="ben-ico">🎓</div><h3>Partner enablement</h3><p>Sales decks, ROI calculators, and the full TC Certification Program to position and sell with confidence.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec sec-dark" id="how">
+  <div class="wrap sec-center">
+    <div class="eyebrow reveal">How partnership works</div>
+    <h2 class="sec-title reveal" data-delay="1">From call to recurring revenue in five steps</h2>
+  </div>
+  <div class="wrap">
+    <div class="steps">
+      <div class="step reveal"><div class="step-num">1</div><div class="step-body"><h3>Schedule a partner call</h3><p>We'll learn about your agency, your clients, and your market to see if it's an exclusive fit.</p></div></div>
+      <div class="step reveal"><div class="step-num">2</div><div class="step-body"><h3>Claim your exclusive territory</h3><p>Get approved and lock in your region so no competing agency can offer Hope AI to your market.</p></div></div>
+      <div class="step reveal"><div class="step-num">3</div><div class="step-body"><h3>We onboard your clients with you</h3><p>Our team handles setup, PMS sync, and TC training, all co-branded under your agency.</p></div></div>
+      <div class="step reveal"><div class="step-num">4</div><div class="step-body"><h3>Your clients recover production</h3><p>Unconverted consults turn into booked cases, attributed back to the leads you generate.</p></div></div>
+      <div class="step reveal"><div class="step-num">5</div><div class="step-body"><h3>You earn and retain</h3><p>Collect recurring revenue while your clients stay longer because the results are undeniable.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec sec-light" id="who">
+  <div class="wrap sec-center">
+    <div class="eyebrow reveal">Who it's for</div>
+    <h2 class="sec-title reveal" data-delay="1">Built for partners who serve dental practices</h2>
+    <p class="sec-lead reveal" data-delay="2">If you generate leads or advise high-value dental practices, Hope AI makes your offer stronger.</p>
+  </div>
+  <div class="wrap">
+    <div class="who-grid">
+      <div class="who-card reveal" data-delay="1"><div class="who-ico">📣</div><h4>Dental marketing agencies</h4><p>Running ads and generating high-value treatment leads for practices.</p></div>
+      <div class="who-card reveal" data-delay="2"><div class="who-ico">🧭</div><h4>Practice consultants</h4><p>Advising practices on growth, systems, and case acceptance.</p></div>
+      <div class="who-card reveal" data-delay="3"><div class="who-ico">🏢</div><h4>DSO &amp; group partners</h4><p>Supporting multiple locations that need consistent conversion.</p></div>
+      <div class="who-card reveal" data-delay="4"><div class="who-ico">🎯</div><h4>Coaches &amp; trainers</h4><p>Helping TCs and teams close more high-value cases.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="final-cta">
+  <div class="glow"></div>
+  <div class="wrap">
+    <h2 class="reveal">Become an exclusive Hope AI partner.</h2>
+    <p class="reveal" data-delay="1">Add a product your clients will thank you for, convert more of the leads you generate, and build recurring revenue, before someone else claims your territory.</p>
+    <div class="reveal" data-delay="2"><a href="https://theimplantinitiative.com/partners" class="btn btn-red">Schedule a Partner Call</a></div>
+    <p class="final-note reveal" data-delay="3">30-minute call · we'll map your territory and revenue potential · no commitment</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-top">
+      <div class="foot-brand">
+        <div class="logo"><svg class="logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="hopeGradFoot" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0EA5E9"/><stop offset="1" stop-color="#6366F1"/></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#hopeGradFoot)"/><path d="M10 8 V24 M22 8 V24" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M10 16 H12.8 L14.2 12 L16.4 20 L18 16 H22" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>Hope&nbsp;AI</div>
+        <p>The AI recovery system for high-value dental treatment. A product of The Implant Initiative.</p>
+      </div>
+      <div class="foot-links">
+        <a href="/landing.html">Hope AI Home</a>
+        <a href="#benefits">Partner Benefits</a>
+        <a href="https://theimplantinitiative.com/partners">Become a Partner</a>
+        <a href="#">Contact</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <div>© 2026 Hope AI by The Implant Initiative. All rights reserved.</div>
+      <div class="foot-badges">HIPAA Compliant · SOC 2 Type II · Data encrypted at rest and in transit</div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const nav = document.getElementById('nav');
+  const onScroll = () => nav.classList.toggle('scrolled', window.scrollY > 24);
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  const hamburger = document.getElementById('hamburger');
+  const mobileMenu = document.getElementById('mobileMenu');
+  hamburger.addEventListener('click', () => mobileMenu.classList.toggle('open'));
+  mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => mobileMenu.classList.remove('open')));
+
+  const revObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) { entry.target.classList.add('in'); revObserver.unobserve(entry.target); }
+    });
+  }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll('.reveal, .reveal-left, .reveal-right').forEach(el => revObserver.observe(el));
+</script>
+</body>
+</html>

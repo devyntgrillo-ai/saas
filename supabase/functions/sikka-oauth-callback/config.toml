@@ -1,0 +1,5 @@
+# The Sikka OAuth callback's GET is hit by the browser redirect from Sikka with
+# NO JWT, so JWT verification must be off for it. (Its POST initiator does its
+# own auth via the user's session.)
+[functions.sikka-oauth-callback]
+verify_jwt = false

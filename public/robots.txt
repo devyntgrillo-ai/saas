@@ -1,0 +1,12 @@
+# ConsultIQ is a private, authenticated application. Only the marketing root is
+# crawlable; the app itself sits behind login.
+User-agent: *
+Allow: /$
+Disallow: /consults
+Disallow: /conversations
+Disallow: /settings
+Disallow: /agency
+Disallow: /performance
+Disallow: /knowledge-base
+Disallow: /onboarding
+Disallow: /accept-invite

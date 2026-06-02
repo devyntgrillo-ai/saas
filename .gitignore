@@ -1,0 +1,60 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+__MACOSX
+.claude/
+dist.zip
+*.zip
+
+# ── Secrets & environment (never commit) ─────────────────────────────────────
+.env
+.env.*
+**/.env
+**/.env.*
+**/.env.local
+**/.env.*.local
+*.pem
+*.key
+*.p12
+*.pfx
+*credentials*.json
+*service-account*.json
+secrets/
+.secrets
+
+# Supabase local / CLI state
+supabase/.temp/
+supabase/.branches/
+
+# Capacitor native build artifacts (the native projects ios/ and android/ are
+# committed; these generated/derived bits are not).
+/ios/App/Pods
+/ios/App/App/public
+/ios/App/Podfile.lock
+/ios/.gradle
+/android/app/src/main/assets/public
+/android/.gradle
+/android/local.properties
+/android/app/build
+/android/build
+DerivedData

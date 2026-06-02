@@ -1,0 +1,12 @@
+{
+  "appId": "com.consultiq.app",
+  "appName": "Hope AI",
+  "webDir": "dist",
+  "ios": {
+    "contentInset": "always",
+    "backgroundColor": "#0a0b0f"
+  },
+  "android": {
+    "backgroundColor": "#0a0b0f"
+  }
+}

@@ -1,0 +1,329 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Hope AI primary - sky blue (#0EA5E9): clean, medical, trustworthy. Channels
+       as "R G B". White-label themes override these on <html> at runtime. */
+    --primary-50: 240 249 255;
+    --primary-100: 224 242 254;
+    --primary-200: 186 230 253;
+    --primary-300: 125 211 252;
+    --primary-400: 56 189 248;
+    --primary-500: 14 165 233;
+    --primary-600: 14 165 233; /* #0EA5E9 - Hope AI brand */
+    --primary-700: 2 132 199;
+    --primary-800: 3 105 161;
+    --primary-900: 12 74 110;
+    --primary-950: 8 47 73;
+
+    /* Surface channels (R G B) that drive the Tailwind `surface` scale - dark. */
+    --s-base: 10 11 15; /* #0a0b0f */
+    --s-surface: 17 19 24; /* #111318 */
+    --s-elevated: 26 29 38; /* #1a1d26 */
+    --s-subtle: 35 38 52; /* #232634 */
+    --s-strong: 46 51 66; /* #2e3342 */
+
+    /* Named theme tokens - dark defaults. Light overrides live in :root.light. */
+    --bg-base: #0a0b0f;
+    --bg-surface: #111318;
+    --bg-elevated: #1a1d26;
+    --bg-subtle: #232634;
+    --border: rgba(255, 255, 255, 0.07);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --text-muted: rgba(255, 255, 255, 0.4);
+    --accent: #6366F1;
+    --accent-subtle: rgba(99, 102, 241, 0.12);
+    --accent-border: rgba(99, 102, 241, 0.25);
+    --success: #34d399;
+    --warning: #fbbf24;
+    --danger: #f87171;
+  }
+
+  /* Light theme - ThemeContext adds `.light` to <html>. */
+  :root.light {
+    --bg-base: #ffffff;
+    --bg-surface: #f8f9fb;
+    --bg-elevated: #f0f2f5;
+    --bg-subtle: #e8eaed;
+    --border: #e5e7eb; /* gray-200 */
+    --border-strong: rgba(0, 0, 0, 0.14);
+    --text-primary: #111827; /* gray-900 - body text */
+    --text-secondary: #4b5563; /* gray-600 - secondary content */
+    --text-muted: #9ca3af; /* gray-400 - placeholders & timestamps only */
+    --accent: #6366F1;
+    --accent-subtle: rgba(99, 102, 241, 0.08);
+    --accent-border: rgba(99, 102, 241, 0.2);
+    --success: #16a34a;
+    --warning: #d97706;
+    --danger: #dc2626;
+
+    /* Light surface channels for the Tailwind `surface` scale. */
+    --s-base: 255 255 255; /* #ffffff */
+    --s-surface: 248 249 251; /* #f8f9fb */
+    --s-elevated: 240 242 245; /* #f0f2f5 */
+    --s-subtle: 232 234 237; /* #e8eaed */
+    --s-strong: 209 213 219; /* #d1d5db */
+  }
+  html {
+    font-size: 15px;
+  }
+  body {
+    @apply bg-surface font-sans antialiased;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  /* Capacitor / iOS safe areas. With viewport-fit=cover the WKWebView fills the
+     whole screen, so the app shell must inset itself from the status bar, notch,
+     and home indicator. On the web these env() values are 0 - no visual change. */
+  .app-shell {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  /* For overlays/drawers that sit at the very top edge. */
+  .safe-top { padding-top: env(safe-area-inset-top); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+  /* ── Native-app feel (Capacitor / touch devices) ──────────────────────────
+     These make the wrapped iOS/Android app feel like a real native app rather
+     than a website in a webview. No visible effect on desktop. */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  body {
+    -webkit-tap-highlight-color: transparent; /* no grey flash on tap */
+    overscroll-behavior: none;                /* kill rubber-band / pull-to-refresh */
+    touch-action: manipulation;               /* remove 300ms tap delay, no double-tap zoom */
+  }
+  /* App chrome shouldn't be long-press-selectable; real content still selects. */
+  button, a, [role="button"], nav, header, aside, label, .card > *:not(p):not(span) {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  p, span, input, textarea, h1, h2, h3 {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  /* Inner scroll regions get momentum scrolling and don't chain to the page. */
+  .overflow-y-auto, .overflow-auto, main {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  h1, h2, h3 {
+    letter-spacing: -0.01em;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #232634;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2e3342;
+  }
+}
+
+/* iOS zooms the page when a focused input's font is < 16px. Bump inputs to 16px
+   on phones so focusing a field never triggers that jarring zoom. */
+@media (max-width: 640px) {
+  .input,
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+@layer components {
+  /* One card treatment everywhere: surface bg, hairline border, 8px radius, one shadow. */
+  .card {
+    @apply rounded-lg bg-surface-900 shadow-sm;
+    border: 1px solid var(--border);
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+  /* Lift-on-hover list card - subtle, no glow. */
+  .card-lift {
+    @apply rounded-lg bg-surface-900 shadow-sm transition duration-150 hover:bg-surface-800;
+    border: 1px solid var(--border);
+  }
+  .card-lift:hover {
+    border-color: var(--border-strong);
+  }
+  /* Pill-style filter toggle. */
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition;
+  }
+  .pill-on {
+    @apply bg-[var(--accent-subtle)] text-primary-300;
+    border-color: var(--accent-border);
+  }
+  .pill-off {
+    @apply bg-surface-700;
+    border-color: var(--border);
+    color: var(--text-secondary);
+  }
+  .pill-off:hover {
+    color: var(--text-primary);
+  }
+  /* Three button styles only. */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold transition hover:bg-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 disabled:opacity-50 disabled:cursor-not-allowed;
+    color: #fff; /* set directly (not @apply text-white) to avoid circular dep with the light override */
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-surface-800 px-4 py-2.5 text-sm font-medium transition hover:bg-surface-700;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+  .btn-ghost:hover {
+    color: var(--text-primary);
+  }
+  /* Secondary: elevated surface + border, for non-primary actions. */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed;
+    background: var(--bg-elevated, theme('colors.surface.800'));
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+  }
+  .btn-secondary:hover {
+    background: var(--bg-subtle, theme('colors.surface.700'));
+  }
+  /* Danger: destructive actions only. */
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-semibold transition hover:bg-rose-500 disabled:opacity-50 disabled:cursor-not-allowed;
+    color: #fff;
+  }
+  .input {
+    @apply w-full rounded-lg bg-surface-700 px-3.5 py-2.5 text-sm transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-500/30;
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+  }
+  .input::placeholder {
+    color: var(--text-muted);
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-medium;
+    color: var(--text-secondary);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Light-mode overrides for hardcoded slate/white utilities used directly in
+   components. These let the theme flip app-wide without rewriting every file.
+   `:root.light .x` (two classes) outranks Tailwind's single-class utility.
+   --------------------------------------------------------------------------- */
+:root.light .text-white,
+:root.light .text-slate-50,
+:root.light .text-slate-100,
+:root.light .text-slate-200 {
+  color: var(--text-primary); /* #111827 gray-900 */
+}
+:root.light .text-slate-300,
+:root.light .text-slate-400 {
+  color: var(--text-secondary); /* #4b5563 gray-600 */
+}
+/* Labels & metadata - gray-500 minimum, never the lighter muted token. */
+:root.light .text-slate-500,
+:root.light .text-slate-600 {
+  color: #6b7280; /* gray-500 */
+}
+/* Hardcoded gray-* utilities used directly in a few pages. In light mode the
+   lightest shades fail contrast on main content, so floor them at gray-600. */
+:root.light .text-gray-300,
+:root.light .text-gray-400 {
+  color: #4b5563; /* gray-600 */
+}
+
+/* ---------------------------------------------------------------------------
+   Colored semantic text (badges, status pills, success/error lines, icons).
+   The 300/400 shades are tuned for dark surfaces and wash out on light tints,
+   so darken them to ~700 shades that pass WCAG AA on their pale /15 fills.
+   Light mode only - dark mode keeps the original brighter shades.
+   --------------------------------------------------------------------------- */
+:root.light .text-emerald-300,
+:root.light .text-emerald-400,
+:root.light .text-green-300,
+:root.light .text-green-400 {
+  color: #047857; /* emerald-700 */
+}
+:root.light .text-amber-300,
+:root.light .text-amber-400,
+:root.light .text-yellow-300,
+:root.light .text-yellow-400 {
+  color: #b45309; /* amber-700 */
+}
+:root.light .text-sky-300,
+:root.light .text-sky-400,
+:root.light .text-blue-300,
+:root.light .text-blue-400 {
+  color: #0369a1; /* sky-700 */
+}
+:root.light .text-rose-300,
+:root.light .text-rose-400,
+:root.light .text-red-300,
+:root.light .text-red-400 {
+  color: #be123c; /* rose-700 */
+}
+:root.light .text-purple-300,
+:root.light .text-purple-400,
+:root.light .text-violet-300,
+:root.light .text-violet-400 {
+  color: #6d28d9; /* violet-700 */
+}
+:root.light .text-primary-300 {
+  color: var(--accent); /* brand accent, AA on light */
+}
+/* Arbitrary hex text colors used by the shared badge config (lib/consults.js). */
+:root.light .text-\[\#34d399\] {
+  color: #047857; /* emerald-700 */
+}
+:root.light .text-\[\#60a5fa\] {
+  color: #0369a1; /* sky-700 */
+}
+:root.light .text-\[\#f87171\],
+:root.light .text-\[\#f43f5e\] {
+  color: #be123c; /* rose-700 */
+}
+/* White hairline borders → theme border. */
+:root.light .border-white\/\[0\.07\] {
+  border-color: var(--border);
+}
+:root.light .border-white\/\[0\.12\] {
+  border-color: var(--border-strong);
+}
+:root.light .border-surface-700 {
+  border-color: var(--border);
+}
+/* Smooth the swap on the most common chrome surfaces. */
+.card,
+.btn-primary,
+.btn-ghost,
+.input,
+aside,
+header {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* Dropdown / popover entrance: fade in + slide down 4px, 150ms. */
+@keyframes dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-dropdown {
+  animation: dropdown-in 150ms ease-out;
+}
