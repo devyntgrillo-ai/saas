@@ -1,0 +1,13 @@
+# Pins the build + publish dir so the SPA fallback is deterministic regardless
+# of dashboard settings. The redirect makes any deep link (e.g. /consults,
+# /settings/billing) serve the app shell, so a hard refresh keeps the route
+# instead of 404ing. Static files in dist (assets, landing.html) are served
+# directly and are unaffected by the catch-all.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
