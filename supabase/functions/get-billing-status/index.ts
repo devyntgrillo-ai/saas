@@ -1,3 +1,15 @@
+// ============================================================================
+// get-billing-status - return the caller's practice subscription status.
+//
+// Auth: the user's JWT. Resolves the practice (body.practice_id, validated via
+// RLS, or the caller's own users.practice_id) and returns:
+//   { plan, status, trial_ends_at, subscription_id }
+// If there's no paid subscription, returns a 14-day trial window derived from
+// the practice's created_at.
+//
+// Subscription state lives on the practices table (written by chargebee-webhook):
+//   subscription_status, trial_ends_at, created_at, chargebee_subscription_id.
+// ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 
@@ -19,6 +31,7 @@ Deno.serve(async (req: Request) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return json({ error: "Missing Authorization header" }, 401);
 
+    // User-scoped client → practice lookups are constrained by RLS.
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
@@ -45,8 +58,9 @@ Deno.serve(async (req: Request) => {
     if (!practice) return json({ error: "Practice not found or not accessible." }, 403);
 
     const status: string | null = practice.subscription_status ?? null;
-    const subscriptionId = practice.ls_subscription_id ?? practice.subscription_id ?? null;
+    const subscriptionId = practice.chargebee_subscription_id ?? practice.subscription_id ?? null;
 
+    // No paid subscription (or explicit trial) → return a 14-day trial window.
     if (!status || status === "trial") {
       let trialEndsAt: string | null = practice.trial_ends_at ?? null;
       if (!trialEndsAt && practice.created_at) {
@@ -57,6 +71,7 @@ Deno.serve(async (req: Request) => {
       return json({ plan: "trial", status: "trial", trial_ends_at: trialEndsAt, subscription_id: subscriptionId });
     }
 
+    // active / past_due / paused / cancelled - report the real status.
     const plan = status === "active" ? "caselift" : status;
     return json({
       plan,

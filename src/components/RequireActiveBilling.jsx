@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Outlet, Link } from 'react-router-dom'
 import { Lock, Loader2, CreditCard } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { isBillingBlocked, getUpdatePaymentUrl } from '../lib/billing'
+import { isBillingBlocked, createPortalSession } from '../lib/billing'
 
 // Route guard: blocks the core app (Consults/Conversations/Performance/KB/
 // Training) when the practice's subscription is past_due/unpaid/cancelled/
@@ -20,9 +20,9 @@ export default function RequireActiveBilling() {
     setBusy(true)
     setErr('')
     try {
-      window.location.href = await getUpdatePaymentUrl(practice.id)
+      window.location.href = await createPortalSession(practice.id)
     } catch (e) {
-      setErr(e?.message || 'Could not open payment update. Please try again.')
+      setErr(e?.message || 'Could not open the billing portal. Please try again.')
       setBusy(false)
     }
   }

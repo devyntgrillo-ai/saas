@@ -46,7 +46,7 @@ import {
   isTrialExpired,
   createCheckout,
   getBillingStatus,
-  getUpdatePaymentUrl,
+  createPortalSession,
 } from '../lib/billing'
 
 const TABS = [
@@ -123,7 +123,7 @@ export default function Settings() {
   const [checkoutError, setCheckoutError] = useState('')
   const [showSuccess, setShowSuccess] = useState(false)
 
-  // After returning from a Lemon Squeezy checkout, the webhook updates the
+  // After returning from a Chargebee checkout, the webhook updates the
   // practice asynchronously - refresh the profile and surface a confirmation.
   useEffect(() => {
     if (searchParams.get('success') === 'true') {
@@ -147,8 +147,8 @@ export default function Settings() {
     } catch (e) {
       const msg = e?.message || ''
       setCheckoutError(
-        /not configured/i.test(msg)
-          ? 'Online checkout isn\'t available yet - billing isn\'t fully configured. Please contact support@caselift.io.'
+        /chargebee|not configured/i.test(msg)
+          ? 'Online checkout isn’t available yet - billing isn’t fully configured. Please contact support@caselift.io.'
           : msg || 'Could not start checkout. Please try again.',
       )
       setCheckoutLoading(false)
@@ -577,22 +577,23 @@ function BillingPanel({ practice, showSuccess, checkoutLoading, checkoutError, o
   const trialExpired = isTrial && isTrialExpired(eff)
   const daysLeft = trialDaysRemaining(eff)
 
-  const [updateBusy, setUpdateBusy] = useState(false)
-  const [updateErr, setUpdateErr] = useState('')
-  async function openUpdatePayment() {
+  // Chargebee customer-portal (update payment method / manage subscription).
+  const [portalBusy, setPortalBusy] = useState(false)
+  const [portalErr, setPortalErr] = useState('')
+  async function openPortal() {
     if (!practice?.id) return
-    setUpdateBusy(true)
-    setUpdateErr('')
+    setPortalBusy(true)
+    setPortalErr('')
     try {
-      window.location.href = await getUpdatePaymentUrl(practice.id)
+      window.location.href = await createPortalSession(practice.id)
     } catch (e) {
-      setUpdateErr(e?.message || 'Could not open payment update. Please try again.')
-      setUpdateBusy(false)
+      setPortalErr(e?.message || 'Could not open the billing portal. Please try again.')
+      setPortalBusy(false)
     }
   }
-  const UpdatePaymentButton = ({ label = 'Update Payment Method' }) => (
-    <button onClick={openUpdatePayment} disabled={updateBusy} className="btn-primary">
-      {updateBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+  const PortalButton = ({ label = 'Update Payment Method' }) => (
+    <button onClick={openPortal} disabled={portalBusy} className="btn-primary">
+      {portalBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
       {label}
     </button>
   )
@@ -607,11 +608,11 @@ function BillingPanel({ practice, showSuccess, checkoutLoading, checkoutError, o
             <AlertCircle className="h-4 w-4 shrink-0" />
             Payment failed - update your payment method to restore access.
           </span>
-          <UpdatePaymentButton />
+          <PortalButton />
         </div>
       )}
-      {updateErr && (
-        <p className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{updateErr}</p>
+      {portalErr && (
+        <p className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{portalErr}</p>
       )}
 
       {showSuccess && (
@@ -705,11 +706,11 @@ function BillingPanel({ practice, showSuccess, checkoutLoading, checkoutError, o
         {status === 'paused' ? (
           <ActivateButton label="Resume subscription" loading={false} onClick={onResume} />
         ) : isActive ? (
-          <UpdatePaymentButton />
+          <PortalButton />
         ) : isTrial ? (
           <ActivateButton label="Activate subscription" loading={checkoutLoading} onClick={onActivate} />
         ) : isPaymentFailed ? (
-          <UpdatePaymentButton />
+          <PortalButton />
         ) : isCancelledOrExpired ? (
           <ActivateButton label="Reactivate subscription" loading={checkoutLoading} onClick={onActivate} />
         ) : (
