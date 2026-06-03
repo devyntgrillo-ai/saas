@@ -1,5 +1,5 @@
-import { lazy, useEffect, useRef } from 'react'
-import { BrowserRouter, Routes, Route, Outlet, Navigate, useLocation } from 'react-router-dom'
+import { lazy } from 'react'
+import { BrowserRouter, Routes, Route, Outlet, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { BrandingProvider } from './context/BrandingContext'
 import { ThemeProvider } from './context/ThemeContext'
@@ -59,20 +59,6 @@ const AdminReferrals = lazy(() => import('./pages/admin/Referrals'))
 const ON_GO_SUBDOMAIN =
   typeof window !== 'undefined' && window.location.hostname === 'get.caselift.io'
 
-// TEMP DIAGNOSTIC: logs every route change so we can see the exact redirect
-// sequence on refresh (e.g. /settings/messaging → /onboarding → /). Remove once
-// the refresh-bounce bug is pinned down.
-function RouteTracer() {
-  const location = useLocation()
-  const prev = useRef('(initial)')
-  useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.warn(`[CaseLift route] ${prev.current} → ${location.pathname}${location.search}`)
-    prev.current = location.pathname + location.search
-  }, [location])
-  return null
-}
-
 export default function App() {
   return (
     <ErrorBoundary>
@@ -80,7 +66,6 @@ export default function App() {
       <AuthProvider>
         <BrandingProvider>
           <BrowserRouter>
-            <RouteTracer />
             <Routes>
               {/* get.caselift.io root → signup funnel (preserving ?plan=/?ref=).
                   Defined first so it wins the "/" match; otherwise the gated app

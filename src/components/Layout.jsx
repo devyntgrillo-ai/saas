@@ -24,6 +24,7 @@ import NotificationBell from './NotificationBell'
 import GlobalSearch from './GlobalSearch'
 import RecordConsultButton from './RecordConsultButton'
 import AccountSwitcher from './AccountSwitcher'
+import ImpersonationBanner from './ImpersonationBanner'
 import { RecorderProvider } from '../context/RecorderContext'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
@@ -69,11 +70,8 @@ export default function Layout() {
     agencyRole,
     isAgencyUser,
     isSuperAdmin,
-    isImpersonating,
-    activePractice,
     practice,
     practiceId,
-    exitPractice,
     signOut,
   } = useAuth()
   const perms = usePermissions()
@@ -94,11 +92,6 @@ export default function Layout() {
   const handleSignOut = async () => {
     await signOut()
     navigate('/login')
-  }
-
-  const handleExit = (to) => {
-    exitPractice()
-    navigate(to || '/agency')
   }
 
   const initials = (user?.email || '?').slice(0, 2).toUpperCase()
@@ -208,7 +201,10 @@ export default function Layout() {
 
   return (
     <RecorderProvider>
-      <div className="app-shell flex h-screen overflow-hidden bg-surface">
+      <div className="flex h-screen flex-col overflow-hidden bg-surface">
+      {/* Impersonation bar - pinned above the nav, visible while impersonating. */}
+      <ImpersonationBanner />
+      <div className="app-shell flex min-h-0 flex-1 overflow-hidden">
       {/* Desktop sidebar */}
       <aside className="hidden w-[220px] shrink-0 flex-col border-r border-white/[0.07] bg-surface-900 lg:flex">
         <SidebarContent />
@@ -286,22 +282,6 @@ export default function Layout() {
           </div>
         )}
 
-        {/* Viewing banner - subtle 32px strip, muted text, text-link exit. */}
-        {isImpersonating && (
-          <div className="flex h-8 items-center justify-between gap-3 border-b border-white/[0.07] bg-surface-800 px-4 text-xs text-slate-400">
-            <span className="truncate">
-              Viewing <span className="text-slate-200">{activePractice?.name || 'client practice'}</span>
-              {activePractice?.agency?.name && <span> · {activePractice.agency.name}</span>}
-            </span>
-            <button
-              onClick={() => handleExit(isSuperAdmin ? '/admin' : '/agency')}
-              className="shrink-0 font-medium text-slate-400 transition hover:text-slate-200"
-            >
-              Exit
-            </button>
-          </div>
-        )}
-
         {/* Top bar - mobile menu/logo on the left, search + notifications on the right */}
         <header className="flex items-center gap-3 border-b border-white/[0.07] bg-surface-900 px-4 py-3 sm:px-6">
           <button
@@ -341,6 +321,7 @@ export default function Layout() {
           CaseLift Admin
         </div>
       )}
+      </div>
       </div>
     </RecorderProvider>
   )
