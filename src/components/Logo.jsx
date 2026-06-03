@@ -1,6 +1,6 @@
 import { useBranding } from '../context/BrandingContext'
 
-export default function Logo({ collapsed = false, size = 'md' }) {
+export default function Logo({ collapsed = false, size = 'md', showBeta = true }) {
   const { brandName, logoUrl, isWhiteLabeled } = useBranding()
 
   const lg = size === 'lg'
@@ -40,12 +40,14 @@ export default function Logo({ collapsed = false, size = 'md' }) {
               name
             )}
           </span>
-          <span
-            className="rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider"
-            style={{ color: 'var(--accent)', background: 'var(--accent-subtle)', boxShadow: 'inset 0 0 0 1px var(--accent-border)' }}
-          >
-            Beta
-          </span>
+          {showBeta && (
+            <span
+              className="rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider"
+              style={{ color: 'var(--accent)', background: 'var(--accent-subtle)', boxShadow: 'inset 0 0 0 1px var(--accent-border)' }}
+            >
+              Beta
+            </span>
+          )}
         </div>
       )}
     </div>
