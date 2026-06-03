@@ -6,8 +6,24 @@ import { supabase } from './supabase'
 // `.code` of 'twilio_voice_not_configured' when Twilio isn't set up yet so the
 // dialer can fall back to a tel: link.
 export async function fetchVoiceToken() {
-  const { data, error } = await supabase.functions.invoke('twilio-voice-token', { body: {} })
-  if (error) throw new Error(error.message || 'Could not start the dialer.')
+  const { data, error, response } = await supabase.functions.invoke('twilio-voice-token', { body: {} })
+  if (error) {
+    let message = error.message || 'Could not start the dialer.'
+    if (response && typeof response.json === 'function') {
+      try {
+        const payload = await response.json()
+        if (payload?.error) message = payload.error
+        if (payload?.code) {
+          const e = new Error(message)
+          e.code = payload.code
+          throw e
+        }
+      } catch (parseErr) {
+        if (parseErr?.code) throw parseErr
+      }
+    }
+    throw new Error(message)
+  }
   if (data?.error) {
     const e = new Error(data.error)
     e.code = data.code
@@ -85,9 +101,11 @@ export function useTwilioVoiceDevice({ enabled = true } = {}) {
     secondsRef.current = 0
   }, [])
 
-  const ensureReady = useCallback(async () => {
-    if (voiceState === 'ready' && deviceRef.current) return true
-    if (voiceState === 'unavailable') return false
+  const ensureReady = useCallback(async (force = false) => {
+    if (voiceState === 'ready' && deviceRef.current) return { ok: true }
+    if (voiceState === 'unavailable' && !force) {
+      return { ok: false, code: 'twilio_voice_not_configured', error: 'Voice calling is not configured.' }
+    }
     try {
       const { token } = await fetchVoiceToken()
       const { Device } = await import('@twilio/voice-sdk')
@@ -111,15 +129,11 @@ export function useTwilioVoiceDevice({ enabled = true } = {}) {
       await device.register()
       deviceRef.current = device
       setVoiceState('ready')
-      return true
+      return { ok: true }
     } catch (e) {
-      if (e?.code === 'twilio_voice_not_configured') {
-        setVoiceState('unavailable')
-      } else {
-        console.error('Twilio voice init failed:', e)
-        setVoiceState('unavailable')
-      }
-      return false
+      console.error('Twilio voice init failed:', e)
+      setVoiceState('unavailable')
+      return { ok: false, error: e?.message || String(e), code: e?.code }
     }
   }, [voiceState])
 
@@ -127,8 +141,8 @@ export function useTwilioVoiceDevice({ enabled = true } = {}) {
     if (!enabled) return
     let cancelled = false
     ;(async () => {
-      const ok = await ensureReady()
-      if (cancelled && ok && deviceRef.current) {
+      const result = await ensureReady()
+      if (cancelled && result?.ok && deviceRef.current) {
         deviceRef.current.destroy()
         deviceRef.current = null
       }

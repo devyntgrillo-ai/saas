@@ -879,23 +879,13 @@ export default function Conversations() {
     if (voice.callState !== 'idle') return
 
     if (voice.voiceState !== 'ready') {
-      const ok = await voice.ensureReady()
-      if (!ok) {
-        const nowIso = new Date().toISOString()
-        const { data } = await insertConvMessage({
-          conversation_id: activeId,
-          direction: 'outbound',
-          channel: 'call',
-          body: 'Outbound call (device)',
-          sent_at: nowIso,
-          meta: { kind: 'call', direction: 'outbound', actor: tcName, fallback: 'tel' },
-        })
-        if (data) {
-          setThread((prev) => [...prev, data])
-          bumpConversation(nowIso, 'Outbound call')
-        }
+      const result = await voice.ensureReady(true)
+      if (!result?.ok) {
+        const hint = result?.code === 'twilio_voice_not_configured'
+          ? 'Set TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, TWILIO_TWIML_APP_SID, and TWILIO_CALLER_ID in Supabase Edge Function secrets.'
+          : (result?.error || 'Voice not configured')
+        showToast(hint)
         window.open(`tel:${phone}`)
-        showToast('In-app calling unavailable — opened your phone app')
         return
       }
     }
