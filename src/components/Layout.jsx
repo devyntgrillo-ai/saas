@@ -1,5 +1,5 @@
 import { Suspense, useState } from 'react'
-import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import PageLoader from './PageLoader'
 import {
   LayoutDashboard,
@@ -16,6 +16,9 @@ import {
   AlertTriangle,
   Sun,
   Moon,
+  LayoutGrid,
+  Rocket,
+  BarChart3,
 } from 'lucide-react'
 import Logo from './Logo'
 import NotificationBell from './NotificationBell'
@@ -37,6 +40,17 @@ const practiceNav = [
   { to: '/sequences', label: 'Sequences', icon: GitBranch },
   { to: '/training', label: 'Training', icon: GraduationCap },
   { to: '/community', label: 'Community', icon: Users, locked: true },
+]
+
+// Reseller (agency) portal nav - rendered vertically in the sidebar in place of
+// the old horizontal AgencyTabs bar. `key` drives active state (the Settings tab
+// lives on /agency?tab=settings, so we can't rely on NavLink path matching).
+const agencyNav = [
+  { key: 'overview', label: 'Overview', icon: LayoutGrid, to: '/agency' },
+  { key: 'saas-mode', label: 'SaaS Mode', icon: Rocket, to: '/agency/saas-mode' },
+  { key: 'settings', label: 'Settings', icon: Settings, to: '/agency?tab=settings' },
+  { key: 'analytics', label: 'Analytics', icon: BarChart3, to: '/agency/analytics' },
+  { key: 'team', label: 'Team', icon: Users, to: '/agency/team' },
 ]
 
 // Shared styling for sidebar nav links (active = brand accent + left border).
@@ -67,6 +81,7 @@ export default function Layout() {
   const { isLight, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const [mobileOpen, setMobileOpen] = useState(false)
   const showPaywall = Boolean(practiceId) && needsPaywall(practice)
   // Reseller wholesale billing failed → their account is suspended, so their
@@ -96,6 +111,16 @@ export default function Layout() {
   const nav = practiceId ? practiceNav : []
   const showSettings = practiceId && perms.canViewSettings
 
+  // Reseller portal: an agency user with no practice in context (or anyone on an
+  // /agency route). Their nav lives in the sidebar instead of a horizontal bar.
+  const inResellerPortal = !practiceId && (isAgencyUser || location.pathname.startsWith('/agency'))
+  const agencyActive =
+    location.pathname.startsWith('/agency/saas-mode') ? 'saas-mode'
+    : location.pathname.startsWith('/agency/analytics') ? 'analytics'
+    : location.pathname.startsWith('/agency/team') ? 'team'
+    : searchParams.get('tab') === 'settings' ? 'settings'
+    : 'overview'
+
   const SidebarContent = () => (
     <>
       <div className="flex justify-center px-4 pb-5 pt-7">
@@ -109,22 +134,36 @@ export default function Layout() {
       {practiceId && <RecordConsultButton onLaunch={() => setMobileOpen(false)} />}
 
       <nav className="flex-1 space-y-0.5 px-3">
-        {nav.map(({ to, label, icon: Icon, end, locked }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            onClick={() => setMobileOpen(false)}
-            className={navItemClass}
-          >
-            {/* Icon inherits the link's text color: muted gray when inactive,
-                brand accent when active. Size 16px, 10px gap (gap-2.5 above). */}
-            {Icon && <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />}
-            <span className="flex-1">{label}</span>
-            {/* Locked tabs (e.g. Community) show a small lock - viewable as a teaser. */}
-            {locked && <Lock className="h-3 w-3 shrink-0 text-slate-500" strokeWidth={2} />}
-          </NavLink>
-        ))}
+        {inResellerPortal
+          ? // Reseller portal: agency nav. Plain Links + manual active state so the
+            // Settings tab (/agency?tab=settings) highlights correctly.
+            agencyNav.map(({ key, label, icon: Icon, to }) => (
+              <Link
+                key={key}
+                to={to}
+                onClick={() => setMobileOpen(false)}
+                className={navItemClass({ isActive: key === agencyActive })}
+              >
+                {Icon && <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />}
+                <span className="flex-1">{label}</span>
+              </Link>
+            ))
+          : nav.map(({ to, label, icon: Icon, end, locked }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                onClick={() => setMobileOpen(false)}
+                className={navItemClass}
+              >
+                {/* Icon inherits the link's text color: muted gray when inactive,
+                    brand accent when active. Size 16px, 10px gap (gap-2.5 above). */}
+                {Icon && <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />}
+                <span className="flex-1">{label}</span>
+                {/* Locked tabs (e.g. Community) show a small lock - viewable as a teaser. */}
+                {locked && <Lock className="h-3 w-3 shrink-0 text-slate-500" strokeWidth={2} />}
+              </NavLink>
+            ))}
       </nav>
 
       {/* Settings - pinned to the bottom (where Record Consult used to be). */}
