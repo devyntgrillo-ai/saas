@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Search, X, Calendar, AlertTriangle, User, Mic, Loader2, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { fetchTodaysAppointments } from '../lib/pms'
+import { fetchTodaysAppointments, searchPmsPatients } from '../lib/pms'
 import { DEFAULT_TREATMENT, normalizeTreatment, treatmentLabel } from '../lib/treatments'
 
 const isEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((e || '').trim())
@@ -24,6 +24,11 @@ export default function AssignmentModal({ presetAppointment = null, onCancel, on
   const [tab, setTab] = useState('appointment') // appointment | new
   const [appts, setAppts] = useState(null)
   const [search, setSearch] = useState('')
+  // "Select Patient" tab: searchable roster pulled from the PMS (pms_patients).
+  const [patientSearch, setPatientSearch] = useState('')
+  const [patientResults, setPatientResults] = useState(null)
+  // The PMS patient chosen via "Select Patient" (carried for attribution).
+  const [pmsPatient, setPmsPatient] = useState(null)
   const [selected, setSelected] = useState(presetAppointment || null)
   const [form, setForm] = useState({ firstName: '', lastName: '', phone: '', email: '' })
   const [contact, setContact] = useState({
@@ -52,10 +57,38 @@ export default function AssignmentModal({ presetAppointment = null, onCancel, on
     return () => { on = false }
   }, [practiceId, presetAppointment])
 
+  // Debounced PMS patient search, only while the "Select Patient" tab is active.
+  useEffect(() => {
+    if (mode !== 'choose' || tab !== 'patient' || !practiceId) return
+    let on = true
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPatientResults(null)
+    const t = setTimeout(() => {
+      searchPmsPatients(practiceId, patientSearch).then((rows) => {
+        if (on) setPatientResults(rows)
+      })
+    }, 250)
+    return () => { on = false; clearTimeout(t) }
+  }, [mode, tab, patientSearch, practiceId])
+
   const filteredAppts = useMemo(() => {
     const q = search.trim().toLowerCase()
     return (appts || []).filter((a) => !q || fullName(a).toLowerCase().includes(q))
   }, [appts, search])
+
+  // Picking a PMS patient pre-fills the contact form (editable) and keeps the
+  // pms_patients link so the consult attributes back to that patient record.
+  function pickPatient(p) {
+    setSelected(null)
+    setPmsPatient(p)
+    setForm({
+      firstName: p.first_name || '',
+      lastName: p.last_name || '',
+      phone: p.phone || '',
+      email: p.email || '',
+    })
+    setMode('confirm')
+  }
 
   const source = selected ? 'appointment' : 'new'
 
@@ -91,6 +124,10 @@ export default function AssignmentModal({ presetAppointment = null, onCancel, on
         email: form.email,
         appointmentId: null,
         pmsApptId: null,
+        // Set when chosen via "Select Patient" — links the consult to the PMS
+        // patient record for attribution. Null for a manually added patient.
+        pmsPatientId: pmsPatient?.id || null,
+        pmsPatientExternalId: pmsPatient?.external_id || null,
         ...treatmentExtras,
       }
 
@@ -112,7 +149,7 @@ export default function AssignmentModal({ presetAppointment = null, onCancel, on
         <div className="flex items-center justify-between border-b border-surface-700 px-5 py-3.5">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
             {mode === 'confirm' && !presetAppointment && (
-              <button onClick={() => { setSelected(null); setMode('choose') }} className="rounded-md p-0.5 text-slate-400 hover:text-white">
+              <button onClick={() => { setSelected(null); setPmsPatient(null); setMode('choose') }} className="rounded-md p-0.5 text-slate-400 hover:text-white">
                 <ArrowLeft className="h-4 w-4" />
               </button>
             )}
@@ -144,16 +181,16 @@ export default function AssignmentModal({ presetAppointment = null, onCancel, on
           {mode === 'choose' && (
             <>
               {/* Tabs */}
-              <div className="mb-4 inline-flex rounded-lg border border-surface-700 bg-surface-800 p-0.5">
-                {[['appointment', "Today's appointment"], ['new', 'New patient']].map(([k, label]) => (
+              <div className="mb-4 flex w-full rounded-lg border border-surface-700 bg-surface-800 p-0.5">
+                {[['appointment', "Today's Consults"], ['patient', 'Select Patient'], ['new', 'Add Patient']].map(([k, label]) => (
                   <button key={k} onClick={() => setTab(k)}
-                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${tab === k ? 'bg-primary/15 text-primary-300' : 'text-slate-400 hover:text-slate-200'}`}>
+                    className={`flex-1 rounded-md px-2 py-1.5 text-center text-[13px] font-medium transition ${tab === k ? 'bg-primary/15 text-primary-300' : 'text-slate-400 hover:text-slate-200'}`}>
                     {label}
                   </button>
                 ))}
               </div>
 
-              {tab === 'appointment' ? (
+              {tab === 'appointment' && (
                 <div>
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -166,7 +203,7 @@ export default function AssignmentModal({ presetAppointment = null, onCancel, on
                       <div className="rounded-lg border border-dashed border-surface-700 px-4 py-8 text-center">
                         <Calendar className="mx-auto h-7 w-7 text-slate-600" />
                         <p className="mt-2 text-sm text-slate-400">No appointments remaining today</p>
-                        <p className="mt-1 text-xs text-slate-500">Use “New patient” to record without a PMS link.</p>
+                        <p className="mt-1 text-xs text-slate-500">Use “Select Patient” or “Add Patient” to record without a today's appointment.</p>
                       </div>
                     ) : filteredAppts.map((a) => (
                       <button key={a.id} onClick={() => pick(a)}
@@ -180,8 +217,43 @@ export default function AssignmentModal({ presetAppointment = null, onCancel, on
                     ))}
                   </div>
                 </div>
-              ) : (
-                <NewPatientForm form={form} setForm={setForm} onContinue={() => setMode('confirm')} phoneOk={isUSPhone(form.phone)} emailOk={isEmail(form.email)} />
+              )}
+
+              {tab === 'patient' && (
+                <div>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                    <input value={patientSearch} onChange={(e) => setPatientSearch(e.target.value)} placeholder="Search all patients..." className="input pl-9" />
+                  </div>
+                  <div className="mt-3 max-h-72 space-y-1 overflow-y-auto pr-1">
+                    {patientResults === null ? (
+                      <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div>
+                    ) : patientResults.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-surface-700 px-4 py-8 text-center">
+                        <User className="mx-auto h-7 w-7 text-slate-600" />
+                        <p className="mt-2 text-sm text-slate-400">{patientSearch.trim() ? 'No matching patients' : 'No patients synced yet'}</p>
+                        <p className="mt-1 text-xs text-slate-500">Connect/sync your PMS, or use “Add Patient”.</p>
+                      </div>
+                    ) : patientResults.map((p) => (
+                      <button key={p.id} onClick={() => pickPatient(p)}
+                        className="flex w-full items-center gap-3 rounded-lg border border-surface-700 bg-surface-800/50 px-3 py-2.5 text-left transition hover:border-surface-600">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-700 text-xs font-semibold text-slate-300">
+                          {(p.first_name?.[0] || p.last_name?.[0] || '?').toUpperCase()}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-slate-100">
+                            {[p.first_name, p.last_name].filter(Boolean).join(' ') || 'Unnamed patient'}
+                          </span>
+                          <span className="block truncate text-xs text-slate-500">{p.phone || p.email || 'No contact on file'}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {tab === 'new' && (
+                <NewPatientForm form={form} setForm={setForm} onContinue={() => { setPmsPatient(null); setMode('confirm') }} phoneOk={isUSPhone(form.phone)} emailOk={isEmail(form.email)} />
               )}
             </>
           )}
