@@ -22,6 +22,10 @@ export function AuthProvider({ children }) {
     () => localStorage.getItem(VIEW_KEY) || null
   )
   const [activePractice, setActivePractice] = useState(null)
+  // Which viewingPracticeId the current activePractice record reflects. Lets the
+  // guards tell "impersonation target still loading" apart from "loaded, but the
+  // practice has no record" — see impersonationPending below.
+  const [activePracticeFor, setActivePracticeFor] = useState(null)
 
   // Set of practices this user can switch between (drives the account switcher).
   const [accessiblePractices, setAccessiblePractices] = useState([])
@@ -134,6 +138,7 @@ export function AuthProvider({ children }) {
   const loadActivePractice = useCallback(async (id) => {
     if (!id) {
       setActivePractice(null)
+      setActivePracticeFor(null)
       return null
     }
     const { data } = await supabase
@@ -142,13 +147,18 @@ export function AuthProvider({ children }) {
       .eq('id', id)
       .maybeSingle()
     setActivePractice(data ?? null)
+    // Mark this target as resolved (even if not found) so guards stop waiting.
+    setActivePracticeFor(id)
     return data
   }, [])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (canImpersonate && viewingPracticeId) loadActivePractice(viewingPracticeId)
-    else setActivePractice(null)
+    else {
+      setActivePractice(null)
+      setActivePracticeFor(null)
+    }
   }, [canImpersonate, viewingPracticeId, loadActivePractice])
 
   // --- accessible-practice list for the account switcher ---
@@ -194,6 +204,16 @@ export function AuthProvider({ children }) {
   const practiceId = canImpersonate ? viewingPracticeId : profile?.practice_id ?? null
   const isImpersonating = canImpersonate && Boolean(viewingPracticeId)
 
+  // On a hard refresh, viewingPracticeId is restored from localStorage
+  // synchronously (so practiceId is truthy at once), but the practice record it
+  // points to is fetched async and is NOT part of profile/agency loading. Until
+  // that fetch resolves, practice is null and onboardingCompleted/baaAccepted
+  // read false — which made route guards bounce impersonating super-admins to
+  // /onboarding (then on to the dashboard), losing the current route on refresh.
+  // Treat the context as still loading until activePractice matches the target.
+  const impersonationPending =
+    canImpersonate && Boolean(viewingPracticeId) && activePracticeFor !== viewingPracticeId
+
   const viewPractice = useCallback((id) => {
     localStorage.setItem(VIEW_KEY, id)
     setViewingPracticeId(id)
@@ -234,7 +254,7 @@ export function AuthProvider({ children }) {
     agencyRole,
     isAgencyUser,
     agencyLoading,
-    contextLoading: profileLoading || agencyLoading,
+    contextLoading: profileLoading || agencyLoading || impersonationPending,
 
     // access
     accessLevel,
