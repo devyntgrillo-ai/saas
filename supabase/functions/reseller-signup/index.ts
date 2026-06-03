@@ -156,10 +156,9 @@ Deno.serve(async (req: Request) => {
       user_metadata: { practice_name: practiceName, first_name: firstName, last_name: lastName },
     });
     if (createErr || !created?.user) {
-      // Most common: the email already has an account.
-      const msg = createErr?.message || "Could not create your account";
-      const exists = /already.+registered|already been registered|exists/i.test(msg);
-      return json({ error: exists ? "An account with this email already exists. Please sign in." : msg }, exists ? 409 : 400);
+      // Generic error — do not distinguish "already registered" from other
+      // failures to prevent email enumeration (audit finding 3).
+      return json({ error: "Could not create your account. Try signing in instead." }, 400);
     }
     const userId = created.user.id;
 

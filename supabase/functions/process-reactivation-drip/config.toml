@@ -1,0 +1,2 @@
+[functions.process-reactivation-drip]
+verify_jwt = true

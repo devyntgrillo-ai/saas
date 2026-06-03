@@ -1,0 +1,2 @@
+[functions.weekly-intelligence-digest]
+verify_jwt = true

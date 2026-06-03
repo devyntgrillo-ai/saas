@@ -160,7 +160,7 @@ export function AuthProvider({ children }) {
         return data || []
       }
       if (ag) {
-        const { data } = await supabase.from('practices').select(sel).eq('agency_id', ag.id).order('name')
+        const { data } = await supabase.from('practices').select(sel).eq('agency_id', ag.id).order('name').limit(500)
         let rows = data || []
         const accessible = prof?.accessible_practice_ids
         if (Array.isArray(accessible) && accessible.length) rows = rows.filter((p) => accessible.includes(p.id))

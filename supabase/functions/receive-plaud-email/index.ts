@@ -13,6 +13,20 @@ const json = (b, s = 200) => new Response(JSON.stringify(b), { status: s, header
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+
+  // Guard: inbound email services (SendGrid Inbound Parse) pass the shared
+  // secret as a query parameter. The URL configured in SendGrid looks like:
+  //   https://project.supabase.co/functions/v1/receive-plaud-email?secret=<value>
+  const expected = Deno.env.get('PLAUD_INBOUND_SECRET')
+  if (expected) {
+    const actual = new URL(req.url).searchParams.get('secret') || ''
+    if (actual !== expected) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403, headers: { ...cors, 'Content-Type': 'application/json' },
+      })
+    }
+  }
+
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
     const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')

@@ -8,8 +8,9 @@
 // Deploy with verify_jwt=false (external caller):
 //   supabase functions deploy doxyme-webhook --no-verify-jwt --project-ref eymgqjeudrmeofytnwgs
 //
-// Auth from Doxy.me: send the key as header `x-doxyme-key`, body `api_key`,
-// or query `?key=`. Recording URL is read from common payload shapes.
+// Auth from Doxy.me: send the key as header `x-doxyme-key` (preferred) or
+// body `api_key`. Query-param `?key=` was removed to avoid secret leakage
+// in proxy logs (audit finding 2).
 // ============================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -42,14 +43,13 @@ Deno.serve(async (req: Request) => {
 
     const url = new URL(req.url);
     const payload = await req.json().catch(() => ({}));
-    const key = req.headers.get("x-doxyme-key") || payload.api_key || url.searchParams.get("key");
+    const key = req.headers.get("x-doxyme-key") || payload.api_key;
     if (!key) return json({ error: "Missing Doxy.me API key." }, 401);
 
     // Authenticate + resolve the practice by stored key.
-    const { data: practice } = await admin
-      .from("practices").select("id").eq("doxyme_api_key", key).maybeSingle();
-    if (!practice) return json({ error: "Unrecognized Doxy.me API key." }, 403);
-    const practiceId = practice.id;
+    // Key is encrypted at rest (pgcrypto); the DB function decrypts and matches.
+    const { data: practiceId } = await admin.rpc("match_doxyme_key", { p_key: key });
+    if (!practiceId) return json({ error: "Unrecognized Doxy.me API key." }, 403);
 
     const recUrl = findRecordingUrl(payload);
     if (!recUrl) return json({ error: "No recording URL in payload." }, 422);

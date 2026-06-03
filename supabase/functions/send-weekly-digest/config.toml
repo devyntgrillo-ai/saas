@@ -1,0 +1,2 @@
+[functions.send-weekly-digest]
+verify_jwt = true

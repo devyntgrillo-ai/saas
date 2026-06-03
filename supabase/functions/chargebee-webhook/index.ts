@@ -40,10 +40,10 @@ const json = (body: unknown, status = 200) =>
     headers: { "Content-Type": "application/json" },
   });
 
-// Verify the shared secret. Chargebee secures webhooks with Basic Auth (or a
-// secret in the URL), not an HMAC signature. Accept the secret in any of the
-// places the dashboard lets you put it.
-function verifySecret(req: Request, url: URL, secret: string): boolean {
+// Verify the shared secret via HTTP Basic Auth (the secure method supported by
+// Chargebee webhook config). Query-parameter fallback was removed to avoid
+// secret leakage in proxy logs (audit finding 2).
+function verifySecret(req: Request, _url: URL, secret: string): boolean {
   const auth = req.headers.get("Authorization") || "";
   if (auth.startsWith("Basic ")) {
     try {
@@ -51,8 +51,7 @@ function verifySecret(req: Request, url: URL, secret: string): boolean {
       if (user === secret || pass === secret) return true;
     } catch { /* malformed header */ }
   }
-  const qp = url.searchParams.get("key") || url.searchParams.get("secret");
-  return qp === secret;
+  return false;
 }
 
 // Map a Chargebee subscription.status to our subscription_status values.

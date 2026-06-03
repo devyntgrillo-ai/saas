@@ -10,6 +10,7 @@
 // Secrets: MAILGUN_API_KEY, MAILGUN_DOMAIN, (optional) MAILGUN_FROM.
 // ============================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireServiceRole } from "../_shared/auth.ts";
 import { type Brand, emailFooter, emailHeader, emailSignature, resolveBrand } from "../_shared/brand.ts";
 import { sendMailgunToMany } from "../_shared/mailgun.ts";
 
@@ -97,6 +98,8 @@ async function digestForPractice(admin: any, p: any) {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  const authErr = requireServiceRole(req);
+  if (authErr) return authErr;
   try {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
       auth: { autoRefreshToken: false, persistSession: false },

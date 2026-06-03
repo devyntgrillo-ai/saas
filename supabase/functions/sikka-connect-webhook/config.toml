@@ -1,0 +1,2 @@
+[functions.sikka-connect-webhook]
+verify_jwt = false

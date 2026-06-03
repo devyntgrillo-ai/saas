@@ -1,0 +1,2 @@
+[functions.chargebee-webhook]
+verify_jwt = false
