@@ -18,7 +18,6 @@ import {
   Moon,
   LayoutGrid,
   Rocket,
-  BarChart3,
 } from 'lucide-react'
 import Logo from './Logo'
 import NotificationBell from './NotificationBell'
@@ -46,11 +45,11 @@ const practiceNav = [
 // the old horizontal AgencyTabs bar. `key` drives active state (the Settings tab
 // lives on /agency?tab=settings, so we can't rely on NavLink path matching).
 const agencyNav = [
-  { key: 'overview', label: 'Overview', icon: LayoutGrid, to: '/agency' },
+  { key: 'analytics', label: 'Dashboard', icon: LayoutDashboard, to: '/agency/analytics' },
+  { key: 'overview', label: 'Subaccounts', icon: LayoutGrid, to: '/agency' },
   { key: 'saas-mode', label: 'SaaS Mode', icon: Rocket, to: '/agency/saas-mode' },
-  { key: 'settings', label: 'Settings', icon: Settings, to: '/agency?tab=settings' },
-  { key: 'analytics', label: 'Analytics', icon: BarChart3, to: '/agency/analytics' },
   { key: 'team', label: 'Team', icon: Users, to: '/agency/team' },
+  { key: 'settings', label: 'Settings', icon: Settings, to: '/agency?tab=settings' },
 ]
 
 // Shared styling for sidebar nav links (active = brand accent + left border).

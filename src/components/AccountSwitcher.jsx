@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronsUpDown, Search, Shield, Building2, Check } from 'lucide-react'
+import { ChevronsUpDown, Search, RotateCcw } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useBranding } from '../context/BrandingContext'
 import { ACCESS_LABELS } from '../lib/permissions'
@@ -12,6 +12,11 @@ function initials(name) {
     .slice(0, 2)
     .join('')
     .toUpperCase()
+}
+
+// Single leading letter for the round account avatars in the list.
+function firstLetter(name) {
+  return (name?.trim()?.[0] || '?').toUpperCase()
 }
 
 // Unified context switcher: Super Admin → Agency → Practices.
@@ -72,6 +77,12 @@ export default function AccountSwitcher() {
     navigate('/')
   }
 
+  // The "switch out of this sub-account" action: agency users go back to the
+  // reseller view, super-admins to the admin view.
+  const showSwitch = isSuperAdmin || isAgencyUser
+  const switchLabel = isAgencyUser ? 'Switch to Reseller View' : 'Switch to Admin View'
+  const switchTo = isAgencyUser ? '/agency' : '/admin'
+
   return (
     <div className="relative px-2 pb-2" ref={ref}>
       {/* Trigger - borderless, subtle hover */}
@@ -89,73 +100,59 @@ export default function AccountSwitcher() {
         <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-500" />
       </button>
 
-      {/* Panel */}
+      {/* Panel - white/light, floating over the dark sidebar */}
       {open && (
         <div
-          className="animate-dropdown absolute left-2 z-50 mt-1 w-80 max-w-[calc(100vw-32px)] rounded-lg border border-white/[0.07] bg-surface-800 p-2 shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
+          className="animate-dropdown absolute left-2 z-50 mt-1 w-80 max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.18)]"
         >
-          {/* YOUR VIEWS */}
-          {(isSuperAdmin || isAgencyUser) && (
-            <>
-              <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                Your views
-              </p>
-              {isSuperAdmin && (
-                <button
-                  onClick={() => { exitPractice(); setOpen(false); navigate('/admin') }}
-                  className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-sm text-slate-200 transition hover:bg-surface-700"
-                >
-                  <Shield className="h-4 w-4 shrink-0 text-slate-400" /> Super Admin
-                  <span className="ml-auto rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-rose-400">ADMIN</span>
-                </button>
-              )}
-              {isAgencyUser && (
-                <button
-                  onClick={() => { exitPractice(); setOpen(false); navigate('/agency') }}
-                  className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-sm text-slate-200 transition hover:bg-surface-700"
-                >
-                  <Building2 className="h-4 w-4 shrink-0 text-slate-400" /> <span className="truncate">{agency?.name || 'Reseller'}</span>
-                  <span className="ml-auto shrink-0 rounded bg-[var(--accent-subtle)] px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-[var(--accent)]">RESELLER</span>
-                </button>
-              )}
-              <div className="my-2 border-t border-white/[0.07]" />
-            </>
-          )}
+          <div className="p-3">
+            {/* Search */}
+            {showSwitch && (
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  autoFocus
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search for a sub-account"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+            )}
 
-          {/* CLIENT PRACTICES */}
-          <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            {isSuperAdmin || isAgencyUser ? 'Client practices' : 'Your practice'}
-          </p>
+            {/* Switch to Reseller / Admin view */}
+            {showSwitch && (
+              <button
+                onClick={() => { exitPractice(); setOpen(false); navigate(switchTo) }}
+                className="mt-2 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-slate-50"
+              >
+                <RotateCcw className="h-4 w-4 shrink-0 text-blue-600" />
+                <span className="text-sm font-medium text-blue-600">{switchLabel}</span>
+              </button>
+            )}
 
-          {(isSuperAdmin || isAgencyUser) && (
-            <div className="relative mb-1 mt-0.5">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
-              <input
-                autoFocus
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search practices..."
-                className="h-7 w-full rounded-md border-0 bg-surface-700 pl-8 pr-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary/40"
-              />
+            {/* ALL ACCOUNTS */}
+            <p className="px-1 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              {showSwitch ? 'All Accounts' : 'Your Practice'}
+            </p>
+
+            {/* Accounts list - ~5 rows visible, scroll beyond. */}
+            <div className="max-h-[300px] space-y-0.5 overflow-y-auto">
+              {filtered.length === 0 ? (
+                <p className="px-2 py-6 text-center text-sm text-slate-400">No sub-accounts found.</p>
+              ) : (
+                filtered.map((p) => (
+                  <AccountRow key={p.id} p={p} active={practice?.id === p.id} onPick={pick} />
+                ))
+              )}
             </div>
-          )}
 
-          {/* Up to 6 rows visible, scroll beyond. */}
-          <div className="max-h-[216px] space-y-0.5 overflow-y-auto">
-            {filtered.length === 0 ? (
-              <p className="px-2 py-5 text-center text-xs text-slate-500">No practices found.</p>
-            ) : (
-              filtered.map((p) => (
-                <AccountRow key={p.id} p={p} active={practice?.id === p.id} onPick={pick} />
-              ))
+            {isWhiteLabeled && (
+              <p className="mt-2 border-t border-slate-100 px-2 pt-2 text-center text-[10px] text-slate-400">
+                Powered by CaseLift
+              </p>
             )}
           </div>
-
-          {isWhiteLabeled && (
-            <p className="mt-2 border-t border-white/[0.07] px-2 pt-2 text-center text-[10px] text-slate-600">
-              Powered by CaseLift
-            </p>
-          )}
         </div>
       )}
     </div>
@@ -166,15 +163,17 @@ function AccountRow({ p, active, onPick }) {
   return (
     <button
       onClick={() => onPick(p.id)}
-      className={`flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left transition ${
-        active ? 'border-l-2 border-primary bg-primary/10' : 'hover:bg-surface-700'
+      className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition ${
+        active ? 'bg-blue-50' : 'hover:bg-slate-50'
       }`}
     >
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-700 text-[10px] font-semibold text-slate-300">
-        {initials(p.name)}
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-600">
+        {firstLetter(p.name)}
       </span>
-      <span className="min-w-0 flex-1 truncate text-sm text-slate-100">{p.name}</span>
-      {active && <Check className="h-3.5 w-3.5 shrink-0 text-primary-300" />}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-slate-900">{p.name}</span>
+        {p.address && <span className="block truncate text-xs text-slate-500">{p.address}</span>}
+      </span>
     </button>
   )
 }
