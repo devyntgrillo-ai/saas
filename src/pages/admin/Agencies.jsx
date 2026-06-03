@@ -1,16 +1,20 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Building2, Plus, Search, Eye, Loader2 } from 'lucide-react'
+import { Building2, Plus, Search, Eye, Loader2, Ban, RotateCcw, Pencil, Send } from 'lucide-react'
 import Modal from '../../components/Modal'
 import { useAdmin } from '../../context/AdminContext'
 import { agencyStatusMeta, PRICING } from '../../lib/admin'
-import { timeAgo } from '../../lib/consults'
 import { supabase } from '../../lib/supabase'
 import { StatCard, Table, Badge, Avatar, money, stop } from '../../components/admin/ui'
+import { WHOLESALE_PRICE, isActiveSubaccount } from '../../lib/resellerSaas'
 
+// Unified Resellers view: the reseller roster (onboarding, search, impersonate)
+// combined with the reseller-SaaS economy (active subaccounts, client price vs.
+// our wholesale rate, margin, and per-reseller billing actions). Previously this
+// was split across two near-identical tabs ("Resellers" + "SaaS").
 const STATUS_FILTERS = ['all', 'active', 'trial', 'suspended']
 const SORTS = [
-  { key: 'mrr', label: 'MRR' },
+  { key: 'mrr', label: 'Our MRR' },
   { key: 'name', label: 'Name' },
   { key: 'joined', label: 'Joined' },
   { key: 'activity', label: 'Last activity' },
@@ -23,9 +27,56 @@ export default function Agencies() {
   const [status, setStatus] = useState('all')
   const [sort, setSort] = useState('mrr')
   const [adding, setAdding] = useState(false)
+  const [editing, setEditing] = useState(null) // agency being wholesale-rate-edited
+  const [busyId, setBusyId] = useState(null)
+
+  // The reseller-SaaS fields (pricing) + active subaccount counts aren't on the
+  // AdminContext roster, so load them directly and merge by id.
+  const [saas, setSaas] = useState({ agencies: [], practices: [], loading: true })
+  const loadSaas = useCallback(async () => {
+    const [agRes, prRes] = await Promise.all([
+      supabase.from('agency_accounts').select('id, active, reseller_client_price, reseller_wholesale_price'),
+      supabase.from('practices').select('id, agency_id, subscription_status').not('agency_id', 'is', null),
+    ])
+    setSaas({ agencies: agRes.data || [], practices: prRes.data || [], loading: false })
+  }, [])
+  useEffect(() => { loadSaas() }, [loadSaas])
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([refresh(), loadSaas()])
+  }, [refresh, loadSaas])
+
+  // Enrich every roster agency with its SaaS economics (full set, unfiltered -
+  // totals are computed off this so they don't shift as you search/filter).
+  const enriched = useMemo(() => {
+    const activeByAgency = new Map()
+    for (const p of saas.practices) {
+      if (isActiveSubaccount(p.subscription_status)) {
+        activeByAgency.set(p.agency_id, (activeByAgency.get(p.agency_id) || 0) + 1)
+      }
+    }
+    const saasById = new Map(saas.agencies.map((a) => [a.id, a]))
+    return data.agencies.map((a) => {
+      const s = saasById.get(a.id) || {}
+      const active = activeByAgency.get(a.id) || 0
+      const price = Number(s.reseller_client_price) || 0
+      const wholesale = Number(s.reseller_wholesale_price) || WHOLESALE_PRICE
+      return {
+        ...a,
+        active,
+        price,
+        wholesale,
+        gross: active * price,
+        ourRevenue: active * wholesale,
+        saasMargin: active * (price - wholesale),
+        suspended: a.status === 'suspended' || s.active === false,
+        configured: s.reseller_client_price != null,
+      }
+    })
+  }, [data.agencies, saas])
 
   const rows = useMemo(() => {
-    let list = [...data.agencies]
+    let list = [...enriched]
     const query = q.trim().toLowerCase()
     if (query) list = list.filter((a) => a.name.toLowerCase().includes(query) || (a.owner_email || '').toLowerCase().includes(query))
     if (status !== 'all') list = list.filter((a) => (status === 'trial' ? a.status === 'trial' || a.status === 'trialing' : a.status === status))
@@ -33,30 +84,58 @@ export default function Agencies() {
       if (sort === 'name') return a.name.localeCompare(b.name)
       if (sort === 'joined') return new Date(b.created_at) - new Date(a.created_at)
       if (sort === 'activity') return new Date(b.last_activity || 0) - new Date(a.last_activity || 0)
-      return (b.mrrToCaseLift || 0) - (a.mrrToCaseLift || 0)
+      return (b.ourRevenue || 0) - (a.ourRevenue || 0)
     })
     return list
-  }, [data.agencies, q, status, sort])
+  }, [enriched, q, status, sort])
 
-  const totalMrr = data.agencies.reduce((s, a) => s + (a.mrrToCaseLift || 0), 0)
-  const totalMargin = data.agencies.reduce((s, a) => s + (a.margin || 0), 0)
+  const totals = useMemo(() => ({
+    resellers: enriched.length,
+    active: enriched.reduce((s, a) => s + a.active, 0),
+    ourMrr: enriched.reduce((s, a) => s + a.ourRevenue, 0),
+    gross: enriched.reduce((s, a) => s + a.gross, 0),
+    margin: enriched.reduce((s, a) => s + a.saasMargin, 0),
+  }), [enriched])
+
+  async function toggleSuspend(a) {
+    setBusyId(a.id)
+    const next = a.suspended ? { status: 'active', active: true } : { status: 'suspended', active: false }
+    await supabase.from('agency_accounts').update(next).eq('id', a.id)
+    setBusyId(null)
+    await refreshAll()
+  }
+
+  async function billNow(a) {
+    setBusyId(a.id)
+    try {
+      await supabase.functions.invoke('bill-resellers', { body: { agency_id: a.id } })
+    } catch {
+      /* surfaced via reload */
+    }
+    setBusyId(null)
+    await refreshAll()
+  }
+
+  const loading = saas.loading
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-white">Resellers</h1>
-          <p className="text-sm text-slate-500">{data.agencies.length} total · {money(totalMrr)} MRR to CaseLift</p>
+          <p className="text-sm text-slate-500">{data.agencies.length} total · {money(totals.ourMrr)} MRR to CaseLift</p>
         </div>
         <button onClick={() => setAdding(true)} className="btn-primary">
           <Plus className="h-4 w-4" /> Add reseller
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Reseller MRR (to CaseLift)" value={money(totalMrr)} accent="text-emerald-300" />
-        <StatCard label="Resellers' client MRR" value={money(data.agencies.reduce((s, a) => s + (a.clientMrr || 0), 0))} />
-        <StatCard label="Their combined margin" value={money(totalMargin)} />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <StatCard label="Resellers" value={totals.resellers} />
+        <StatCard label="Active subaccounts" value={totals.active} />
+        <StatCard label="Our MRR" value={money(totals.ourMrr)} accent="text-emerald-300" sub="active × wholesale" />
+        <StatCard label="Reseller gross" value={money(totals.gross)} sub="what resellers collect" />
+        <StatCard label="Their margin" value={money(totals.margin)} />
       </div>
 
       {/* Search + filters */}
@@ -88,36 +167,52 @@ export default function Agencies() {
         </select>
       </div>
 
-      <Table
-        head={['Reseller', 'Owner', 'Practices', 'MRR', 'Their MRR', 'Margin', 'Status', 'Joined', 'Activity', '']}
-        rows={rows.map((a) => [
-          <div className="flex items-center gap-2.5">
-            <Avatar name={a.name} color={a.white_label?.primary_color} />
-            <span className="font-medium text-slate-100">{a.name}</span>
-          </div>,
-          a.owner_email || '-',
-          <span className="text-primary-300">{a.practiceCount}</span>,
-          money(a.mrrToCaseLift),
-          money(a.clientMrr),
-          <span className="text-emerald-300">{money(a.margin)}</span>,
-          <Badge className={agencyStatusMeta(a.status).classes}>{agencyStatusMeta(a.status).label}</Badge>,
-          new Date(a.created_at).toLocaleDateString(),
-          a.last_activity ? timeAgo(a.last_activity) : '-',
-          <div className="flex items-center gap-1.5" onClick={stop}>
-            <button onClick={() => navigate(`/admin/agencies/${a.id}`)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-slate-300 transition hover:bg-surface-700" title="View">
-              <Eye className="h-3.5 w-3.5" />
-            </button>
-            <button onClick={() => impersonateAgency(a)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-primary-300 transition hover:bg-surface-700">
-              Impersonate
-            </button>
-          </div>,
-        ])}
-        empty="No resellers match your filters."
-        icon={Building2}
-        onRowClick={(i) => navigate(`/admin/agencies/${rows[i].id}`)}
-      />
+      {loading ? (
+        <div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div>
+      ) : (
+        <Table
+          head={['Reseller', 'Owner', 'Subaccounts', 'Client price', 'Gross', 'Our MRR', 'Margin', 'Status', '']}
+          rows={rows.map((a) => [
+            <div className="flex items-center gap-2.5">
+              <Avatar name={a.name} color={a.white_label?.primary_color} />
+              <div>
+                <span className="font-medium text-slate-100">{a.name}</span>
+                {!a.configured && <span className="ml-2 text-xs text-slate-500">(SaaS not set up)</span>}
+              </div>
+            </div>,
+            a.owner_email || '-',
+            <span className="text-primary-300">{a.active}</span>,
+            a.configured ? `${money(a.price)}/mo` : '—',
+            money(a.gross),
+            money(a.ourRevenue),
+            <span className={a.saasMargin >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{money(a.saasMargin)}</span>,
+            <Badge className={agencyStatusMeta(a.status).classes}>{agencyStatusMeta(a.status).label}</Badge>,
+            <div className="flex items-center gap-1.5" onClick={stop}>
+              <button onClick={() => navigate(`/admin/agencies/${a.id}`)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-slate-300 transition hover:bg-surface-700" title="View clients">
+                <Eye className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => impersonateAgency(a)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-primary-300 transition hover:bg-surface-700">
+                Impersonate
+              </button>
+              <button onClick={() => setEditing(a)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-slate-300 transition hover:bg-surface-700" title="Edit wholesale rate">
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => billNow(a)} disabled={busyId === a.id} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-sky-300 transition hover:bg-surface-700 disabled:opacity-40" title="Bill now">
+                {busyId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              </button>
+              <button onClick={() => toggleSuspend(a)} disabled={busyId === a.id} className={`rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs transition hover:bg-surface-700 disabled:opacity-40 ${a.suspended ? 'text-emerald-300' : 'text-rose-300'}`} title={a.suspended ? 'Reactivate' : 'Suspend'}>
+                {a.suspended ? <RotateCcw className="h-3.5 w-3.5" /> : <Ban className="h-3.5 w-3.5" />}
+              </button>
+            </div>,
+          ])}
+          empty="No resellers match your filters."
+          icon={Building2}
+          onRowClick={(i) => navigate(`/admin/agencies/${rows[i].id}`)}
+        />
+      )}
 
-      {adding && <AddAgencyModal onClose={() => setAdding(false)} onSaved={async () => { setAdding(false); await refresh() }} />}
+      {adding && <AddAgencyModal onClose={() => setAdding(false)} onSaved={async () => { setAdding(false); await refreshAll() }} />}
+      {editing && <EditRateModal agency={editing} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await refreshAll() }} />}
     </div>
   )
 }
@@ -184,6 +279,39 @@ function AddAgencyModal({ onClose, onSaved }) {
           Send invite email to owner
         </label>
         <div><label className="label">Internal notes</label><textarea className="input min-h-[72px]" value={form.notes} onChange={set('notes')} placeholder="Only visible to super admin" /></div>
+        {error && <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
+      </div>
+    </Modal>
+  )
+}
+
+function EditRateModal({ agency, onClose, onSaved }) {
+  const [rate, setRate] = useState(String(agency.wholesale || WHOLESALE_PRICE))
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function save() {
+    const value = Number(rate)
+    if (!Number.isFinite(value) || value < 0) { setError('Enter a valid rate.'); return }
+    setBusy(true); setError('')
+    const { error: err } = await supabase.from('agency_accounts').update({ reseller_wholesale_price: value }).eq('id', agency.id)
+    if (err) { setError(err.message); setBusy(false); return }
+    onSaved()
+  }
+
+  return (
+    <Modal title={`Wholesale rate — ${agency.name}`} onClose={onClose} maxWidth="max-w-md" footer={
+      <>
+        <button onClick={onClose} className="btn-ghost">Cancel</button>
+        <button onClick={save} disabled={busy} className="btn-primary">{busy && <Loader2 className="h-4 w-4 animate-spin" />} Save rate</button>
+      </>
+    }>
+      <div className="space-y-3">
+        <p className="text-sm text-slate-400">What CaseLift bills this reseller per active subaccount, per month. Default is {money(WHOLESALE_PRICE)}.</p>
+        <div>
+          <label className="label">Wholesale rate (USD/active/mo)</label>
+          <input className="input" type="number" min={0} value={rate} onChange={(e) => setRate(e.target.value)} />
+        </div>
         {error && <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
       </div>
     </Modal>

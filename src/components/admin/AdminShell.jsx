@@ -10,7 +10,6 @@ import { AdminProvider, useAdmin } from '../../context/AdminContext'
 const TABS = [
   { to: '/admin', label: 'Overview', end: true },
   { to: '/admin/agencies', label: 'Resellers' },
-  { to: '/admin/resellers', label: 'SaaS' },
   { to: '/admin/practices', label: 'Subaccounts' },
   { to: '/admin/revenue', label: 'Revenue' },
   { to: '/admin/billing', label: 'Billing' },
