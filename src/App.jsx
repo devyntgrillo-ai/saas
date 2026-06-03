@@ -45,7 +45,6 @@ const AgencyKnowledgeBase = lazy(() => import('./pages/AgencyKnowledgeBase'))
 const AgencyTeam = lazy(() => import('./pages/AgencyTeam'))
 const AdminOverview = lazy(() => import('./pages/admin/Overview'))
 const AdminAgencies = lazy(() => import('./pages/admin/Agencies'))
-const AdminResellers = lazy(() => import('./pages/admin/Resellers'))
 const AdminAgencyDetail = lazy(() => import('./pages/admin/AgencyDetail'))
 const AdminPractices = lazy(() => import('./pages/admin/Practices'))
 const AdminPracticeDetail = lazy(() => import('./pages/admin/PracticeDetail'))
@@ -116,7 +115,6 @@ export default function App() {
                 <Route path="/admin" element={<AdminShell />}>
                   <Route index element={<AdminOverview />} />
                   <Route path="agencies" element={<AdminAgencies />} />
-                  <Route path="resellers" element={<AdminResellers />} />
                   <Route path="agencies/:id" element={<AdminAgencyDetail />} />
                   <Route path="practices" element={<AdminPractices />} />
                   <Route path="practices/:id" element={<AdminPracticeDetail />} />
