@@ -214,7 +214,7 @@ export default function PracticeDetail() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => impersonatePractice(practice)} className="btn-ghost text-violet-300"><UserCog className="h-4 w-4" /> Impersonate</button>
+          <button onClick={() => impersonatePractice(practice)} className="btn-ghost text-primary-300"><UserCog className="h-4 w-4" /> Impersonate</button>
           <button onClick={() => setConfirmCancel(true)} className="btn-ghost text-rose-300"><Ban className="h-4 w-4" /> Force cancel</button>
         </div>
       </div>

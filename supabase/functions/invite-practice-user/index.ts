@@ -6,7 +6,7 @@
 //   2. Create the practice record under that agency (service role).
 //   3. Generate a Supabase magic invite link server-side and email it via
 //      Mailgun using the reseller's white-label brand (logo header, company
-//      name, support reply-to, "Powered by Hope AI" footer) - matching the
+//      name, support reply-to, "Powered by CaseLift" footer) - matching the
 //      other transactional emails. Falls back to returning the link if Mailgun
 //      isn't configured. (Replaces the old Supabase Auth invite email, which
 //      used a shared, un-brandable global SMTP template.)
@@ -71,13 +71,13 @@ async function sendMailgun(
 
 // White-labeled invite email built around the reseller brand.
 function buildInviteEmail(brand: Brand, practiceName: string, inviteLink: string) {
-  const subject = `Welcome to ${brand.companyName} - Meet Hope`;
+  const subject = `Welcome to ${brand.companyName} - Meet CaseLift`;
   const html = `
     <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111827">
       <div style="margin-bottom:20px">${emailHeader(brand)}</div>
-      <h1 style="font-size:20px;margin:0 0 12px">Welcome to ${escapeHtml(brand.companyName)} - meet Hope</h1>
+      <h1 style="font-size:20px;margin:0 0 12px">Welcome to ${escapeHtml(brand.companyName)} - meet CaseLift</h1>
       <p style="font-size:14px;line-height:1.6;color:#374151;margin:0 0 20px">
-        Hi - I'm Hope, your AI assistant at ${escapeHtml(practiceName)}. I listen to your consults,
+        Hi - I'm CaseLift, your AI assistant at ${escapeHtml(practiceName)}. I listen to your consults,
         follow up with patients, and recover more implant cases for you. Click below to set up your
         account and we'll get started together.
       </p>
@@ -95,8 +95,8 @@ function buildInviteEmail(brand: Brand, practiceName: string, inviteLink: string
       ${emailFooter(brand)}
     </div>`;
   const text =
-    `Welcome to ${brand.companyName} - meet Hope.\n\n` +
-    `I'm Hope, your AI assistant at ${practiceName}. Set up your account to get started: ${inviteLink}\n\n` +
+    `Welcome to ${brand.companyName} - meet CaseLift.\n\n` +
+    `I'm CaseLift, your AI assistant at ${practiceName}. Set up your account to get started: ${inviteLink}\n\n` +
     `Questions? Email ${brand.supportEmail}`;
   return { subject, html, text };
 }

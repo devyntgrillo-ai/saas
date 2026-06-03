@@ -5,7 +5,7 @@
 // Service-role; verify_jwt=false (internal job). No-ops cleanly if Mailgun is
 // not configured. Body { practice_id } runs for a single practice (manual test).
 // Each email is white-labeled to the practice's reseller brand when applicable
-// (see _shared/brand.ts), falling back to Hope AI branding otherwise.
+// (see _shared/brand.ts), falling back to CaseLift branding otherwise.
 //
 // Secrets: MAILGUN_API_KEY, MAILGUN_DOMAIN, (optional) MAILGUN_FROM.
 // ============================================================================
@@ -69,7 +69,7 @@ function buildHtml(p: any, d: any, brand: Brand) {
     <div style="margin-bottom:8px">${emailHeader(brand)}</div>
     <h1 style="font-size:18px;margin:0 0 2px">${brand.companyName} Weekly</h1>
     <p style="color:#6b7280;font-size:13px;margin:0 0 14px">${p.name || "Your practice"}</p>
-    <p style="font-size:14px;line-height:1.6;color:#374151;margin:0 0 18px">Here's what Hope did this week.</p>
+    <p style="font-size:14px;line-height:1.6;color:#374151;margin:0 0 18px">Here's what CaseLift did this week.</p>
     <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:18px;margin-bottom:14px">
       <table style="width:100%;font-size:14px;border-collapse:collapse">
         <tr><td style="padding:4px 0;color:#6b7280">Consults recorded</td><td style="text-align:right;font-weight:600">${d.recorded} of ${d.totalAppts} (${d.recordPct}%)</td></tr>
@@ -84,9 +84,9 @@ function buildHtml(p: any, d: any, brand: Brand) {
     </div>
     <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:18px;margin-bottom:18px">
       <p style="color:#b45309;font-size:12px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px">Suggested training</p>
-      <a href="https://app.heyhope.ai/training?v=${training.slug}" style="font-size:15px;font-weight:600;color:#b45309;text-decoration:none">${training.title} &rarr;</a>
+      <a href="https://app.caselift.io/training?v=${training.slug}" style="font-size:15px;font-weight:600;color:#b45309;text-decoration:none">${training.title} &rarr;</a>
     </div>
-    <a href="https://app.heyhope.ai/" style="display:inline-block;background:${brand.primaryColor};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:10px 16px;border-radius:8px">Open ${brand.companyName}</a>
+    <a href="https://app.caselift.io/" style="display:inline-block;background:${brand.primaryColor};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:10px 16px;border-radius:8px">Open ${brand.companyName}</a>
     ${emailSignature(brand)}
     <p style="color:#9ca3af;font-size:11px;margin:18px 0 0">You are receiving this because weekly digests are on. Manage in Settings &rarr; Notifications.</p>
     ${emailFooter(brand)}

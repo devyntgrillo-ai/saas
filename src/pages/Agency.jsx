@@ -510,8 +510,8 @@ export default function Agency() {
     saveBrand({ company_name: name || null, brand_name: name || null, ...(name ? { white_label_enabled: true } : {}) })
   }
 
-  // Wipe the brand back to Hope AI defaults and persist.
-  async function resetToHopeAI() {
+  // Wipe the brand back to CaseLift defaults and persist.
+  async function resetToCaseLift() {
     setPreviewing(false)
     resetPrimaryColor()
     await saveBrand({
@@ -589,7 +589,7 @@ export default function Agency() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold tracking-tight text-white">{agency?.name || 'Reseller'}</h1>
-              <span className="rounded-full bg-violet-500/15 px-2.5 py-0.5 text-xs font-semibold text-violet-300">RESELLER</span>
+              <span className="rounded-full bg-[var(--accent-subtle)] px-2.5 py-0.5 text-xs font-semibold text-[var(--accent)]">RESELLER</span>
             </div>
             <p className="text-sm text-slate-400 capitalize">{agencyRole} · {practices.length} client practices</p>
           </div>
@@ -678,7 +678,7 @@ export default function Agency() {
                 <Palette className="h-4 w-4 text-primary-400" /> Brand &amp; White-label
               </h2>
               <p className="mt-1 text-sm text-slate-400">
-                What your clients see instead of Hope AI. Changes save automatically.
+                What your clients see instead of CaseLift. Changes save automatically.
               </p>
             </div>
             <span className="flex h-5 shrink-0 items-center text-xs">
@@ -694,7 +694,7 @@ export default function Agency() {
           <label className="mt-5 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-surface-700 bg-surface-800/40 px-4 py-3">
             <span>
               <span className="block text-sm font-medium text-slate-200">White-label enabled</span>
-              <span className="mt-0.5 block text-xs text-slate-500">When off, your client practices see Hope AI branding.</span>
+              <span className="mt-0.5 block text-xs text-slate-500">When off, your client practices see CaseLift branding.</span>
             </span>
             <BrandSwitch checked={Boolean(settings.white_label_enabled)} onChange={(v) => saveBrand({ white_label_enabled: v })} />
           </label>
@@ -708,7 +708,7 @@ export default function Agency() {
                   onChange={(e) => setSettings((s) => ({ ...s, company_name: e.target.value }))}
                   onBlur={(e) => saveCompanyName(e.target.value)}
                   placeholder="e.g. NW Recovery Suite" />
-                <p className="mt-1.5 text-xs text-slate-500">Shown to clients in place of “Hope AI”.</p>
+                <p className="mt-1.5 text-xs text-slate-500">Shown to clients in place of “CaseLift”.</p>
               </div>
 
               <div>
@@ -784,9 +784,9 @@ export default function Agency() {
               <button type="button" onClick={togglePreview} className="btn-ghost mt-3 w-full justify-center">
                 <Eye className="h-4 w-4" /> {previewing ? 'Stop preview' : 'Preview as client'}
               </button>
-              <button type="button" onClick={resetToHopeAI}
+              <button type="button" onClick={resetToCaseLift}
                 className="mt-2 inline-flex w-full items-center justify-center gap-1.5 text-xs font-medium text-slate-500 transition hover:text-slate-300">
-                <RotateCcw className="h-3.5 w-3.5" /> Reset to Hope AI defaults
+                <RotateCcw className="h-3.5 w-3.5" /> Reset to CaseLift defaults
               </button>
             </div>
           </div>

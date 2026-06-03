@@ -8,8 +8,8 @@
 import { supabase } from './supabase'
 
 export const PRICING = {
-  directPractice: 997, // $/month a direct (no-agency) practice pays Hope AI
-  agencyPerLocation: 500, // default $/location an agency pays Hope AI
+  directPractice: 997, // $/month a direct (no-agency) practice pays CaseLift
+  agencyPerLocation: 500, // default $/location an agency pays CaseLift
   trialDays: 14,
 }
 
@@ -122,7 +122,7 @@ function shapeRealAgency(row, practices) {
   const mine = practices.filter((p) => p.agency_id === row.id)
   const fee = Number(row.monthly_fee || row.per_location_fee) || PRICING.agencyPerLocation
   const clientPrice = Number(row.client_price) || 1497
-  const mrrToHopeAI = mine.length * fee
+  const mrrToCaseLift = mine.length * fee
   const clientMrr = mine.length * clientPrice
   return {
     id: row.id,
@@ -135,9 +135,9 @@ function shapeRealAgency(row, practices) {
     perLocationFee: fee,
     clientPricePerLocation: clientPrice,
     practiceCount: mine.length,
-    mrrToHopeAI,
+    mrrToCaseLift,
     clientMrr,
-    margin: clientMrr - mrrToHopeAI,
+    margin: clientMrr - mrrToCaseLift,
     notes: row.admin_notes || row.notes || '',
     white_label:
       row.white_label_enabled || row.brand_name
@@ -154,14 +154,14 @@ function shapeRealAgency(row, practices) {
 function deriveDemoAgencies() {
   return DEMO_AGENCIES.map((a) => {
     const mine = DEMO_PRACTICES.filter((p) => p.agency_id === a.id)
-    const mrrToHopeAI = mine.length * a.perLocationFee
+    const mrrToCaseLift = mine.length * a.perLocationFee
     const clientMrr = mine.length * a.clientPricePerLocation
     return {
       ...a,
       practiceCount: mine.length,
-      mrrToHopeAI,
+      mrrToCaseLift,
       clientMrr,
-      margin: clientMrr - mrrToHopeAI,
+      margin: clientMrr - mrrToCaseLift,
     }
   })
 }
@@ -310,7 +310,7 @@ export function computeOverview(data) {
   const { agencies, practices, cancellations } = data
   const activePractices = practices.filter((p) => p.subscription_status === 'active')
   const directActive = activePractices.filter((p) => !p.agency_id)
-  const agencyFees = agencies.reduce((s, a) => s + (a.mrrToHopeAI || 0), 0)
+  const agencyFees = agencies.reduce((s, a) => s + (a.mrrToCaseLift || 0), 0)
   const directRevenue = directActive.length * PRICING.directPractice
   const totalMrr = agencyFees + directRevenue
 

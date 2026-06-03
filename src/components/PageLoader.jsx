@@ -6,7 +6,7 @@ export default function PageLoader({ className = '' }) {
   return (
     <div className={`flex min-h-[40vh] w-full flex-col items-center justify-center gap-3 ${className}`}>
       <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
-      <p className="text-sm text-slate-400">Hope is thinking…</p>
+      <p className="text-sm text-slate-400">CaseLift is thinking…</p>
     </div>
   )
 }

@@ -20,7 +20,7 @@ export async function sendMailgunMessage(opts: {
 
   const envFrom = Deno.env.get("MAILGUN_FROM");
   const address = envFrom?.match(/<([^>]+)>/)?.[1] || `noreply@${domain}`;
-  const fromName = opts.fromName || "Hope AI";
+  const fromName = opts.fromName || "CaseLift";
 
   const form = new FormData();
   form.append("from", `${fromName} <${address}>`);

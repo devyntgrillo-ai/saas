@@ -1,6 +1,6 @@
 // ============================================================================
 // create-checkout - start a Chargebee hosted-page checkout for a practice's
-// Hope AI subscription.
+// CaseLift subscription.
 //
 // Flow:
 //   0. Guard: if Chargebee isn't configured (CHARGEBEE_SITE / CHARGEBEE_API_KEY
@@ -9,12 +9,12 @@
 //   2. Create or reuse a Chargebee customer for the practice.
 //   3. Persist chargebee_customer_id on the practice (service-role) so the
 //      webhook can map events back to it.
-//   4. Create a hosted-page checkout for the Hope AI plan and return its URL.
+//   4. Create a hosted-page checkout for the CaseLift plan and return its URL.
 //
 // Secrets (server-side only):
-//   CHARGEBEE_SITE     - required. Chargebee site name, e.g. "hopeai".
+//   CHARGEBEE_SITE     - required. Chargebee site name, e.g. "caselift".
 //   CHARGEBEE_API_KEY  - required. API key from the Chargebee dashboard.
-//   CHARGEBEE_PLAN_ID  - required. Plan id for the Hope AI subscription.
+//   CHARGEBEE_PLAN_ID  - required. Plan id for the CaseLift subscription.
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
@@ -117,7 +117,7 @@ Deno.serve(async (req: Request) => {
     // PC 2.0 uses /checkout_new_for_items with subscription_items[item_price_id][N];
     // the {0:...} objects encode as the bracketed list indices Chargebee expects
     // (subscription_items[item_price_id][0], subscription_items[quantity][0]).
-    // CHARGEBEE_PLAN_ID holds the item price id for the Hope AI plan.
+    // CHARGEBEE_PLAN_ID holds the item price id for the CaseLift plan.
     const checkout = await chargebeeRequest(cfg, "/hosted_pages/checkout_new_for_items", "POST", {
       subscription_items: { item_price_id: { 0: planId }, quantity: { 0: 1 } },
       customer: { id: customerId },

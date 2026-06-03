@@ -56,7 +56,7 @@ export class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     // Surfaced for monitoring; replace with a real reporter in production.
-    console.error('[Hope AI] render error', error, info)
+    console.error('[CaseLift] render error', error, info)
   }
 
   render() {

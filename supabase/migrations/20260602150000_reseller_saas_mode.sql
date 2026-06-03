@@ -4,7 +4,7 @@
 -- Layers a GoHighLevel-style "SaaS configurator" onto the reseller record:
 -- resellers set their own client price (>= $397), optionally offer a trial and
 -- annual pricing, and onboard clients through a white-labeled signup page at
--- /signup/<reseller_slug>. Hope AI bills each reseller $297/month per active
+-- /signup/<reseller_slug>. CaseLift bills each reseller $297/month per active
 -- subaccount via Chargebee (see the bill-resellers edge function).
 --
 -- Columns added to agency_accounts (the resellers table):

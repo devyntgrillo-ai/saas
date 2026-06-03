@@ -166,7 +166,7 @@ export default function Consults() {
       ) : loading ? (
         <div className="card flex justify-center py-16"><Clock className="h-6 w-6 animate-pulse text-slate-500" /></div>
       ) : appts.length === 0 ? (
-        <EmptyCard icon={Calendar} title="Hope is ready to listen. Hit record to start your first consult." sub="Pick another date to view the schedule." />
+        <EmptyCard icon={Calendar} title="CaseLift is ready to listen. Hit record to start your first consult." sub="Pick another date to view the schedule." />
       ) : rows.length === 0 ? (
         <EmptyCard icon={Calendar} title="No appointments match your filters" />
       ) : counts.recorded === counts.all ? (

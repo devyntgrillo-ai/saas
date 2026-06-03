@@ -5,29 +5,29 @@ import { useAuth } from './AuthContext'
 
 // The resolved white-label theme, available app-wide via useBranding().
 // Resolution order (see the branding memo below):
-//   1. Super-admin (Devyn) → Hope AI in their own view; when impersonating a
+//   1. Super-admin (Devyn) → CaseLift in their own view; when impersonating a
 //      client practice, that client's (reseller) brand applies.
 //   2. The current user's reseller (their own agency, the agency of the practice
 //      they belong to, or the practice they're impersonating) → reseller brand.
 //   3. A reseller matched by custom domain / ?brand= slug (pre-auth marketing).
-//   4. Hope AI defaults.
+//   4. CaseLift defaults.
 const DEFAULT_BRANDING = {
-  brandName: 'Hope AI',
-  companyName: 'Hope AI',
+  brandName: 'CaseLift',
+  companyName: 'CaseLift',
   logoUrl: null,
   logoDarkUrl: null,
   faviconUrl: null,
   primaryColor: null, // null → the default indigo palette from index.css
   secondaryColor: null,
   accentColor: null,
-  supportEmail: 'support@heyhope.ai',
+  supportEmail: 'support@caselift.io',
   supportPhone: null,
   onboardingMessage: null,
   slug: null,
   isWhiteLabeled: false,
 }
 
-const DEFAULT_TITLE = 'Hope AI - Never Lose Another Patient'
+const DEFAULT_TITLE = 'CaseLift — We Do The Heavy Lifting'
 const CACHE_KEY = 'ciq_brand'
 
 const BrandingContext = createContext(DEFAULT_BRANDING)
@@ -41,7 +41,7 @@ function isWhiteLabeledAgency(a) {
 
 // Map an agency_accounts row → branding shape.
 function brandFromAgency(a) {
-  const name = a.company_name || a.brand_name || a.name || 'Hope AI'
+  const name = a.company_name || a.brand_name || a.name || 'CaseLift'
   return {
     brandName: name,
     companyName: name,
@@ -61,7 +61,7 @@ function brandFromAgency(a) {
 
 // Map the get_branding() RPC payload → branding shape.
 function brandFromRpc(data, fallbackSlug) {
-  const name = data.company_name || data.brand_name || 'Hope AI'
+  const name = data.company_name || data.brand_name || 'CaseLift'
   return {
     brandName: name,
     companyName: name,
@@ -128,7 +128,7 @@ export function BrandingProvider({ children }) {
         const { data } = await supabase.rpc('get_branding', { p_slug: slug, p_domain: host })
         if (active && data) setDomainBrand(brandFromRpc(data, slug))
       } catch {
-        /* fall back to default Hope AI branding */
+        /* fall back to default CaseLift branding */
       }
     })()
     return () => {
@@ -144,7 +144,7 @@ export function BrandingProvider({ children }) {
   )
 
   // The effective brand, derived from auth context and any domain match. No
-  // mirror state - this IS the resolved brand. A super-admin sees Hope AI in
+  // mirror state - this IS the resolved brand. A super-admin sees CaseLift in
   // their own view; when they impersonate a client practice, the client's
   // (reseller) brand applies, matching what that client actually sees.
   const branding = useMemo(() => {

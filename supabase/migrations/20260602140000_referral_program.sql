@@ -98,7 +98,7 @@ begin
 
   -- Strip everything but letters/digits, uppercase. "Gold Dental" → "GOLDDENTAL".
   base := upper(regexp_replace(coalesce(nm, ''), '[^a-zA-Z0-9]', '', 'g'));
-  if length(base) < 3 then base := 'HOPE'; end if;
+  if length(base) < 3 then base := 'CASE'; end if;
   base := left(base, 16);
 
   -- Prefer the clean name as-is; only add a numeric suffix if it's taken.

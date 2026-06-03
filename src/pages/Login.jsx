@@ -36,9 +36,9 @@ export default function Login() {
         </div>
 
         <div className="card p-8">
-          <h1 className="text-2xl font-bold text-white">Welcome to Hope AI</h1>
+          <h1 className="text-2xl font-bold text-white">Welcome to CaseLift</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Your AI-powered patient conversion platform
+            The heavy lifting starts here.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -87,7 +87,7 @@ export default function Login() {
           </form>
 
           <p className="mt-5 text-center text-xs text-slate-500">
-            🔒 HIPAA Compliant · SOC 2 · 256-bit encryption
+            🔒 HIPAA Compliant · 256-bit encryption · SOC 2
           </p>
         </div>
 
@@ -99,7 +99,7 @@ export default function Login() {
         </p>
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          © 2026 Hope AI · heyhope.ai
+          © 2026 CaseLift · caselift.io
         </p>
       </div>
     </div>

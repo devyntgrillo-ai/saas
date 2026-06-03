@@ -2,7 +2,7 @@
 // configurator). One source of truth so the reseller configurator, the admin
 // overview, and the billing function all agree on the economics.
 
-// What Hope AI charges a reseller per active subaccount, per month.
+// What CaseLift charges a reseller per active subaccount, per month.
 export const WHOLESALE_PRICE = 297
 // Floor on what a reseller may charge their clients, so they always clear at
 // least $100/mo over our wholesale. Enforced in the UI and by a DB CHECK.
@@ -44,7 +44,7 @@ export function economics({ clientPrice, activeCount = 0 }) {
   return {
     perClientMargin,
     gross, // what the reseller collects from clients
-    wholesale, // what Hope AI bills the reseller
+    wholesale, // what CaseLift bills the reseller
     margin: gross - wholesale, // the reseller's take
   }
 }

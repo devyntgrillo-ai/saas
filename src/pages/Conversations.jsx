@@ -265,7 +265,7 @@ function PatientContextPanel({ consult, conv, msgs, loading, paused, onCollapse,
     if (!consult?.id) return
     setBusy('convert')
     const val = Number(String(convertValue).replace(/[^0-9.]/g, '')) || null
-    const patch = { outcome: 'closed_won', status: 'closed_won', case_value: val, closed_at: new Date().toISOString(), attribution_status: 'consultiq_recovered', sequence_status: 'cancelled' }
+    const patch = { outcome: 'closed_won', status: 'closed_won', case_value: val, closed_at: new Date().toISOString(), attribution_status: 'caselift_recovered', sequence_status: 'cancelled' }
     await supabase.from('messages').update({ status: 'cancelled' }).eq('consult_id', consult.id).in('status', ['draft', 'scheduled', 'pending'])
     await supabase.from('consults').update(patch).eq('id', consult.id)
     if (consult.practice_id) {
@@ -990,7 +990,7 @@ export default function Conversations() {
         <EmptyState
           icon={MessagesSquare}
           title="No conversations yet"
-          description="Hope will create one when a patient replies. New threads open here automatically."
+          description="CaseLift will create one when a patient replies. New threads open here automatically."
         />
       </div>
     )
@@ -1216,7 +1216,7 @@ export default function Conversations() {
                 <span className="flex min-w-0 items-center gap-1.5">
                   <PauseCircle className="h-3.5 w-3.5 shrink-0" />
                   {consult.sequence_paused_reason === 'reply'
-                    ? 'Hope paused this sequence - patient replied. Resume or close this conversation.'
+                    ? 'CaseLift paused this sequence - patient replied. Resume or close this conversation.'
                     : 'Sequence paused - messages won’t send until resumed.'}
                 </span>
                 <button onClick={resumeSequence} className="shrink-0 rounded-md border border-amber-300 px-2 py-0.5 font-semibold text-amber-800 transition hover:bg-amber-100">
@@ -1343,13 +1343,13 @@ export default function Conversations() {
                               target="_blank"
                               rel="noreferrer"
                               download
-                              className={`flex items-center gap-2 px-3.5 py-2.5 ${radius} ${outbound ? 'bg-[#007AFF] text-[#fff]' : 'bg-[#E9E9EB] text-black'}`}
+                              className={`flex items-center gap-2 px-3.5 py-2.5 ${radius} ${outbound ? 'bg-[var(--accent)] text-[#fff]' : 'bg-[var(--bg-elevated)] text-[var(--text-primary)]'}`}
                             >
                               <Download className="h-4 w-4 shrink-0 opacity-80" />
                               <span className="truncate text-sm font-medium underline-offset-2 hover:underline">{m.meta.attachment.name || 'Attachment'}</span>
                             </a>
                           ) : (
-                            <div className={`px-3.5 py-2 text-[15px] leading-snug ${radius} ${outbound ? 'bg-[#007AFF] text-[#fff]' : 'bg-[#E9E9EB] text-black'}`}>
+                            <div className={`px-3.5 py-2 text-[15px] leading-snug ${radius} ${outbound ? 'bg-[var(--accent)] text-[#fff]' : 'bg-[var(--bg-elevated)] text-[var(--text-primary)]'}`}>
                               <p className="whitespace-pre-wrap">{cleanBody(m.body)}</p>
                             </div>
                           )}
@@ -1361,7 +1361,7 @@ export default function Conversations() {
                       {showTime && (
                         <div
                           className="flex justify-center pb-0.5 pt-1.5 text-[11px] text-gray-500"
-                          title={outbound ? `Hope sent this message on ${dayLabel(ts)}` : undefined}
+                          title={outbound ? `CaseLift sent this message on ${dayLabel(ts)}` : undefined}
                         >
                           {messageTime(ts)}
                         </div>
@@ -1375,7 +1375,7 @@ export default function Conversations() {
             <form onSubmit={handleSend} className="shrink-0 border-t border-gray-200 bg-white p-3">
               {aiSuggested && draft.trim() && (
                 <div className="mb-1.5 flex items-center gap-1.5 px-1 text-[11px] font-medium text-blue-600">
-                  <Sparkles className="h-3 w-3" /> Hope recommended
+                  <Sparkles className="h-3 w-3" /> CaseLift recommended
                 </div>
               )}
               <div className="flex items-start gap-2">
@@ -1460,7 +1460,7 @@ export default function Conversations() {
                     className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
                   >
                     {suggesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    <span className="hidden md:inline">{suggesting ? 'Hope is suggesting a reply…' : 'Ask Hope to reply'}</span>
+                    <span className="hidden md:inline">{suggesting ? 'CaseLift is suggesting a reply…' : 'Ask CaseLift to reply'}</span>
                   </button>
 
                   {/* Send / Add Note */}

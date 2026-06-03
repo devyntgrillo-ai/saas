@@ -2,15 +2,15 @@
 -- ATTRIBUTION MODEL v2 + auditable attribution_events trail. Idempotent.
 --
 -- Adds a defensible, event-sourced attribution model:
---   • consults.attribution_status: consultiq_assisted | consultiq_recovered
+--   • consults.attribution_status: caselift_assisted | caselift_recovered
 --     | practice_direct | unknown
 --   • consults.attribution_confirmed_at / attribution_source (pms_sync|manual|webhook)
 --   • attribution_events: append-only log (message_sent | patient_replied |
---     treatment_accepted) that builds the status and proves how Hope AI helped.
+--     treatment_accepted) that builds the status and proves how CaseLift helped.
 --
 -- Status is derived (in priority order) when a consult is accepted/closed_won:
---   patient replied to a sequence  -> consultiq_recovered
---   at least one message was sent  -> consultiq_assisted
+--   patient replied to a sequence  -> caselift_recovered
+--   at least one message was sent  -> caselift_assisted
 --   no sequence activity           -> practice_direct
 --
 -- Triggers populate attribution_events automatically:
@@ -24,14 +24,14 @@
 
 -- ── Columns ─────────────────────────────────────────────────────────────────
 alter table public.consults
-  add column if not exists attribution_status text,        -- consultiq_assisted | consultiq_recovered | practice_direct | unknown
+  add column if not exists attribution_status text,        -- caselift_assisted | caselift_recovered | practice_direct | unknown
   add column if not exists attribution_confirmed_at timestamptz,
   add column if not exists attribution_source text;        -- pms_sync | manual | webhook
 
 alter table public.consults drop constraint if exists consults_attribution_status_check;
 alter table public.consults add constraint consults_attribution_status_check
   check (attribution_status is null or attribution_status in
-    ('consultiq_assisted', 'consultiq_recovered', 'practice_direct', 'unknown'));
+    ('caselift_assisted', 'caselift_recovered', 'practice_direct', 'unknown'));
 
 -- ── attribution_events: append-only auditable trail ──────────────────────────
 create table if not exists public.attribution_events (
@@ -40,7 +40,7 @@ create table if not exists public.attribution_events (
   practice_id uuid not null references public.practices(id) on delete cascade,
   event_type  text not null,                  -- message_sent | patient_replied | treatment_accepted
   event_date  timestamptz not null default now(),
-  source      text not null default 'consultiq', -- consultiq | pms | manual
+  source      text not null default 'caselift', -- caselift | pms | manual
   created_at  timestamptz not null default now()
 );
 create index if not exists idx_attr_events_consult  on public.attribution_events(consult_id);
@@ -80,8 +80,8 @@ begin
     where ae.consult_id = p_consult_id and ae.event_type = 'message_sent'
   ) into sent;
 
-  if replied then return 'consultiq_recovered'; end if;
-  if sent then return 'consultiq_assisted'; end if;
+  if replied then return 'caselift_recovered'; end if;
+  if sent then return 'caselift_assisted'; end if;
   return 'practice_direct';
 end $$;
 
@@ -93,7 +93,7 @@ begin
      and (TG_OP = 'INSERT' or OLD.status is distinct from 'sent')
      and NEW.consult_id is not null then
     insert into public.attribution_events (consult_id, practice_id, event_type, event_date, source)
-    values (NEW.consult_id, NEW.practice_id, 'message_sent', coalesce(NEW.sent_at, now()), 'consultiq');
+    values (NEW.consult_id, NEW.practice_id, 'message_sent', coalesce(NEW.sent_at, now()), 'caselift');
   end if;
   return NEW;
 end $$;
@@ -113,7 +113,7 @@ begin
       from public.conversations where id = NEW.conversation_id;
     if cv_consult is not null then
       insert into public.attribution_events (consult_id, practice_id, event_type, event_date, source)
-      values (cv_consult, cv_practice, 'patient_replied', coalesce(NEW.sent_at, NEW.created_at, now()), 'consultiq');
+      values (cv_consult, cv_practice, 'patient_replied', coalesce(NEW.sent_at, NEW.created_at, now()), 'caselift');
     end if;
   end if;
   return NEW;
@@ -144,7 +144,7 @@ begin
   NEW.attribution_source       := coalesce(NEW.attribution_source, 'manual');
   -- Keep the legacy column in sync (billing / older reports read it).
   NEW.attribution_model := case
-    when new_status in ('consultiq_recovered', 'consultiq_assisted') then 'consultiq_recovered'
+    when new_status in ('caselift_recovered', 'caselift_assisted') then 'caselift_recovered'
     else 'practice_recovered' end;
 
   insert into public.attribution_events (consult_id, practice_id, event_type, event_date, source)

@@ -30,8 +30,8 @@ import ErrorState, { friendlyError } from '../components/ErrorState'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const tooltipStyle = {
-  contentStyle: { background: '#0f1521', border: '1px solid #1e2738', borderRadius: '0.5rem', fontSize: '0.8rem' },
-  labelStyle: { color: '#94a3b8' },
+  contentStyle: { background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '0.5rem', fontSize: '0.8rem', color: 'var(--text-primary)' },
+  labelStyle: { color: 'var(--text-secondary)' },
 }
 function parseDate(d) {
   if (!d) return null
@@ -201,15 +201,15 @@ export default function AgencyAnalytics() {
                 <AreaChart data={data.trend} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
                   <defs>
                     <linearGradient id="agRev" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#34d399" stopOpacity={0.35} />
-                      <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e2738" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={formatMoney} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={formatMoney} />
                   <Tooltip {...tooltipStyle} formatter={(v) => [formatMoney(v), 'Recovered']} />
-                  <Area type="monotone" dataKey="value" stroke="#34d399" strokeWidth={2.5} fill="url(#agRev)" />
+                  <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2.5} fill="url(#agRev)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>

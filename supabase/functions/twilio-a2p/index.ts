@@ -75,7 +75,7 @@ async function ensureMessagingService(
 
   if (!mgSid) {
     const form = new URLSearchParams();
-    form.set("FriendlyName", `Hope AI - ${practiceName}`.slice(0, 64));
+    form.set("FriendlyName", `CaseLift - ${practiceName}`.slice(0, 64));
     if (inbound) {
       form.set("InboundRequestUrl", inbound);
       form.set("InboundMethod", "POST");

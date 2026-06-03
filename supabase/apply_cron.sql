@@ -1,5 +1,5 @@
 -- ============================================================================
--- apply_cron.sql - schedule the four background jobs that drive Hope AI:
+-- apply_cron.sql - schedule the four background jobs that drive CaseLift:
 --   • sync-pms-appointments       every 15 min → /functions/v1/sync-appointments
 --   • process-sequences           every  5 min → /functions/v1/process-sequences
 --   • send-due-messages           every  5 min → /functions/v1/send-due-messages

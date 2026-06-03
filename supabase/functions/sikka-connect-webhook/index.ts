@@ -207,7 +207,7 @@ async function closeConsultsForTreatmentPlans(admin: any, practiceId: string, re
         .select("id", { count: "exact", head: true }).eq("direction", "inbound").in("conversation_id", convIds);
       replied = (inCount || 0) > 0;
     }
-    const status = replied ? "consultiq_recovered" : (sentCount || 0) > 0 ? "consultiq_assisted" : "practice_direct";
+    const status = replied ? "caselift_recovered" : (sentCount || 0) > 0 ? "caselift_assisted" : "practice_direct";
 
     // deno-lint-ignore no-explicit-any
     const patch: Record<string, any> = {
@@ -217,7 +217,7 @@ async function closeConsultsForTreatmentPlans(admin: any, practiceId: string, re
       attribution_status: status,
       attribution_confirmed_at: new Date().toISOString(),
       attribution_source: "pms_webhook",
-      attribution_model: status === "practice_direct" ? "practice_recovered" : "consultiq_recovered",
+      attribution_model: status === "practice_direct" ? "practice_recovered" : "caselift_recovered",
     };
     if (value != null) {
       patch.case_value = value;

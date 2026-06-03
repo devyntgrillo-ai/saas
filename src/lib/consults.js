@@ -12,16 +12,16 @@ const BADGE = 'bg-surface-700 ring-white/[0.06]'
 export const CONSULT_STATUS = {
   pending: { label: 'Pending', classes: `${BADGE} text-slate-400` },
   approved: { label: 'Approved', classes: `${BADGE} text-[#60a5fa]` },
-  active: { label: 'Active', classes: `${BADGE} text-[#34d399]` },
+  active: { label: 'Active', classes: `${BADGE} text-[#10b981]` },
   replied: { label: 'Replied', classes: `${BADGE} text-primary-300` },
-  closed_won: { label: 'Converted', classes: `${BADGE} text-[#34d399]` },
+  closed_won: { label: 'Converted', classes: `${BADGE} text-[#10b981]` },
   closed_lost: { label: 'Not converting', classes: `${BADGE} text-[#f87171]` },
   // legacy
   new: { label: 'New', classes: `${BADGE} text-slate-400` },
   analyzing: { label: 'Analyzing', classes: `${BADGE} text-[#60a5fa]` },
   analyzed: { label: 'Analyzed', classes: `${BADGE} text-primary-300` },
   followed_up: { label: 'Followed up', classes: `${BADGE} text-primary-300` },
-  recovered: { label: 'Recovered', classes: `${BADGE} text-[#34d399]` },
+  recovered: { label: 'Recovered', classes: `${BADGE} text-[#10b981]` },
   lost: { label: 'Lost', classes: `${BADGE} text-[#f87171]` },
 }
 
@@ -83,7 +83,7 @@ export function exitIntentMeta(level) {
 // Message status: text-only semantic colors on the subtle surface.
 export const MESSAGE_STATUS = {
   pending: { label: 'Pending', classes: `${BADGE} text-slate-400` },
-  sent: { label: 'Sent', classes: `${BADGE} text-[#34d399]` },
+  sent: { label: 'Sent', classes: `${BADGE} text-[#10b981]` },
   opened: { label: 'Opened', classes: `${BADGE} text-[#60a5fa]` },
   replied: { label: 'Replied', classes: `${BADGE} text-primary-300` },
   // legacy

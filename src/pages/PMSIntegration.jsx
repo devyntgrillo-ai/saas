@@ -26,7 +26,7 @@ function detectOS() {
   if (/win/i.test(sig)) return 'windows'
   return 'unknown'
 }
-const SYNC_APPS = { mac: 'hopeai-sync-mac.dmg', windows: 'hopeai-sync-windows.exe' }
+const SYNC_APPS = { mac: 'caselift-sync-mac.dmg', windows: 'caselift-sync-windows.exe' }
 function downloadApp(file) {
   const a = document.createElement('a')
   a.href = `/downloads/${file}`
@@ -107,9 +107,9 @@ function PMSWizard({ practiceId, currentType, onClose, onDone }) {
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary-400">
                 <Download className="h-5 w-5" />
               </div>
-              <h3 className="mt-4 text-base font-semibold text-white">Install the Hope AI sync app</h3>
+              <h3 className="mt-4 text-base font-semibold text-white">Install the CaseLift sync app</h3>
               <p className="mt-1 text-sm text-slate-400">
-                A small background app that connects {label} to Hope AI. Takes about 2 minutes.
+                A small background app that connects {label} to CaseLift. Takes about 2 minutes.
               </p>
               <button type="button" className="btn-primary mt-4"
                 onClick={() => {
@@ -122,8 +122,8 @@ function PMSWizard({ practiceId, currentType, onClose, onDone }) {
               {showBoth && (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <span className="text-xs text-slate-500">Choose your OS:</span>
-                  <a href="/downloads/hopeai-sync-mac.dmg" download className="btn-ghost px-3 py-1.5 text-xs"><Download className="h-3.5 w-3.5" /> macOS</a>
-                  <a href="/downloads/hopeai-sync-windows.exe" download className="btn-ghost px-3 py-1.5 text-xs"><Download className="h-3.5 w-3.5" /> Windows</a>
+                  <a href="/downloads/caselift-sync-mac.dmg" download className="btn-ghost px-3 py-1.5 text-xs"><Download className="h-3.5 w-3.5" /> macOS</a>
+                  <a href="/downloads/caselift-sync-windows.exe" download className="btn-ghost px-3 py-1.5 text-xs"><Download className="h-3.5 w-3.5" /> Windows</a>
                 </div>
               )}
               <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-lg border border-surface-700 bg-surface-800/50 p-3 text-sm text-slate-200">
@@ -198,7 +198,7 @@ export default function PMSIntegration() {
       <div className="card flex flex-wrap items-center justify-between gap-3 p-5">
         <div>
           <h2 className="text-base font-semibold text-white">PMS Integration</h2>
-          <p className="mt-1 text-sm text-slate-400">Install the Hope AI sync app on your front-desk computer and your consult appointments appear automatically.</p>
+          <p className="mt-1 text-sm text-slate-400">Install the CaseLift sync app on your front-desk computer and your consult appointments appear automatically.</p>
         </div>
         {!wizardComplete && (
           <button onClick={() => setWizard(true)} className="btn-primary">

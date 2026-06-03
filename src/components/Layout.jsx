@@ -100,7 +100,7 @@ export default function Layout() {
     <>
       <div className="px-4 pb-3 pt-6">
         {/* Logo resolves the white-label brand via BrandingContext, which already
-            honors the super-admin override (Devyn always sees Hope AI). */}
+            honors the super-admin override (Devyn always sees CaseLift). */}
         <Logo />
       </div>
       <AccountSwitcher />
@@ -198,7 +198,7 @@ export default function Layout() {
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Service paused - the reseller behind this practice is past due on
-            their Hope AI wholesale bill, so their subaccounts are paused. */}
+            their CaseLift wholesale bill, so their subaccounts are paused. */}
         {resellerSuspended && (
           <div
             className={`flex flex-wrap items-center gap-2 border-b px-4 py-2.5 text-sm ${
@@ -224,11 +224,11 @@ export default function Layout() {
             <span className={`flex items-center gap-2 ${isLight ? 'text-amber-900' : 'text-amber-200'}`}>
               <AlertTriangle className="h-4 w-4 shrink-0" />
               {practice?.subscription_status === 'past_due'
-                ? 'Your last payment failed. Update your billing to keep Hope AI active.'
+                ? 'Your last payment failed. Update your billing to keep CaseLift active.'
                 : practice?.subscription_status === 'cancelled' ||
                     practice?.subscription_status === 'canceled'
                   ? 'Your subscription is cancelled. Reactivate to keep full access.'
-                  : 'Your free trial has ended. Upgrade to keep using Hope AI.'}
+                  : 'Your free trial has ended. Upgrade to keep using CaseLift.'}
             </span>
             <Link
               to="/settings/billing"
@@ -300,7 +300,7 @@ export default function Layout() {
           even when previewing a client's white-label brand. */}
       {isSuperAdmin && (
         <div className="pointer-events-none fixed bottom-3 right-3 z-30 rounded-full border border-white/10 bg-surface-900/90 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-slate-400 shadow-lg backdrop-blur">
-          Hope AI Admin
+          CaseLift Admin
         </div>
       )}
       </div>

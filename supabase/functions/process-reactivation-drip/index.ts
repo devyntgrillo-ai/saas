@@ -118,7 +118,7 @@ Deno.serve(async (req: Request) => {
         if (!reply) continue;
 
         // Pause the enrollment, tag the conversation, notify the TC, and log a
-        // reply outcome so attribution can flip to consultiq_recovered later.
+        // reply outcome so attribution can flip to caselift_recovered later.
         await admin
           .from("reactivation_enrollments")
           .update({ status: "replied", replied_at: reply.created_at, reply_content: reply.body || null })

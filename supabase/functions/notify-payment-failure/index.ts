@@ -8,16 +8,16 @@
 //
 // The practice-facing email is white-labeled to the practice's reseller brand
 // (see _shared/brand.ts); internal copies to the reseller owner + super admin
-// stay Hope AI-branded and prefixed "[Internal]".
+// stay CaseLift-branded and prefixed "[Internal]".
 //
 // Secrets: SUPABASE_SERVICE_ROLE_KEY, MAILGUN_API_KEY, MAILGUN_DOMAIN.
 // Optional: MAILGUN_FROM (only the <noreply@domain> address is reused; the
 //           display name is branded per-recipient),
-//           APP_URL (defaults to https://app.heyhope.ai) for the billing link.
+//           APP_URL (defaults to https://app.caselift.io) for the billing link.
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
-import { type Brand, CONSULTIQ_BRAND, emailFooter, emailHeader, emailSignature, resolveBrand } from "../_shared/brand.ts";
+import { type Brand, CASELIFT_BRAND, emailFooter, emailHeader, emailSignature, resolveBrand } from "../_shared/brand.ts";
 
 const SUPER_ADMIN_EMAIL = "devyntgrillo@gmail.com";
 
@@ -98,7 +98,7 @@ Deno.serve(async (req: Request) => {
 
     const name = practice.name || "your practice";
     const failedOn = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-    const appUrl = Deno.env.get("APP_URL") || "https://app.heyhope.ai";
+    const appUrl = Deno.env.get("APP_URL") || "https://app.caselift.io";
     const billingUrl = `${appUrl}/settings/billing`;
 
     // Resolve the reseller brand for the practice-facing email.
@@ -131,17 +131,17 @@ Deno.serve(async (req: Request) => {
       results.practice = await sendMailgun([practice.email], subject, htmlBody, text, brand.fromName, brand.supportEmail);
     }
 
-    // Internal copies (reseller owner + super admin) stay Hope AI-branded.
+    // Internal copies (reseller owner + super admin) stay CaseLift-branded.
     const internal = [...new Set([resellerEmail, SUPER_ADMIN_EMAIL].filter(Boolean))] as string[];
     if (internal.length) {
-      const { subject, text, htmlBody } = buildEmail(CONSULTIQ_BRAND);
+      const { subject, text, htmlBody } = buildEmail(CASELIFT_BRAND);
       results.internal = await sendMailgun(
         internal,
         `[Internal] ${subject}`,
         htmlBody,
         text,
-        CONSULTIQ_BRAND.fromName,
-        CONSULTIQ_BRAND.supportEmail,
+        CASELIFT_BRAND.fromName,
+        CASELIFT_BRAND.supportEmail,
       );
     }
 

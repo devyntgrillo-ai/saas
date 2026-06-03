@@ -17,7 +17,7 @@ function lineClass(text) {
 const SPEAKER_COLOR = {
   TC: 'text-primary-300',
   Patient: 'text-slate-200',
-  Doctor: 'text-violet-300',
+  Doctor: 'text-primary-300',
 }
 
 function parseTranscript(raw) {

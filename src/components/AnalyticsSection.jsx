@@ -20,8 +20,8 @@ function usePrimaryColor() {
   }, [])
 }
 
-const axis = { stroke: '#475569', fontSize: 11 }
-const grid = '#1e2738'
+const axis = { stroke: 'var(--border)', fontSize: 11 }
+const grid = 'var(--border)'
 
 function ChartCard({ title, subtitle, children, empty }) {
   return (
@@ -40,9 +40,9 @@ function ChartCard({ title, subtitle, children, empty }) {
 }
 
 const tooltipStyle = {
-  contentStyle: { background: '#0f1521', border: '1px solid #1e2738', borderRadius: 10, fontSize: 12 },
-  labelStyle: { color: '#cbd5e1' },
-  itemStyle: { color: '#e2e8f0' },
+  contentStyle: { background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12, color: 'var(--text-primary)' },
+  labelStyle: { color: 'var(--text-primary)' },
+  itemStyle: { color: 'var(--text-secondary)' },
 }
 
 export default function AnalyticsSection({ practiceId }) {
@@ -118,7 +118,7 @@ export default function AnalyticsSection({ practiceId }) {
               <XAxis dataKey="label" tick={axis} tickLine={false} axisLine={{ stroke: grid }} />
               <YAxis tick={axis} tickLine={false} axisLine={false} tickFormatter={formatMoney} width={48} />
               <Tooltip {...tooltipStyle} formatter={(v) => [formatMoney(v), 'Recovered']} />
-              <Line type="monotone" dataKey="value" stroke="#34d399" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
             </LineChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -142,7 +142,7 @@ export default function AnalyticsSection({ practiceId }) {
               <XAxis dataKey="label" tick={axis} tickLine={false} axisLine={{ stroke: grid }} />
               <YAxis tick={axis} tickLine={false} axisLine={false} width={36} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
               <Tooltip {...tooltipStyle} formatter={(v) => [`${v}%`, 'Close rate']} />
-              <Line type="monotone" dataKey="rate" stroke="#a78bfa" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="rate" stroke="#0EA5E9" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
             </LineChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -179,7 +179,7 @@ export default function AnalyticsSection({ practiceId }) {
               <YAxis tick={axis} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
               <Tooltip {...tooltipStyle}
                 formatter={(v, n, p) => [`${v} replies (${p.payload.replyRate}% of ${p.payload.sent})`, p.payload.position]} />
-              <Bar dataKey="replies" fill="#34d399" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="replies" fill="#10b981" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>

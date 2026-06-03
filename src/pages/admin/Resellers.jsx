@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { StatCard, Table, Badge, Avatar, money, stop } from '../../components/admin/ui'
 import { WHOLESALE_PRICE, isActiveSubaccount } from '../../lib/resellerSaas'
 
-// Hope AI super-admin view of the reseller SaaS economy: what each reseller
+// CaseLift super-admin view of the reseller SaaS economy: what each reseller
 // charges, how many active subaccounts they run, what they collect vs. what we
 // bill them, and their margin. Queries agency_accounts + practices directly so
 // the numbers reflect the live reseller_client_price / $297 wholesale model.
@@ -187,7 +187,7 @@ function EditRateModal({ agency, onClose, onSaved }) {
       </>
     }>
       <div className="space-y-3">
-        <p className="text-sm text-slate-400">What Hope AI bills this reseller per active subaccount, per month. Default is {money(WHOLESALE_PRICE)}.</p>
+        <p className="text-sm text-slate-400">What CaseLift bills this reseller per active subaccount, per month. Default is {money(WHOLESALE_PRICE)}.</p>
         <div>
           <label className="label">Wholesale rate (USD/active/mo)</label>
           <input className="input" type="number" min={0} value={rate} onChange={(e) => setRate(e.target.value)} />

@@ -175,7 +175,7 @@ export default function ResellerSignup() {
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          {offer.company_name} · Powered by Hope AI
+          {offer.company_name} · Powered by CaseLift
         </p>
       </div>
     </div>

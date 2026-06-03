@@ -22,7 +22,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { chargebeeConfig, chargebeeRequest } from "../_shared/chargebee.ts";
 
-// Wholesale price Hope AI charges resellers per active subaccount, in cents.
+// Wholesale price CaseLift charges resellers per active subaccount, in cents.
 const WHOLESALE_CENTS = 29_700; // $297.00
 // Subaccount statuses that count as "active" for wholesale billing.
 const ACTIVE_STATUSES = ["active", "trial", "trialing"];
@@ -114,7 +114,7 @@ Deno.serve(async (req: Request) => {
         }
 
         // 3) Create + auto-collect the wholesale invoice.
-        const description = `Hope AI wholesale - ${activeCount} active subaccount${activeCount === 1 ? "" : "s"} @ $${(unitCents / 100).toFixed(0)}`;
+        const description = `CaseLift wholesale - ${activeCount} active subaccount${activeCount === 1 ? "" : "s"} @ $${(unitCents / 100).toFixed(0)}`;
         const inv = await chargebeeRequest(cfg!, "/invoices/create_for_charge_items_and_charges", "POST", {
           customer_id: customerId,
           auto_collection: "on",

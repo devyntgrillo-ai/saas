@@ -78,16 +78,16 @@ async function sendMailgun(
 }
 
 function buildWelcomeEmail(brand: Brand, practiceName: string, appUrl: string, trialDays: number | null) {
-  const subject = `Welcome to ${brand.companyName} - meet Hope`;
+  const subject = `Welcome to ${brand.companyName} - meet CaseLift`;
   const trialLine = trialDays
     ? `Your ${trialDays}-day free trial has started - no payment required today.`
     : `Your account is ready to go.`;
   const html = `
     <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111827">
       <div style="margin-bottom:20px">${emailHeader(brand)}</div>
-      <h1 style="font-size:20px;margin:0 0 12px">Welcome to ${escapeHtml(brand.companyName)} - meet Hope</h1>
+      <h1 style="font-size:20px;margin:0 0 12px">Welcome to ${escapeHtml(brand.companyName)} - meet CaseLift</h1>
       <p style="font-size:14px;line-height:1.6;color:#374151;margin:0 0 20px">
-        Hi - I'm Hope, your AI assistant at ${escapeHtml(practiceName)}. I listen to your consults,
+        Hi - I'm CaseLift, your AI assistant at ${escapeHtml(practiceName)}. I listen to your consults,
         follow up with patients, and recover more high-value cases for you. ${escapeHtml(trialLine)}
       </p>
       <a href="${appUrl}" style="display:inline-block;background:${brand.primaryColor};color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:11px 22px;border-radius:8px">
@@ -100,8 +100,8 @@ function buildWelcomeEmail(brand: Brand, practiceName: string, appUrl: string, t
       ${emailFooter(brand)}
     </div>`;
   const text =
-    `Welcome to ${brand.companyName} - meet Hope.\n\n` +
-    `I'm Hope, your AI assistant at ${practiceName}. ${trialLine}\n\nOpen the app: ${appUrl}\n\n` +
+    `Welcome to ${brand.companyName} - meet CaseLift.\n\n` +
+    `I'm CaseLift, your AI assistant at ${practiceName}. ${trialLine}\n\nOpen the app: ${appUrl}\n\n` +
     `Questions? Email ${brand.supportEmail}`;
   return { subject, html, text };
 }
@@ -197,7 +197,7 @@ Deno.serve(async (req: Request) => {
       .upsert({ id: userId, email, practice_id: practiceId, role: "owner" }, { onConflict: "id" });
 
     // --- 5) Branded welcome email (best-effort). ---
-    const appUrl = (body.app_url || Deno.env.get("APP_URL") || "https://app.heyhope.ai").replace(/\/$/, "");
+    const appUrl = (body.app_url || Deno.env.get("APP_URL") || "https://app.caselift.io").replace(/\/$/, "");
     const brand = await resolveBrand(admin, { agency_id: agency.id });
     const { subject, html, text } = buildWelcomeEmail(brand, practiceName, appUrl, trialEnabled ? trialDays : null);
     const sent = await sendMailgun(email, subject, html, text, brand.fromName, brand.supportEmail);

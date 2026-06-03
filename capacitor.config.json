@@ -1,6 +1,6 @@
 {
-  "appId": "com.consultiq.app",
-  "appName": "Hope AI",
+  "appId": "com.caselift.app",
+  "appName": "CaseLift",
   "webDir": "dist",
   "ios": {
     "contentInset": "always",

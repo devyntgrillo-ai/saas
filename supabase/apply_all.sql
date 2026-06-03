@@ -1,5 +1,5 @@
 -- ============================================================================
--- apply_all.sql - bring a Hope AI database fully up to date in one run.
+-- apply_all.sql - bring a CaseLift database fully up to date in one run.
 --
 -- Bundles every SCHEMA migration (idempotent column/table/RLS additions) in
 -- dependency order, wrapped in a single transaction. Safe to re-run.
@@ -147,7 +147,7 @@ create unique index if not exists uq_pms_appts_practice_extid
   on public.pms_appointments(practice_id, pms_appointment_id);
 
 -- Unlinked Sikka registrations for admin review (when the connect webhook can't
--- match a Sikka practice to a Hope AI practice).
+-- match a Sikka practice to a CaseLift practice).
 create table if not exists public.sikka_registrations (
   id                uuid primary key default gen_random_uuid(),
   sikka_practice_id text,
@@ -407,7 +407,7 @@ alter table public.conversations
   add column if not exists reactivation_campaign_id uuid
     references public.reactivation_campaigns(id) on delete set null;
 
--- Attribution status on consults (reporting): consultiq_recovered etc.
+-- Attribution status on consults (reporting): caselift_recovered etc.
 alter table public.consults add column if not exists attribution_status text;
 alter table public.consults add column if not exists conversion_source  text;
 alter table public.consults add column if not exists closed_at          timestamptz;

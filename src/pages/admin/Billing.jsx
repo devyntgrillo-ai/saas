@@ -97,7 +97,7 @@ export default function AdminBilling() {
     return [
       <span className="font-medium text-slate-100">{r.name}</span>,
       r.agency?.name || <span className="text-slate-500">Direct</span>,
-      status === 'active' ? 'Hope AI' : <span className="capitalize">{status}</span>,
+      status === 'active' ? 'CaseLift' : <span className="capitalize">{status}</span>,
       <Badge className={meta.classes}>{meta.label}</Badge>,
       r.next_billing_date ? new Date(r.next_billing_date).toLocaleDateString() : '-',
       money(mrr),

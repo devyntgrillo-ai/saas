@@ -201,7 +201,7 @@ function RecordingSettingsCard({ practice, save }) {
             />
             <Toggle
               label="Auto-analyze after recording"
-              description="Run Hope AI analysis automatically when a recording finishes."
+              description="Run CaseLift analysis automatically when a recording finishes."
               checked={Boolean(practice?.auto_analyze)} onChange={(v) => save({ auto_analyze: v }, 'rec')}
             />
             <Toggle
@@ -251,7 +251,7 @@ export default function Integrations() {
       await fetch(slackUrl, {
         method: 'POST', mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: '🟢 *Hope AI* - test notification. Your Slack integration is working.' }),
+        body: JSON.stringify({ text: '🟢 *CaseLift* - test notification. Your Slack integration is working.' }),
       })
       setSlackTest('sent')
     } catch { setSlackTest('sent') }
@@ -260,7 +260,7 @@ export default function Integrations() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-base font-semibold text-white">Hope AI Integrations</h2>
+      <h2 className="text-base font-semibold text-white">CaseLift Integrations</h2>
 
       {/* PMS */}
       <div>
@@ -278,7 +278,7 @@ export default function Integrations() {
         <div className="grid gap-3 lg:grid-cols-2">
           <IntegrationCard logo={<Mic className="h-5 w-5" />} logoTone="bg-emerald-600" title="Browser Recording"
             badge={<Badge tone="green"><CheckCircle2 className="h-3 w-3" /> Active</Badge>}>
-            Record directly in Hope AI on desktop or phone - no setup required.
+            Record directly in CaseLift on desktop or phone - no setup required.
           </IntegrationCard>
 
           <IntegrationCard logo={<span className="text-sm font-bold">D</span>} logoTone="bg-teal-600" title="Doxy.me" disabled
@@ -320,11 +320,11 @@ export default function Integrations() {
         <SectionHeader>Notifications</SectionHeader>
         <IntegrationCard logo={<Hash className="h-5 w-5" />} logoTone="bg-violet-600" title="Slack"
           badge={slackConnected ? <Badge tone="green"><CheckCircle2 className="h-3 w-3" /> Connected</Badge> : <Badge tone="slate">Not connected</Badge>}>
-          Get Hope AI alerts in your Slack workspace.
+          Get CaseLift alerts in your Slack workspace.
           <div className="mt-3 space-y-2">
             <input value={slackUrl} onChange={(e) => setSlackUrl(e.target.value)} placeholder="Slack incoming webhook URL" className="input" />
             <div className="flex gap-2">
-              <input value={slackChannel} onChange={(e) => setSlackChannel(e.target.value)} placeholder="#hopeai-alerts" className="input" />
+              <input value={slackChannel} onChange={(e) => setSlackChannel(e.target.value)} placeholder="#caselift-alerts" className="input" />
               <button onClick={() => save({ slack_webhook_url: slackUrl.trim() || null, slack_channel: slackChannel.trim() || null }, 'slack')} disabled={saving === 'slack'} className="btn-primary shrink-0">
                 {saving === 'slack' ? <Loader2 className="h-4 w-4 animate-spin" /> : slackConnected ? 'Update' : 'Connect'}
               </button>

@@ -1,4 +1,4 @@
-// Shared billing / subscription helpers for Hope AI (Chargebee).
+// Shared billing / subscription helpers for CaseLift (Chargebee).
 //
 // Subscription lifecycle (practices.subscription_status):
 //   trial     - new signups; full access until trial_ends_at (14 days)
@@ -7,14 +7,14 @@
 //   cancelled - subscription cancelled (access until end of paid period)
 import { supabase } from './supabase'
 
-export const PLAN_NAME = 'Hope AI'
+export const PLAN_NAME = 'CaseLift'
 export const PLAN_PRICE = '$997/month'
 
 // Visual treatment for each subscription status badge.
 export const SUBSCRIPTION_STATUS = {
   trial: { label: 'Trial', classes: 'bg-sky-500/15 text-sky-300 ring-sky-400/20' },
   active: { label: 'Active', classes: 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/20' },
-  paused: { label: 'Paused', classes: 'bg-indigo-500/15 text-indigo-300 ring-indigo-400/20' },
+  paused: { label: 'Paused', classes: 'bg-[var(--bg-subtle)] text-[var(--text-muted)]' },
   past_due: { label: 'Past Due', classes: 'bg-amber-500/15 text-amber-300 ring-amber-400/20' },
   unpaid: { label: 'Unpaid', classes: 'bg-rose-500/15 text-rose-300 ring-rose-400/20' },
   cancelled: { label: 'Cancelled', classes: 'bg-rose-500/15 text-rose-300 ring-rose-400/20' },
@@ -141,10 +141,10 @@ export async function fetchCancellationImpact(practiceId) {
       .in('status', ['active', 'approved']),
   ])
   const consults = consultsRes.data || []
-  // Production attributed to Hope AI (conservative attribution model); fall
+  // Production attributed to CaseLift (conservative attribution model); fall
   // back to all closed-won if attribution hasn't been computed yet.
   const attributed = consults
-    .filter((c) => c.attribution_model === 'consultiq_recovered')
+    .filter((c) => c.attribution_model === 'caselift_recovered')
     .reduce((s, c) => s + (Number(c.case_value) || 0), 0)
   const production = attributed || consults
     .filter((c) => c.status === 'closed_won' || c.status === 'recovered')
@@ -214,7 +214,7 @@ export async function cancelSubscription(practiceId) {
 }
 
 // Client-side export of the practice's data (preserved for 90 days regardless).
-export async function exportPracticeData(practiceId, practiceName = 'hopeai') {
+export async function exportPracticeData(practiceId, practiceName = 'caselift') {
   const [c, m, conv] = await Promise.all([
     supabase.from('consults').select('*').eq('practice_id', practiceId),
     supabase.from('messages').select('*').eq('practice_id', practiceId),
@@ -231,7 +231,7 @@ export async function exportPracticeData(practiceId, practiceName = 'hopeai') {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${String(practiceName).replace(/\s+/g, '-').toLowerCase()}-hopeai-export.json`
+  a.download = `${String(practiceName).replace(/\s+/g, '-').toLowerCase()}-caselift-export.json`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)

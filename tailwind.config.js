@@ -31,7 +31,7 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['-apple-system', 'BlinkMacSystemFont', 'Inter', 'Segoe UI', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
         // One consistent elevation level across the whole app.

@@ -115,7 +115,7 @@ export default function AccountSwitcher() {
                   className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-sm text-slate-200 transition hover:bg-surface-700"
                 >
                   <Building2 className="h-4 w-4 shrink-0 text-slate-400" /> <span className="truncate">{agency?.name || 'Reseller'}</span>
-                  <span className="ml-auto shrink-0 rounded bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-violet-400">RESELLER</span>
+                  <span className="ml-auto shrink-0 rounded bg-[var(--accent-subtle)] px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-[var(--accent)]">RESELLER</span>
                 </button>
               )}
               <div className="my-2 border-t border-white/[0.07]" />
@@ -153,7 +153,7 @@ export default function AccountSwitcher() {
 
           {isWhiteLabeled && (
             <p className="mt-2 border-t border-white/[0.07] px-2 pt-2 text-center text-[10px] text-slate-600">
-              Powered by Hope AI
+              Powered by CaseLift
             </p>
           )}
         </div>

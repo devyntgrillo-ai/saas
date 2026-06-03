@@ -61,7 +61,7 @@ export default function AcceptInvite() {
             <>
               <div className="flex items-center gap-2 text-primary-300">
                 <ShieldCheck className="h-5 w-5" />
-                <span className="text-xs font-semibold uppercase tracking-wide">Welcome to Hope AI</span>
+                <span className="text-xs font-semibold uppercase tracking-wide">Welcome to CaseLift</span>
               </div>
               <h1 className="mt-3 text-xl font-bold text-white">Set your password</h1>
               <p className="mt-1 text-sm text-slate-400">

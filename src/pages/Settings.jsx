@@ -143,7 +143,7 @@ export default function Settings() {
       const msg = e?.message || ''
       setCheckoutError(
         /chargebee|not configured/i.test(msg)
-          ? 'Online checkout isn’t available yet - billing isn’t fully configured. Please contact support@heyhope.ai.'
+          ? 'Online checkout isn’t available yet - billing isn’t fully configured. Please contact support@caselift.io.'
           : msg || 'Could not start checkout. Please try again.',
       )
       setCheckoutLoading(false)
@@ -202,7 +202,7 @@ export default function Settings() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Hope AI Settings</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-white">CaseLift Settings</h1>
           <p className="mt-1 text-sm text-slate-400">
             Practice profile, integrations, notifications, and billing.
           </p>
@@ -410,7 +410,7 @@ function HipaaBadge() {
   return (
     <div className="flex shrink-0 items-center gap-1.5 px-3 py-2 text-xs font-normal text-slate-500 lg:mt-2 lg:border-t lg:border-surface-700 lg:pt-3">
       <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-      Hope AI is HIPAA Compliant
+      CaseLift is HIPAA Compliant
     </div>
   )
 }
@@ -421,7 +421,7 @@ function AppearanceCard() {
   return (
     <div className="card p-6">
       <h2 className="text-base font-semibold text-white">Appearance</h2>
-      <p className="mt-2 text-sm text-slate-400">Choose how Hope AI looks on this device.</p>
+      <p className="mt-2 text-sm text-slate-400">Choose how CaseLift looks on this device.</p>
       <div className="mt-4 flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-slate-200">Theme</p>
@@ -651,7 +651,7 @@ function BillingPanel({ practice, showSuccess, checkoutLoading, checkoutError, o
           </p>
         )}
         {status === 'paused' && (
-          <p className="mt-4 text-sm text-indigo-300">
+          <p className="mt-4 text-sm text-primary-300">
             Your account is paused
             {practice?.pause_ends_at ? ` until ${formatDate(practice.pause_ends_at)}` : ''}. No charges during the
             pause - resume any time.

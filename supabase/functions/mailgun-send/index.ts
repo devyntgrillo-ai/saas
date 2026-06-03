@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
       practiceId = c?.practice_id;
     }
 
-    let fromName = "Hope AI";
+    let fromName = "CaseLift";
     let replyTo: string | null = null;
     if (practiceId) {
       const { data: pr } = await admin.from("practices").select("*, agency:agency_accounts(*)").eq("id", practiceId).maybeSingle();

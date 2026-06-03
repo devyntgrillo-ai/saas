@@ -7,7 +7,7 @@ export const MIN_PAYOUT = 250
 // copied link is shareable regardless of which app host generated it.
 export function referralLink(code) {
   if (!code) return ''
-  return `https://hopeai.com/r/${code}`
+  return `https://caselift.io/r/${code}`
 }
 
 // Pre-written, editable share email. `link` is interpolated into the body.
@@ -16,7 +16,7 @@ export const EMAIL_SUBJECT =
 
 export function emailBody(link) {
   return (
-    "Hey, we've been using Hope AI to follow up with implant patients who " +
+    "Hey, we've been using CaseLift to follow up with implant patients who " +
     "didn't commit at their consult. It has been recovering cases we thought " +
     `were lost. Here is a link to check it out: ${link}. No pressure, just ` +
     'thought it was worth sharing.'
@@ -35,7 +35,7 @@ export function referralStatusMeta(status) {
     case 'expired':
       return { label: 'Cancelled', classes: 'bg-slate-500/15 text-slate-400' }
     case 'paused':
-      return { label: 'Paused', classes: 'bg-indigo-500/15 text-indigo-300' }
+      return { label: 'Paused', classes: 'bg-[var(--bg-subtle)] text-[var(--text-muted)]' }
     case 'past_due':
     case 'unpaid':
       return { label: 'Past due', classes: 'bg-rose-500/15 text-rose-300' }

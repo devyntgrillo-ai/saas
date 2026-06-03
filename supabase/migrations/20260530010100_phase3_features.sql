@@ -101,7 +101,7 @@ create policy "react_enroll_all_own_practice" on public.reactivation_enrollments
   for all to authenticated using (practice_id = public.current_practice_id())
   with check (practice_id = public.current_practice_id());
 
--- Attribution status on consults (reporting): consultiq_recovered etc.
+-- Attribution status on consults (reporting): caselift_recovered etc.
 alter table public.consults add column if not exists attribution_status text;
 alter table public.consults add column if not exists conversion_source  text;
 alter table public.consults add column if not exists closed_at          timestamptz;

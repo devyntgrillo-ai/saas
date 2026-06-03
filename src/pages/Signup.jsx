@@ -145,7 +145,7 @@ export default function Signup() {
               <Gift className="mt-0.5 h-4 w-4 shrink-0" />
               <span>
                 You were referred by <span className="font-semibold">{referrer.practice_name}</span>{' '}
-                — welcome to Hope AI.
+                — welcome to CaseLift.
               </span>
             </div>
           )}

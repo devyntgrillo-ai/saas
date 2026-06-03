@@ -5,7 +5,7 @@
 -- `practices.agency_id`. This migration makes the reseller record carry the
 -- full white-label brand so the app + emails can re-skin per reseller:
 --
---   • company_name   - display name shown to clients instead of "Hope AI"
+--   • company_name   - display name shown to clients instead of "CaseLift"
 --   • primary_color   - hex brand color (drives the themeable primary palette)
 --   • logo_url        - sidebar / email-header logo (public URL)
 --   • favicon_url     - browser-tab favicon (optional)

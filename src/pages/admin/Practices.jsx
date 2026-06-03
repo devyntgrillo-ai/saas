@@ -81,7 +81,7 @@ export default function Practices() {
             <span className={sms.classes}>{sms.label}</span>,
             <div className="flex items-center gap-1.5" onClick={stop}>
               <button onClick={() => navigate(`/admin/practices/${p.id}`)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-slate-300 transition hover:bg-surface-700" title="View"><Eye className="h-3.5 w-3.5" /></button>
-              <button onClick={() => impersonatePractice(p)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-violet-300 transition hover:bg-surface-700" title="Impersonate"><UserCog className="h-3.5 w-3.5" /></button>
+              <button onClick={() => impersonatePractice(p)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-primary-300 transition hover:bg-surface-700" title="Impersonate"><UserCog className="h-3.5 w-3.5" /></button>
             </div>,
           ]
         })}

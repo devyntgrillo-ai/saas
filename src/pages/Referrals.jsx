@@ -308,7 +308,7 @@ export default function ReferralsPanel({ practice }) {
         </ol>
         <p className="mt-4 max-w-2xl text-xs leading-relaxed text-slate-600">
           Referral earnings are paid via Stripe/ACH on the 1st of each month. Minimum payout $
-          {MIN_PAYOUT}. You must have an active Hope AI subscription to receive referral payments.
+          {MIN_PAYOUT}. You must have an active CaseLift subscription to receive referral payments.
         </p>
       </div>
       </div>

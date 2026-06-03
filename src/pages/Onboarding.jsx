@@ -248,9 +248,9 @@ export default function Onboarding() {
         <div className="w-full max-w-xl">
           {step === 'profile' && (
             <div className="card p-6">
-              <h1 className="text-lg font-semibold text-white">Let's introduce Hope to your practice.</h1>
+              <h1 className="text-lg font-semibold text-white">Let's introduce CaseLift to your practice.</h1>
               <p className="mt-1 text-sm text-slate-400">
-                Meet Hope. She's your AI team member for patient conversion. This personalizes the
+                Meet CaseLift. She's your AI team member for patient conversion. This personalizes the
                 follow-ups your patients receive.
               </p>
               {saveError && (
@@ -303,8 +303,8 @@ export default function Onboarding() {
               </div>
               <h1 className="mt-4 text-lg font-semibold text-white">Connect your Plaud recorder</h1>
               <p className="mt-1 text-sm text-slate-400">
-                Hope listens to every consult so nothing slips through the cracks. Paste this webhook
-                into Plaud AutoFlow so recorded consults flow into Hope AI automatically.
+                CaseLift listens to every consult so nothing slips through the cracks. Paste this webhook
+                into Plaud AutoFlow so recorded consults flow into CaseLift automatically.
               </p>
               <div className="mt-5">
                 <Field label="Webhook URL">
@@ -348,7 +348,7 @@ export default function Onboarding() {
               </div>
               <h1 className="mt-4 text-lg font-semibold text-white">Phone &amp; messaging</h1>
               <p className="mt-1 text-sm text-slate-400">
-                Hope follows up with every patient automatically - SMS and email from your own
+                CaseLift follows up with every patient automatically - SMS and email from your own
                 dedicated number, no third-party tools required. You'll pick your number and complete
                 carrier registration in Settings → Phone &amp; Messaging.
               </p>
@@ -422,7 +422,7 @@ export default function Onboarding() {
               </div>
               <h1 className="mt-5 text-xl font-bold text-white">You're all set!</h1>
               <p className="mt-2 text-sm text-slate-400">
-                Hope is ready to start recovering unconverted patients for {form.name || 'your practice'}.
+                CaseLift is ready to start recovering unconverted patients for {form.name || 'your practice'}.
                 She learns what works and gets smarter every week.
               </p>
               <div className="mt-6 space-y-3 text-left">

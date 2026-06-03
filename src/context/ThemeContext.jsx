@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 
 const ThemeContext = createContext(null)
-const STORAGE_KEY = 'consultiq-theme'
+const STORAGE_KEY = 'caselift-theme'
 
 // Resolve the initial theme before first paint: a saved preference wins,
-// otherwise default to dark.
+// otherwise light is the default (Stripe-style) unless the system prefers dark.
 function getInitialTheme() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
@@ -12,13 +12,19 @@ function getInitialTheme() {
   } catch {
     /* localStorage unavailable (SSR/private mode) */
   }
-  return 'dark'
+  try {
+    if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) return 'dark'
+  } catch {
+    /* matchMedia unavailable */
+  }
+  return 'light'
 }
 
 // Apply the theme to <html> synchronously so there's no flash on load.
+// Light is the default (no class); dark mode adds `.dark` to <html>.
 function applyTheme(theme) {
   const root = document.documentElement
-  root.classList.toggle('light', theme === 'light')
+  root.classList.toggle('dark', theme === 'dark')
   root.style.colorScheme = theme
 }
 

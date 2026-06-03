@@ -1,5 +1,5 @@
 // ============================================================================
-// Chargebee API helper for Hope AI billing.
+// Chargebee API helper for CaseLift billing.
 //
 // Chargebee API v2 quirks this wraps:
 //   - Base URL is per-site: https://{CHARGEBEE_SITE}.chargebee.com/api/v2
@@ -9,7 +9,7 @@
 //   - Responses are JSON.
 //
 // Secrets (server-side only):
-//   CHARGEBEE_SITE     - site name, e.g. "hopeai"
+//   CHARGEBEE_SITE     - site name, e.g. "caselift"
 //   CHARGEBEE_API_KEY  - full-access / functional API key from the dashboard
 // ============================================================================
 

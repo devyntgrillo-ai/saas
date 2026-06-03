@@ -4,7 +4,7 @@ import { supabase } from './supabase'
 export const RECORDING_SOURCES = {
   browser: { label: '📱 Phone Recording', classes: 'bg-primary/10 text-primary-300 ring-primary-400/20' },
   pms_autosync: { label: '🔗 PMS AutoSync', classes: 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/20' },
-  plaud_autoflow: { label: 'Plaud AutoFlow', classes: 'bg-violet-500/15 text-violet-300 ring-violet-400/20' },
+  plaud_autoflow: { label: 'Plaud AutoFlow', classes: 'bg-[var(--accent-subtle)] text-[var(--accent)]' },
   plaud_device: { label: 'Plaud Device', classes: 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/20' },
 }
 export function recordingSourceMeta(source) {
@@ -26,7 +26,7 @@ export const MIC_PREF_KEY = 'ciq_pref_mic'
 
 // The AutoFlow forwarding address for a practice.
 export function plaudAutoflowEmail(practiceId) {
-  return `consults+${practiceId}@heyhope.ai`
+  return `consults+${practiceId}@caselift.io`
 }
 
 // Create a placeholder consult row up front so we can redirect to it.

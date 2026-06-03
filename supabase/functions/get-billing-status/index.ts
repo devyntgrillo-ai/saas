@@ -72,7 +72,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // active / past_due / paused / cancelled - report the real status.
-    const plan = status === "active" ? "consultiq" : status;
+    const plan = status === "active" ? "caselift" : status;
     return json({
       plan,
       status,

@@ -30,7 +30,7 @@ export default function Overview() {
     </div>,
     a.owner_email || '-',
     a.practiceCount,
-    money(a.mrrToHopeAI),
+    money(a.mrrToCaseLift),
     <Badge className={agencyStatusMeta(a.status).classes}>{agencyStatusMeta(a.status).label}</Badge>,
     new Date(a.created_at).toLocaleDateString(),
     a.last_activity ? timeAgo(a.last_activity) : '-',
@@ -38,7 +38,7 @@ export default function Overview() {
       <button onClick={() => navigate(`/admin/agencies/${a.id}`)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-slate-300 transition hover:bg-surface-700" title="View">
         <Eye className="h-3.5 w-3.5" />
       </button>
-      <button onClick={() => impersonateAgency(a)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-violet-300 transition hover:bg-surface-700">
+      <button onClick={() => impersonateAgency(a)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-primary-300 transition hover:bg-surface-700">
         Impersonate
       </button>
     </div>,

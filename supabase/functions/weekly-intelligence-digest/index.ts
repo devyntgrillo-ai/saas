@@ -18,7 +18,7 @@ function buildHtml(p, d) {
   const insight = d.insight
   return `<!doctype html><html><body style="margin:0;background:#0b0f17;font-family:Inter,Arial,sans-serif;color:#cbd5e1">
   <div style="max-width:560px;margin:0 auto;padding:24px">
-    <h1 style="color:#fff;font-size:18px;margin:0 0 4px">Hope AI Weekly</h1>
+    <h1 style="color:#fff;font-size:18px;margin:0 0 4px">CaseLift Weekly</h1>
     <p style="color:#64748b;font-size:13px;margin:0 0 20px">Your practice intelligence update for ${p.name || 'your practice'}</p>
     <div style="background:#0f1521;border:1px solid #1e2738;border-radius:12px;padding:16px;margin-bottom:14px">
       <p style="color:#94a3b8;font-size:12px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 8px">This week</p>
@@ -37,8 +37,8 @@ function buildHtml(p, d) {
       <p style="color:#34d399;font-size:12px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px">Cases recovered this week</p>
       <p style="margin:0;font-size:14px">${d.recoveredCount} case(s) &middot; <b style="color:#fff">${money(d.recoveredValue)}</b> in production</p>
     </div>
-    <a href="https://app.heyhope.ai/performance" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:10px 16px;border-radius:8px">View your dashboard</a>
-    <p style="color:#475569;font-size:11px;margin-top:20px">You are receiving this because you own a Hope AI practice.</p>
+    <a href="https://app.caselift.io/performance" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:10px 16px;border-radius:8px">View your dashboard</a>
+    <p style="color:#475569;font-size:11px;margin-top:20px">You are receiving this because you own a CaseLift practice.</p>
   </div></body></html>`
 }
 
@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
     const RESEND = Deno.env.get('RESEND_API_KEY')
-    const FROM = Deno.env.get('DIGEST_FROM_EMAIL') || 'Hope AI <digest@heyhope.ai>'
+    const FROM = Deno.env.get('DIGEST_FROM_EMAIL') || 'CaseLift <digest@caselift.io>'
     const supabase = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))
     const body = await req.json().catch(() => ({}))
 
@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
       if (!p.email) { results.push({ practice: p.id, sent: false, reason: 'No email on file' }); continue }
       const send = await fetch('https://api.resend.com/emails', {
         method: 'POST', headers: { Authorization: `Bearer ${RESEND}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: FROM, to: p.email, subject: 'Hope AI Weekly - Your practice intelligence update', html }),
+        body: JSON.stringify({ from: FROM, to: p.email, subject: 'CaseLift Weekly - Your practice intelligence update', html }),
       })
       results.push({ practice: p.id, sent: send.ok, status: send.status })
     }

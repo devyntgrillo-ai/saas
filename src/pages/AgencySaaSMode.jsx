@@ -36,7 +36,7 @@ const STATUS_BADGE = {
   active: 'bg-emerald-500/15 text-emerald-300',
   trialing: 'bg-sky-500/15 text-sky-300',
   past_due: 'bg-amber-500/15 text-amber-300',
-  paused: 'bg-indigo-500/15 text-indigo-300',
+  paused: 'bg-[var(--bg-subtle)] text-[var(--text-muted)]',
   cancelled: 'bg-rose-500/15 text-rose-300',
   canceled: 'bg-rose-500/15 text-rose-300',
 }
@@ -102,7 +102,7 @@ export default function AgencySaaSMode() {
 
   const canSave = priceNum >= MIN_CLIENT_PRICE && isValidSlug(slug) && !saving
 
-  const signupHost = typeof window !== 'undefined' ? window.location.host : 'hopeai.com'
+  const signupHost = typeof window !== 'undefined' ? window.location.host : 'caselift.io'
   const signupPath = `/signup/${slug}`
 
   async function save() {
@@ -171,7 +171,7 @@ export default function AgencySaaSMode() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-base font-semibold text-white">Your Reseller Plan</h2>
-                <p className="mt-0.5 text-sm text-slate-400">Set what you charge clients. Hope AI bills you {money(WHOLESALE_PRICE)}/mo per active client.</p>
+                <p className="mt-0.5 text-sm text-slate-400">Set what you charge clients. CaseLift bills you {money(WHOLESALE_PRICE)}/mo per active client.</p>
               </div>
             </div>
 
@@ -276,7 +276,7 @@ export default function AgencySaaSMode() {
             <div className="mt-6 rounded-xl border border-primary/20 bg-primary/[0.06] p-4">
               <p className="text-sm text-slate-300">
                 You collect <span className="font-semibold text-white">{money(priceNum)}/month</span>
-                {' · '}Hope AI charges you <span className="font-semibold text-white">{money(WHOLESALE_PRICE)}/month</span>
+                {' · '}CaseLift charges you <span className="font-semibold text-white">{money(WHOLESALE_PRICE)}/month</span>
                 {' · '}Your margin:{' '}
                 <span className={`font-semibold ${econ.perClientMargin >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                   {money(econ.perClientMargin)}/month per client
@@ -341,7 +341,7 @@ export default function AgencySaaSMode() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <StatCard label="Active clients" value={activeCount} icon={Users} accent="primary" />
               <StatCard label="Your monthly revenue" value={money(econ.gross)} icon={DollarSign} accent="green" hint={`${activeCount} × ${money(priceNum)}`} />
-              <StatCard label="Cost to Hope AI" value={money(econ.wholesale)} icon={Building2} accent="violet" hint={`${activeCount} × ${money(WHOLESALE_PRICE)}`} />
+              <StatCard label="Cost to CaseLift" value={money(econ.wholesale)} icon={Building2} accent="violet" hint={`${activeCount} × ${money(WHOLESALE_PRICE)}`} />
               <StatCard label="Your net margin" value={money(econ.margin)} icon={TrendingUp} accent="green" />
             </div>
 

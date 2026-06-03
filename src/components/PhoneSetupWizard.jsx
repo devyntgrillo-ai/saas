@@ -335,7 +335,7 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
               <CheckCircle2 className="h-7 w-7" />
             </div>
             <h3 className="mt-4 text-lg font-bold text-white">SMS is active</h3>
-            <p className="mt-1 text-sm text-slate-400">{practiceName || 'Your practice'} can send and receive patient texts through Hope AI.</p>
+            <p className="mt-1 text-sm text-slate-400">{practiceName || 'Your practice'} can send and receive patient texts through CaseLift.</p>
             <button
               type="button"
               onClick={() => {

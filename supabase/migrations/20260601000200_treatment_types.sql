@@ -1,7 +1,7 @@
 -- ============================================================================
 -- TREATMENT TYPE SYSTEM. Idempotent.
 --
--- Hope AI recovers unconverted patients across ALL high-value treatments, not
+-- CaseLift recovers unconverted patients across ALL high-value treatments, not
 -- just implants. This adds treatment_type + accurate treatment-plan-value
 -- tracking to consults, recording metadata, and per-practice default values.
 --

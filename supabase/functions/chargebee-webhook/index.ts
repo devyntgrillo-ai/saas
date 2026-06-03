@@ -1,5 +1,5 @@
 // ============================================================================
-// chargebee-webhook - Chargebee webhook receiver for Hope AI billing.
+// chargebee-webhook - Chargebee webhook receiver for CaseLift billing.
 //
 // Chargebee calls this endpoint (server-to-server, no user JWT) whenever a
 // billing event happens. We map the event back to a practice - via the stored

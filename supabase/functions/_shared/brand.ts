@@ -9,7 +9,7 @@
 // white_label_enabled is true and a display name exists.
 //
 // resolveBrand() is intentionally defensive: any error, missing reseller, or
-// non-white-labeled reseller falls back to CONSULTIQ_BRAND so callers can use
+// non-white-labeled reseller falls back to CASELIFT_BRAND so callers can use
 // the result unconditionally.
 // ============================================================================
 
@@ -22,10 +22,10 @@ export interface Brand {
   isWhiteLabeled: boolean;
 }
 
-export const CONSULTIQ_BRAND: Brand = {
-  companyName: "Hope AI",
-  fromName: "Hope AI",
-  supportEmail: "support@heyhope.ai",
+export const CASELIFT_BRAND: Brand = {
+  companyName: "CaseLift",
+  fromName: "CaseLift",
+  supportEmail: "support@caselift.io",
   logoUrl: null,
   primaryColor: "#0EA5E9",
   isWhiteLabeled: false,
@@ -49,31 +49,31 @@ export async function resolveBrand(admin: any, practice: any): Promise<Brand> {
     } else {
       agencyId = practice?.agency_id ?? null;
     }
-    if (!agencyId) return CONSULTIQ_BRAND;
+    if (!agencyId) return CASELIFT_BRAND;
 
     const { data: agency } = await admin
       .from("agency_accounts")
       .select("name, company_name, brand_name, logo_url, support_email, primary_color, white_label_enabled")
       .eq("id", agencyId)
       .maybeSingle();
-    if (!agency) return CONSULTIQ_BRAND;
+    if (!agency) return CASELIFT_BRAND;
 
     const displayName: string | null =
       agency.company_name || agency.brand_name || agency.name || null;
     const whiteLabeled = agency.white_label_enabled === true;
-    if (!whiteLabeled || !displayName) return CONSULTIQ_BRAND;
+    if (!whiteLabeled || !displayName) return CASELIFT_BRAND;
 
     return {
       companyName: displayName,
       fromName: displayName,
-      supportEmail: agency.support_email || CONSULTIQ_BRAND.supportEmail,
+      supportEmail: agency.support_email || CASELIFT_BRAND.supportEmail,
       logoUrl: agency.logo_url || null,
-      primaryColor: agency.primary_color || CONSULTIQ_BRAND.primaryColor,
+      primaryColor: agency.primary_color || CASELIFT_BRAND.primaryColor,
       isWhiteLabeled: true,
     };
   } catch (_e) {
     // Never let branding break an email send.
-    return CONSULTIQ_BRAND;
+    return CASELIFT_BRAND;
   }
 }
 
@@ -86,22 +86,22 @@ export function emailHeader(brand: Brand): string {
   return `<span style="font-size:18px;font-weight:700;color:${brand.primaryColor}">${escapeHtml(brand.companyName)}</span>`;
 }
 
-// HTML footer: "<Company> · Powered by Hope AI". For Hope AI itself this
-// collapses to just "Hope AI" so we never print "Hope AI · Powered by
-// Hope AI".
+// HTML footer: "<Company> · Powered by CaseLift". For CaseLift itself this
+// collapses to just "CaseLift" so we never print "CaseLift · Powered by
+// CaseLift".
 export function emailFooter(brand: Brand): string {
   const text = brand.isWhiteLabeled
-    ? `${escapeHtml(brand.companyName)} &middot; Powered by Hope AI`
-    : "Hope AI";
+    ? `${escapeHtml(brand.companyName)} &middot; Powered by CaseLift`
+    : "CaseLift";
   return `<p style="color:#9ca3af;font-size:11px;margin:18px 0 0">${text}</p>`;
 }
 
-// Email sign-off, voiced as Hope's team. White-labeled brands keep the reseller's
-// own name; Hope AI's own emails sign off as "The Hope AI Team · heyhope.ai".
+// Email sign-off, voiced as CaseLift's team. White-labeled brands keep the reseller's
+// own name; CaseLift's own emails sign off as "The CaseLift Team · caselift.io".
 export function emailSignature(brand: Brand): string {
   const line = brand.isWhiteLabeled
     ? `The ${escapeHtml(brand.companyName)} Team`
-    : "The Hope AI Team &middot; heyhope.ai";
+    : "The CaseLift Team &middot; caselift.io";
   return `<p style="color:#6b7280;font-size:13px;margin:20px 0 0">${line}</p>`;
 }
 

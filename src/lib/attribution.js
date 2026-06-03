@@ -1,10 +1,10 @@
 // ============================================================================
-// Attribution model v2 - defensible "how did Hope AI help close this case?"
+// Attribution model v2 - defensible "how did CaseLift help close this case?"
 //
 // Status (priority order):
-//   consultiq_recovered - patient replied to a sequence, then accepted treatment
-//   consultiq_assisted  - at least one follow-up was sent before acceptance
-//   practice_direct     - accepted with no Hope AI sequence activity
+//   caselift_recovered - patient replied to a sequence, then accepted treatment
+//   caselift_assisted  - at least one follow-up was sent before acceptance
+//   practice_direct     - accepted with no CaseLift sequence activity
 //   unknown             - not yet determined
 //
 // The DB (attribution_events + triggers in migration 20260530010000) is the
@@ -15,21 +15,21 @@
 import { supabase } from './supabase'
 
 export const ATTRIBUTION_STATUS = {
-  consultiq_recovered: {
-    label: 'Hope AI Recovered',
+  caselift_recovered: {
+    label: 'CaseLift Recovered',
     short: 'Patient replied to a sequence, then accepted treatment',
     badge: 'bg-emerald-100 text-emerald-700',
     check: true,
   },
-  consultiq_assisted: {
-    label: 'Hope AI Assisted',
+  caselift_assisted: {
+    label: 'CaseLift Assisted',
     short: 'A follow-up message was sent before treatment was accepted',
     badge: 'bg-blue-100 text-blue-700',
     check: true,
   },
   practice_direct: {
     label: 'Practice Direct',
-    short: 'Accepted without any Hope AI sequence activity',
+    short: 'Accepted without any CaseLift sequence activity',
     badge: 'bg-gray-100 text-gray-600',
     check: false,
   },
@@ -56,8 +56,8 @@ export function isAcceptedConsult(c) {
 
 // Pure: derive the status from "did we send" / "did they reply".
 export function computeAttributionStatus({ sent, replied }) {
-  if (replied) return 'consultiq_recovered'
-  if (sent) return 'consultiq_assisted'
+  if (replied) return 'caselift_recovered'
+  if (sent) return 'caselift_assisted'
   return 'practice_direct'
 }
 
@@ -174,7 +174,7 @@ function buildExplanation({ status, events, consult, messages }) {
     .filter((m) => m.status === 'sent')
     .sort((a, b) => new Date(a.sent_at || a.scheduled_for || a.created_at) - new Date(b.sent_at || b.scheduled_for || b.created_at))
 
-  if (status === 'consultiq_recovered') {
+  if (status === 'caselift_recovered') {
     const replyDate = eventDate('patient_replied')
     const trigger =
       (replyDate && [...sentMsgs].reverse().find((m) => new Date(m.sent_at || m.created_at) <= new Date(replyDate))) ||
@@ -186,12 +186,12 @@ function buildExplanation({ status, events, consult, messages }) {
     const lag = daysBetween(replyDate, acceptDate)
     return `Patient replied to ${dayLabel} → accepted treatment${lag != null ? ` ${lag} day${lag === 1 ? '' : 's'} later` : ''}.`
   }
-  if (status === 'consultiq_assisted') {
+  if (status === 'caselift_assisted') {
     const n = sentMsgs.length
-    if (!n) return 'A Hope AI follow-up sequence was active before the patient accepted treatment.'
+    if (!n) return 'A CaseLift follow-up sequence was active before the patient accepted treatment.'
     return `${n} follow-up ${n === 1 ? 'message' : 'messages'} sent before the patient accepted treatment.`
   }
-  if (status === 'practice_direct') return 'Accepted without any Hope AI sequence activity.'
+  if (status === 'practice_direct') return 'Accepted without any CaseLift sequence activity.'
   return 'Attribution will be determined once this case is closed.'
 }
 
@@ -262,8 +262,8 @@ export async function recordCloseAttribution(consult, { source = 'manual' } = {}
     attribution_status: status,
     attribution_confirmed_at: new Date().toISOString(),
     attribution_source: source,
-    attribution_model: ['consultiq_recovered', 'consultiq_assisted'].includes(status)
-      ? 'consultiq_recovered'
+    attribution_model: ['caselift_recovered', 'caselift_assisted'].includes(status)
+      ? 'caselift_recovered'
       : 'practice_recovered',
   }
 
