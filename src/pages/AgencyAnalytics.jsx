@@ -18,7 +18,6 @@ import {
   CartesianGrid,
   Tooltip,
 } from 'recharts'
-import AgencyTabs from '../components/AgencyTabs'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { formatMoney } from '../lib/analytics'
@@ -165,7 +164,6 @@ export default function AgencyAnalytics() {
         </div>
       </div>
 
-      <AgencyTabs />
 
       {loading ? (
         <>

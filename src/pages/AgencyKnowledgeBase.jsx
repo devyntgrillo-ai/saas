@@ -4,7 +4,6 @@ import { BookOpen } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import KnowledgeBaseEditor from '../components/KnowledgeBaseEditor'
-import AgencyTabs from '../components/AgencyTabs'
 
 // Agency view: pick any client practice and edit its knowledge base.
 export default function AgencyKnowledgeBase() {
@@ -37,7 +36,6 @@ export default function AgencyKnowledgeBase() {
 
   return (
     <div className="space-y-6">
-      <AgencyTabs />
       <div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>

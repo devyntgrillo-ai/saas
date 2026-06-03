@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext'
 import { usePermissions, ACCESS_LABELS } from '../lib/permissions'
 import { supabase } from '../lib/supabase'
 import InviteModal from '../components/InviteModal'
-import AgencyTabs from '../components/AgencyTabs'
 import { formatDateTime } from '../lib/consults'
 
 export default function AgencyTeam() {
@@ -49,7 +48,6 @@ export default function AgencyTeam() {
 
   return (
     <div className="space-y-6">
-      <AgencyTabs />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white">Team</h1>

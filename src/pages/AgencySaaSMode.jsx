@@ -13,7 +13,6 @@ import {
   TrendingUp,
   AlertCircle,
 } from 'lucide-react'
-import AgencyTabs from '../components/AgencyTabs'
 import StatCard from '../components/StatCard'
 import { Skeleton } from '../components/Skeleton'
 import { useAuth } from '../context/AuthContext'
@@ -157,7 +156,6 @@ export default function AgencySaaSMode() {
         </div>
       </div>
 
-      <AgencyTabs />
 
       {agencyLoading || !seeded ? (
         <div className="space-y-4">

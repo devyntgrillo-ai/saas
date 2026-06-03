@@ -25,7 +25,6 @@ import { applyPrimaryColor, resetPrimaryColor } from '../lib/whitelabel'
 import { supabase } from '../lib/supabase'
 import { timeAgo } from '../lib/consults'
 import { fetchRecordingRate, rateColor } from '../lib/pms'
-import AgencyTabs from '../components/AgencyTabs'
 
 function startOfMonthISODate() {
   const d = new Date()
@@ -293,7 +292,7 @@ export default function Agency() {
   const { agency, agencyRole, agencyLoading, isAgencyUser, viewPractice, refreshAgency } = useAuth()
   const { invalidateBrand } = useBranding()
   const navigate = useNavigate()
-  // Sub-view is URL-driven (?tab=) so the shared AgencyTabs bar can link to it
+  // Sub-view is URL-driven (?tab=) so the sidebar agency nav can link to it
   // from any agency route and deep-links work.
   const [searchParams] = useSearchParams()
   const tab = searchParams.get('tab') || 'overview'
@@ -491,7 +490,6 @@ export default function Agency() {
       </div>
 
       {/* Shared tab bar (persists across all agency pages). */}
-      <AgencyTabs />
 
       {tab === 'phone' ? (
         <Navigate to="/agency" replace />
