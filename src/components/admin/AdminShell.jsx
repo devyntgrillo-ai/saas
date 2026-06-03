@@ -11,9 +11,10 @@ const TABS = [
   { to: '/admin', label: 'Overview', end: true },
   { to: '/admin/agencies', label: 'Resellers' },
   { to: '/admin/resellers', label: 'SaaS' },
-  { to: '/admin/practices', label: 'Practices' },
+  { to: '/admin/practices', label: 'Subaccounts' },
   { to: '/admin/revenue', label: 'Revenue' },
   { to: '/admin/billing', label: 'Billing' },
+  { to: '/admin/training', label: 'Training' },
   { to: '/admin/referrals', label: 'Referrals' },
 ]
 
@@ -24,7 +25,7 @@ function Breadcrumbs() {
   const { pathname } = useLocation()
   const parts = pathname.split('/').filter(Boolean) // ['admin', 'agencies', ':id']
   if (parts.length <= 2) return null // only show when drilled in
-  const map = { admin: 'Admin', agencies: 'Resellers', practices: 'Practices', revenue: 'Revenue', settings: 'Settings' }
+  const map = { admin: 'Admin', agencies: 'Resellers', practices: 'Subaccounts', revenue: 'Revenue', settings: 'Settings' }
   const trail = []
   trail.push({ label: 'Admin', to: '/admin' })
   if (parts[1]) trail.push({ label: map[parts[1]] || parts[1], to: `/admin/${parts[1]}` })

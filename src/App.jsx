@@ -51,6 +51,7 @@ const AdminPractices = lazy(() => import('./pages/admin/Practices'))
 const AdminPracticeDetail = lazy(() => import('./pages/admin/PracticeDetail'))
 const AdminRevenue = lazy(() => import('./pages/admin/Revenue'))
 const AdminBilling = lazy(() => import('./pages/admin/Billing'))
+const AdminTraining = lazy(() => import('./pages/admin/TrainingAdmin'))
 const AdminReferrals = lazy(() => import('./pages/admin/Referrals'))
 
 // get.caselift.io is a signup landing host: visiting its root sends people
@@ -121,6 +122,7 @@ export default function App() {
                   <Route path="practices/:id" element={<AdminPracticeDetail />} />
                   <Route path="revenue" element={<AdminRevenue />} />
                   <Route path="billing" element={<AdminBilling />} />
+                  <Route path="training" element={<AdminTraining />} />
                   <Route path="referrals" element={<AdminReferrals />} />
                 </Route>
 
