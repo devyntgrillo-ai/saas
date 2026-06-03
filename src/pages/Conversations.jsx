@@ -8,6 +8,10 @@ import {
   ArrowLeft,
   Phone,
   PhoneCall,
+  PhoneOff,
+  Mic,
+  MicOff,
+  Circle,
   Search,
   Sparkles,
   Loader2,
@@ -16,7 +20,6 @@ import {
   ChevronDown,
   ChevronLeft,
   PauseCircle,
-  Mic,
   Star,
   Trash2,
   SlidersHorizontal,
@@ -43,7 +46,7 @@ import { auditConversationViewed, auditPatientAccessed, auditMessageSent } from 
 import { SkeletonList } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
 import { formatMoney } from '../lib/analytics'
-import { loadRecordingUrl, formatCallTime } from '../lib/voice'
+import { loadRecordingUrl, formatCallTime, useTwilioVoiceDevice } from '../lib/voice'
 
 function initials(first, last) {
   return `${(first || '?')[0]}${(last || '')[0] || ''}`.toUpperCase()
@@ -768,6 +771,14 @@ export default function Conversations() {
   }, [activeId, conversations, practiceId])
 
   const activeConv = conversations.find((c) => c.id === activeId) || null
+
+  const voice = useTwilioVoiceDevice({ enabled: Boolean(practiceId && activeConv?.patient_phone) })
+
+  useEffect(() => {
+    if (voice.callState === 'idle') return
+    voice.hangup()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- end call when switching threads
+  }, [activeId])
   const lastInbound = [...thread].reverse().find((m) => m.direction === 'inbound')
   const paused = lastInbound && (!thread.length || thread[thread.length - 1].direction === 'inbound')
   const consultPath = activeConv
@@ -829,17 +840,77 @@ export default function Conversations() {
         .sort((a, b) => new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0)))
   }
 
-  // Phone: log an outbound call event in the thread, then open the dialer.
+  async function logOutboundVoiceCall({ callSid, seconds: dur }) {
+    const nowIso = new Date().toISOString()
+    const dateLabel = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    const durLabel = dur > 0 ? ` · ${formatCallTime(dur)}` : ''
+    let callLogId = null
+    if (callSid) {
+      const { data: cl } = await supabase.from('call_logs').select('id, recording_url').eq('twilio_call_sid', callSid).maybeSingle()
+      callLogId = cl?.id || null
+      await supabase.from('call_logs').update({
+        conversation_id: activeId,
+        duration_seconds: dur || null,
+      }).eq('twilio_call_sid', callSid)
+      if (callLogId && cl?.recording_url) {
+        setCallRecordings((prev) => ({ ...prev, [callLogId]: { id: callLogId, recording_url: cl.recording_url, duration_seconds: dur } }))
+      }
+    }
+    const body = `📞 Called ${dateLabel}${durLabel}`
+    const { data } = await insertConvMessage({
+      conversation_id: activeId,
+      direction: 'outbound',
+      channel: 'call',
+      body,
+      sent_at: nowIso,
+      call_log_id: callLogId,
+      meta: { kind: 'call', direction: 'outbound', actor: tcName, duration_sec: dur || null },
+    })
+    if (data) {
+      setThread((prev) => [...prev, data])
+      bumpConversation(nowIso, body)
+    }
+  }
+
+  // In-app Twilio Voice when configured; otherwise device dialer (tel:).
   async function callPatient() {
     const phone = activeConv?.patient_phone
     if (!phone) return showToast('No phone number on file')
-    const nowIso = new Date().toISOString()
-    const { data } = await insertConvMessage({
-      conversation_id: activeId, direction: 'outbound', channel: 'call', body: 'Outbound call',
-      sent_at: nowIso, meta: { kind: 'call', direction: 'outbound', actor: tcName },
+    if (voice.callState !== 'idle') return
+
+    if (voice.voiceState !== 'ready') {
+      const ok = await voice.ensureReady()
+      if (!ok) {
+        const nowIso = new Date().toISOString()
+        const { data } = await insertConvMessage({
+          conversation_id: activeId,
+          direction: 'outbound',
+          channel: 'call',
+          body: 'Outbound call (device)',
+          sent_at: nowIso,
+          meta: { kind: 'call', direction: 'outbound', actor: tcName, fallback: 'tel' },
+        })
+        if (data) {
+          setThread((prev) => [...prev, data])
+          bumpConversation(nowIso, 'Outbound call')
+        }
+        window.open(`tel:${phone}`)
+        showToast('In-app calling unavailable — opened your phone app')
+        return
+      }
+    }
+
+    const started = await voice.placeCall({
+      to: phone,
+      practiceId,
+      consultId: activeConv.consult_id || undefined,
+      conversationId: activeId,
+      onEnded: logOutboundVoiceCall,
     })
-    if (data) { setThread((prev) => [...prev, data]); bumpConversation(nowIso, 'Outbound call') }
-    window.open(`tel:${phone}`)
+    if (!started) {
+      window.open(`tel:${phone}`)
+      showToast('Could not place call — try your phone app')
+    }
   }
 
   // Mail icon → Mark as read / unread (reuses conversations.unread_count).
@@ -1158,8 +1229,15 @@ export default function Conversations() {
 
                 {/* Action buttons */}
                 <div className="flex shrink-0 items-center gap-1">
-                  <button type="button" onClick={callPatient} title="Call" aria-label="Call" className="hidden rounded-md p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 sm:inline-flex">
-                    <Phone className="h-4 w-4" />
+                  <button
+                    type="button"
+                    onClick={callPatient}
+                    disabled={voice.callState !== 'idle'}
+                    title={voice.voiceState === 'unavailable' ? 'Call (device phone)' : 'Call in browser'}
+                    aria-label="Call"
+                    className="hidden rounded-md p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 disabled:opacity-40 sm:inline-flex"
+                  >
+                    {voice.callState !== 'idle' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Phone className="h-4 w-4" />}
                   </button>
                   <button
                     type="button"
@@ -1210,6 +1288,42 @@ export default function Conversations() {
                 </div>
               )}
             </div>
+
+            {voice.callState !== 'idle' && (
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-emerald-200 bg-emerald-50 px-4 py-2">
+                <span className="flex items-center gap-2 text-sm font-medium text-emerald-800">
+                  {voice.callState === 'in_call' ? (
+                    <>
+                      <Circle className="h-2 w-2 animate-pulse fill-rose-500 text-rose-500" />
+                      Recording · {formatCallTime(voice.seconds)}
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                      {voice.callState === 'ringing' ? 'Ringing…' : 'Connecting…'}
+                    </>
+                  )}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={voice.toggleMute}
+                    disabled={voice.callState !== 'in_call'}
+                    className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-2.5 py-1 text-xs font-medium text-emerald-900 disabled:opacity-40"
+                  >
+                    {voice.muted ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+                    {voice.muted ? 'Unmute' : 'Mute'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={voice.hangup}
+                    className="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-rose-500"
+                  >
+                    <PhoneOff className="h-3.5 w-3.5" /> End call
+                  </button>
+                </div>
+              </div>
+            )}
 
             {consult?.sequence_status === 'paused' && (
               <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-[11px] font-medium text-amber-700">

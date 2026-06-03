@@ -2,16 +2,16 @@
 // twilio-send - outbound SMS via Twilio REST API.
 //
 // Called from Conversations (user JWT), send-due-messages / reactivation drip
-// (service role). Resolves the practice's From number, sends the message, and
-// stores the Twilio MessageSid on the conversation_messages row when provided.
+// (service role). Per-practice number + Messaging Service (A2P); no shared From
+// in production except TWILIO_A2P_SKIP_ENFORCEMENT dev fallback.
 //
-// Secrets: TWILIO_ACCOUNT_SID, TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET.
-// Optional: TWILIO_CALLER_ID (fallback From), TWILIO_WEBHOOK_BASE_URL (status cb).
+// Secrets: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN or API key pair.
+// Optional: TWILIO_CALLER_ID (dev fallback only), TWILIO_WEBHOOK_BASE_URL.
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { getTwilioConfig, phonesMatch, sendSms, toE164 } from "../_shared/twilio.ts";
-import { a2pSkipEnforcement } from "../_shared/twilio-api.ts";
+import { isServiceRoleRequest, resolveTwilioSmsContext } from "../_shared/twilio-sms-context.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -57,7 +57,6 @@ Deno.serve(async (req: Request) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Resolve practice_id from consult when omitted (cron sender path).
     let practiceId = payload.practice_id || null;
     if (!practiceId && payload.consult_id) {
       const { data: consult } = await admin
@@ -69,10 +68,8 @@ Deno.serve(async (req: Request) => {
     }
     if (!practiceId) return json({ error: "Could not resolve practice." }, 400);
 
-    // When called with a user JWT (not service role), verify practice access.
     const authHeader = req.headers.get("Authorization") || "";
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    const isServiceRole = authHeader.replace(/^Bearer\s+/i, "") === serviceKey;
+    const isServiceRole = isServiceRoleRequest(authHeader);
     if (!isServiceRole && authHeader) {
       const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
         global: { headers: { Authorization: authHeader } },
@@ -85,26 +82,22 @@ Deno.serve(async (req: Request) => {
 
     const { data: practice } = await admin
       .from("practices")
-      .select("id, twilio_phone_number, sms_enabled, a2p_brand_status, a2p_campaign_status")
+      .select(
+        "id, twilio_phone_number, twilio_phone_e164, twilio_messaging_service_sid, sms_enabled, a2p_brand_status, a2p_campaign_status",
+      )
       .eq("id", practiceId)
       .maybeSingle();
     if (!practice) return json({ error: "Practice not found." }, 404);
-    if (practice.sms_enabled === false) return json({ error: "SMS is disabled for this practice." }, 403);
 
-    const a2pApproved =
-      practice.a2p_brand_status === "approved" && practice.a2p_campaign_status === "approved";
-    if (!a2pSkipEnforcement() && practice.twilio_phone_number && !a2pApproved) {
+    const ctx = resolveTwilioSmsContext(practice, cfg);
+    if (!ctx.ok) {
+      const status = ctx.code === "sms_disabled" || ctx.code === "a2p_pending" ? 403 : 503;
       return json({
-        error: "SMS registration is pending. Complete A2P setup in Settings → Phone & Messaging.",
-        code: "a2p_pending",
-        a2p_brand_status: practice.a2p_brand_status,
-        a2p_campaign_status: practice.a2p_campaign_status,
-      }, 403);
-    }
-
-    const from = practice.twilio_phone_number || cfg.callerIdFallback;
-    if (!from) {
-      return json({ error: "No Twilio phone number configured for this practice.", code: "no_from_number" }, 503);
+        error: ctx.error,
+        code: ctx.code,
+        a2p_brand_status: ctx.a2p_brand_status,
+        a2p_campaign_status: ctx.a2p_campaign_status,
+      }, status);
     }
 
     const statusCallback = cfg.webhookBase
@@ -112,16 +105,18 @@ Deno.serve(async (req: Request) => {
       : undefined;
 
     const result = await sendSms(cfg, {
-      from,
+      messagingServiceSid: ctx.mode === "messaging_service" ? ctx.messagingServiceSid : undefined,
+      from: ctx.mode !== "messaging_service" ? ctx.from : undefined,
       to,
       body,
       mediaUrl: payload.media_url,
       statusCallback,
     });
 
+    const fromDisplay = ctx.from || ctx.messagingServiceSid || "";
+
     const nowIso = new Date().toISOString();
 
-    // Link Twilio sid to the pre-inserted conversation message.
     if (payload.conversation_message_id) {
       const { data: msg } = await admin
         .from("conversation_messages")
@@ -130,7 +125,12 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
       const meta = (msg?.meta && typeof msg.meta === "object" ? msg.meta : {}) as Record<string, unknown>;
       await admin.from("conversation_messages").update({
-        meta: { ...meta, twilio_message_sid: result.sid, delivery_status: result.status },
+        meta: {
+          ...meta,
+          twilio_message_sid: result.sid,
+          delivery_status: result.status,
+          send_mode: ctx.mode,
+        },
       }).eq("id", payload.conversation_message_id);
 
       const { data: cm } = await admin
@@ -146,7 +146,6 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Record outbound in the conversation thread when the UI didn't pre-insert a row.
     if (!payload.conversation_message_id) {
       await ensureOutboundConversationMessage(admin, {
         practiceId,
@@ -159,7 +158,14 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    return json({ ok: true, sid: result.sid, status: result.status, from: toE164(from), to: toE164(to) });
+    return json({
+      ok: true,
+      sid: result.sid,
+      status: result.status,
+      from: toE164(fromDisplay),
+      to: toE164(to),
+      send_mode: ctx.mode,
+    });
   } catch (e) {
     console.error("twilio-send error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);

@@ -19,15 +19,51 @@ messages go through **`twilio-send`**; inbound replies hit **`twilio-inbound`**.
 2. **Purchase** — saves `twilio_phone_number`, inbound webhook on the number  
 3. **A2P** — `twilio-a2p` `register` creates Messaging Service, submits brand/campaign  
 4. **Poll** — UI polls `poll-status` until `a2p_*_status = approved` → `sms_enabled = true`  
-5. **Send** — `twilio-send` blocks outbound until A2P approved (unless `TWILIO_A2P_SKIP_ENFORCEMENT=true`)
+5. **Send** — `twilio-send` uses the practice **Messaging Service** when A2P is approved; blocks outbound until then (unless `TWILIO_A2P_SKIP_ENFORCEMENT=true` for local dev only)
 
-### Extra secrets (production A2P)
+### Extra secrets (production A2P — ISV API)
+
+Trust Hub + brand registration run automatically in `twilio-a2p` when a practice submits the wizard.
+
+**Required on production** (Hope ISV account):
 
 ```bash
-TWILIO_A2P_BUNDLE_SID=BUxxxxxxxx   # Trust Hub customer profile bundle (ISV setup)
-# Local only:
+# Approved Primary Business Profile (Trust Hub → BU…)
+TWILIO_PRIMARY_CUSTOMER_PROFILE_SID=BUxxxxxxxx
+
+# ISV inbox for Trust Hub / profile status emails (not the dental practice)
+TWILIO_TRUSTHUB_NOTIFICATION_EMAIL=ops@yourplatform.com
+```
+
+**Optional** — skip Trust Hub API if you already created bundles manually:
+
+```bash
+TWILIO_CUSTOMER_PROFILE_BUNDLE_SID=BUxxxxxxxx   # Secondary Customer Profile
+TWILIO_A2P_PROFILE_BUNDLE_SID=BUxxxxxxxx         # A2P TrustProduct (step 2.1)
+```
+
+Legacy `TWILIO_A2P_BUNDLE_SID` is **not** used alone anymore; brand create requires **both** customer + A2P profile bundle SIDs per [Twilio ISV API guide](https://www.twilio.com/docs/messaging/compliance/a2p-10dlc/onboarding-isv-api).
+
+**Local only:**
+
+```bash
 TWILIO_A2P_DEV_AUTO_APPROVE=true   # auto-approve after wizard submit
 TWILIO_A2P_SKIP_ENFORCEMENT=true   # allow send without A2P (dev only)
+```
+
+## Multi-tenant model (one Twilio account)
+
+All practices share **one** `TWILIO_ACCOUNT_SID`. Each practice gets:
+
+- Its own **phone number** (`twilio_phone_number`, `twilio_phone_e164`)
+- Its own **Messaging Service** + **A2P campaign** (`twilio_messaging_service_sid`)
+- Outbound via **`twilio-send`** → Messaging Service when A2P is approved, else blocked (no shared `TWILIO_CALLER_ID` in production)
+- Inbound webhook per practice: `.../twilio-inbound?practice_id=<uuid>` (indexed lookup on `twilio_phone_e164`)
+
+Re-sync an existing number’s webhook after deploy:
+
+```json
+POST twilio-provision { "action": "sync-inbound-webhook", "practice_id": "..." }
 ```
 
 ## Practice phone number
@@ -49,7 +85,7 @@ TWILIO_ACCOUNT_SID=ACxxxxxxxx          # required
 TWILIO_AUTH_TOKEN=xxxxxxxx             # required for SMS (unless using API key below)
 TWILIO_API_KEY_SID=SKxxxxxxxx          # optional — only needed for in-browser voice dialer
 TWILIO_API_KEY_SECRET=xxxxxxxx
-TWILIO_CALLER_ID=+1XXXXXXXXXX            # optional fallback From when practice has no number
+TWILIO_CALLER_ID=+1XXXXXXXXXX            # dev only: used only with TWILIO_A2P_SKIP_ENFORCEMENT when practice has no number
 TWILIO_WEBHOOK_BASE_URL=https://...      # public URL Twilio can reach (see below)
 ```
 
@@ -112,6 +148,7 @@ Twilio Messaging webhook:
 - [ ] Practice row has `twilio_phone_number` matching your Twilio number
 - [ ] Inbound webhook URL reachable (port forward or prod URL)
 - [ ] Send SMS from Conversations → patient receives it
+- [ ] Settings → Phone & Messaging → **Send test SMS** (when A2P active)
 - [ ] Reply from phone → thread shows inbound message, unread badge increments
 - [ ] Reply `STOP` → conversation marked opted out in Settings → Phone & Messaging counts
 

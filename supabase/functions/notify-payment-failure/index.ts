@@ -18,52 +18,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { type Brand, CONSULTIQ_BRAND, emailFooter, emailHeader, emailSignature, resolveBrand } from "../_shared/brand.ts";
+import { sendMailgunToMany } from "../_shared/mailgun.ts";
 
 const SUPER_ADMIN_EMAIL = "devyntgrillo@gmail.com";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
-
-// `replyTo` overrides the brand support email when set; the noreply@domain
-// "from" address is kept and only the display name is branded.
-async function sendMailgun(
-  to: string[],
-  subject: string,
-  html: string,
-  text: string,
-  fromName: string,
-  replyTo: string | null,
-) {
-  const domain = Deno.env.get("MAILGUN_DOMAIN");
-  const key = Deno.env.get("MAILGUN_API_KEY");
-  if (!domain || !key) {
-    console.warn("notify-payment-failure: MAILGUN_DOMAIN/MAILGUN_API_KEY not set - skipping email send");
-    return { sent: false, reason: "mailgun_not_configured" };
-  }
-  // Keep the existing noreply@domain address; only the display name is branded.
-  const envFrom = Deno.env.get("MAILGUN_FROM");
-  const address = envFrom?.match(/<([^>]+)>/)?.[1] || `noreply@${domain}`;
-  const from = `${fromName} <${address}>`;
-  const form = new FormData();
-  form.append("from", from);
-  for (const addr of to) form.append("to", addr);
-  form.append("subject", subject);
-  form.append("text", text);
-  form.append("html", html);
-  if (replyTo) form.append("h:Reply-To", replyTo);
-
-  const res = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
-    method: "POST",
-    headers: { Authorization: `Basic ${btoa(`api:${key}`)}` },
-    body: form,
-  });
-  if (!res.ok) {
-    const detail = await res.text();
-    console.error(`Mailgun send failed ${res.status}:`, detail);
-    return { sent: false, reason: `mailgun_${res.status}` };
-  }
-  return { sent: true };
-}
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -128,21 +88,28 @@ Deno.serve(async (req: Request) => {
     // Practice-facing email: white-labeled to the reseller's brand when applicable.
     if (practice.email) {
       const { subject, text, htmlBody } = buildEmail(brand);
-      results.practice = await sendMailgun([practice.email], subject, htmlBody, text, brand.fromName, brand.supportEmail);
+      results.practice = await sendMailgunToMany({
+        to: [practice.email],
+        subject,
+        text,
+        html: htmlBody,
+        fromName: brand.fromName,
+        replyTo: brand.supportEmail,
+      });
     }
 
     // Internal copies (reseller owner + super admin) stay Hope AI-branded.
     const internal = [...new Set([resellerEmail, SUPER_ADMIN_EMAIL].filter(Boolean))] as string[];
     if (internal.length) {
       const { subject, text, htmlBody } = buildEmail(CONSULTIQ_BRAND);
-      results.internal = await sendMailgun(
-        internal,
-        `[Internal] ${subject}`,
-        htmlBody,
+      results.internal = await sendMailgunToMany({
+        to: internal,
+        subject: `[Internal] ${subject}`,
         text,
-        CONSULTIQ_BRAND.fromName,
-        CONSULTIQ_BRAND.supportEmail,
-      );
+        html: htmlBody,
+        fromName: CONSULTIQ_BRAND.fromName,
+        replyTo: CONSULTIQ_BRAND.supportEmail,
+      });
     }
 
     if (!practice.email && !internal.length) return json({ ok: true, sent: false, reason: "no recipients" });

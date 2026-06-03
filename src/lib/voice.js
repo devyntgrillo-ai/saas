@@ -1,4 +1,5 @@
-// Twilio Voice (browser dialer) helpers.
+// Twilio Voice (browser dialer) helpers + React hook for in-app calling.
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase'
 
 // Mint a Twilio AccessToken for the signed-in user's practice. Throws with a
@@ -46,4 +47,196 @@ export async function loadRecordingUrl(callLogId) {
   })
   if (!res.ok) throw new Error('Could not load recording.')
   return URL.createObjectURL(await res.blob())
+}
+
+/**
+ * Browser Twilio Voice device for Conversations / Power Dialer.
+ * @param {{ enabled?: boolean }} opts — when true, pre-warms the device (token + register).
+ */
+export function useTwilioVoiceDevice({ enabled = true } = {}) {
+  const deviceRef = useRef(null)
+  const callRef = useRef(null)
+  const callSidRef = useRef(null)
+  const onEndedRef = useRef(null)
+  const secondsRef = useRef(0)
+
+  const [voiceState, setVoiceState] = useState('init') // init | ready | unavailable
+  const [callState, setCallState] = useState('idle') // idle | connecting | ringing | in_call
+  const [muted, setMuted] = useState(false)
+  const [seconds, setSeconds] = useState(0)
+
+  const destroyDevice = useCallback(() => {
+    try {
+      callRef.current?.disconnect()
+    } catch {
+      /* noop */
+    }
+    try {
+      deviceRef.current?.destroy()
+    } catch {
+      /* noop */
+    }
+    callRef.current = null
+    deviceRef.current = null
+    callSidRef.current = null
+    setCallState('idle')
+    setMuted(false)
+    setSeconds(0)
+    secondsRef.current = 0
+  }, [])
+
+  const ensureReady = useCallback(async () => {
+    if (voiceState === 'ready' && deviceRef.current) return true
+    if (voiceState === 'unavailable') return false
+    try {
+      const { token } = await fetchVoiceToken()
+      const { Device } = await import('@twilio/voice-sdk')
+      if (deviceRef.current) {
+        try {
+          deviceRef.current.destroy()
+        } catch {
+          /* noop */
+        }
+      }
+      const device = new Device(token, { codecPreferences: ['opus', 'pcmu'], logLevel: 'error' })
+      device.on('tokenWillExpire', async () => {
+        try {
+          const { token: t } = await fetchVoiceToken()
+          device.updateToken(t)
+        } catch {
+          /* keep going */
+        }
+      })
+      device.on('error', (e) => console.error('Twilio device error:', e?.message || e))
+      await device.register()
+      deviceRef.current = device
+      setVoiceState('ready')
+      return true
+    } catch (e) {
+      if (e?.code === 'twilio_voice_not_configured') {
+        setVoiceState('unavailable')
+      } else {
+        console.error('Twilio voice init failed:', e)
+        setVoiceState('unavailable')
+      }
+      return false
+    }
+  }, [voiceState])
+
+  useEffect(() => {
+    if (!enabled) return
+    let cancelled = false
+    ;(async () => {
+      const ok = await ensureReady()
+      if (cancelled && ok && deviceRef.current) {
+        deviceRef.current.destroy()
+        deviceRef.current = null
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [enabled, ensureReady])
+
+  useEffect(() => {
+    if (!enabled) destroyDevice()
+    return () => destroyDevice()
+  }, [enabled, destroyDevice])
+
+  useEffect(() => {
+    if (callState !== 'in_call') return
+    const t = setInterval(() => {
+      setSeconds((s) => {
+        const next = s + 1
+        secondsRef.current = next
+        return next
+      })
+    }, 1000)
+    return () => clearInterval(t)
+  }, [callState])
+
+  const resetCallUi = useCallback(() => {
+    callRef.current = null
+    const sid = callSidRef.current
+    const dur = secondsRef.current
+    callSidRef.current = null
+    setCallState('idle')
+    setMuted(false)
+    setSeconds(0)
+    secondsRef.current = 0
+    const cb = onEndedRef.current
+    onEndedRef.current = null
+    if (cb) cb({ callSid: sid || null, seconds: dur })
+  }, [])
+
+  const placeCall = useCallback(
+    async ({ to, practiceId, consultId, conversationId, onEnded }) => {
+      const device = deviceRef.current
+      if (!device || !to || callState !== 'idle') return false
+      onEndedRef.current = onEnded || null
+      setSeconds(0)
+      secondsRef.current = 0
+      setMuted(false)
+      setCallState('connecting')
+      try {
+        const params = { To: to, practice_id: practiceId || '' }
+        if (consultId) params.consult_id = consultId
+        if (conversationId) params.conversation_id = conversationId
+        const call = await device.connect({ params })
+        callRef.current = call
+        call.on('ringing', () => setCallState('ringing'))
+        call.on('accept', () => {
+          callSidRef.current = call.parameters?.CallSid || null
+          setCallState('in_call')
+        })
+        const end = () => resetCallUi()
+        call.on('disconnect', end)
+        call.on('cancel', end)
+        call.on('reject', end)
+        call.on('error', (e) => {
+          console.error('Twilio call error:', e?.message || e)
+          end()
+        })
+        return true
+      } catch (e) {
+        console.error('placeCall failed:', e)
+        setCallState('idle')
+        onEndedRef.current = null
+        return false
+      }
+    },
+    [callState, resetCallUi],
+  )
+
+  const hangup = useCallback(() => {
+    try {
+      callRef.current?.disconnect()
+    } catch {
+      /* noop */
+    }
+  }, [])
+
+  const toggleMute = useCallback(() => {
+    const call = callRef.current
+    if (!call) return
+    const next = !muted
+    try {
+      call.mute(next)
+      setMuted(next)
+    } catch {
+      /* noop */
+    }
+  }, [muted])
+
+  return {
+    voiceState,
+    callState,
+    seconds,
+    muted,
+    ensureReady,
+    placeCall,
+    hangup,
+    toggleMute,
+    destroyDevice,
+  }
 }

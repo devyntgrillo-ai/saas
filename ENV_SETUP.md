@@ -1,31 +1,50 @@
 # Environment variables
 
-Do not commit env files. Copy these into local files that are gitignored (e.g. `.env.local`, `supabase/.env.local`).
+**Default:** the app targets the **managed** Supabase project `eymgqjeudrmeofytnwgs`.
 
 ## Frontend (`.env.local` at repo root)
 
-```
-VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
-```
-
-## Supabase Edge Functions (`supabase/.env.local`)
-
-Used by `npm run supabase:functions` locally:
-
-```
-SUPABASE_URL=http://127.0.0.1:54321
-SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-MAILGUN_DOMAIN=
-MAILGUN_API_KEY=
-TWILIO_ACCOUNT_SID=
-TWILIO_AUTH_TOKEN=
-TWILIO_A2P_SKIP_ENFORCEMENT=true
+```bash
+VITE_SUPABASE_URL=https://eymgqjeudrmeofytnwgs.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon key from Dashboard → Settings → API>
 ```
 
-Production: set secrets with `supabase secrets set KEY=value`.
+Regenerate after rotating keys:
 
-See also `supabase/TWILIO_SMS_SETUP.md` and `supabase/SEQUENCE_SCHEDULING.md`.
+```bash
+ANON_KEY='eyJ...' ./scripts/use-managed-env.sh
+```
+
+Run the app:
+
+```bash
+npm install
+npm run dev
+```
+
+## Deploy schema + edge functions to managed
+
+```bash
+npx supabase login
+npm run deploy:managed          # migrations + all functions
+npm run deploy:managed:db       # migrations only
+npm run deploy:managed:functions
+```
+
+Edge function **secrets** stay on the hosted project (Dashboard → Edge Functions → Secrets). The CLI cannot download secret values.
+
+## Optional: local Supabase (legacy)
+
+Only if you need an offline DB:
+
+```bash
+npx supabase start
+npm run setup:local-env
+npm run dev:local
+```
+
+Local keys must **not** be mixed into `.env.local` when using managed Supabase for the frontend.
+
+## Cron on hosted
+
+After deploy, ensure cron DB settings are set once (see `supabase/apply_cron.sql` or `supabase/SEQUENCE_SCHEDULING.md`).

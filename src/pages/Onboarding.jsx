@@ -175,8 +175,14 @@ export default function Onboarding() {
     if (!tcEmail.trim()) return
     setInviteState('sending')
     try {
-      await supabase.functions.invoke('invite-tc', {
-        body: { practice_id: practiceId, email: tcEmail.trim() },
+      await supabase.functions.invoke('invite-team-member', {
+        body: {
+          practice_id: practiceId,
+          email: tcEmail.trim(),
+          role: 'member',
+          access_level: 'practice_member',
+          app_origin: window.location.origin,
+        },
       })
     } catch {
       /* function optional in some environments - treat as queued */

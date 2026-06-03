@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ShieldCheck, Loader2, FileText } from 'lucide-react'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
+import { ensurePracticeLinked } from '../lib/linkPractice'
 import { supabase } from '../lib/supabase'
 
 export default function BAA() {
@@ -25,51 +26,13 @@ export default function BAA() {
       setLinking(true)
       setError('')
       try {
-        const { data: existing } = await supabase
-          .from('users')
-          .select('practice_id')
-          .eq('id', user.id)
-          .maybeSingle()
-
-        if (existing?.practice_id) {
-          await refreshProfile()
-          return
-        }
-
-        const { data: byEmail } = await supabase
-          .from('practices')
-          .select('id')
-          .eq('email', user.email)
-          .maybeSingle()
-
-        if (byEmail?.id) {
-          const { error: linkError } = await supabase
-            .from('users')
-            .update({ practice_id: byEmail.id })
-            .eq('id', user.id)
-          if (linkError) throw linkError
-          await refreshProfile()
-          return
-        }
-
-        const { data: created, error: practiceError } = await supabase
-          .from('practices')
-          .insert({ name: practiceName, email: user.email })
-          .select()
-          .single()
-        if (practiceError) throw practiceError
-
-        const { error: linkError } = await supabase
-          .from('users')
-          .update({ practice_id: created.id })
-          .eq('id', user.id)
+        const { practiceId, error: linkError } = await ensurePracticeLinked(supabase, user)
         if (linkError) throw linkError
-
-        await refreshProfile()
+        if (practiceId) await refreshProfile()
       } catch (e) {
         if (active) setError(e.message || 'Could not finish practice setup.')
       } finally {
-        if (active) setLinking(false)
+        setLinking(false)
       }
     })()
 

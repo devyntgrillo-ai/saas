@@ -14,12 +14,14 @@ function authHeader(cfg: TwilioConfig): string {
 
 export async function twilioRequest<T = Record<string, unknown>>(
   cfg: TwilioConfig,
-  base: "api" | "messaging",
+  base: "api" | "messaging" | "trusthub",
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
   const host = base === "messaging"
     ? "https://messaging.twilio.com"
+    : base === "trusthub"
+    ? "https://trusthub.twilio.com/v1"
     : `https://api.twilio.com/2010-04-01`;
   const url = path.startsWith("http") ? path : `${host}${path}`;
   const headers = new Headers(init.headers);
@@ -42,10 +44,23 @@ export function cfgOrThrow(): TwilioConfig {
   return cfg;
 }
 
-export function inboundWebhookUrl(): string | null {
+function publicWebhookBase(): string | null {
   const base = Deno.env.get("TWILIO_WEBHOOK_BASE_URL") || null;
   if (!base || base.includes("kong") || base.includes("127.0.0.1")) return null;
-  return `${base.replace(/\/$/, "")}/functions/v1/twilio-inbound`;
+  return base.replace(/\/$/, "");
+}
+
+/** Default inbound URL (legacy numbers without practice_id query). */
+export function inboundWebhookUrl(): string | null {
+  const base = publicWebhookBase();
+  return base ? `${base}/functions/v1/twilio-inbound` : null;
+}
+
+/** Per-practice inbound URL for O(1) routing at scale. */
+export function inboundWebhookUrlForPractice(practiceId: string): string | null {
+  const base = publicWebhookBase();
+  if (!base || !practiceId) return inboundWebhookUrl();
+  return `${base}/functions/v1/twilio-inbound?practice_id=${encodeURIComponent(practiceId)}`;
 }
 
 /** Map Twilio brand/campaign status strings to our enum. */

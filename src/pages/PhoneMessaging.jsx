@@ -16,7 +16,14 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { fetchOptOutCount, pollA2PStatus, smsProvisioningStatus, a2pMeta } from '../lib/messaging'
+import {
+  fetchOptOutCount,
+  pollA2PStatus,
+  sendTestEmail,
+  sendTestSms,
+  smsProvisioningStatus,
+  a2pMeta,
+} from '../lib/messaging'
 import PhoneSetupWizard from '../components/PhoneSetupWizard'
 
 // Format a stored phone number for display: +1 (509) 555-0100.
@@ -105,6 +112,12 @@ export default function PhoneMessaging() {
   const [emailFromName, setEmailFromName] = useState('')
   const [emailReplyTo, setEmailReplyTo] = useState('')
   const [optOuts, setOptOuts] = useState(null)
+  const [testSmsTo, setTestSmsTo] = useState('')
+  const [testSmsState, setTestSmsState] = useState('idle')
+  const [testSmsError, setTestSmsError] = useState('')
+  const [testEmail, setTestEmail] = useState('')
+  const [testEmailState, setTestEmailState] = useState('idle') // idle | sending | ok | err
+  const [testEmailError, setTestEmailError] = useState('')
 
   useEffect(() => {
     if (!practice) return
@@ -257,6 +270,53 @@ export default function PhoneMessaging() {
           </div>
         </div>
 
+        {smsFullyActive && hasNumber && (
+          <div className="mt-5 rounded-lg border border-surface-700 bg-surface-800/40 p-4">
+            <p className="text-sm font-medium text-slate-200">Send test SMS</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Sends from your practice number ({formatPhone(phoneNumber)}).
+            </p>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <input
+                className="input flex-1"
+                type="tel"
+                value={testSmsTo}
+                onChange={(e) => setTestSmsTo(e.target.value)}
+                placeholder="+1 555 010 1234"
+              />
+              <button
+                type="button"
+                disabled={!practiceId || !testSmsTo.trim() || testSmsState === 'sending'}
+                className="btn-secondary shrink-0"
+                onClick={async () => {
+                  setTestSmsState('sending')
+                  setTestSmsError('')
+                  try {
+                    await sendTestSms(practiceId, testSmsTo.trim())
+                    setTestSmsState('ok')
+                  } catch (e) {
+                    setTestSmsState('err')
+                    setTestSmsError(e.message || 'Send failed')
+                  }
+                }}
+              >
+                {testSmsState === 'sending' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MessageSquare className="h-4 w-4" />
+                )}
+                Send test
+              </button>
+            </div>
+            {testSmsState === 'ok' && (
+              <p className="mt-2 text-xs text-emerald-300">Test SMS queued — check the handset.</p>
+            )}
+            {testSmsState === 'err' && (
+              <p className="mt-2 text-xs text-rose-300">{testSmsError}</p>
+            )}
+          </div>
+        )}
+
         <SaveBar
           onSave={() => update({ sms_enabled: smsEnabled, sms_sender_name: smsSender || null })}
         />
@@ -304,6 +364,49 @@ export default function PhoneMessaging() {
         <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-surface-700 bg-surface-800/50 px-4 py-3 text-sm text-slate-400">
           <Mail className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
           Emails are sent via Hope AI's delivery system - no setup required.
+        </div>
+
+        <div className="mt-5 rounded-lg border border-surface-700 bg-surface-800/40 p-4">
+          <p className="text-sm font-medium text-slate-200">Send test email</p>
+          <p className="mt-1 text-xs text-slate-500">Verify Mailgun delivery to any inbox.</p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <input
+              className="input flex-1"
+              type="email"
+              value={testEmail}
+              onChange={(e) => setTestEmail(e.target.value)}
+              placeholder="you@example.com"
+            />
+            <button
+              type="button"
+              disabled={!practiceId || !testEmail.trim() || testEmailState === 'sending'}
+              className="btn-secondary shrink-0"
+              onClick={async () => {
+                setTestEmailState('sending')
+                setTestEmailError('')
+                try {
+                  await sendTestEmail(practiceId, testEmail.trim())
+                  setTestEmailState('ok')
+                } catch (e) {
+                  setTestEmailState('err')
+                  setTestEmailError(e.message || 'Send failed')
+                }
+              }}
+            >
+              {testEmailState === 'sending' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Mail className="h-4 w-4" />
+              )}
+              Send test
+            </button>
+          </div>
+          {testEmailState === 'ok' && (
+            <p className="mt-2 text-xs text-emerald-300">Test email queued — check the inbox (and spam).</p>
+          )}
+          {testEmailState === 'err' && (
+            <p className="mt-2 text-xs text-rose-300">{testEmailError}</p>
+          )}
         </div>
 
         <SaveBar

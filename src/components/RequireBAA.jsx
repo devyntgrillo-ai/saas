@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext'
 // Super admins and agency owners/admins manage accounts rather than being a
 // practice themselves, so they are never blocked by the BAA gate.
 export default function RequireBAA({ children }) {
-  const { contextLoading, profile, practice, baaAccepted, accessLevel, isSuperAdmin } = useAuth()
+  const { contextLoading, profile, practice, baaAccepted, accessLevel, isSuperAdmin, user } = useAuth()
 
   if (contextLoading) {
     return (
@@ -25,6 +25,11 @@ export default function RequireBAA({ children }) {
 
   // Has a practice that hasn't accepted the BAA → force acceptance first.
   if (profile?.practice_id && practice && !baaAccepted) {
+    return <Navigate to="/baa" replace />
+  }
+
+  // Signed up with email confirmation but never finished practice provisioning.
+  if (!profile?.practice_id && user?.user_metadata?.practice_name) {
     return <Navigate to="/baa" replace />
   }
 

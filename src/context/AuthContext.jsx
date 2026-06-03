@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { ensurePracticeLinked } from '../lib/linkPractice'
 import { supabase } from '../lib/supabase'
 import { resetPrimaryColor } from '../lib/whitelabel'
 
@@ -94,6 +95,24 @@ export function AuthProvider({ children }) {
     loadProfile(session.user.id)
     loadAgency(session.user.id)
   }, [session, loadProfile, loadAgency])
+
+  // Email-confirmed signups often land with practice_name metadata but no practice_id yet.
+  useEffect(() => {
+    if (!session?.user || profileLoading || profile?.practice_id) return
+    let active = true
+    ;(async () => {
+      const { practiceId, error } = await ensurePracticeLinked(supabase, session.user)
+      if (!active || !practiceId) return
+      if (error) {
+        console.warn('[Hope AI] Could not link practice:', error.message)
+        return
+      }
+      await loadProfile(session.user.id, { silent: true })
+    })()
+    return () => {
+      active = false
+    }
+  }, [session, profile?.practice_id, profileLoading, loadProfile])
 
   const isAgencyUser = Boolean(agency)
 

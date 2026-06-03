@@ -78,7 +78,10 @@ export function isOptOutMessage(body: string): boolean {
 }
 
 export interface SendSmsParams {
-  from: string;
+  /** E.164 sender when not using a Messaging Service. */
+  from?: string;
+  /** Preferred for A2P-registered practices (10DLC campaign on the service). */
+  messagingServiceSid?: string;
   to: string;
   body: string;
   mediaUrl?: string;
@@ -94,7 +97,14 @@ export interface SendSmsResult {
 export async function sendSms(cfg: TwilioConfig, params: SendSmsParams): Promise<SendSmsResult> {
   const url = `https://api.twilio.com/2010-04-01/Accounts/${cfg.accountSid}/Messages.json`;
   const form = new URLSearchParams();
-  form.set("From", toE164(params.from));
+  const mgSid = params.messagingServiceSid?.trim();
+  if (mgSid) {
+    form.set("MessagingServiceSid", mgSid);
+  } else if (params.from) {
+    form.set("From", toE164(params.from));
+  } else {
+    throw new Error("Twilio send requires MessagingServiceSid or From");
+  }
   form.set("To", toE164(params.to));
   form.set("Body", params.body);
   if (params.mediaUrl) form.set("MediaUrl", params.mediaUrl);

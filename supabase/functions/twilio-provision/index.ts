@@ -4,7 +4,7 @@
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
-import { cfgOrThrow, inboundWebhookUrl, twilioRequest } from "../_shared/twilio-api.ts";
+import { cfgOrThrow, inboundWebhookUrlForPractice, twilioRequest } from "../_shared/twilio-api.ts";
 import { toE164 } from "../_shared/twilio.ts";
 
 const cors = {
@@ -69,10 +69,40 @@ Deno.serve(async (req: Request) => {
     if (action === "get-status") {
       const { data: p } = await admin
         .from("practices")
-        .select("twilio_phone_number, a2p_brand_status, a2p_campaign_status, a2p_failure_reason, sms_enabled")
+        .select("twilio_phone_number, twilio_phone_e164, a2p_brand_status, a2p_campaign_status, a2p_failure_reason, sms_enabled")
         .eq("id", practiceId)
         .maybeSingle();
       return json({ ok: true, practice: p });
+    }
+
+    if (action === "sync-inbound-webhook") {
+      const { data: p } = await admin
+        .from("practices")
+        .select("twilio_phone_sid, twilio_phone_number")
+        .eq("id", practiceId)
+        .maybeSingle();
+      if (!p?.twilio_phone_sid) {
+        return json({ error: "No Twilio number on file. Purchase a number first." }, 400);
+      }
+      const smsUrl = inboundWebhookUrlForPractice(practiceId);
+      if (!smsUrl) {
+        return json({ error: "TWILIO_WEBHOOK_BASE_URL is not set for this environment." }, 503);
+      }
+      const form = new URLSearchParams();
+      form.set("SmsUrl", smsUrl);
+      form.set("SmsMethod", "POST");
+      await twilioRequest(
+        cfg,
+        "api",
+        `/Accounts/${cfg.accountSid}/IncomingPhoneNumbers/${p.twilio_phone_sid}.json`,
+        { method: "POST", body: form.toString() },
+      );
+      if (p.twilio_phone_number) {
+        await admin.from("practices").update({
+          twilio_phone_e164: toE164(p.twilio_phone_number),
+        }).eq("id", practiceId);
+      }
+      return json({ ok: true, sms_url: smsUrl });
     }
 
     if (action === "search-numbers") {
@@ -82,7 +112,7 @@ Deno.serve(async (req: Request) => {
       const data = await twilioRequest<{ available_phone_numbers: Array<Record<string, string>> }>(
         cfg,
         "api",
-        `/Accounts/${cfg.accountSid}/AvailablePhoneNumbers/US/Local.json?SmsEnabled=true&MmsEnabled=false&AreaCode=${ac}&PageSize=12`,
+        `/Accounts/${cfg.accountSid}/AvailablePhoneNumbers/US/Local.json?SmsEnabled=true&AreaCode=${ac}&PageSize=12`,
         { method: "GET" },
       );
 
@@ -100,7 +130,7 @@ Deno.serve(async (req: Request) => {
       const phone = toE164(String(body.phone_number || ""));
       if (!phone) return json({ error: "phone_number required" }, 400);
 
-      const smsUrl = inboundWebhookUrl();
+      const smsUrl = inboundWebhookUrlForPractice(practiceId);
       const form = new URLSearchParams();
       form.set("PhoneNumber", phone);
       if (smsUrl) form.set("SmsUrl", smsUrl);
@@ -118,6 +148,7 @@ Deno.serve(async (req: Request) => {
 
       await admin.from("practices").update({
         twilio_phone_number: purchased.phone_number || phone,
+        twilio_phone_e164: toE164(purchased.phone_number || phone),
         twilio_phone_sid: phoneSid,
         sms_enabled: false,
         a2p_brand_status: "unregistered",

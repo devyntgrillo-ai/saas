@@ -20,6 +20,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { type Brand, emailFooter, emailHeader, resolveBrand } from "../_shared/brand.ts";
+import { sendMailgunMessage } from "../_shared/mailgun.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,45 +32,6 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-
-// Send a branded invite via Mailgun. Keeps the existing noreply@domain address;
-// only the display name + reply-to are branded (mirrors the other functions).
-async function sendMailgun(
-  to: string,
-  subject: string,
-  html: string,
-  text: string,
-  fromName: string,
-  replyTo: string | null,
-) {
-  const domain = Deno.env.get("MAILGUN_DOMAIN");
-  const key = Deno.env.get("MAILGUN_API_KEY");
-  if (!domain || !key) {
-    console.warn("send-client-invite: MAILGUN_DOMAIN/MAILGUN_API_KEY not set - skipping email send");
-    return { sent: false, reason: "mailgun_not_configured" };
-  }
-  const envFrom = Deno.env.get("MAILGUN_FROM");
-  const address = envFrom?.match(/<([^>]+)>/)?.[1] || `noreply@${domain}`;
-  const form = new FormData();
-  form.append("from", `${fromName} <${address}>`);
-  form.append("to", to);
-  form.append("subject", subject);
-  form.append("text", text);
-  form.append("html", html);
-  if (replyTo) form.append("h:Reply-To", replyTo);
-
-  const res = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
-    method: "POST",
-    headers: { Authorization: `Basic ${btoa(`api:${key}`)}` },
-    body: form,
-  });
-  if (!res.ok) {
-    const detail = await res.text();
-    console.error(`send-client-invite Mailgun send failed ${res.status}:`, detail);
-    return { sent: false, reason: `mailgun_${res.status}` };
-  }
-  return { sent: true };
-}
 
 function escapeHtml(s: string): string {
   return String(s)
@@ -261,7 +223,14 @@ Deno.serve(async (req: Request) => {
       resellerPrice,
       inviteLink,
     );
-    const sendResult = await sendMailgun(ownerEmail, subject, html, text, brand.fromName, brand.supportEmail);
+    const sendResult = await sendMailgunMessage({
+      to: ownerEmail,
+      subject,
+      text,
+      html,
+      fromName: brand.fromName,
+      replyTo: brand.supportEmail,
+    });
 
     // Link the invited auth user to the new practice as its owner.
     if (invitedUserId) {

@@ -29,8 +29,10 @@ dist.zip
 # ── Secrets & environment (never commit) ─────────────────────────────────────
 .env
 .env.*
+.env.remote
 **/.env
 **/.env.*
+**/.env.remote
 **/.env.local
 **/.env.*.local
 *.pem

@@ -106,6 +106,7 @@ export default function Settings() {
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
   const [savedFlash, setSavedFlash] = useState('')
+  const [saveError, setSaveError] = useState('')
   const [showCancel, setShowCancel] = useState(false)
 
   // Billing
@@ -193,16 +194,33 @@ export default function Settings() {
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }))
 
   async function save(patch, flash = 'Saved') {
-    if (!practice?.id) return
-    setSaving(true)
-    const { error } = await supabase.from('practices').update(patch).eq('id', practice.id)
-    setSaving(false)
-    if (!error) {
-      setSavedFlash(flash)
-      setTimeout(() => setSavedFlash(''), 2500)
-      await refreshProfile()
+    if (!practice?.id) {
+      setSaveError(
+        'Your account is not linked to a practice yet. Wait a moment and try again, or sign out and complete signup.',
+      )
+      return
     }
-    return error
+    setSaving(true)
+    setSaveError('')
+    const { data, error } = await supabase
+      .from('practices')
+      .update(patch)
+      .eq('id', practice.id)
+      .select('id')
+      .maybeSingle()
+    setSaving(false)
+    if (error) {
+      setSaveError(error.message || 'Could not save changes.')
+      return error
+    }
+    if (!data) {
+      setSaveError('Could not save changes. You may not have permission to update this practice.')
+      return new Error('no rows updated')
+    }
+    setSavedFlash(flash)
+    setTimeout(() => setSavedFlash(''), 2500)
+    await refreshProfile()
+    return null
   }
 
   if (profileLoading) {
@@ -294,6 +312,11 @@ export default function Settings() {
                   </Field>
                 </div>
               </div>
+              {saveError && tab === 'profile' && (
+                <p className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                  {saveError}
+                </p>
+              )}
               <div className="mt-6 flex justify-end">
                 <button
                   onClick={() =>
@@ -307,7 +330,7 @@ export default function Settings() {
                       timezone: form.timezone,
                     })
                   }
-                  disabled={saving}
+                  disabled={saving || !practice?.id}
                   className="btn-primary"
                 >
                   {saving && <Loader2 className="h-4 w-4 animate-spin" />}

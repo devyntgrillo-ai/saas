@@ -1,16 +1,22 @@
 // ============================================================================
-// twilio-a2p — A2P 10DLC brand + campaign registration per practice.
-// Actions: register, poll-status, webhook
+// twilio-a2p — A2P 10DLC via Trust Hub (ISV API) + brand/campaign registration.
+// Actions: register, poll-status
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import {
   a2pDevAutoApprove,
   cfgOrThrow,
-  inboundWebhookUrl,
+  inboundWebhookUrlForPractice,
   mapA2pStatus,
   twilioRequest,
 } from "../_shared/twilio-api.ts";
+import {
+  type A2PBusiness,
+  type TrustHubStored,
+  ensureA2pTrustHubBundles,
+  preconfiguredA2pBundles,
+} from "../_shared/twilio-trusthub.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -20,24 +26,24 @@ const cors = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 
-interface A2PBusiness {
-  legal_name?: string;
-  business_type?: string;
-  ein?: string;
-  website?: string;
-  contact_first?: string;
-  contact_last?: string;
-  contact_email?: string;
-  contact_phone?: string;
-  use_case?: string;
-  message_samples?: string[];
-  opt_in_description?: string;
-}
-
 const DEFAULT_SAMPLES = [
   "Hi [name], following up on your implant consult. Any questions about your treatment plan? Reply STOP to opt out.",
   "Hi [name], just checking in after your visit. Happy to help schedule your next step. Reply STOP to opt out.",
 ];
+
+function trustHubFromConfig(a2pConfig: unknown): TrustHubStored {
+  const cfg = (a2pConfig && typeof a2pConfig === "object" ? a2pConfig : {}) as Record<string, unknown>;
+  const th = (cfg.trust_hub && typeof cfg.trust_hub === "object" ? cfg.trust_hub : {}) as TrustHubStored;
+  return {
+    customer_profile_sid: th.customer_profile_sid || undefined,
+    trust_product_sid: th.trust_product_sid || undefined,
+  };
+}
+
+function mergeA2pConfig(existing: unknown, biz: A2PBusiness, trustHub: TrustHubStored): Record<string, unknown> {
+  const base = (existing && typeof existing === "object" ? existing : {}) as Record<string, unknown>;
+  return { ...base, ...biz, trust_hub: trustHub };
+}
 
 async function verifyAccess(req: Request, practiceId: string, admin: ReturnType<typeof createClient>) {
   const authHeader = req.headers.get("Authorization") || "";
@@ -71,7 +77,7 @@ async function ensureMessagingService(
     .maybeSingle();
 
   let mgSid = p?.twilio_messaging_service_sid || null;
-  const inbound = inboundWebhookUrl();
+  const inbound = inboundWebhookUrlForPractice(practiceId);
 
   if (!mgSid) {
     const form = new URLSearchParams();
@@ -98,7 +104,6 @@ async function ensureMessagingService(
         body: attach.toString(),
       });
     } catch (e) {
-      // Already attached is fine
       const msg = String((e as Error).message || "");
       if (!msg.includes("21710") && !msg.toLowerCase().includes("already")) console.warn("attach phone:", msg);
     }
@@ -109,20 +114,14 @@ async function ensureMessagingService(
 
 async function submitBrand(
   cfg: ReturnType<typeof cfgOrThrow>,
+  customerProfileBundleSid: string,
+  a2pProfileBundleSid: string,
   biz: A2PBusiness,
 ): Promise<{ brandSid: string | null; skipped: boolean; reason?: string }> {
-  const bundleSid = Deno.env.get("TWILIO_A2P_BUNDLE_SID") || Deno.env.get("TWILIO_CUSTOMER_PROFILE_BUNDLE_SID");
-  if (!bundleSid) {
-    return {
-      brandSid: null,
-      skipped: true,
-      reason: "TWILIO_A2P_BUNDLE_SID not configured — registration queued for manual Trust Hub setup.",
-    };
-  }
-
   const brandType = (biz.business_type || "").toLowerCase().includes("sole") ? "SOLE_PROPRIETOR" : "STANDARD";
   const form = new URLSearchParams();
-  form.set("CustomerProfileBundleSid", bundleSid);
+  form.set("CustomerProfileBundleSid", customerProfileBundleSid);
+  form.set("A2PProfileBundleSid", a2pProfileBundleSid);
   form.set("BrandType", brandType);
   form.set("Mock", "false");
 
@@ -255,11 +254,22 @@ Deno.serve(async (req: Request) => {
         return json({ error: "Purchase a phone number before A2P registration." }, 400);
       }
 
-      const biz: A2PBusiness = { ...(practice.a2p_config as A2PBusiness || {}), ...(body.business || {}) };
+      const biz: A2PBusiness = {
+        ...(practice.a2p_config as A2PBusiness || {}),
+        ...(body.business || {}),
+        legal_name: body.business?.legal_name || (practice.a2p_config as A2PBusiness)?.legal_name || practice.name,
+        contact_email: body.business?.contact_email || (practice.a2p_config as A2PBusiness)?.contact_email ||
+          practice.email,
+        contact_phone: body.business?.contact_phone || (practice.a2p_config as A2PBusiness)?.contact_phone ||
+          practice.phone,
+        address_street: body.business?.address_street || (practice.a2p_config as A2PBusiness)?.address_street ||
+          practice.address,
+      };
+
+      const trustHubExisting = trustHubFromConfig(practice.a2p_config);
       const nowIso = new Date().toISOString();
 
       await admin.from("practices").update({
-        a2p_config: biz,
         a2p_submitted_at: nowIso,
         a2p_brand_status: "pending",
         a2p_campaign_status: "pending",
@@ -275,17 +285,14 @@ Deno.serve(async (req: Request) => {
         practice.twilio_phone_sid,
       );
 
-      const brandResult = await submitBrand(cfg, biz);
-      let brandSid = brandResult.brandSid;
-      let notes: string[] = [];
-      if (brandResult.skipped && brandResult.reason) notes.push(brandResult.reason);
+      const notes: string[] = [];
 
       if (a2pDevAutoApprove()) {
         await admin.from("practices").update({
+          a2p_config: mergeA2pConfig(practice.a2p_config, biz, trustHubExisting),
           a2p_brand_status: "approved",
           a2p_campaign_status: "approved",
           sms_enabled: true,
-          a2p_failure_reason: notes.length ? notes.join(" ") : null,
         }).eq("id", practiceId);
         return json({
           ok: true,
@@ -295,19 +302,53 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      const bundles = await ensureA2pTrustHubBundles(
+        cfg,
+        practiceId,
+        practice.name || "Practice",
+        biz,
+        practice.address,
+        trustHubExisting,
+      );
+
+      if (!bundles.ok) {
+        const legacy = Deno.env.get("TWILIO_A2P_BUNDLE_SID");
+        const hint = legacy
+          ? "TWILIO_A2P_BUNDLE_SID alone is not enough — set TWILIO_CUSTOMER_PROFILE_BUNDLE_SID and TWILIO_A2P_PROFILE_BUNDLE_SID, or configure Trust Hub secrets."
+          : "";
+        await admin.from("practices").update({
+          a2p_config: mergeA2pConfig(practice.a2p_config, biz, trustHubExisting),
+          a2p_failure_reason: [bundles.reason, hint].filter(Boolean).join(" "),
+        }).eq("id", practiceId);
+        return json({ ok: false, error: bundles.reason, notes: hint ? [hint] : [] }, 400);
+      }
+
+      await admin.from("practices").update({
+        a2p_config: mergeA2pConfig(practice.a2p_config, biz, bundles.trustHub),
+      }).eq("id", practiceId);
+
+      const brandResult = await submitBrand(
+        cfg,
+        bundles.customerProfileBundleSid,
+        bundles.a2pProfileBundleSid,
+        biz,
+      );
+
+      let brandSid = brandResult.brandSid;
+      if (brandResult.skipped && brandResult.reason) notes.push(`Brand: ${brandResult.reason}`);
+
       if (brandSid) {
         await admin.from("practices").update({ twilio_brand_sid: brandSid }).eq("id", practiceId);
         const campResult = await submitCampaign(cfg, mgSid!, brandSid, biz);
         if (campResult.campaignSid) {
           await admin.from("practices").update({ twilio_campaign_sid: campResult.campaignSid }).eq("id", practiceId);
         } else if (campResult.reason) {
-          notes.push(campResult.reason);
-          await admin.from("practices").update({ a2p_failure_reason: notes.join(" | ") }).eq("id", practiceId);
+          notes.push(`Campaign: ${campResult.reason}`);
         }
-      } else {
-        await admin.from("practices").update({
-          a2p_failure_reason: notes.join(" | ") || "Awaiting Trust Hub bundle configuration.",
-        }).eq("id", practiceId);
+      }
+
+      if (notes.length) {
+        await admin.from("practices").update({ a2p_failure_reason: notes.join(" | ") }).eq("id", practiceId);
       }
 
       const polled = await pollAndUpdate(cfg, admin, practiceId);
@@ -315,6 +356,10 @@ Deno.serve(async (req: Request) => {
         ok: true,
         messaging_service_sid: mgSid,
         brand_sid: brandSid,
+        customer_profile_bundle_sid: bundles.customerProfileBundleSid,
+        a2p_profile_bundle_sid: bundles.a2pProfileBundleSid,
+        trust_hub: bundles.trustHub,
+        preconfigured_bundles: Boolean(preconfiguredA2pBundles()),
         notes,
         status: polled,
       });

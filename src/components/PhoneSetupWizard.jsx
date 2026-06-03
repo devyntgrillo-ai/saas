@@ -26,6 +26,7 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
   const [step, setStep] = useState(1)
   const [areaCode, setAreaCode] = useState('')
   const [numbers, setNumbers] = useState([])
+  const [searched, setSearched] = useState(false)
   const [searching, setSearching] = useState(false)
   const [selected, setSelected] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -39,6 +40,10 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
     contact_last: '',
     contact_email: '',
     contact_phone: '',
+    address_street: '',
+    address_city: '',
+    address_region: '',
+    address_postal: '',
     use_case: 'Post-consult dental implant treatment plan follow-up and scheduling reminders.',
     opt_in_description:
       'Patients provide their mobile number during the in-office consult and agree to receive follow-up texts about their treatment plan.',
@@ -48,12 +53,15 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
   useEffect(() => {
     supabase
       .from('practices')
-      .select('name, address, doctor_first, doctor_last, email, phone, twilio_phone_number, a2p_brand_status, a2p_campaign_status')
+      .select(
+        'name, address, doctor_first, doctor_last, email, phone, twilio_phone_number, a2p_brand_status, a2p_campaign_status',
+      )
       .eq('id', practiceId)
       .maybeSingle()
       .then(({ data }) => {
         if (!data) return
-        const zipMatch = String(data.address || '').match(/\b(\d{5})\b/)
+        const addr = String(data.address || '')
+        const zipMatch = addr.match(/\b(\d{5})(?:-\d{4})?\b/)
         if (zipMatch) setAreaCode(zipMatch[1].slice(0, 3))
         if (data.twilio_phone_number && data.a2p_brand_status === 'approved') {
           setStep(5)
@@ -62,6 +70,7 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
         } else if (data.twilio_phone_number) {
           setStep(3)
         }
+        const stateMatch = addr.match(/\b([A-Z]{2})\s+\d{5}\b/)
         setBiz((b) => ({
           ...b,
           legal_name: data.name || b.legal_name,
@@ -69,6 +78,9 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
           contact_last: data.doctor_last || '',
           contact_email: data.email || '',
           contact_phone: data.phone || '',
+          address_street: data.address || b.address_street,
+          address_postal: zipMatch?.[1] || b.address_postal,
+          address_region: stateMatch?.[1] || b.address_region,
         }))
       })
   }, [practiceId])
@@ -101,9 +113,11 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
   async function doSearch() {
     setError('')
     setSearching(true)
+    setSearched(true)
     try {
       setNumbers(await searchNumbers(practiceId, areaCode))
     } catch (e) {
+      setNumbers([])
       setError(e.message || 'Search failed')
     } finally {
       setSearching(false)
@@ -194,6 +208,11 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
                 {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Search
               </button>
             </div>
+            {searched && !searching && numbers.length === 0 && (
+              <p className="mt-4 rounded-lg border border-surface-700 bg-surface-800/50 px-4 py-3 text-sm text-slate-400">
+                No SMS-capable numbers in area code {areaCode} right now. Try a nearby code (e.g. 737 for Austin, 210 for San Antonio) or search again in a few minutes.
+              </p>
+            )}
             {numbers.length > 0 && (
               <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {numbers.map((n) => (
@@ -267,6 +286,42 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
                 <label className="label">Website</label>
                 <input className="input" value={biz.website} onChange={(e) => setBiz({ ...biz, website: e.target.value })} placeholder="https://" />
               </div>
+              <div className="sm:col-span-2">
+                <label className="label">Business street address</label>
+                <input
+                  className="input"
+                  value={biz.address_street}
+                  onChange={(e) => setBiz({ ...biz, address_street: e.target.value })}
+                  placeholder="123 Main St"
+                />
+              </div>
+              <div>
+                <label className="label">City</label>
+                <input
+                  className="input"
+                  value={biz.address_city}
+                  onChange={(e) => setBiz({ ...biz, address_city: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">State</label>
+                <input
+                  className="input"
+                  maxLength={2}
+                  value={biz.address_region}
+                  onChange={(e) => setBiz({ ...biz, address_region: e.target.value.toUpperCase() })}
+                  placeholder="TX"
+                />
+              </div>
+              <div>
+                <label className="label">ZIP</label>
+                <input
+                  className="input"
+                  value={biz.address_postal}
+                  onChange={(e) => setBiz({ ...biz, address_postal: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                  placeholder="78701"
+                />
+              </div>
               <div>
                 <label className="label">Contact first name</label>
                 <input className="input" value={biz.contact_first} onChange={(e) => setBiz({ ...biz, contact_first: e.target.value })} />
@@ -297,7 +352,20 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
               <button type="button" onClick={() => setStep(2)} className="btn-ghost">
                 <ArrowLeft className="h-4 w-4" /> Back
               </button>
-              <button type="button" onClick={submitA2P} disabled={busy || !biz.legal_name} className="btn-primary">
+              <button
+                type="button"
+                onClick={submitA2P}
+                disabled={
+                  busy ||
+                  !biz.legal_name ||
+                  !biz.ein ||
+                  !biz.address_street ||
+                  !biz.address_city ||
+                  !biz.address_region ||
+                  !biz.address_postal
+                }
+                className="btn-primary"
+              >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Submit registration
               </button>
             </div>

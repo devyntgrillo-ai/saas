@@ -11,6 +11,7 @@
 // ============================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { type Brand, emailFooter, emailHeader, emailSignature, resolveBrand } from "../_shared/brand.ts";
+import { sendMailgunToMany } from "../_shared/mailgun.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -34,32 +35,6 @@ const OBJ_LABEL: Record<string, string> = {
   price: "Cost & Financing", fear: "Fear & Anxiety", spouse: "Spouse / Decision-maker",
   timing: "Timing", other: "Other",
 };
-
-async function sendMailgun(to: string[], subject: string, html: string, brand: Brand) {
-  const key = Deno.env.get("MAILGUN_API_KEY");
-  const domain = Deno.env.get("MAILGUN_DOMAIN");
-  if (!key || !domain) return { sent: false, reason: "mailgun_not_configured" };
-  // Keep the existing digest@domain address; only the display name is branded.
-  const envFrom = Deno.env.get("MAILGUN_FROM");
-  const address = envFrom?.match(/<([^>]+)>/)?.[1] || `digest@${domain}`;
-  const from = `${brand.fromName} <${address}>`;
-  const form = new FormData();
-  form.append("from", from);
-  to.forEach((t) => form.append("to", t));
-  form.append("subject", subject);
-  form.append("html", html);
-  form.append("h:Reply-To", brand.supportEmail);
-  const res = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
-    method: "POST",
-    headers: { Authorization: "Basic " + btoa(`api:${key}`) },
-    body: form,
-  });
-  if (!res.ok) {
-    const detail = (await res.text()).slice(0, 300);
-    return { sent: false, reason: `mailgun_${res.status}`, detail };
-  }
-  return { sent: true };
-}
 
 // deno-lint-ignore no-explicit-any
 function buildHtml(p: any, d: any, brand: Brand) {
@@ -142,12 +117,14 @@ Deno.serve(async (req: Request) => {
       const brand = await resolveBrand(admin, p);
       let send: unknown = { sent: false, reason: "no_recipient" };
       if (to.length) {
-        send = await sendMailgun(
-          to as string[],
-          `${brand.companyName} Weekly - ${p.name || "your practice"}`,
-          buildHtml(p, d, brand),
-          brand,
-        );
+        send = await sendMailgunToMany({
+          to: to as string[],
+          subject: `${brand.companyName} Weekly - ${p.name || "your practice"}`,
+          html: buildHtml(p, d, brand),
+          fromName: brand.fromName,
+          replyTo: brand.supportEmail,
+          fromKind: "digest",
+        });
       }
       results.push({ practice_id: p.id, stats: d, send });
     }

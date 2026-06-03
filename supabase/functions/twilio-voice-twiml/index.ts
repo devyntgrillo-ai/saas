@@ -21,6 +21,7 @@ Deno.serve(async (req: Request) => {
     const to = String(form.get("To") || "").trim();
     const practiceId = String(form.get("practice_id") || "").trim();
     const consultId = String(form.get("consult_id") || "").trim();
+    const conversationId = String(form.get("conversation_id") || "").trim();
     const callSid = String(form.get("CallSid") || "").trim();
 
     if (!to) return xml("<Response><Say>No number to dial.</Say></Response>");
@@ -43,6 +44,7 @@ Deno.serve(async (req: Request) => {
         twilio_call_sid: callSid,
         practice_id: practiceId,
         consult_id: consultId || null,
+        conversation_id: conversationId || null,
         direction: "outbound",
         to_number: to,
         from_number: callerId,

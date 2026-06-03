@@ -20,6 +20,7 @@ import {
   getTwilioConfig,
   isOptOutMessage,
   phonesMatch,
+  toE164,
   twilioWebhookUrl,
   validateTwilioSignature,
 } from "../_shared/twilio.ts";
@@ -66,15 +67,46 @@ Deno.serve(async (req: Request) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Resolve practice by the Twilio number that received the SMS.
-    const { data: practices } = await admin
-      .from("practices")
-      .select("id, twilio_phone_number")
-      .not("twilio_phone_number", "is", null);
+    const practiceIdHint = new URL(req.url).searchParams.get("practice_id")?.trim() || null;
+    const toE164Norm = toE164(to);
 
-    const practice = (practices || []).find((p) => phonesMatch(p.twilio_phone_number || "", to));
+    let practice: { id: string } | null = null;
+
+    if (practiceIdHint) {
+      const { data: hinted } = await admin
+        .from("practices")
+        .select("id, twilio_phone_number, twilio_phone_e164")
+        .eq("id", practiceIdHint)
+        .maybeSingle();
+      if (
+        hinted &&
+        (phonesMatch(hinted.twilio_phone_number || "", to) ||
+          hinted.twilio_phone_e164 === toE164Norm)
+      ) {
+        practice = { id: hinted.id };
+      }
+    }
+
     if (!practice) {
-      console.warn(`twilio-inbound: no practice for To=${to}`);
+      const { data: byE164 } = await admin
+        .from("practices")
+        .select("id")
+        .eq("twilio_phone_e164", toE164Norm)
+        .maybeSingle();
+      if (byE164) practice = { id: byE164.id };
+    }
+
+    if (!practice) {
+      const { data: practices } = await admin
+        .from("practices")
+        .select("id, twilio_phone_number")
+        .not("twilio_phone_number", "is", null);
+      const legacy = (practices || []).find((p) => phonesMatch(p.twilio_phone_number || "", to));
+      if (legacy) practice = { id: legacy.id };
+    }
+
+    if (!practice) {
+      console.warn(`twilio-inbound: no practice for To=${to} hint=${practiceIdHint || "none"}`);
       return twiml();
     }
 

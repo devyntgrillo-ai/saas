@@ -10,9 +10,10 @@ JS SDK. Architecture:
   `call_logs` row keyed by the Twilio CallSid.
 - **`twilio-recording-callback`** (`--no-verify-jwt`) - attaches the finished
   recording (URL/sid/duration) to that `call_logs` row.
-- Frontend: `src/pages/PowerDialer.jsx` (live call panel: connecting/ringing/
-  recording timer, mute, hang up) + `src/lib/voice.js`. Falls back to a `tel:`
-  link when Twilio isn't configured.
+- Frontend: `src/lib/voice.js` (`useTwilioVoiceDevice` hook) powers:
+  - **Conversations** header call button (in-browser call + thread log + recording)
+  - **Power Dialer** (`src/pages/PowerDialer.jsx`)
+  Falls back to `tel:` when Voice secrets are missing.
 - DB: `call_logs` (migration `20260601000000_call_logs.sql`) + `practices.twilio_phone_number`.
 
 ## One-time Twilio setup

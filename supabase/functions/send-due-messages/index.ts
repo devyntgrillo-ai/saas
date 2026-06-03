@@ -87,7 +87,14 @@ Deno.serve(async (req: Request) => {
       const transport = m.channel === "email" ? "mailgun-send" : "twilio-send";
       try {
         const { error: tErr } = await admin.functions.invoke(transport, {
-          body: { to, subject: m.subject, body: m.body, consult_id: m.consult_id, message_id: m.id },
+          body: {
+            to,
+            subject: m.subject,
+            body: m.body,
+            consult_id: m.consult_id,
+            message_id: m.id,
+            practice_id: c.practice_id,
+          },
         });
         if (tErr) throw tErr;
         await admin.from("messages").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", m.id);

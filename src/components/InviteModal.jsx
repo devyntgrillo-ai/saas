@@ -46,7 +46,18 @@ export default function InviteModal({ scope, agencyId, practiceId, practices = [
       setError(e.message)
       return
     }
-    setLink(`${window.location.origin}/invite/${data.token}`)
+    const link = `${window.location.origin}/invite/${data.token}`
+    setLink(link)
+    try {
+      await supabase.functions.invoke('invite-team-member', {
+        body: {
+          invitation_token: data.token,
+          app_origin: window.location.origin,
+        },
+      })
+    } catch {
+      /* invitation row exists; user can copy link manually */
+    }
     onSent?.()
   }
 
