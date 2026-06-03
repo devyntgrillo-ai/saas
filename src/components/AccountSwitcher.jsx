@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronsUpDown, Search, RotateCcw } from 'lucide-react'
+import { ChevronsUpDown, Search, RotateCcw, Shield } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useBranding } from '../context/BrandingContext'
 import { ACCESS_LABELS } from '../lib/permissions'
@@ -24,10 +24,12 @@ function firstLetter(name) {
 export default function AccountSwitcher() {
   const {
     accessiblePractices,
+    accessibleResellers,
     practice,
     agency,
     isAgencyUser,
     isSuperAdmin,
+    isImpersonating,
     accessLevel,
     viewPractice,
     exitPractice,
@@ -63,6 +65,11 @@ export default function AccountSwitcher() {
     )
   }, [accessiblePractices, search])
 
+  const filteredResellers = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return (accessibleResellers || []).filter((r) => !q || r.name?.toLowerCase().includes(q))
+  }, [accessibleResellers, search])
+
   // Current context shown on the trigger.
   const currentName = practice?.name || agency?.name || (isSuperAdmin ? 'Super Admin' : 'Select account')
   const currentSub = practice
@@ -77,11 +84,11 @@ export default function AccountSwitcher() {
     navigate('/')
   }
 
-  // The "switch out of this sub-account" action: agency users go back to the
-  // reseller view, super-admins to the admin view.
-  const showSwitch = isSuperAdmin || isAgencyUser
-  const switchLabel = isAgencyUser ? 'Switch to Reseller View' : 'Switch to Admin View'
-  const switchTo = isAgencyUser ? '/agency' : '/admin'
+  // Practice users have nothing to switch between - hide the switcher entirely.
+  if (!isSuperAdmin && !isAgencyUser) return null
+
+  // Super-admins search across every account; resellers across their sub-accounts.
+  const searchPlaceholder = isSuperAdmin ? 'Search for an account' : 'Search for a sub-account'
 
   return (
     <div className="relative px-2 pb-2" ref={ref}>
@@ -107,39 +114,73 @@ export default function AccountSwitcher() {
         >
           <div className="p-3">
             {/* Search */}
-            {showSwitch && (
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  autoFocus
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search for a sub-account"
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                />
-              </div>
-            )}
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={searchPlaceholder}
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
 
-            {/* Switch to Reseller / Admin view */}
-            {showSwitch && (
+            {/* Super-admin: current context (not clickable). Reseller: switch action. */}
+            {isSuperAdmin ? (
+              <div className="mt-2 flex items-center gap-2.5 rounded-lg bg-slate-50 px-2 py-2">
+                <Shield className="h-4 w-4 shrink-0 text-slate-500" />
+                <span className="text-sm font-medium text-slate-700">Super Admin View</span>
+                {!isImpersonating && (
+                  <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    Current
+                  </span>
+                )}
+              </div>
+            ) : (
               <button
-                onClick={() => { exitPractice(); setOpen(false); navigate(switchTo) }}
+                onClick={() => { exitPractice(); setOpen(false); navigate('/agency') }}
                 className="mt-2 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-slate-50"
               >
                 <RotateCcw className="h-4 w-4 shrink-0 text-blue-600" />
-                <span className="text-sm font-medium text-blue-600">{switchLabel}</span>
+                <span className="text-sm font-medium text-blue-600">Switch to Reseller View</span>
               </button>
+            )}
+
+            {/* RESELLERS (super-admin only) - jump to a reseller's admin view. */}
+            {isSuperAdmin && filteredResellers.length > 0 && (
+              <>
+                <p className="px-1 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  Resellers
+                </p>
+                <div className="max-h-[150px] space-y-0.5 overflow-y-auto">
+                  {filteredResellers.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => { setOpen(false); navigate(`/admin/agencies/${r.id}`) }}
+                      className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-slate-50"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-600">
+                        {firstLetter(r.name)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-slate-900">{r.name}</span>
+                        <span className="block truncate text-xs text-slate-500">Reseller</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
 
             {/* ALL ACCOUNTS */}
             <p className="px-1 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-              {showSwitch ? 'All Accounts' : 'Your Practice'}
+              All Accounts
             </p>
 
             {/* Accounts list - ~5 rows visible, scroll beyond. */}
             <div className="max-h-[300px] space-y-0.5 overflow-y-auto">
               {filtered.length === 0 ? (
-                <p className="px-2 py-6 text-center text-sm text-slate-400">No sub-accounts found.</p>
+                <p className="px-2 py-6 text-center text-sm text-slate-400">No accounts found.</p>
               ) : (
                 filtered.map((p) => (
                   <AccountRow key={p.id} p={p} active={practice?.id === p.id} onPick={pick} />
