@@ -20,6 +20,10 @@ export default function RequireOnboarding({ children }) {
 
   // A practice user who hasn't finished setup goes to the wizard.
   if (practiceId && !onboardingCompleted) {
+    // eslint-disable-next-line no-console
+    console.warn('[CaseLift guard] RequireOnboarding → /onboarding', {
+      from: location.pathname, practiceId, onboardingCompleted, isAgencyUser,
+    })
     return <Navigate to="/onboarding" replace state={{ from: location }} />
   }
 

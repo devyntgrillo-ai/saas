@@ -84,7 +84,11 @@ export default function Onboarding() {
 
   // Already done → straight to the app.
   useEffect(() => {
-    if (practice?.onboarding_completed) navigate('/', { replace: true })
+    if (practice?.onboarding_completed) {
+      // eslint-disable-next-line no-console
+      console.warn('[CaseLift guard] Onboarding already complete → / (dashboard)')
+      navigate('/', { replace: true })
+    }
   }, [practice?.onboarding_completed, navigate])
 
   useEffect(() => {

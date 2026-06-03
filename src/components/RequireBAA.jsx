@@ -25,11 +25,15 @@ export default function RequireBAA({ children }) {
 
   // Has a practice that hasn't accepted the BAA → force acceptance first.
   if (profile?.practice_id && practice && !baaAccepted) {
+    // eslint-disable-next-line no-console
+    console.warn('[CaseLift guard] RequireBAA → /baa (practice, not accepted)')
     return <Navigate to="/baa" replace />
   }
 
   // Signed up with email confirmation but never finished practice provisioning.
   if (!profile?.practice_id && user?.user_metadata?.practice_name) {
+    // eslint-disable-next-line no-console
+    console.warn('[CaseLift guard] RequireBAA → /baa (no practice_id, has metadata)')
     return <Navigate to="/baa" replace />
   }
 
