@@ -193,6 +193,30 @@ export async function fetchSyncLog(practiceId, limit = 10) {
   return data || []
 }
 
+// Searchable lookup over every patient synced from the practice's PMS
+// (pms_patients). Powers the recording flow's "Select Patient" option so a TC
+// can record for any patient, not only one on today's schedule. Server-side
+// name/phone match, capped so a large roster stays responsive.
+export async function searchPmsPatients(practiceId, query = '', limit = 25) {
+  if (!practiceId) return []
+  let q = supabase
+    .from('pms_patients')
+    .select('id, external_id, first_name, last_name, phone, email')
+    .eq('practice_id', practiceId)
+    .order('last_name', { ascending: true })
+    .limit(limit)
+  const term = (query || '').trim().replace(/[%,]/g, '')
+  if (term) {
+    q = q.or(`first_name.ilike.%${term}%,last_name.ilike.%${term}%,phone.ilike.%${term}%`)
+  }
+  const { data, error } = await q
+  if (error) {
+    console.warn('[pms] searchPmsPatients failed:', error.message)
+    return []
+  }
+  return data || []
+}
+
 // Today's appointments (local day).
 export async function fetchTodaysAppointments(practiceId) {
   const start = new Date()
