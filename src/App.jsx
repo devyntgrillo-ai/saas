@@ -1,5 +1,5 @@
 import { lazy } from 'react'
-import { BrowserRouter, Routes, Route, Outlet, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Outlet, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { BrandingProvider } from './context/BrandingContext'
 import { ThemeProvider } from './context/ThemeContext'
@@ -53,6 +53,17 @@ const AdminRevenue = lazy(() => import('./pages/admin/Revenue'))
 const AdminBilling = lazy(() => import('./pages/admin/Billing'))
 const AdminReferrals = lazy(() => import('./pages/admin/Referrals'))
 
+// The go.caselift.io subdomain is a signup landing host: hitting it at the root
+// sends visitors straight to the signup funnel. Other hosts/paths are untouched.
+function HostRedirect() {
+  const { pathname, search } = useLocation()
+  if (typeof window !== 'undefined' && window.location.hostname === 'go.caselift.io' && pathname === '/') {
+    // Carry the query string through (e.g. ?plan=797, ?ref=CODE) to /signup.
+    return <Navigate to={`/signup${search}`} replace />
+  }
+  return null
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -60,6 +71,7 @@ export default function App() {
       <AuthProvider>
         <BrandingProvider>
           <BrowserRouter>
+            <HostRedirect />
             <Routes>
               {/* Public */}
               <Route path="/login" element={<Login />} />
