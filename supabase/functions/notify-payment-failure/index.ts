@@ -2,7 +2,7 @@
 // notify-payment-failure - email the practice admin, their reseller, and the
 // super admin when a practice's subscription goes past_due / unpaid.
 //
-// Called server-to-server by chargebee-webhook with { practice_id } and a
+// Called server-to-server by ls-webhook with { practice_id } and a
 // service-role bearer. Resolves contacts and sends via Mailgun. Best-effort: if Mailgun
 // isn't configured it logs and returns ok:false rather than failing the webhook.
 //

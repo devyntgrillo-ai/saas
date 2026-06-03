@@ -391,8 +391,8 @@ verify_jwt = false
 verify_jwt = false
 [functions.sikka-oauth-callback]
 verify_jwt = false
-# Chargebee billing webhook — authenticated via CHARGEBEE_WEBHOOK_SECRET, not a JWT.
-[functions.chargebee-webhook]
+# Lemon Squeezy billing webhook — authenticated via X-Signature HMAC header, not a JWT.
+[functions.ls-webhook]
 verify_jwt = false
 # Public white-labeled client signup (/signup/<reseller-slug>) — no caller JWT.
 [functions.reseller-signup]

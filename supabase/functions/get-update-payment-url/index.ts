@@ -1,7 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "@supabase/supabase-js";
-
-const TRIAL_DAYS = 14;
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { lsConfig, createLSCheckout } from "../_shared/lemonsqueezy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,6 +14,9 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
+  const cfg = lsConfig();
+  if (!cfg) return json({ error: "Billing isn't configured yet (Lemon Squeezy secrets are not set)." }, 503);
+
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return json({ error: "Missing Authorization header" }, 401);
@@ -24,7 +26,6 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_ANON_KEY")!,
       { global: { headers: { Authorization: authHeader } } },
     );
-
     const { data: { user }, error: userErr } = await supabase.auth.getUser();
     if (userErr || !user) return json({ error: "Unauthorized" }, 401);
 
@@ -34,38 +35,32 @@ Deno.serve(async (req: Request) => {
       const { data: prof } = await supabase.from("users").select("practice_id").eq("id", user.id).maybeSingle();
       practiceId = prof?.practice_id ?? null;
     }
-    if (!practiceId) return json({ error: "No practice in context for this user." }, 400);
+    if (!practiceId) return json({ error: "No practice in context." }, 400);
 
     const { data: practice, error: pErr } = await supabase
       .from("practices")
-      .select("*")
+      .select("id, name, email, ls_customer_id")
       .eq("id", practiceId)
       .maybeSingle();
     if (pErr) throw pErr;
     if (!practice) return json({ error: "Practice not found or not accessible." }, 403);
 
-    const status: string | null = practice.subscription_status ?? null;
-    const subscriptionId = practice.ls_subscription_id ?? practice.subscription_id ?? null;
+    const email = practice.email || user.email;
+    if (!email) return json({ error: "No email on file - update your practice profile first." }, 409);
 
-    if (!status || status === "trial") {
-      let trialEndsAt: string | null = practice.trial_ends_at ?? null;
-      if (!trialEndsAt && practice.created_at) {
-        const d = new Date(practice.created_at);
-        d.setDate(d.getDate() + TRIAL_DAYS);
-        trialEndsAt = d.toISOString();
-      }
-      return json({ plan: "trial", status: "trial", trial_ends_at: trialEndsAt, subscription_id: subscriptionId });
-    }
+    const origin = req.headers.get("origin") || "";
+    const redirectUrl = body.redirect_url || (origin ? `${origin}/settings/billing` : undefined);
 
-    const plan = status === "active" ? "caselift" : status;
-    return json({
-      plan,
-      status,
-      trial_ends_at: practice.trial_ends_at ?? null,
-      subscription_id: subscriptionId,
+    const checkout = await createLSCheckout(cfg, cfg.variantId, {
+      email,
+      name: practice.name || email,
+      customData: { practice_id: practice.id, update_payment: "true" },
+      redirectUrl,
     });
+
+    return json({ url: checkout.url });
   } catch (e) {
-    console.error("get-billing-status error:", e);
+    console.error("get-update-payment-url error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }
 });

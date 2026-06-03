@@ -1,8 +1,5 @@
-// cancel-subscription - cancels a practice's Chargebee subscription and flips
-// its status. Runs with the caller's JWT so RLS confirms ownership. Degrades
-// gracefully when Chargebee isn't configured.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { chargebeeConfig, chargebeeRequest } from '../_shared/chargebee.ts'
+import { lsConfig, cancelLSSubscription } from '../_shared/lemonsqueezy.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -21,32 +18,28 @@ Deno.serve(async (req) => {
 
     const { data: practice, error: pe } = await supabase
       .from('practices')
-      .select('id, chargebee_subscription_id, subscription_status')
+      .select('id, ls_subscription_id, subscription_status')
       .eq('id', practice_id)
       .maybeSingle()
     if (pe) return json({ error: pe.message }, 400)
     if (!practice) return json({ error: 'Practice not found or not permitted' }, 404)
 
-    let cbCancelled = false
-    let cbError = null
-    const cfg = chargebeeConfig()
-    if (cfg && practice.chargebee_subscription_id) {
+    let lsCancelled = false
+    let lsError = null
+    const cfg = lsConfig()
+    if (cfg && practice.ls_subscription_id) {
       try {
-        // end_of_term: false cancels immediately; Chargebee also accepts
-        // cancel_at_end_of_term for end-of-period cancellation.
-        await chargebeeRequest(cfg, `/subscriptions/${practice.chargebee_subscription_id}/cancel_for_items`, 'POST', {
-          end_of_term: true,
-        })
-        cbCancelled = true
+        await cancelLSSubscription(cfg, practice.ls_subscription_id)
+        lsCancelled = true
       } catch (e) {
-        cbError = String(e?.message || e)
+        lsError = String(e?.message || e)
       }
     }
 
     const { error: ue } = await supabase.from('practices').update({ subscription_status: 'cancelled' }).eq('id', practice_id)
     if (ue) return json({ error: ue.message }, 400)
 
-    return json({ ok: true, cb_cancelled: cbCancelled, cb_error: cbError })
+    return json({ ok: true, ls_cancelled: lsCancelled, ls_error: lsError })
   } catch (e) {
     return json({ error: String(e?.message || e) }, 500)
   }
