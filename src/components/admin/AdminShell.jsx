@@ -71,7 +71,7 @@ function Chrome() {
   const SidebarContent = () => (
     <>
       <div className="flex items-center gap-2 px-4 pb-5 pt-7">
-        <Logo />
+        <Logo showBeta={false} />
         <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-semibold text-rose-300">ADMIN</span>
       </div>
 
@@ -140,7 +140,7 @@ function Chrome() {
             <Menu className="h-5 w-5" />
           </button>
           <div className="flex items-center gap-2 lg:hidden">
-            <Logo />
+            <Logo showBeta={false} />
             <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-semibold text-rose-300">ADMIN</span>
           </div>
           <span className="ml-auto hidden text-sm font-semibold text-slate-300 lg:block">CaseLift Admin</span>
