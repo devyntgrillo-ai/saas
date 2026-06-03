@@ -12,12 +12,6 @@ import { useAuth } from '../../context/AuthContext'
 // publish model: 'draft' (never live), 'published' ('Live'), 'updated' (edited
 // since last push — hidden from practices until re-pushed). RLS lets the super
 // admin see/manage everything; practices only see 'published'.
-const MODULE_GROUPS = [
-  'Module 1: Foundation',
-  'Module 2: The Consult',
-  'Module 3: The Close',
-  'Module 4: Objections',
-]
 const CATEGORIES = ['TC Certification', 'Front Desk', 'Sales & Objections']
 const SUPER_ADMIN_EMAIL = 'devyntgrillo@gmail.com'
 
@@ -39,21 +33,30 @@ export default function TrainingAdmin() {
   const [fGroup, setFGroup] = useState('all')
   const [fCategory, setFCategory] = useState('all')
 
+  const [groups, setGroups] = useState([]) // training_module_groups (editable tabs)
+  const [showModules, setShowModules] = useState(false)
   const [editing, setEditing] = useState(null) // lesson object, or {} for new
   const [confirmPush, setConfirmPush] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [busyId, setBusyId] = useState(null)
 
   const load = useCallback(async () => {
-    const [lr, pr] = await Promise.all([
+    const [lr, pr, gr] = await Promise.all([
       supabase.from('training_modules').select('*').order('order_index', { ascending: true }),
       supabase.from('training_push_log').select('*').order('pushed_at', { ascending: false }).limit(1),
+      supabase.from('training_module_groups').select('*').order('order_index', { ascending: true }),
     ])
     if (lr.error) setError(lr.error.message)
     setLessons(lr.data || [])
     setLastPush(pr.data?.[0] || null)
+    setGroups(gr.data || [])
     setLoading(false)
   }, [])
+
+  const groupName = useCallback(
+    (key) => groups.find((g) => g.key === key)?.name || key || '—',
+    [groups],
+  )
 
   useEffect(() => {
     let active = true
@@ -170,6 +173,41 @@ export default function TrainingAdmin() {
     return true
   }
 
+  // ── Module tabs (training_module_groups) ──────────────────────────────────
+  async function renameGroup(id, name) {
+    setGroups((gs) => gs.map((g) => (g.id === id ? { ...g, name } : g)))
+    const { error: e } = await supabase.from('training_module_groups').update({ name }).eq('id', id)
+    if (e) setError(e.message)
+  }
+  async function reorderGroup(g, dir) {
+    const sorted = [...groups].sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+    const idx = sorted.findIndex((x) => x.id === g.id)
+    const swap = sorted[idx + dir]
+    if (!swap) return
+    setGroups((gs) => gs.map((x) =>
+      x.id === g.id ? { ...x, order_index: swap.order_index } : x.id === swap.id ? { ...x, order_index: g.order_index } : x))
+    await Promise.all([
+      supabase.from('training_module_groups').update({ order_index: swap.order_index }).eq('id', g.id),
+      supabase.from('training_module_groups').update({ order_index: g.order_index }).eq('id', swap.id),
+    ])
+  }
+  async function addGroup() {
+    const order = groups.reduce((m, g) => Math.max(m, g.order_index || 0), 0) + 1
+    const key = `mod-${order}-${String(Date.now()).slice(-6)}`
+    const { data, error: e } = await supabase
+      .from('training_module_groups')
+      .insert({ key, name: 'New Module', order_index: order })
+      .select().single()
+    if (e) { setError(e.message); return }
+    setGroups((gs) => [...gs, data])
+  }
+  async function deleteGroup(g) {
+    const n = lessons.filter((l) => l.module_group === g.key).length
+    if (!window.confirm(`Delete the "${g.name}" tab?${n ? ` ${n} lesson(s) are assigned to it and will be hidden until reassigned to another module.` : ''}`)) return
+    setGroups((gs) => gs.filter((x) => x.id !== g.id))
+    await supabase.from('training_module_groups').delete().eq('id', g.id)
+  }
+
   return (
     <div className="space-y-6">
       {/* Header + push */}
@@ -210,10 +248,11 @@ export default function TrainingAdmin() {
           <Plus className="h-4 w-4" /> Add New Lesson
         </button>
         <button onClick={publishAll} className="btn-ghost">Publish All</button>
+        <button onClick={() => setShowModules((v) => !v)} className="btn-ghost">Manage Module Tabs</button>
         <div className="ml-auto flex items-center gap-2">
           <select value={fGroup} onChange={(e) => setFGroup(e.target.value)} className="input w-auto">
             <option value="all">All modules</option>
-            {MODULE_GROUPS.map((g) => <option key={g} value={g}>{g}</option>)}
+            {groups.map((g) => <option key={g.key} value={g.key}>{g.name}</option>)}
           </select>
           <select value={fCategory} onChange={(e) => setFCategory(e.target.value)} className="input w-auto">
             <option value="all">All categories</option>
@@ -221,6 +260,36 @@ export default function TrainingAdmin() {
           </select>
         </div>
       </div>
+
+      {/* Module-tab manager */}
+      {showModules && (
+        <div className="card p-5">
+          <div className="mb-1 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-white">Module Tabs</h2>
+            <button onClick={addGroup} className="btn-ghost !py-1.5 text-xs"><Plus className="h-3.5 w-3.5" /> Add module</button>
+          </div>
+          <p className="mb-3 text-xs text-slate-500">These are the horizontal tabs practices see. Rename or reorder them — lessons are grouped under their module.</p>
+          <div className="space-y-2">
+            {[...groups].sort((a, b) => (a.order_index || 0) - (b.order_index || 0)).map((g, i, arr) => (
+              <div key={g.id} className="flex items-center gap-2 rounded-lg border border-surface-700 bg-surface-800/40 px-3 py-2">
+                <div className="flex flex-col">
+                  <button onClick={() => reorderGroup(g, -1)} disabled={i === 0} className="text-slate-500 hover:text-slate-200 disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => reorderGroup(g, 1)} disabled={i === arr.length - 1} className="text-slate-500 hover:text-slate-200 disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
+                </div>
+                <input
+                  defaultValue={g.name}
+                  onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== g.name) renameGroup(g.id, v) }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
+                  className="input flex-1 !py-1.5"
+                />
+                <span className="shrink-0 text-xs text-slate-500">{lessons.filter((l) => l.module_group === g.key).length} lessons</span>
+                <button onClick={() => deleteGroup(g)} className="shrink-0 rounded-md border border-surface-700 bg-surface-800 p-1.5 text-rose-300 hover:bg-surface-700" title="Delete tab"><Trash2 className="h-3.5 w-3.5" /></button>
+              </div>
+            ))}
+            {groups.length === 0 && <p className="text-sm text-slate-500">No module tabs yet — add one.</p>}
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       {loading ? (
@@ -255,7 +324,7 @@ export default function TrainingAdmin() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap">{l.module_group || '—'}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap">{groupName(l.module_group)}</td>
                       <td className="px-3 py-2.5 min-w-[200px]">
                         <InlineEdit value={l.title} onSave={(v) => patchLesson(l.id, { title: v }, { markUpdated: true })} className="font-medium text-slate-100" />
                       </td>
@@ -300,6 +369,7 @@ export default function TrainingAdmin() {
       {editing && (
         <LessonModal
           lesson={editing}
+          groups={groups}
           onClose={() => setEditing(null)}
           onSave={async (form) => { const ok = await saveLesson(form); if (ok) setEditing(null) }}
         />
@@ -355,12 +425,12 @@ function InlineEdit({ value, onSave, className = '', placeholder = '', textarea 
   )
 }
 
-function LessonModal({ lesson, onClose, onSave }) {
+function LessonModal({ lesson, groups = [], onClose, onSave }) {
   const isNew = !lesson?.id
   const [form, setForm] = useState({
     id: lesson?.id,
     title: lesson?.title || '',
-    module_group: lesson?.module_group || MODULE_GROUPS[0],
+    module_group: lesson?.module_group || groups[0]?.key || '',
     description: lesson?.description || '',
     durationMin: lesson?.duration != null ? minsFromSec(lesson.duration) : 15,
     video_url: lesson?.video_url || '',
@@ -393,7 +463,7 @@ function LessonModal({ lesson, onClose, onSave }) {
           <div>
             <label className="label">Module Group</label>
             <select className="input" value={form.module_group} onChange={set('module_group')}>
-              {MODULE_GROUPS.map((g) => <option key={g} value={g}>{g}</option>)}
+              {groups.map((g) => <option key={g.key} value={g.key}>{g.name}</option>)}
             </select>
           </div>
           <div>

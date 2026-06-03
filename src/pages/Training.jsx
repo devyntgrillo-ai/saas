@@ -15,7 +15,6 @@ import { stripEmDashes } from '../lib/sanitize'
 import { formatDuration } from '../lib/consults'
 import { fetchTrainingRecommendation } from '../lib/insights'
 
-const CATEGORIES = ['TC Certification', 'Front Desk', 'Sales & Objections']
 const REC_TTL = 24 * 60 * 60 * 1000 // re-generate the AI recommendation at most once a day
 
 export default function Training() {
@@ -24,9 +23,10 @@ export default function Training() {
   const [recLoading, setRecLoading] = useState(true)
   const [recError, setRecError] = useState(false)
   const [modules, setModules] = useState([])
+  const [groups, setGroups] = useState([]) // editable module tabs (training_module_groups)
   const [progress, setProgress] = useState({}) // module_id -> { progress, completed_at }
   const [loading, setLoading] = useState(true)
-  const [activeCategory, setActiveCategory] = useState(CATEGORIES[0])
+  const [activeGroup, setActiveGroup] = useState(null) // active module tab (group key)
   const [playing, setPlaying] = useState(null) // module being watched
   const [saving, setSaving] = useState(false)
   const videoRef = useRef(null)
@@ -34,14 +34,17 @@ export default function Training() {
   useEffect(() => {
     let active = true
     async function load() {
-      const [{ data: mods }, { data: prog }] = await Promise.all([
+      const [{ data: mods }, { data: prog }, { data: grps }] = await Promise.all([
         supabase.from('training_modules').select('*').order('order_index', { ascending: true }),
         user
           ? supabase.from('training_progress').select('module_id, progress, completed_at').eq('user_id', user.id)
           : Promise.resolve({ data: [] }),
+        supabase.from('training_module_groups').select('*').order('order_index', { ascending: true }),
       ])
       if (!active) return
       setModules(mods || [])
+      setGroups(grps || [])
+      setActiveGroup((cur) => cur || grps?.[0]?.key || null)
       const map = {}
       for (const p of prog || []) map[p.module_id] = p
       setProgress(map)
@@ -110,8 +113,8 @@ export default function Training() {
   }, [practiceId])
 
   const visible = useMemo(
-    () => modules.filter((m) => m.category === activeCategory),
-    [modules, activeCategory]
+    () => modules.filter((m) => (m.module_group || '') === activeGroup),
+    [modules, activeGroup]
   )
 
   const completedCount = useMemo(
@@ -137,15 +140,15 @@ export default function Training() {
     setSaving(false)
   }
 
-  const categoryCounts = useMemo(() => {
+  const groupCounts = useMemo(() => {
     const counts = {}
-    for (const c of CATEGORIES) {
-      const total = modules.filter((m) => m.category === c).length
-      const done = modules.filter((m) => m.category === c && progress[m.id]?.completed_at).length
-      counts[c] = { total, done }
+    for (const g of groups) {
+      const total = modules.filter((m) => m.module_group === g.key).length
+      const done = modules.filter((m) => m.module_group === g.key && progress[m.id]?.completed_at).length
+      counts[g.key] = { total, done }
     }
     return counts
-  }, [modules, progress])
+  }, [modules, groups, progress])
 
   return (
     <div className="space-y-6">
@@ -226,15 +229,15 @@ export default function Training() {
         </div>
       </div>
 
-      {/* Category tabs */}
+      {/* Module tabs (editable in the Super Admin Training tab) */}
       <div className="flex flex-wrap gap-2 border-b border-surface-700">
-        {CATEGORIES.map((c) => {
-          const isActive = c === activeCategory
-          const cc = categoryCounts[c] || { total: 0, done: 0 }
+        {groups.map((g) => {
+          const isActive = g.key === activeGroup
+          const cc = groupCounts[g.key] || { total: 0, done: 0 }
           return (
             <button
-              key={c}
-              onClick={() => setActiveCategory(c)}
+              key={g.key}
+              onClick={() => setActiveGroup(g.key)}
               className={[
                 '-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition',
                 isActive
@@ -242,7 +245,7 @@ export default function Training() {
                   : 'border-transparent text-slate-400 hover:text-slate-200',
               ].join(' ')}
             >
-              {c}
+              {g.name}
               <span className="ml-2 text-xs text-slate-500">
                 {cc.done}/{cc.total}
               </span>
@@ -257,7 +260,7 @@ export default function Training() {
       ) : visible.length === 0 ? (
         <div className="card px-6 py-16 text-center">
           <GraduationCap className="mx-auto h-9 w-9 text-slate-600" />
-          <p className="mt-3 text-sm text-slate-400">No modules in this category yet.</p>
+          <p className="mt-3 text-sm text-slate-400">No lessons in this module yet.</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
