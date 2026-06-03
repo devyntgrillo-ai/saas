@@ -1,26 +1,59 @@
-import { useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Loader2, CheckCircle2, Gift } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { Loader2, Gift, Check, CreditCard, ArrowLeft } from 'lucide-react'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { createCheckout } from '../lib/billing'
 import { REF_STORAGE_KEY } from '../components/ReferralRedirect'
+
+// PMS systems offered in the dropdown.
+const PMS_OPTIONS = [
+  'Dentrix',
+  'Eaglesoft',
+  'Curve Dental',
+  'Open Dental',
+  'Carestream',
+  'Dolphin',
+  'Orthotrac',
+  'Lighthouse 360',
+  'Dentimax',
+  'MacPractice',
+  'Other',
+]
+
+const HEARD_FROM_OPTIONS = ['Referral', 'Instagram', 'Facebook', 'Google', 'Podcast', 'Other']
+
+// Plan amount comes from ?plan= (e.g. /signup?plan=797). Default 997. The real
+// price is validated server-side in create-checkout; this is display only.
+function parsePlanAmount(searchParams) {
+  const raw = Number(searchParams.get('plan'))
+  return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 997
+}
 
 export default function Signup() {
   const { signUp, refreshProfile } = useAuth()
-  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
-  const [practiceName, setPracticeName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [step, setStep] = useState(1)
+  const [form, setForm] = useState({
+    practiceName: '',
+    phone: '',
+    contactName: '',
+    email: '',
+    password: '',
+    pms: '',
+    heardFrom: '',
+  })
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [done, setDone] = useState(false)
+  const [practiceId, setPracticeId] = useState(null) // set once the account+practice exist
+  const planAmount = useMemo(() => parsePlanAmount(searchParams), [searchParams])
 
-  // Referral: code comes from ?ref= or localStorage (set by /r/[code]). We
-  // resolve it to the referrer so we can both welcome them by name and stamp
-  // the new practice with referred_by_practice_id.
+  // Referral: code comes from ?ref= or localStorage (set by /r/[code]). Resolve
+  // it to the referrer so we can welcome them and stamp the new practice.
   const [refCode] = useState(() => {
     let stored = ''
     try {
@@ -30,7 +63,7 @@ export default function Signup() {
     }
     return (searchParams.get('ref') || stored || '').trim()
   })
-  const [referrer, setReferrer] = useState(null) // { practice_id, practice_name }
+  const [referrer, setReferrer] = useState(null)
 
   useEffect(() => {
     if (!refCode) return
@@ -48,92 +81,108 @@ export default function Signup() {
     }
   }, [refCode])
 
-  const handleSubmit = async (e) => {
+  function splitContactName(full) {
+    const parts = (full || '').trim().split(/\s+/)
+    return { doctor_first: parts[0] || '', doctor_last: parts.slice(1).join(' ') || '' }
+  }
+
+  // Step 1 → create the auth user + practice, then advance to payment. If the
+  // account already exists (user clicked Back then Continue), just move forward.
+  async function handleStep1(e) {
     e.preventDefault()
     setError('')
+
+    if (practiceId) {
+      setStep(2)
+      return
+    }
+
     setLoading(true)
-
-    // Create the auth user. A trigger provisions the public.users row.
-    const { data, error: signUpError } = await signUp(email, password, {
-      practice_name: practiceName,
+    const { data, error: signUpError } = await signUp(form.email, form.password, {
+      practice_name: form.practiceName,
     })
-
     if (signUpError) {
       setLoading(false)
       setError(signUpError.message)
       return
     }
-
-    // If we have an active session (email confirmation disabled), create the
-    // practice and link the user to it.
-    if (data.session && data.user) {
-      const { data: practice, error: practiceError } = await supabase
-        .from('practices')
-        .insert({
-          name: practiceName,
-          email,
-          ...(refCode ? { referred_by_code: refCode } : {}),
-          ...(referrer?.practice_id ? { referred_by_practice_id: referrer.practice_id } : {}),
-        })
-        .select()
-        .single()
-
-      if (practiceError) {
-        setLoading(false)
-        setError(practiceError.message || 'Could not create your practice.')
-        return
-      }
-
-      // Referral consumed - don't re-stamp a future signup on this device.
-      try {
-        localStorage.removeItem(REF_STORAGE_KEY)
-      } catch {
-        /* storage unavailable */
-      }
-
-      const { error: linkError } = await supabase
-        .from('users')
-        .update({ practice_id: practice.id })
-        .eq('id', data.user.id)
-
-      if (linkError) {
-        setLoading(false)
-        setError(linkError.message || 'Practice created but could not link to your account.')
-        return
-      }
-
-      await refreshProfile()
+    // Payment-first funnel needs an active session to start checkout. If email
+    // confirmation is on (no session), we can't proceed to hosted checkout here.
+    if (!data.session || !data.user) {
       setLoading(false)
-      navigate('/baa', { replace: true })
+      setError(
+        'Please confirm your email, then sign in to complete payment. (Email confirmation is enabled on this project.)',
+      )
       return
     }
 
-    // Otherwise email confirmation is required.
+    const { doctor_first, doctor_last } = splitContactName(form.contactName)
+    const { data: practice, error: practiceError } = await supabase
+      .from('practices')
+      .insert({
+        name: form.practiceName,
+        email: form.email,
+        phone: form.phone,
+        doctor_first,
+        doctor_last,
+        pms_type: form.pms || null,
+        heard_from: form.heardFrom || null,
+        plan_amount: planAmount,
+        ...(refCode ? { referred_by_code: refCode } : {}),
+        ...(referrer?.practice_id ? { referred_by_practice_id: referrer.practice_id } : {}),
+      })
+      .select()
+      .single()
+    if (practiceError) {
+      setLoading(false)
+      setError(practiceError.message || 'Could not create your practice.')
+      return
+    }
+
+    try {
+      localStorage.removeItem(REF_STORAGE_KEY)
+    } catch {
+      /* storage unavailable */
+    }
+
+    const { error: linkError } = await supabase
+      .from('users')
+      .update({ practice_id: practice.id })
+      .eq('id', data.user.id)
+    if (linkError) {
+      setLoading(false)
+      setError(linkError.message || 'Practice created but could not link it to your account.')
+      return
+    }
+
+    await refreshProfile()
+    setPracticeId(practice.id)
     setLoading(false)
-    setDone(true)
+    setStep(2)
   }
 
-  if (done) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-surface px-4">
-        <div className="w-full max-w-md text-center">
-          <div className="mb-6 flex justify-center">
-            <Logo />
-          </div>
-          <div className="card p-8">
-            <CheckCircle2 className="mx-auto h-12 w-12 text-primary-400" />
-            <h1 className="mt-4 text-xl font-bold text-white">Check your email</h1>
-            <p className="mt-2 text-sm text-slate-400">
-              We sent a confirmation link to <span className="text-slate-200">{email}</span>.
-              Confirm it to finish setting up your practice.
-            </p>
-            <Link to="/login" className="btn-primary mt-6 w-full">
-              Back to sign in
-            </Link>
-          </div>
-        </div>
-      </div>
-    )
+  // Step 2 → start hosted checkout. On success, the provider redirects back to
+  // /baa (the next gate); the billing webhook flips the practice to active.
+  async function handlePayNow() {
+    if (!practiceId) return
+    setError('')
+    setLoading(true)
+    try {
+      const { url } = await createCheckout({
+        practiceId,
+        email: form.email,
+        planAmount,
+        redirectPath: '/baa?welcome=1',
+      })
+      window.location.href = url
+    } catch (e) {
+      setError(
+        /not configured/i.test(e?.message || '')
+          ? 'Online checkout isn’t available yet — please contact support@caselift.io.'
+          : e?.message || 'Could not start checkout. Please try again.',
+      )
+      setLoading(false)
+    }
   }
 
   return (
@@ -143,88 +192,165 @@ export default function Signup() {
           <Logo />
         </div>
 
+        {/* Progress indicator */}
+        <div className="mb-6 flex items-center gap-3">
+          {[
+            { n: 1, label: 'Practice info' },
+            { n: 2, label: 'Payment' },
+          ].map((s, i) => {
+            const active = step === s.n
+            const done = step > s.n
+            return (
+              <div key={s.n} className="flex flex-1 items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ring-1 ring-inset transition ${
+                      done
+                        ? 'bg-primary text-white ring-primary'
+                        : active
+                          ? 'bg-primary/15 text-primary-300 ring-primary/40'
+                          : 'bg-surface-800 text-slate-500 ring-surface-700'
+                    }`}
+                  >
+                    {done ? <Check className="h-4 w-4" /> : s.n}
+                  </span>
+                  <span className={`text-sm font-medium ${active || done ? 'text-slate-200' : 'text-slate-500'}`}>
+                    Step {s.n}
+                  </span>
+                </div>
+                {i === 0 && <div className={`h-px flex-1 ${step > 1 ? 'bg-primary/50' : 'bg-surface-700'}`} />}
+              </div>
+            )
+          })}
+        </div>
+
         <div className="card p-8">
-          {referrer && (
+          {referrer && step === 1 && (
             <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary-200">
               <Gift className="mt-0.5 h-4 w-4 shrink-0" />
               <span>
-                You were referred by <span className="font-semibold">{referrer.practice_name}</span>{' '}
-                — welcome to CaseLift.
+                You were referred by <span className="font-semibold">{referrer.practice_name}</span> — welcome to
+                CaseLift.
               </span>
             </div>
           )}
-          <h1 className="text-2xl font-bold text-white">Create your account</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Start recovering unconverted high-value treatment patients.
-          </p>
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <div>
-              <label className="label" htmlFor="practice">
-                Practice name
-              </label>
-              <input
-                id="practice"
-                type="text"
-                required
-                className="input"
-                placeholder="Bright Smile Dental"
-                value={practiceName}
-                onChange={(e) => setPracticeName(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="label" htmlFor="email">
-                Work email
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                autoComplete="email"
-                className="input"
-                placeholder="you@practice.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="label" htmlFor="password">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                minLength={6}
-                autoComplete="new-password"
-                className="input"
-                placeholder="At least 6 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-
-            {error && (
-              <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                {error}
+          {step === 1 ? (
+            <>
+              <h1 className="text-2xl font-bold text-white">Create your account</h1>
+              <p className="mt-1 text-sm text-slate-400">
+                Start recovering unconverted high-value treatment patients.
               </p>
-            )}
 
-            <button type="submit" className="btn-primary w-full" disabled={loading}>
-              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {loading ? 'Creating account…' : 'Create account'}
-            </button>
-          </form>
+              <form onSubmit={handleStep1} className="mt-6 space-y-4">
+                <div>
+                  <label className="label" htmlFor="practiceName">Practice name</label>
+                  <input id="practiceName" type="text" required className="input"
+                    placeholder="Bright Smile Dental" value={form.practiceName} onChange={set('practiceName')} />
+                </div>
+
+                <div>
+                  <label className="label" htmlFor="phone">Office phone</label>
+                  <input id="phone" type="tel" required className="input"
+                    placeholder="(555) 123-4567" value={form.phone} onChange={set('phone')} />
+                </div>
+
+                <div>
+                  <label className="label" htmlFor="contactName">Your name</label>
+                  <input id="contactName" type="text" required className="input"
+                    placeholder="Dr. Jane Smith" value={form.contactName} onChange={set('contactName')} />
+                </div>
+
+                <div>
+                  <label className="label" htmlFor="email">Work email</label>
+                  <input id="email" type="email" required autoComplete="email" className="input"
+                    placeholder="you@practice.com" value={form.email} onChange={set('email')}
+                    disabled={Boolean(practiceId)} />
+                </div>
+
+                {!practiceId && (
+                  <div>
+                    <label className="label" htmlFor="password">Password</label>
+                    <input id="password" type="password" required minLength={6} autoComplete="new-password"
+                      className="input" placeholder="At least 6 characters" value={form.password} onChange={set('password')} />
+                  </div>
+                )}
+
+                <div>
+                  <label className="label" htmlFor="pms">PMS system</label>
+                  <select id="pms" required className="input" value={form.pms} onChange={set('pms')}>
+                    <option value="" disabled>Select your practice management system</option>
+                    {PMS_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="label" htmlFor="heardFrom">Where did you hear about us?</label>
+                  <select id="heardFrom" required className="input" value={form.heardFrom} onChange={set('heardFrom')}>
+                    <option value="" disabled>Select one</option>
+                    {HEARD_FROM_OPTIONS.map((h) => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+
+                {error && (
+                  <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>
+                )}
+
+                <button type="submit" className="btn-primary w-full" disabled={loading}>
+                  {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {loading ? 'Creating account…' : 'Continue to payment'}
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl font-bold text-white">Confirm &amp; pay</h1>
+              <p className="mt-1 text-sm text-slate-400">
+                You’re activating CaseLift for <span className="text-slate-200">{form.practiceName}</span>.
+              </p>
+
+              {/* Order summary */}
+              <div className="mt-6 rounded-xl border border-surface-700 bg-surface-800/50 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Order summary</p>
+                    <p className="mt-1 text-base font-semibold text-white">CaseLift — Month 1</p>
+                    <p className="mt-0.5 text-sm text-slate-400">Billed monthly · cancel anytime</p>
+                  </div>
+                  <p className="text-2xl font-bold text-white">${planAmount.toLocaleString()}</p>
+                </div>
+                <div className="mt-4 flex items-center justify-between border-t border-surface-700 pt-3 text-sm">
+                  <span className="text-slate-400">Due today</span>
+                  <span className="font-semibold text-white">${planAmount.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {error && (
+                <p className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>
+              )}
+
+              <button onClick={handlePayNow} className="btn-primary mt-6 w-full" disabled={loading}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                {loading ? 'Starting secure checkout…' : 'Pay now'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setError(''); setStep(1) }}
+                disabled={loading}
+                className="mt-3 flex w-full items-center justify-center gap-1.5 text-sm font-medium text-slate-400 transition hover:text-slate-200"
+              >
+                <ArrowLeft className="h-4 w-4" /> Back
+              </button>
+              <p className="mt-4 text-center text-xs text-slate-500">
+                Secure checkout. You can manage or cancel your subscription anytime from Settings.
+              </p>
+            </>
+          )}
         </div>
 
         <p className="mt-6 text-center text-sm text-slate-400">
           Already have an account?{' '}
-          <Link to="/login" className="font-medium text-primary-400 hover:text-primary-300">
-            Sign in
-          </Link>
+          <Link to="/login" className="font-medium text-primary-400 hover:text-primary-300">Sign in</Link>
         </p>
       </div>
     </div>

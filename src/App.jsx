@@ -53,6 +53,12 @@ const AdminRevenue = lazy(() => import('./pages/admin/Revenue'))
 const AdminBilling = lazy(() => import('./pages/admin/Billing'))
 const AdminReferrals = lazy(() => import('./pages/admin/Referrals'))
 
+// get.caselift.io is a signup landing host: visiting its root sends people
+// straight into the signup funnel. Hostname is stable per page load, so this is
+// evaluated once at module init.
+const ON_GO_SUBDOMAIN =
+  typeof window !== 'undefined' && window.location.hostname === 'get.caselift.io'
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -61,6 +67,20 @@ export default function App() {
         <BrandingProvider>
           <BrowserRouter>
             <Routes>
+              {/* get.caselift.io root → signup funnel (preserving ?plan=/?ref=).
+                  Defined first so it wins the "/" match; otherwise the gated app
+                  shell matches "/" and ProtectedRoute bounces visitors to /login. */}
+              {ON_GO_SUBDOMAIN && (
+                <Route
+                  path="/"
+                  element={
+                    <Navigate
+                      to={`/signup${typeof window !== 'undefined' ? window.location.search : ''}`}
+                      replace
+                    />
+                  }
+                />
+              )}
               {/* Public */}
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />

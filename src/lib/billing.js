@@ -56,17 +56,21 @@ export function needsPaywall(practice) {
 
 // Create a Chargebee hosted-page checkout for this practice and return the
 // hosted-page URL for redirect.
-export async function createCheckout({ practiceId, email }) {
+// redirectPath lets a caller (e.g. the signup funnel) send the user somewhere
+// other than the default billing settings page after a successful checkout.
+export async function createCheckout({ practiceId, email, planAmount, redirectPath } = {}) {
+  const redirect = `${window.location.origin}${redirectPath || '/settings/billing?success=true'}`
   const { data, error } = await supabase.functions.invoke('create-checkout', {
     body: {
       practice_id: practiceId,
       email,
-      redirect_url: `${window.location.origin}/settings/billing?success=true`,
+      ...(planAmount != null ? { plan_amount: planAmount } : {}),
+      redirect_url: redirect,
     },
   })
   if (error) throw new Error(await edgeErrorMessage(error))
   if (!data?.url) throw new Error('No checkout URL returned')
-  return { url: data.url }
+  return { url: data.url, planAmount: data.plan_amount ?? planAmount }
 }
 
 // supabase-js surfaces non-2xx edge responses as a generic

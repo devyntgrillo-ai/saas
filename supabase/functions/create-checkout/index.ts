@@ -44,6 +44,8 @@ function splitName(practice: { doctor_first?: string; doctor_last?: string; name
   return { first_name: parts[0] ?? "", last_name: parts.slice(1).join(" ") };
 }
 
+const DEFAULT_PLAN_AMOUNT = 997;
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -109,6 +111,10 @@ Deno.serve(async (req: Request) => {
       await admin.from("practices").update({ chargebee_customer_id: customerId }).eq("id", practice.id);
     }
 
+    const amount = Number(body.plan_amount);
+    const planAmount = Number.isFinite(amount) && amount > 0 ? amount : DEFAULT_PLAN_AMOUNT;
+    await admin.from("practices").update({ plan_amount: planAmount }).eq("id", practice.id);
+
     const origin = req.headers.get("origin") || "";
     const redirectUrl =
       body.redirect_url || (origin ? `${origin}/settings/billing?success=true` : undefined);
@@ -128,7 +134,7 @@ Deno.serve(async (req: Request) => {
 
     const url = checkout?.hosted_page?.url;
     if (!url) return json({ error: "Checkout created but no URL was returned." }, 502);
-    return json({ url });
+    return json({ url, plan_amount: planAmount });
   } catch (e) {
     console.error("create-checkout error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
