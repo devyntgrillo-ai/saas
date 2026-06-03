@@ -17,6 +17,7 @@ import {
   Plus,
   Mail,
   Phone,
+  MessageSquare,
   Sun,
   Moon,
   BookOpen,
@@ -51,6 +52,7 @@ import {
 const TABS = [
   { key: 'profile', label: 'Practice Profile', icon: Building2 },
   { key: 'integrations', label: 'Integrations', icon: Plug },
+  { key: 'messaging', label: 'Messaging', icon: MessageSquare },
   { key: 'team', label: 'Team', icon: Users },
   { key: 'knowledge-base', label: 'Knowledge Base', icon: BookOpen },
   { key: 'notifications', label: 'Notifications', icon: Bell },
@@ -60,7 +62,8 @@ const TABS = [
   { key: 'audit-log', label: 'Audit Log', icon: ScrollText, adminOnly: true },
   // Reachable via Integrations cards / deep links, hidden from the tab rail.
   { key: 'pms', label: 'PMS Integration', icon: Plug, hidden: true },
-  { key: 'phone', label: 'Phone & Messaging', icon: Phone, hidden: true },
+  // Legacy deep link — redirects to messaging.
+  { key: 'phone', label: 'Messaging', icon: Phone, hidden: true },
 ]
 
 function StatusBadge({ connected }) {
@@ -103,9 +106,10 @@ export default function Settings() {
   const tab = TAB_KEYS.includes(tabParam) ? tabParam : 'profile'
   const setTab = (key) => navigate(key === 'profile' ? '/settings' : `/settings/${key}`)
 
-  // The Recording tab was merged into Integrations - keep old links working.
+  // Legacy tab URLs — keep old links working.
   useEffect(() => {
     if (tabParam === 'recording') navigate('/settings/integrations', { replace: true })
+    if (tabParam === 'phone') navigate('/settings/messaging', { replace: true })
   }, [tabParam, navigate])
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
@@ -337,8 +341,8 @@ export default function Settings() {
           {/* PMS Integration (deep-linked from Integrations) */}
           {tab === 'pms' && <PMSIntegration />}
 
-          {/* Phone & Messaging (deep-linked from Integrations) */}
-          {tab === 'phone' && <PhoneMessaging />}
+          {/* Messaging — Twilio SMS, Mailgun email, A2P, phone number */}
+          {(tab === 'messaging' || tab === 'phone') && <PhoneMessaging />}
 
           {/* GHL Integration */}
           {tab === 'ghl' && (

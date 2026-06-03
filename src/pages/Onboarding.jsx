@@ -356,7 +356,7 @@ export default function Onboarding() {
               <p className="mt-1 text-sm text-slate-400">
                 CaseLift follows up with every patient automatically - SMS and email from your own
                 dedicated number, no third-party tools required. You'll pick your number and complete
-                carrier registration in Settings → Phone &amp; Messaging.
+                carrier registration in Settings → Messaging.
               </p>
               <div className="mt-5 rounded-lg border border-surface-700 bg-surface-800/50 p-4 text-sm text-slate-400">
                 <p className="flex items-center gap-2 font-medium text-slate-200">

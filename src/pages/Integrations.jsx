@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Mic, Video, Smartphone, MessageSquare, Mail, Plug, Hash, Copy, Check,
+  Mic, Video, Smartphone, Plug, Hash, Copy, Check,
   Loader2, CheckCircle2, Lock, ChevronDown,
   RefreshCw, SlidersHorizontal,
 } from 'lucide-react'
@@ -240,8 +240,6 @@ export default function Integrations() {
   }
 
   const slackConnected = Boolean(practice?.slack_webhook_url)
-  const phoneNumber = practice?.twilio_phone_number || practice?.phone_number || ''
-  const a2p = practice?.a2p_brand_status
   const pmsConnected = Boolean(practice?.sikka_connected || practice?.pms_type)
 
   async function testSlack() {
@@ -295,24 +293,6 @@ export default function Integrations() {
         </div>
 
         <RecordingSettingsCard practice={practice} save={save} />
-      </div>
-
-      {/* MESSAGING */}
-      <div>
-        <SectionHeader>Messaging</SectionHeader>
-        <div className="grid gap-3 lg:grid-cols-2">
-          <IntegrationCard logo={<MessageSquare className="h-5 w-5" />} logoTone="bg-rose-600" title="SMS via Twilio"
-            badge={a2p === 'approved' ? <Badge tone="green">A2P Approved</Badge> : phoneNumber ? <Badge tone="amber">A2P Pending</Badge> : <Badge tone="slate">Not configured</Badge>}>
-            {phoneNumber ? <p>Sending from <span className="font-medium text-slate-200">{phoneNumber}</span></p> : 'Send follow-up texts from your own number.'}
-            <div className="mt-3"><button onClick={() => navigate('/settings/phone')} className="btn-secondary">Set up phone number</button></div>
-          </IntegrationCard>
-
-          <IntegrationCard logo={<Mail className="h-5 w-5" />} logoTone="bg-amber-600" title="Email via Mailgun"
-            badge={practice?.email_enabled ? <Badge tone="green">Active</Badge> : <Badge tone="slate">Not configured</Badge>}>
-            {practice?.email_sending_domain ? <p>Domain: <span className="font-medium text-slate-200">{practice.email_sending_domain}</span></p> : 'Send follow-up emails from your practice domain.'}
-            <div className="mt-3"><button onClick={() => navigate('/settings/phone')} className="btn-secondary">Configure</button></div>
-          </IntegrationCard>
-        </div>
       </div>
 
       {/* NOTIFICATIONS */}

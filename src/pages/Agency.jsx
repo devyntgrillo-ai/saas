@@ -25,118 +25,7 @@ import { applyPrimaryColor, resetPrimaryColor } from '../lib/whitelabel'
 import { supabase } from '../lib/supabase'
 import { timeAgo } from '../lib/consults'
 import { fetchRecordingRate, rateColor } from '../lib/pms'
-import PhoneSetupModal from '../components/PhoneSetupModal'
 import AgencyTabs from '../components/AgencyTabs'
-
-function AgencyPhoneNumbers({ agencyId }) {
-  const [rows, setRows] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [cost, setCost] = useState(0)
-  const [setupPractice, setSetupPractice] = useState(null)
-  const [reloadKey, setReloadKey] = useState(0)
-
-  useEffect(() => {
-    if (!agencyId) return
-    let active = true
-    ;(async () => {
-      const { data: practices } = await supabase
-        .from('practices')
-        .select('id, name, twilio_phone_number, a2p_brand_status, a2p_campaign_status, sms_enabled')
-        .eq('agency_id', agencyId)
-        .order('name')
-      const ids = (practices || []).map((p) => p.id)
-      let total = 0
-      if (ids.length) {
-        const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
-        const { data: logs } = await supabase
-          .from('message_logs')
-          .select('cost_usd, created_at, practice_id')
-          .in('practice_id', ids)
-          .gte('created_at', monthStart.toISOString())
-        total = (logs || []).reduce((s, l) => s + (Number(l.cost_usd) || 0), 0)
-      }
-      if (!active) return
-      setRows(practices || [])
-      setCost(total)
-      setLoading(false)
-    })()
-    return () => { active = false }
-  }, [agencyId, reloadKey])
-
-  function statusFor(p) {
-    if (!p.twilio_phone_number) return { label: 'Not registered', dot: 'bg-slate-500', text: 'text-slate-400' }
-    if (p.a2p_brand_status === 'failed' || p.a2p_campaign_status === 'failed') return { label: 'Failed', dot: 'bg-rose-500', text: 'text-rose-300' }
-    if (p.a2p_brand_status === 'approved' && p.a2p_campaign_status === 'approved') return { label: 'Active', dot: 'bg-emerald-400', text: 'text-emerald-300' }
-    return { label: 'Pending', dot: 'bg-amber-400 animate-pulse', text: 'text-amber-300' }
-  }
-
-  if (loading) return <div className="py-16 text-center text-sm text-slate-500">Loading phone numbers…</div>
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-400">Messaging registration status across all client practices.</p>
-        <span className="text-sm text-slate-400">Total messaging cost this month: <span className="font-semibold text-slate-200">${cost.toFixed(2)}</span></span>
-      </div>
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-surface-700 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="px-5 py-3">Practice</th>
-                <th className="px-5 py-3">Number</th>
-                <th className="px-5 py-3">Status</th>
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-700">
-              {rows.map((p) => {
-                const st = statusFor(p)
-                return (
-                  <tr key={p.id} className="text-slate-300">
-                    <td className="px-5 py-3.5 font-medium text-slate-100">{p.name}</td>
-                    <td className="px-5 py-3.5">{p.twilio_phone_number || <span className="text-slate-600">-</span>}</td>
-                    <td className="px-5 py-3.5">
-                      <span className={`inline-flex items-center gap-1.5 font-medium ${st.text}`}>
-                        <span className={`h-2 w-2 rounded-full ${st.dot}`} /> {st.label}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      {!p.twilio_phone_number ? (
-                        <button
-                          onClick={() => setSetupPractice(p)}
-                          className="rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary-300 transition hover:bg-primary/20"
-                        >
-                          Complete setup
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setSetupPractice(p)}
-                          className="text-xs font-medium text-slate-500 hover:text-slate-300"
-                        >
-                          Manage
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {setupPractice && (
-        <PhoneSetupModal
-          practiceId={setupPractice.id}
-          practiceName={setupPractice.name}
-          onClose={() => setSetupPractice(null)}
-          onDone={() => setReloadKey((k) => k + 1)}
-        />
-      )}
-    </div>
-  )
-}
 
 function startOfMonthISODate() {
   const d = new Date()
@@ -605,7 +494,7 @@ export default function Agency() {
       <AgencyTabs />
 
       {tab === 'phone' ? (
-        <AgencyPhoneNumbers agencyId={agency?.id} />
+        <Navigate to="/agency" replace />
       ) : tab === 'overview' ? (
         loading ? (
           <div className="py-16 text-center text-sm text-slate-500">Loading client practices…</div>

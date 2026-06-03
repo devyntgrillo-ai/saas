@@ -173,6 +173,13 @@ export default function PhoneMessaging() {
 
   return (
     <div className="space-y-6">
+      <div>
+        <h2 className="text-base font-semibold text-white">Messaging</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Your practice phone number (Twilio), patient email (Mailgun), carrier registration (A2P 10DLC), and follow-up channel settings.
+        </p>
+      </div>
+
       {provStatus === 'pending' && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
           <Clock className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
@@ -199,13 +206,16 @@ export default function PhoneMessaging() {
         </div>
       )}
 
-      <PhoneNumberCard
-        phoneNumber={phoneNumber}
-        hasNumber={hasNumber}
-        provStatus={provStatus}
-        practice={practice}
-        onSetup={() => setSetupOpen(true)}
-      />
+      <div>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Twilio SMS</h3>
+        <PhoneNumberCard
+          phoneNumber={phoneNumber}
+          hasNumber={hasNumber}
+          provStatus={provStatus}
+          practice={practice}
+          onSetup={() => setSetupOpen(true)}
+        />
+      </div>
 
       {setupOpen && (
         <PhoneSetupWizard
@@ -220,11 +230,11 @@ export default function PhoneMessaging() {
         />
       )}
 
-      {/* ── SECTION 2: SMS Settings ────────────────────────────────────── */}
+      {/* ── SMS follow-up settings ───────────────────────────────────── */}
       <div className="card p-6">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-primary-400" />
-          <h2 className="text-base font-semibold text-white">SMS Settings</h2>
+          <h2 className="text-base font-semibold text-white">SMS follow-up</h2>
         </div>
         <p className="mt-1 text-sm text-slate-400">
           Text-message follow-ups sent to patients after a consult.
@@ -322,11 +332,11 @@ export default function PhoneMessaging() {
         />
       </div>
 
-      {/* ── SECTION 3: Email Settings ──────────────────────────────────── */}
+      {/* ── Mailgun email ─────────────────────────────────────────────── */}
       <div className="card p-6">
         <div className="flex items-center gap-2">
           <Mail className="h-4 w-4 text-primary-400" />
-          <h2 className="text-base font-semibold text-white">Email Settings</h2>
+          <h2 className="text-base font-semibold text-white">Email (Mailgun)</h2>
         </div>
         <p className="mt-1 text-sm text-slate-400">
           Email follow-ups sent to patients after a consult.

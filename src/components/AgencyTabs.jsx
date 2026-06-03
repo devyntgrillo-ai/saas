@@ -1,15 +1,14 @@
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import { LayoutGrid, Phone, Settings as SettingsIcon, BarChart3, BookOpen, Users, Rocket } from 'lucide-react'
+import { LayoutGrid, Settings as SettingsIcon, BarChart3, BookOpen, Users, Rocket } from 'lucide-react'
 
 // One shared tab bar for the entire Reseller portal. Every agency page renders
 // it so the tabs are always present and consistent - previously each page had
 // its own (different) bar, so navigating between them made the tabs flicker or
-// disappear. The three Agency sub-views (overview / phone / settings) are
-// URL-driven (?tab=) so they can be linked to from any agency route.
+// disappear. Agency sub-views (overview / settings) are URL-driven (?tab=).
+// Per-practice SMS (Twilio), email (Mailgun), and A2P live under Settings → Messaging.
 const TABS = [
   { key: 'overview', label: 'Overview', icon: LayoutGrid, to: '/agency' },
   { key: 'saas-mode', label: 'SaaS Mode', icon: Rocket, to: '/agency/saas-mode' },
-  { key: 'phone', label: 'Phone Numbers', icon: Phone, to: '/agency?tab=phone' },
   { key: 'settings', label: 'Settings', icon: SettingsIcon, to: '/agency?tab=settings' },
   { key: 'analytics', label: 'Analytics', icon: BarChart3, to: '/agency/analytics' },
   { key: 'knowledge-base', label: 'Knowledge Base', icon: BookOpen, to: '/agency/knowledge-base' },
