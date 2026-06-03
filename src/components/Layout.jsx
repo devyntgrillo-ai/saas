@@ -98,10 +98,10 @@ export default function Layout() {
 
   const SidebarContent = () => (
     <>
-      <div className="px-4 pb-3 pt-6">
+      <div className="flex justify-center px-4 pb-5 pt-7">
         {/* Logo resolves the white-label brand via BrandingContext, which already
             honors the super-admin override (Devyn always sees CaseLift). */}
-        <Logo />
+        <Logo size="lg" />
       </div>
       <AccountSwitcher />
 

@@ -77,9 +77,9 @@
     box-shadow: 0 1px 0 rgba(0,0,0,0.06);
   }
   .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 66px; }
-  .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; letter-spacing: -0.025em; color: #fff; transition: color 0.4s var(--ease); }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 22px; letter-spacing: -0.025em; color: #fff; transition: color 0.4s var(--ease); }
   nav.scrolled .logo { color: var(--ink); }
-  .logo-mark { width: 30px; height: 30px; flex-shrink: 0; display: block; }
+  .logo-mark { width: 36px; height: 36px; flex-shrink: 0; display: block; }
   .nav-links { display: flex; align-items: center; gap: 32px; }
   .nav-links a.link { font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.85); transition: color 0.4s var(--ease), opacity 0.2s; }
   nav.scrolled .nav-links a.link { color: var(--ink); }
@@ -128,6 +128,9 @@
   .hero-note { font-size: 15.5px; color: rgba(255,255,255,0.55); max-width: 620px; margin: 0 auto 38px; line-height: 1.55; font-weight: 500; }
   .hero-note b { color: rgba(255,255,255,0.9); font-weight: 700; }
   .hero-ctas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .hero-rating { display: inline-flex; align-items: center; gap: 10px; margin-top: 24px; font-size: 14.5px; color: rgba(255,255,255,0.7); }
+  .hero-rating .stars { color: #fbbf24; letter-spacing: 2px; font-size: 16px; line-height: 1; }
+  .hero-rating b { color: #fff; font-weight: 700; }
 
   /* ---------- Hero mockup ---------- */
   .mockup-wrap { position: relative; z-index: 1; margin: 66px auto 0; max-width: 780px; }
@@ -323,9 +326,149 @@
   .hero-anim.d5 { animation-delay: 0.57s; } .hero-anim.d6 { animation-delay: 0.74s; }
   @keyframes heroIn { to { opacity: 1; transform: translateY(0); } }
 
+  /* ---------- Hero eyebrow ---------- */
+  .hero-eyebrow { font-size: 14px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brand-2); margin-bottom: 14px; }
+
+  /* ---------- Social-proof research callout ---------- */
+  .proof-callout { max-width: 760px; margin: 18px auto 0; background: rgba(6,182,212,0.10); border: 1px solid rgba(6,182,212,0.28); border-radius: 16px; padding: 22px 28px; }
+  .proof-callout p { font-size: 15.5px; line-height: 1.65; color: rgba(255,255,255,0.85); }
+  .proof-callout b { color: #fff; font-weight: 700; }
+
+  /* ---------- Stat grid (hidden leak + results) ---------- */
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 56px; }
+  .stat-card { border-radius: var(--radius); padding: 38px 28px; text-align: center; border: 1px solid var(--line); background: #fff; transition: transform 0.4s var(--ease), box-shadow 0.4s var(--ease), border-color 0.4s; }
+  .stat-card:hover { transform: translateY(-6px); box-shadow: 0 24px 50px rgba(15,23,42,0.10); }
+  .sec-dark .stat-card { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.1); }
+  .sec-dark .stat-card:hover { border-color: rgba(6,182,212,0.45); box-shadow: none; }
+  .stat-num { font-size: clamp(40px, 6vw, 60px); font-weight: 800; letter-spacing: -0.04em; line-height: 1; background: var(--grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .stat-desc { font-size: 15.5px; color: var(--gray); line-height: 1.55; margin-top: 14px; }
+  .sec-dark .stat-desc { color: rgba(255,255,255,0.7); }
+
+  /* ---------- Product tour ---------- */
+  .tour-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 56px; }
+  .tour-step { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 34px 30px; transition: transform 0.4s var(--ease), box-shadow 0.4s var(--ease); }
+  .tour-step:hover { transform: translateY(-6px); box-shadow: 0 24px 50px rgba(15,23,42,0.10); }
+  .tour-num { width: 46px; height: 46px; border-radius: 50%; background: var(--grad); color: #fff; font-weight: 800; font-size: 19px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; box-shadow: 0 6px 18px rgba(37,99,235,0.22); }
+  .tour-step h3 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 10px; }
+  .tour-step p { font-size: 15px; color: var(--gray); line-height: 1.6; }
+
+  /* ---------- Integrations ---------- */
+  .intg-row { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin-top: 50px; }
+  .intg-pill { font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); border-radius: 999px; padding: 12px 24px; transition: border-color 0.3s, transform 0.3s var(--ease); }
+  .intg-pill:hover { border-color: rgba(6,182,212,0.5); transform: translateY(-2px); }
+
+  /* ---------- Lost-production calculator ---------- */
+  .calc { max-width: 920px; margin: 56px auto 0; background: var(--black); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius); padding: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+  .calc-inputs { display: flex; flex-direction: column; gap: 22px; }
+  .calc-field label { display: block; font-size: 13.5px; font-weight: 600; color: rgba(255,255,255,0.72); margin-bottom: 9px; }
+  .calc-field label b { color: var(--brand-2); font-weight: 800; }
+  .calc-field input[type="range"] { width: 100%; accent-color: var(--brand); cursor: pointer; }
+  .calc-field input[type="number"] { width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); border-radius: 10px; color: #fff; font-size: 16px; font-weight: 600; padding: 11px 14px; }
+  .calc-fixed { font-size: 13px; color: rgba(255,255,255,0.5); }
+  .calc-out { display: flex; flex-direction: column; justify-content: center; gap: 20px; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 38px; }
+  .calc-out .co-label { font-size: 12.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-bottom: 6px; }
+  .calc-out .co-val { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--brand-2); }
+  .calc-out .co-year { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px; }
+  .calc-out .co-year .co-label { color: var(--brand-2); }
+  .calc-out .co-year .co-val { font-size: clamp(40px, 6vw, 58px); line-height: 1; background: var(--grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+
+  /* ---------- What's inside (simplified 3-col) ---------- */
+  .inside-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; margin-top: 56px; }
+  .inside-card { text-align: center; padding: 12px; }
+  .inside-ico { width: 60px; height: 60px; margin: 0 auto 18px; border-radius: 16px; background: linear-gradient(135deg,#eff6ff,#ecfeff); display: flex; align-items: center; justify-content: center; font-size: 28px; line-height: 1; }
+  .inside-card h3 { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 9px; }
+  .inside-card p { font-size: 15px; color: var(--gray); line-height: 1.6; }
+
+  /* ---------- Product Tour showcases ---------- */
+  .showcase { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; margin-top: 64px; }
+  .showcase + .showcase { margin-top: 84px; }
+  .showcase.flip .showcase-text { order: 2; }
+  .showcase.flip .showcase-media { order: 1; }
+  .showcase-text h3 { font-size: clamp(24px, 3vw, 32px); font-weight: 800; letter-spacing: -0.025em; line-height: 1.15; margin-bottom: 16px; }
+  .showcase-text > p { font-size: 17px; color: var(--gray); line-height: 1.65; margin-bottom: 22px; }
+  .sc-list { list-style: none; display: flex; flex-direction: column; gap: 13px; }
+  .sc-list li { display: flex; gap: 12px; align-items: flex-start; font-size: 15.5px; color: var(--ink); line-height: 1.45; }
+  .sc-list .ck { width: 22px; height: 22px; flex-shrink: 0; border-radius: 50%; background: rgba(37,99,235,0.12); color: var(--brand); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; margin-top: 1px; }
+  .dash { background: rgba(18,26,44,0.92); border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; box-shadow: 0 30px 70px rgba(15,23,42,0.18); overflow: hidden; }
+  .dash-bar { display: flex; align-items: center; gap: 7px; padding: 13px 16px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  .dash-bar i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  .dash-bar i:nth-child(1){ background:#ff5f57; } .dash-bar i:nth-child(2){ background:#febc2e; } .dash-bar i:nth-child(3){ background:#28c840; }
+  .dash-bar span { margin-left: 10px; font-size: 12.5px; color: rgba(255,255,255,0.45); }
+  .dash-body { padding: 22px; }
+  .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 22px; }
+  .kpi { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px 16px; }
+  .kpi-label { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(255,255,255,0.45); margin-bottom: 8px; }
+  .kpi-val { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; color: #fff; line-height: 1; }
+  .kpi-delta { font-size: 11.5px; font-weight: 600; margin-top: 7px; }
+  .kpi-delta.up { color: #4cd964; }
+  .kpi-delta.flat { color: rgba(255,255,255,0.5); }
+  .mk-bars { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .mk-bar-row { display: flex; align-items: center; gap: 12px; }
+  .mk-bar-label { font-size: 12.5px; color: rgba(255,255,255,0.7); width: 132px; flex-shrink: 0; }
+  .mk-bar-track { flex: 1; height: 7px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; }
+  .mk-bar-fill { height: 100%; background: var(--grad); border-radius: 999px; }
+  .ctx-chip { display: inline-block; font-size: 12.5px; font-weight: 600; color: #5fd0e6; background: rgba(6,182,212,0.14); border: 1px solid rgba(6,182,212,0.25); border-radius: 999px; padding: 7px 14px; margin-bottom: 16px; }
+  .chat { display: flex; flex-direction: column; gap: 12px; }
+  .bub { max-width: 82%; font-size: 13.5px; line-height: 1.45; padding: 11px 14px; border-radius: 14px; }
+  .bub .meta { display: block; font-size: 10.5px; opacity: 0.65; margin-top: 6px; }
+  .bub.in { align-self: flex-start; background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.92); border-bottom-left-radius: 4px; }
+  .bub.out { align-self: flex-end; background: var(--brand); color: #fff; border-bottom-right-radius: 4px; }
+  .chat-input { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; padding: 11px 16px; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.4); font-size: 13px; }
+  .chat-input b { color: var(--brand-2); }
+  .funnel { display: flex; flex-direction: column; gap: 9px; }
+  .fn-row { display: flex; align-items: center; gap: 12px; }
+  .fn-track { flex: 1; }
+  .fn-fill { background: var(--grad); color: #fff; font-size: 12.5px; font-weight: 600; padding: 9px 14px; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fn-val { font-size: 14px; font-weight: 700; color: #fff; width: 42px; text-align: right; flex-shrink: 0; }
+  .trend-head { display: flex; align-items: center; justify-content: space-between; margin-top: 22px; margin-bottom: 10px; }
+  .trend-head .tl { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(255,255,255,0.45); }
+  .trend-head .tr { font-size: 14px; font-weight: 800; color: var(--brand-2); }
+  .trend-svg { width: 100%; height: 88px; display: block; }
+
+  /* ---------- Results / testimonials ---------- */
+  .test-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 56px; }
+  .test-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 32px 28px; display: flex; flex-direction: column; transition: transform 0.4s var(--ease), box-shadow 0.4s var(--ease); }
+  .test-card:hover { transform: translateY(-6px); box-shadow: 0 24px 50px rgba(15,23,42,0.10); }
+  .test-label { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--brand); margin-bottom: 14px; }
+  .test-stars { color: #fbbf24; font-size: 16px; letter-spacing: 2px; margin-bottom: 14px; }
+  .test-quote { font-size: 16px; color: var(--ink); line-height: 1.6; margin-bottom: 24px; flex: 1; }
+  .test-who { display: flex; align-items: center; gap: 13px; }
+  .test-av { width: 46px; height: 46px; border-radius: 50%; background: var(--grad); color: #fff; font-weight: 700; font-size: 15px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .test-name { font-size: 15px; font-weight: 700; color: var(--ink); }
+  .test-role { font-size: 13px; color: var(--gray); }
+  .test-summary { text-align: center; margin: 46px auto 0; font-size: 17px; color: var(--gray); }
+  .test-summary span { color: var(--ink); font-weight: 800; }
+  .stat-bar { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px 40px; margin-top: 28px; padding-top: 28px; border-top: 1px solid var(--line); font-size: 15px; color: var(--gray); text-align: center; }
+  .stat-bar span { color: var(--brand); font-weight: 800; }
+
+  /* ---------- ROI calculator (results column) ---------- */
+  .calc-field output { float: right; font-weight: 800; color: var(--brand-2); }
+  .calc-hint { font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 4px; line-height: 1.5; }
+  .calc-results { display: flex; flex-direction: column; justify-content: center; gap: 22px; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 38px; }
+  .calc-res .cr-num { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; color: #fff; line-height: 1.05; }
+  .calc-res.big .cr-num { font-size: clamp(38px, 6vw, 56px); }
+  .calc-res .cr-num.red { background: linear-gradient(135deg,#fb7185,#ef4444); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .calc-res .cr-label { font-size: 13.5px; color: rgba(255,255,255,0.6); line-height: 1.5; margin-top: 6px; }
+  .calc-note { max-width: 760px; margin: 36px auto 0; text-align: center; font-size: 16px; color: var(--gray); line-height: 1.65; }
+  .calc-note strong { color: var(--ink); font-weight: 700; }
+  .roi-cta { text-align: center; margin-top: 28px; }
+  .btn-red { background: var(--grad); color: #fff; box-shadow: 0 10px 28px rgba(37,99,235,0.34); }
+  .btn-red:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 14px 36px rgba(37,99,235,0.46); }
+
   /* ---------- Responsive ---------- */
   @media (max-width: 900px) {
     .treat-grid, .feat-grid, .roi-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 860px) {
+    .showcase, .showcase.flip { grid-template-columns: 1fr; gap: 32px; }
+    .showcase.flip .showcase-text, .showcase.flip .showcase-media { order: 0; }
+    .test-grid { grid-template-columns: 1fr; }
+    .calc-results { border-left: none; border-top: 1px solid rgba(255,255,255,0.1); padding-left: 0; padding-top: 28px; }
+  }
+  @media (max-width: 820px) {
+    .calc { grid-template-columns: 1fr; gap: 28px; padding: 28px; }
+    .calc-out { border-left: none; border-top: 1px solid rgba(255,255,255,0.1); padding-left: 0; padding-top: 28px; }
+    .stat-grid, .tour-grid, .inside-grid { grid-template-columns: 1fr; }
   }
   @media (max-width: 760px) {
     .nav-links { display: none; }
@@ -361,14 +504,14 @@
       </svg>CaseLift</a>
     <div class="nav-links">
       <a href="#how" class="link">How It Works</a>
-      <a href="#treatments" class="link">Treatments</a>
-      <a href="#roi" class="link">ROI</a>
+      <a href="#how-it-works" class="link">Product Tour</a>
+      <a href="#results" class="link">Results</a>
       <a href="#pricing" class="link">Pricing</a>
       <a href="#faq" class="link">FAQ</a>
     </div>
     <div class="nav-cta-wrap">
       <a href="/login" class="nav-login">Log In</a>
-      <a href="/apply" class="btn btn-brand btn-sm">Start Lifting Cases →</a>
+      <a href="/apply" class="btn btn-brand btn-sm">Schedule A Demo</a>
       <button class="hamburger" id="hamburger" aria-label="Menu"><span></span><span></span><span></span></button>
     </div>
   </div>
@@ -376,26 +519,26 @@
 
 <div class="mobile-menu" id="mobileMenu">
   <a href="#how">How It Works</a>
-  <a href="#treatments">Treatments</a>
-  <a href="#roi">ROI</a>
+  <a href="#how-it-works">Product Tour</a>
+  <a href="#results">Results</a>
   <a href="#pricing">Pricing</a>
   <a href="#faq">FAQ</a>
   <a href="/login">Log In</a>
-  <a href="/apply" class="btn btn-brand">Start Lifting Cases →</a>
+  <a href="/apply" class="btn btn-brand">Schedule A Demo</a>
 </div>
 
 <!-- ============ HERO ============ -->
 <header class="hero" id="top">
   <div class="hero-bg"></div>
   <div class="wrap">
-    <div class="badge hero-anim d1"><span class="dot"></span>CaseLift is lifting production at dental practices across the country</div>
-    <h1 class="hero-title hero-anim d2">We Do The Heavy Lifting To Get You <span class="accent">More Cases</span></h1>
-    <p class="hero-sub hero-anim d3">CaseLift records every dental consultation, analyzes every objection, and follows up with every patient automatically, so your practice lifts more production from the cases you're currently losing.</p>
-    <p class="hero-note hero-anim d3"><b>Your TC records the consult. CaseLift handles everything after.</b></p>
+    <div class="badge hero-anim d1"><span class="dot"></span>DENTISTS LOOKING TO GROW PRODUCTION:</div>
+    <h1 class="hero-title hero-anim d2">We Do The Heavy Lifting To Recover <span class="accent">More High-Value Dental Cases</span></h1>
+    <p class="hero-sub hero-anim d3">CaseLift listens to your dental consultations, coaches you on every objection, and automatically follows up to close more cases.</p>
     <div class="hero-ctas hero-anim d4">
-      <a href="/apply" class="btn btn-brand">Start Lifting Cases →</a>
+      <a href="/apply" class="btn btn-brand">Schedule A Demo</a>
       <a href="#how" class="btn btn-outline">See how it works</a>
     </div>
+    <div class="hero-rating hero-anim d5"><span class="stars">★★★★★</span><span><b>4.8/5</b> from 150+ practices</span></div>
 
     <!-- Mockup -->
     <div class="mockup-wrap hero-anim d6">
@@ -433,7 +576,7 @@
 <section class="proof">
   <div class="wrap">
     <div class="pl1">CaseLift is lifting production at dental practices across the country</div>
-    <div class="pl2">Avg <b>$47k lifted</b> in first 90 days · <b>15% case recovery rate</b> · Works for implants, Invisalign, full arch, cosmetic + more</div>
+    <div class="proof-callout"><p>Research shows that <b>80% of tx plans require 5 to 12 follow-up touchpoints</b> before closing. Despite this, <b>44% of treatment coordinators give up after just ONE attempt</b>, and <b>92% stop after the 4th attempt</b>. (Salesforce)</p></div>
   </div>
 </section>
 
@@ -458,7 +601,7 @@
 <section class="sec sec-light" id="how">
   <div class="wrap sec-center">
     <div class="eyebrow reveal">How it works</div>
-    <h2 class="sec-title reveal" data-delay="1">How CaseLift Lifts Your Cases</h2>
+    <h2 class="sec-title reveal" data-delay="1">How CaseLift Recovers Lost Treatment Plans</h2>
     <p class="sec-lead reveal" data-delay="2">Your TC records the consult. CaseLift does the heavy lifting after.</p>
   </div>
   <div class="wrap">
@@ -499,86 +642,234 @@
   </div>
 </section>
 
-<!-- ============ TREATMENT TYPES ============ -->
-<section class="sec" id="treatments">
+<!-- ============ PRODUCT TOUR ============ -->
+<section class="sec" id="how-it-works">
   <div class="wrap sec-center">
-    <div class="eyebrow reveal">Treatments</div>
-    <h2 class="sec-title reveal" data-delay="1">CaseLift Lifts Every High-Value Treatment</h2>
-    <p class="sec-lead reveal" data-delay="2">If a patient left without scheduling, CaseLift follows up until they do.</p>
+    <div class="eyebrow reveal">Product Tour</div>
+    <h2 class="sec-title reveal" data-delay="1">From consultation to closed case, automatically</h2>
+    <p class="sec-lead reveal" data-delay="2">CaseLift sits between your TC and every patient who didn't schedule, turning unfinished consultations into booked and paid cases.</p>
   </div>
   <div class="wrap">
-    <div class="treat-grid">
-      <div class="treat-card reveal" data-delay="1">
-        <div class="treat-ico">🦷</div>
-        <h3>Dental Implants</h3>
-        <div class="treat-val">$25,000–$35,000 avg case</div>
-        <p>CaseLift's specialty. One lifted implant case pays for a full year.</p>
+
+    <!-- 1: Analysis -->
+    <div class="showcase">
+      <div class="showcase-text reveal-left">
+        <h3>Every consult, analyzed in seconds</h3>
+        <p>Your TC records the consultation. CaseLift reads the transcript, identifies the treatment, extracts the case value, and categorizes every objection raised, before the patient reaches their car.</p>
+        <ul class="sc-list">
+          <li><span class="ck">✓</span>Treatment type and case value extracted automatically</li>
+          <li><span class="ck">✓</span>Objections identified and ranked by close probability</li>
+          <li><span class="ck">✓</span>Personalized follow-up sequence built instantly</li>
+        </ul>
       </div>
-      <div class="treat-card reveal" data-delay="2">
-        <div class="treat-ico">😁</div>
-        <h3>Full Arch / All-on-4</h3>
-        <div class="treat-val">$35,000–$65,000 avg case</div>
-        <p>CaseLift manages the longest sales cycles automatically, every touchpoint, every follow-up.</p>
-      </div>
-      <div class="treat-card reveal" data-delay="3">
-        <div class="treat-ico">✨</div>
-        <h3>Invisalign / Clear Aligners</h3>
-        <div class="treat-val">$5,000–$8,000 avg case</div>
-        <p>CaseLift adapts follow-up for aligner patients, compliance and lifestyle objections handled differently.</p>
-      </div>
-      <div class="treat-card reveal" data-delay="1">
-        <div class="treat-ico">💎</div>
-        <h3>Cosmetic / Veneers</h3>
-        <div class="treat-val">$8,000–$20,000 avg case</div>
-        <p>CaseLift follows up with confidence-building messages that speak to how patients want to feel.</p>
-      </div>
-      <div class="treat-card reveal" data-delay="2">
-        <div class="treat-ico">🌙</div>
-        <h3>Sleep Apnea / Oral Appliance</h3>
-        <div class="treat-val">$3,500–$5,000 avg case</div>
-        <p>CaseLift addresses insurance navigation and CPAP skepticism in every sequence.</p>
-      </div>
-      <div class="treat-card reveal" data-delay="3">
-        <div class="treat-ico">🪥</div>
-        <h3>Full Mouth Rehabilitation</h3>
-        <div class="treat-val">$20,000–$60,000 avg case</div>
-        <p>CaseLift manages the entire follow-up journey for your most complex cases.</p>
+      <div class="showcase-media reveal-right">
+        <div class="dash">
+          <div class="dash-bar"><i></i><i></i><i></i><span>CaseLift · Consult Analysis</span></div>
+          <div class="dash-body">
+            <div class="kpi-grid">
+              <div class="kpi"><div class="kpi-label">Case Value</div><div class="kpi-val">$26,400</div><div class="kpi-delta up">Full Arch</div></div>
+              <div class="kpi"><div class="kpi-label">Close Probability</div><div class="kpi-val">74%</div><div class="kpi-delta up">↑ High intent</div></div>
+              <div class="kpi"><div class="kpi-label">Primary Objection</div><div class="kpi-val" style="font-size:16px">Financing</div><div class="kpi-delta flat">Monthly payment</div></div>
+              <div class="kpi"><div class="kpi-label">Follow-up Sequence</div><div class="kpi-val" style="font-size:16px">7-touch</div><div class="kpi-delta flat">Launching now</div></div>
+            </div>
+            <div class="mk-section-label">Objection coaching</div>
+            <div class="mk-objection"><div class="mk-ico">💬</div><div class="mk-obj-text"><b>Patient said:</b> "I need to think about the cost."</div></div>
+            <div class="mk-objection"><div class="mk-ico">✅</div><div class="mk-obj-text"><b>Suggested response:</b> "Totally understand — most patients feel that way until they see the monthly breakdown. Would it help to walk through what $410/month actually looks like?"</div></div>
+            <div class="mk-bars">
+              <div class="mk-bar-row"><div class="mk-bar-label">Financing concern</div><div class="mk-bar-track"><div class="mk-bar-fill" style="width:85%"></div></div></div>
+              <div class="mk-bar-row"><div class="mk-bar-label">Timeline hesitation</div><div class="mk-bar-track"><div class="mk-bar-fill" style="width:40%"></div></div></div>
+              <div class="mk-bar-row"><div class="mk-bar-label">Spouse not present</div><div class="mk-bar-track"><div class="mk-bar-fill" style="width:25%"></div></div></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-    <p class="treat-more reveal">CaseLift also lifts cases for periodontal treatment, bone grafting, sedation dentistry, and any high-value treatment where follow-up matters.</p>
+
+    <!-- 2: Conversations -->
+    <div class="showcase flip">
+      <div class="showcase-text reveal-right">
+        <h3>Every conversation, with full context</h3>
+        <p>When a patient replies, it lands in front of your TC with the entire consult story attached: the case, the objection, the dollar amount. No scrambling, no cold re-introductions.</p>
+        <ul class="sc-list">
+          <li><span class="ck">✓</span>Two-way SMS and email in one thread</li>
+          <li><span class="ck">✓</span>Case value and objection pinned to every chat</li>
+          <li><span class="ck">✓</span>Your TC always knows exactly what to say next</li>
+        </ul>
+      </div>
+      <div class="showcase-media reveal-left">
+        <div class="dash">
+          <div class="dash-bar"><i></i><i></i><i></i><span>CaseLift · Conversations</span></div>
+          <div class="dash-body">
+            <div class="ctx-chip">🦷 Full-arch · $26,400 case · Objection: financing</div>
+            <div class="chat">
+              <div class="bub in">Hi, is that monthly payment option still on the table?<span class="meta">Robert M. · 9:14 AM</span></div>
+              <div class="bub out">Absolutely, Robert. I can get you approved at $410/mo with no payments for the first 90 days.<span class="meta">Your TC · 9:16 AM</span></div>
+              <div class="bub in">That actually works for us. Can we get back on the schedule this week?<span class="meta">Robert M. · 9:21 AM</span></div>
+            </div>
+            <div class="chat-input"><span>Type a reply...</span><b>➤</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3: Analytics -->
+    <div class="showcase">
+      <div class="showcase-text reveal-left">
+        <h3>Know exactly what's working</h3>
+        <p>Watch each stage of recovery from analyzed consult to closed case, and see your close rate climb as CaseLift learns what brings your patients back.</p>
+        <ul class="sc-list">
+          <li><span class="ck">✓</span>Full recovery funnel, consult to won</li>
+          <li><span class="ck">✓</span>Close-rate trend that improves over time</li>
+          <li><span class="ck">✓</span>Clear ROI you can take to the whole team</li>
+        </ul>
+      </div>
+      <div class="showcase-media reveal-right">
+        <div class="dash">
+          <div class="dash-bar"><i></i><i></i><i></i><span>CaseLift · Recovery Analytics</span></div>
+          <div class="dash-body">
+            <div class="funnel">
+              <div class="fn-row"><div class="fn-track"><div class="fn-fill" style="width:100%">Consults analyzed</div></div><div class="fn-val">248</div></div>
+              <div class="fn-row"><div class="fn-track"><div class="fn-fill" style="width:88%">Sequences launched</div></div><div class="fn-val">218</div></div>
+              <div class="fn-row"><div class="fn-track"><div class="fn-fill" style="width:52%">Patients re-engaged</div></div><div class="fn-val">129</div></div>
+              <div class="fn-row"><div class="fn-track"><div class="fn-fill" style="width:31%">Booked back</div></div><div class="fn-val">77</div></div>
+              <div class="fn-row"><div class="fn-track"><div class="fn-fill" style="width:19%">Cases won</div></div><div class="fn-val">47</div></div>
+            </div>
+            <div class="trend-head"><span class="tl">Close rate · last 6 months</span><span class="tr">31% → 58%</span></div>
+            <svg class="trend-svg" viewBox="0 0 320 88" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0EA5E9" stop-opacity="0.38"/><stop offset="1" stop-color="#0EA5E9" stop-opacity="0"/></linearGradient></defs>
+              <path d="M8 70 L66 64 L124 56 L182 46 L240 32 L312 14 L312 88 L8 88 Z" fill="url(#tg)"/>
+              <polyline points="8,70 66,64 124,56 182,46 240,32 312,14" fill="none" stroke="#0EA5E9" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </section>
 
-<!-- ============ ROI ============ -->
-<section class="sec sec-dark" id="roi">
+<!-- ============ THE HIDDEN LEAK ============ -->
+<section class="sec sec-dark" id="leak">
   <div class="wrap sec-center">
-    <div class="eyebrow reveal">The numbers</div>
-    <h2 class="sec-title reveal" data-delay="1">The Math Is Simple</h2>
+    <div class="eyebrow reveal">The Hidden Leak</div>
+    <h2 class="sec-title reveal" data-delay="1">Most Practices Are Bleeding Production Without Knowing It</h2>
   </div>
   <div class="wrap">
-    <div class="roi-statement reveal">
-      <p><b>CaseLift costs $997/month.</b> One lifted case from any treatment pays for the entire year. CaseLift averages <b>15% case recovery</b> across our network.</p>
+    <div class="stat-grid">
+      <div class="stat-card reveal" data-delay="1"><div class="stat-num">80%</div><div class="stat-desc">of treatment plans need 5–12 follow-ups to close</div></div>
+      <div class="stat-card reveal" data-delay="2"><div class="stat-num">44%</div><div class="stat-desc">of TCs stop after just 1 follow-up attempt</div></div>
+      <div class="stat-card reveal" data-delay="3"><div class="stat-num">$2.1M</div><div class="stat-desc">average annual production left on the table per practice</div></div>
     </div>
-    <div class="roi-grid">
-      <div class="roi-card reveal" data-delay="1">
-        <div class="rc-label">Implants</div>
-        <div class="rc-math">10 unconverted implant consults × $30,000 avg × 15%</div>
-        <div class="rc-result"><span>$45,000</span> lifted</div>
+  </div>
+</section>
+
+<!-- ============ INTEGRATIONS ============ -->
+<section class="sec sec-dark" id="integrations">
+  <div class="wrap sec-center">
+    <div class="eyebrow reveal">Integrations</div>
+    <h2 class="sec-title reveal" data-delay="1">Works With Your Existing Stack</h2>
+  </div>
+  <div class="wrap">
+    <div class="intg-row reveal">
+      <span class="intg-pill">Dentrix</span>
+      <span class="intg-pill">Eaglesoft</span>
+      <span class="intg-pill">Carestream</span>
+      <span class="intg-pill">Open Dental</span>
+      <span class="intg-pill">Weave</span>
+      <span class="intg-pill">Birdeye</span>
+      <span class="intg-pill">Slack</span>
+      <span class="intg-pill">Google Workspace</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RESULTS / TESTIMONIALS ============ -->
+<section class="sec sec-light" id="results">
+  <div class="wrap sec-center">
+    <div class="eyebrow reveal">Results</div>
+    <h2 class="sec-title reveal" data-delay="1">Practices are recovering production they thought was gone</h2>
+  </div>
+  <div class="wrap">
+    <div class="test-grid">
+      <div class="test-card reveal-left">
+        <div class="test-label">Dental Implants</div>
+        <div class="test-stars">★★★★★</div>
+        <p class="test-quote">"We recovered $47,000 in the first 90 days. Three patients came back just from the Day 7 email."</p>
+        <div class="test-who">
+          <div class="test-av">SM</div>
+          <div><div class="test-name">Dr. Sarah M.</div><div class="test-role">Oral Surgeon · Austin, TX</div></div>
+        </div>
       </div>
-      <div class="roi-card reveal" data-delay="2">
-        <div class="rc-label">Full Arch</div>
-        <div class="rc-math">5 unconverted All-on-4 consults × $45,000 avg × 15%</div>
-        <div class="rc-result"><span>$33,750</span> lifted</div>
+      <div class="test-card reveal" data-delay="1">
+        <div class="test-label">Full Arch / All-on-4</div>
+        <div class="test-stars">★★★★★</div>
+        <p class="test-quote">"Our TC finally has a system. She knows exactly what each patient needs to hear. Close rate went from 31% to 58%."</p>
+        <div class="test-who">
+          <div class="test-av">JP</div>
+          <div><div class="test-name">Dr. James P.</div><div class="test-role">Implant Specialist · Phoenix, AZ</div></div>
+        </div>
       </div>
-      <div class="roi-card reveal" data-delay="3">
-        <div class="rc-label">Invisalign</div>
-        <div class="rc-math">20 unconverted aligner consults × $6,500 avg × 15%</div>
-        <div class="rc-result"><span>$19,500</span> lifted</div>
+      <div class="test-card reveal-right">
+        <div class="test-label">Invisalign &amp; Cosmetic</div>
+        <div class="test-stars">★★★★★</div>
+        <p class="test-quote">"I didn't think software could replace the personal touch. These messages feel like they were written by my best TC."</p>
+        <div class="test-who">
+          <div class="test-av">LK</div>
+          <div><div class="test-name">Dr. Linda K.</div><div class="test-role">General Dentist · Nashville, TN</div></div>
+        </div>
       </div>
     </div>
-    <div class="guarantee reveal">
-      <div class="g-ico">🛡️</div>
-      <p>$50,000 in lifted production in 90 days, or we keep working for free until you get there.</p>
+    <p class="test-summary reveal"><span>4.8/5</span> average rating · <span>200+</span> practices · <span>$2.3M</span> recovered production</p>
+    <div class="stat-bar reveal">
+      <div>Works across <span>6+ treatment types</span></div>
+      <div>Avg <span>15% case recovery rate</span></div>
+      <div><span>$30k+ recovered</span> per practice in first 90 days</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ROI CALCULATOR ============ -->
+<section class="sec" id="pricing">
+  <div class="wrap sec-center">
+    <div class="eyebrow reveal">The cost of doing nothing</div>
+    <h2 class="sec-title reveal" data-delay="1">Calculate what walks out your door every year</h2>
+    <p class="sec-lead reveal" data-delay="2">Drag the sliders to match your practice. See how many high-value patients leave without scheduling, and what it's quietly costing you.</p>
+  </div>
+  <div class="wrap">
+    <div class="calc reveal">
+      <div class="calc-inputs">
+        <div class="calc-field">
+          <label>High-value consults per month <output id="oConsults">40</output></label>
+          <input type="range" id="cConsults" min="5" max="150" value="40" step="1" />
+        </div>
+        <div class="calc-field">
+          <label>Average case value <output id="oValue">$25,000</output></label>
+          <input type="range" id="cValue" min="3000" max="65000" value="25000" step="1000" />
+        </div>
+        <div class="calc-field">
+          <label>% that don't schedule same-day <output id="oRate">47%</output></label>
+          <input type="range" id="cRate" min="20" max="80" value="47" step="1" />
+        </div>
+        <p class="calc-hint">Most of these patients never get a single structured follow-up.</p>
+      </div>
+      <div class="calc-results">
+        <div class="calc-res">
+          <div class="cr-num" id="rPatients">226</div>
+          <div class="cr-label">patients walk out every year without scheduling, and most are never followed up with</div>
+        </div>
+        <div class="calc-res big">
+          <div class="cr-num red" id="rLost">$5,640,000</div>
+          <div class="cr-label">in production walking out your door every year</div>
+        </div>
+        <div class="calc-res">
+          <div class="cr-num" id="rRecover">$846,000</div>
+          <div class="cr-label">recoverable per year at a conservative 15% recovery rate</div>
+        </div>
+      </div>
+    </div>
+    <p class="calc-note reveal">CaseLift follows up with every one of those patients, automatically. Our guarantee: <strong>$50,000 in recovered production in 90 days, or we work with you for free until you get there.</strong></p>
+    <div class="roi-cta reveal">
+      <a href="/apply.html" class="btn btn-red">Schedule A Demo</a>
     </div>
   </div>
 </section>
@@ -590,81 +881,10 @@
     <h2 class="sec-title reveal" data-delay="1">Everything Inside CaseLift</h2>
   </div>
   <div class="wrap">
-    <div class="feat-grid">
-      <div class="feat-card reveal"><div class="feat-check">✓</div><div class="ft"><b>AI consult analysis</b><span>Listens, transcribes, analyzes every objection.</span></div></div>
-      <div class="feat-card reveal" data-delay="1"><div class="feat-check">✓</div><div class="ft"><b>Automated follow-up</b><span>SMS + email on a smart schedule.</span></div></div>
-      <div class="feat-card reveal" data-delay="2"><div class="feat-check">✓</div><div class="ft"><b>Treatment-specific messaging</b><span>Adapts to every treatment type.</span></div></div>
-      <div class="feat-card reveal"><div class="feat-check">✓</div><div class="ft"><b>Two-way conversations</b><span>Patient replies go straight to your TC.</span></div></div>
-      <div class="feat-card reveal" data-delay="1"><div class="feat-check">✓</div><div class="ft"><b>Reactivation campaigns</b><span>Lift cold treatment plans back to life.</span></div></div>
-      <div class="feat-card reveal" data-delay="2"><div class="feat-check">✓</div><div class="ft"><b>Smart sequence timing</b><span>Calibrated to patient exit intent.</span></div></div>
-      <div class="feat-card reveal"><div class="feat-check">✓</div><div class="ft"><b>Full attribution tracking</b><span>Every lifted dollar traced back.</span></div></div>
-      <div class="feat-card reveal" data-delay="1"><div class="feat-check">✓</div><div class="ft"><b>CaseLift Academy</b><span>TC certification and training library.</span></div></div>
-      <div class="feat-card reveal" data-delay="2"><div class="feat-check">✓</div><div class="ft"><b>Monthly strategy call</b><span>Certified TC specialist reviews your numbers.</span></div></div>
-      <div class="feat-card reveal"><div class="feat-check">✓</div><div class="ft"><b>The Conversion Collective</b><span>Community of practices lifting together.</span></div></div>
-      <div class="feat-card reveal" data-delay="1"><div class="feat-check">✓</div><div class="ft"><b>PMS integration</b><span>Connects to your patient data via Sikka.</span></div></div>
-      <div class="feat-card reveal" data-delay="2"><div class="feat-check">✓</div><div class="ft"><b>HIPAA compliant</b><span>BAA included, all data encrypted.</span></div></div>
-    </div>
-  </div>
-</section>
-
-<!-- ============ COMMUNITY ============ -->
-<section class="sec sec-dark" id="community">
-  <div class="wrap sec-center">
-    <div class="eyebrow reveal">Community</div>
-    <h2 class="sec-title reveal" data-delay="1">CaseLift Comes With A Community</h2>
-  </div>
-  <div class="wrap">
-    <div class="community">
-      <div class="community-text">
-        <p class="reveal-left">Every CaseLift member gets access to <b>The Conversion Collective</b>, a private community of dental practices lifting more cases together.</p>
-        <p class="reveal-left" data-delay="1">Share what's working. Get coaching from certified TC specialists. Learn from practices just like yours. <b>Laura Calle</b>, a former implant TC, runs the community and hosts monthly group coaching calls.</p>
-        <p class="reveal-left" data-delay="2">You're not just getting software. You're joining a team that's obsessed with lifting case acceptance.</p>
-      </div>
-      <div class="community-card reveal-right">
-        <div class="cc-head">
-          <div class="cc-av">LC</div>
-          <div>
-            <div class="cc-name">Laura Calle</div>
-            <div class="cc-role">Former Implant TC · Community Lead</div>
-          </div>
-        </div>
-        <ul class="cc-list">
-          <li><span class="ck">✓</span>Private community of high-value dental practices</li>
-          <li><span class="ck">✓</span>Monthly group coaching calls</li>
-          <li><span class="ck">✓</span>Coaching from certified TC specialists</li>
-          <li><span class="ck">✓</span>Real playbooks from practices just like yours</li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============ PRICING ============ -->
-<section class="sec" id="pricing">
-  <div class="wrap sec-center">
-    <div class="eyebrow reveal">Pricing</div>
-    <h2 class="sec-title reveal" data-delay="1">One Price. CaseLift Does The Rest.</h2>
-  </div>
-  <div class="wrap">
-    <div class="price-card reveal">
-      <span class="price-tag">CaseLift Membership</span>
-      <div class="price-amount">$997<span>/month</span></div>
-      <div class="price-cancel">Cancel anytime. No contracts. No setup fees.</div>
-      <ul class="price-list">
-        <li><span class="ck">✓</span>Full CaseLift platform</li>
-        <li><span class="ck">✓</span>Unlimited consult recordings and analysis</li>
-        <li><span class="ck">✓</span>Automated SMS + email sequences</li>
-        <li><span class="ck">✓</span>Reactivation campaigns</li>
-        <li><span class="ck">✓</span>Two-way patient conversations</li>
-        <li><span class="ck">✓</span>CaseLift Academy, TC training + certification</li>
-        <li><span class="ck">✓</span>Monthly strategy call with certified TC specialist</li>
-        <li><span class="ck">✓</span>The Conversion Collective community</li>
-        <li><span class="ck">✓</span>PMS integration via Sikka</li>
-        <li><span class="ck">✓</span>HIPAA compliant, BAA included</li>
-        <li class="guar"><span class="ck">✓</span>$50,000 production guarantee in 90 days</li>
-      </ul>
-      <a href="/apply" class="btn btn-brand">Start Lifting Cases →</a>
-      <p class="price-note">Limited spots available. Apply to see if your practice qualifies.</p>
+    <div class="inside-grid">
+      <div class="inside-card reveal" data-delay="1"><div class="inside-ico">🎙️</div><h3>Consult Analysis</h3><p>CaseLift listens to every consult and surfaces each objection automatically.</p></div>
+      <div class="inside-card reveal" data-delay="2"><div class="inside-ico">✉️</div><h3>Automated Follow-Up</h3><p>Personalized SMS and email sequences go out on a smart schedule.</p></div>
+      <div class="inside-card reveal" data-delay="3"><div class="inside-ico">📈</div><h3>Attribution Tracking</h3><p>Every recovered case is traced back to the dollar, so you see the ROI.</p></div>
     </div>
   </div>
 </section>
@@ -723,7 +943,7 @@
   <div class="wrap">
     <h2 class="reveal">Ready to lift the cases you're losing?</h2>
     <p class="reveal" data-delay="1">Your TC records the consult. CaseLift handles everything after. $50,000 lifted in 90 days, guaranteed.</p>
-    <div class="reveal" data-delay="2"><a href="/apply" class="btn btn-brand">Start Lifting Cases →</a></div>
+    <div class="reveal" data-delay="2"><a href="/apply" class="btn btn-brand">Schedule A Demo</a></div>
     <p class="final-note reveal" data-delay="3">$997/month · Cancel anytime · Limited spots available</p>
   </div>
 </section>
@@ -803,6 +1023,33 @@
     });
   }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
   Object.keys(navLinkMap).forEach(id => { const el = document.getElementById(id); if (el) spy.observe(el); });
+
+  // ----- ROI Calculator -----
+  const cConsults = document.getElementById('cConsults');
+  const cValue = document.getElementById('cValue');
+  const cRate = document.getElementById('cRate');
+  const oConsults = document.getElementById('oConsults');
+  const oValue = document.getElementById('oValue');
+  const oRate = document.getElementById('oRate');
+  const rPatients = document.getElementById('rPatients');
+  const rLost = document.getElementById('rLost');
+  const rRecover = document.getElementById('rRecover');
+  function updateCalc() {
+    const consults = +cConsults.value;
+    const value = +cValue.value;
+    const rate = +cRate.value / 100;
+    const patientsPerMonth = Math.round(consults * rate);
+    const patientsPerYear = patientsPerMonth * 12;
+    const lostPerYear = patientsPerYear * value;
+    const recoverPerYear = Math.round(lostPerYear * 0.15);
+    oConsults.textContent = consults;
+    oValue.textContent = '$' + value.toLocaleString('en-US');
+    oRate.textContent = Math.round(rate * 100) + '%';
+    rPatients.textContent = patientsPerYear.toLocaleString('en-US');
+    rLost.textContent = '$' + lostPerYear.toLocaleString('en-US');
+    rRecover.textContent = '$' + recoverPerYear.toLocaleString('en-US');
+  }
+  if (cConsults) { cConsults.addEventListener('input', updateCalc); cValue.addEventListener('input', updateCalc); cRate.addEventListener('input', updateCalc); updateCalc(); }
 </script>
 </body>
 </html>
