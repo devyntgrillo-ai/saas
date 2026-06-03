@@ -149,15 +149,15 @@ export default function AccountSwitcher() {
             {/* RESELLERS (super-admin only) - jump to a reseller's admin view. */}
             {isSuperAdmin && filteredResellers.length > 0 && (
               <>
-                <p className="px-1 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                <p className="px-1 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                   Resellers
                 </p>
-                <div className="max-h-[150px] overflow-y-auto">
+                <div className="max-h-[150px] space-y-0.5 overflow-y-auto">
                   {filteredResellers.map((r) => (
                     <button
                       key={r.id}
                       onClick={() => { setOpen(false); navigate(`/admin/agencies/${r.id}`) }}
-                      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1 text-left transition hover:bg-slate-50"
+                      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-slate-50"
                     >
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-600">
                         {firstLetter(r.name)}
@@ -170,12 +170,12 @@ export default function AccountSwitcher() {
             )}
 
             {/* ALL ACCOUNTS */}
-            <p className="px-1 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <p className="px-1 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               All Accounts
             </p>
 
-            {/* Accounts list - smaller dense rows, scroll beyond. */}
-            <div className="max-h-[300px] overflow-y-auto">
+            {/* Accounts list - compact rows with a little breathing room. */}
+            <div className="max-h-[300px] space-y-0.5 overflow-y-auto">
               {filtered.length === 0 ? (
                 <p className="px-2 py-6 text-center text-sm text-slate-400">No accounts found.</p>
               ) : (
@@ -201,7 +201,7 @@ function AccountRow({ p, active, onPick }) {
   return (
     <button
       onClick={() => onPick(p.id)}
-      className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1 text-left transition ${
+      className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition ${
         active ? 'bg-blue-50' : 'hover:bg-slate-50'
       }`}
     >
