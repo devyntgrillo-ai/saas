@@ -112,7 +112,7 @@ export default function AccountSwitcher() {
         <div
           className="animate-dropdown absolute left-2 z-50 mt-1 w-80 max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.18)]"
         >
-          <div className="p-3">
+          <div className="p-2.5">
             {/* Search */}
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -121,7 +121,7 @@ export default function AccountSwitcher() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={searchPlaceholder}
-                className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
 
@@ -149,23 +149,20 @@ export default function AccountSwitcher() {
             {/* RESELLERS (super-admin only) - jump to a reseller's admin view. */}
             {isSuperAdmin && filteredResellers.length > 0 && (
               <>
-                <p className="px-1 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                <p className="px-1 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                   Resellers
                 </p>
-                <div className="max-h-[150px] space-y-0.5 overflow-y-auto">
+                <div className="max-h-[150px] overflow-y-auto">
                   {filteredResellers.map((r) => (
                     <button
                       key={r.id}
                       onClick={() => { setOpen(false); navigate(`/admin/agencies/${r.id}`) }}
-                      className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-slate-50"
+                      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1 text-left transition hover:bg-slate-50"
                     >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-600">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-600">
                         {firstLetter(r.name)}
                       </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-slate-900">{r.name}</span>
-                        <span className="block truncate text-xs text-slate-500">Reseller</span>
-                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-slate-900">{r.name}</span>
                     </button>
                   ))}
                 </div>
@@ -173,12 +170,12 @@ export default function AccountSwitcher() {
             )}
 
             {/* ALL ACCOUNTS */}
-            <p className="px-1 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <p className="px-1 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               All Accounts
             </p>
 
-            {/* Accounts list - ~5 rows visible, scroll beyond. */}
-            <div className="max-h-[300px] space-y-0.5 overflow-y-auto">
+            {/* Accounts list - smaller dense rows, scroll beyond. */}
+            <div className="max-h-[300px] overflow-y-auto">
               {filtered.length === 0 ? (
                 <p className="px-2 py-6 text-center text-sm text-slate-400">No accounts found.</p>
               ) : (
@@ -204,16 +201,16 @@ function AccountRow({ p, active, onPick }) {
   return (
     <button
       onClick={() => onPick(p.id)}
-      className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition ${
+      className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1 text-left transition ${
         active ? 'bg-blue-50' : 'hover:bg-slate-50'
       }`}
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-600">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
         {firstLetter(p.name)}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-slate-900">{p.name}</span>
-        {p.address && <span className="block truncate text-xs text-slate-500">{p.address}</span>}
+        <span className="block truncate text-[13px] font-semibold leading-tight text-slate-900">{p.name}</span>
+        {p.address && <span className="block truncate text-[11px] leading-tight text-slate-500">{p.address}</span>}
       </span>
     </button>
   )
