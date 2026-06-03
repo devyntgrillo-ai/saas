@@ -631,7 +631,7 @@ export default function ConsultDetail() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load() }, [load])
 
-  // Attribution status + human-readable "how Hope AI helped" explanation.
+  // Attribution status + human-readable "how CaseLift helped" explanation.
   useEffect(() => {
     if (!consult?.id) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -926,16 +926,16 @@ export default function ConsultDetail() {
               )}
             </div>
 
-            {/* Hope AI analysis */}
+            {/* CaseLift analysis */}
             <Card>
-              <SectionLabel icon={Sparkles}>Hope AI Analysis</SectionLabel>
+              <SectionLabel icon={Sparkles}>CaseLift Analysis</SectionLabel>
               {analysisPending ? (
                 <SkeletonLines lines={5} className="mt-4" />
               ) : (
                 <div className="mt-4 space-y-5">
                   {/* Three stat boxes with colored left accents */}
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <StatBox label="Hope identified the primary objection as" accent="border-l-red-400">
+                    <StatBox label="CaseLift identified the primary objection as" accent="border-l-red-400">
                       {consult.objection_type || consult.primary_objection ? (
                         <span className="flex flex-wrap items-center gap-1.5">
                           {consult.objection_type && <span>{objectionMeta(consult.objection_type).label}</span>}
@@ -964,7 +964,7 @@ export default function ConsultDetail() {
                   {consult.coaching_insight && (
                     <div className="rounded-lg border border-gray-200 border-l-4 border-l-blue-500 bg-blue-50 p-4">
                       <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700">
-                        <Lightbulb className="h-3.5 w-3.5" /> Hope&apos;s coaching insight
+                        <Lightbulb className="h-3.5 w-3.5" /> CaseLift&apos;s coaching insight
                       </p>
                       <p className="mt-2 text-[15px] leading-relaxed text-gray-900">{stripEmDashes(consult.coaching_insight)}</p>
                     </div>
@@ -992,7 +992,7 @@ export default function ConsultDetail() {
                       {consult.tc_action && (
                         <div className="rounded-lg border border-gray-200 bg-white p-4">
                           <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-500">
-                            <ListChecks className="h-3.5 w-3.5 text-blue-600" /> Hope&apos;s recommended next step
+                            <ListChecks className="h-3.5 w-3.5 text-blue-600" /> CaseLift&apos;s recommended next step
                           </p>
                           <p className="mt-1.5 text-sm leading-relaxed text-gray-900">{stripEmDashes(consult.tc_action)}</p>
                         </div>
@@ -1046,7 +1046,7 @@ export default function ConsultDetail() {
 
               {analysisPending && messages.length === 0 ? (
                 <div className="mt-3 flex animate-pulse items-center gap-2 text-sm text-gray-500">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Hope is drafting personalized messages…
+                  <Loader2 className="h-4 w-4 animate-spin" /> CaseLift is drafting personalized messages…
                 </div>
               ) : messages.length === 0 ? (
                 <p className="mt-3 text-sm text-gray-500">No follow-up messages.</p>
@@ -1066,7 +1066,7 @@ export default function ConsultDetail() {
                       </button>
                     </div>
                   )}
-                  <p className="text-sm text-gray-500">Hope drafted {messages.length} follow-up message{messages.length === 1 ? '' : 's'} for {heading}.</p>
+                  <p className="text-sm text-gray-500">CaseLift drafted {messages.length} follow-up message{messages.length === 1 ? '' : 's'} for {heading}.</p>
                   {messages.map((m, i) => (
                     <EditableMessage
                       key={m.id}

@@ -35,7 +35,7 @@ export default function RequireActiveBilling() {
         </div>
         <h1 className="mt-4 text-xl font-bold text-white">Your subscription is paused</h1>
         <p className="mt-2 text-sm text-slate-400">
-          Update your payment method to restore access to Hope AI.
+          Update your payment method to restore access to CaseLift.
         </p>
         {err && (
           <p className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{err}</p>

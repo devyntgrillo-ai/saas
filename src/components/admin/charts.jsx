@@ -15,10 +15,10 @@ import {
 } from 'recharts'
 
 const AXIS = { stroke: '#475569', fontSize: 12 }
-const GRID = '#232634'
+const GRID = 'var(--border)'
 const tooltipStyle = {
-  background: '#1a1d26',
-  border: '1px solid rgba(255,255,255,0.07)',
+  background: 'var(--bg-elevated)',
+  border: '1px solid var(--border)', color: 'var(--text-primary)',
   borderRadius: 8,
   fontSize: 12,
   color: '#e2e8f0',
@@ -49,7 +49,7 @@ export function MRRGrowthChart({ data }) {
           <YAxis tickFormatter={money} tickLine={false} axisLine={false} {...AXIS} width={60} />
           <Tooltip contentStyle={tooltipStyle} formatter={(v) => money(v)} />
           <Line type="monotone" dataKey="actual" stroke="#0EA5E9" strokeWidth={2.5} dot={{ r: 3 }} name="Actual" />
-          <Line type="monotone" dataKey="projected" stroke="#8A82FF" strokeWidth={2} strokeDasharray="5 4" dot={false} name="Projected" />
+          <Line type="monotone" dataKey="projected" stroke="#94A3B8" strokeWidth={2} strokeDasharray="5 4" dot={false} name="Projected" />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -69,7 +69,7 @@ export function SignupsChurnChart({ data }) {
           <YAxis allowDecimals={false} tickLine={false} axisLine={false} {...AXIS} width={28} />
           <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Bar dataKey="signups" fill="#34d399" radius={[3, 3, 0, 0]} name="Signups" />
+          <Bar dataKey="signups" fill="#10b981" radius={[3, 3, 0, 0]} name="Signups" />
           <Bar dataKey="churn" fill="#f43f5e" radius={[3, 3, 0, 0]} name="Churn" />
         </BarChart>
       </ResponsiveContainer>

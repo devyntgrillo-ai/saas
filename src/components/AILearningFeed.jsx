@@ -64,14 +64,14 @@ export default function AILearningFeed({ practiceId }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-base font-semibold text-slate-100">
-            Hope's Learning Feed
+            CaseLift Activity
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
             </span>
           </h2>
           <p className="mt-0.5 text-sm text-slate-400">
-            Hope is evolving automatically based on what's working
+            CaseLift is constantly learning and improving your sequences
           </p>
         </div>
       </div>
@@ -84,7 +84,7 @@ export default function AILearningFeed({ practiceId }) {
               <p className="text-sm leading-relaxed text-slate-200">{e.description}</p>
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 <span className="text-slate-500">{timeAgo(e.created_at)} ago</span>
-                {e.result_value && <span className="font-medium text-[#34d399]">{e.result_value}</span>}
+                {e.result_value && <span className="font-medium text-[#10b981]">{e.result_value}</span>}
               </div>
             </div>
           </li>
@@ -101,7 +101,7 @@ export default function AILearningFeed({ practiceId }) {
       )}
 
       <p className="mt-4 border-t border-white/[0.07] pt-3 text-xs text-slate-500">
-        Hope AI has made <span className="font-semibold text-slate-300">{monthCount}</span> optimizations to your
+        CaseLift has made <span className="font-semibold text-slate-300">{monthCount}</span> optimizations to your
         sequences in the last 30 days.
       </p>
     </div>

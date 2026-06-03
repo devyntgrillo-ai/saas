@@ -122,7 +122,7 @@ export default function Community() {
                 <Users className="h-7 w-7" />
               </div>
               <div className="pb-1">
-                <h1 className="text-lg font-bold text-white">Hope AI Community</h1>
+                <h1 className="text-lg font-bold text-white">The Conversion Collective</h1>
                 <p className="text-xs text-slate-400">4,812 members · 213 online</p>
               </div>
             </div>

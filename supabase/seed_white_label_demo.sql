@@ -17,7 +17,7 @@
 --
 -- WHY THIS MAKES THE TOGGLE WORK: BrandingContext resolves `resellerAgency` from
 -- the viewer's own agency, or the practice they're impersonating. With the toggle
--- OFF a super-admin still sees Hope AI; ON shows this brand. isWhiteLabeledAgency
+-- OFF a super-admin still sees CaseLift; ON shows this brand. isWhiteLabeledAgency
 -- requires white_label_enabled = true AND a name - both set here.
 --
 -- HOW TO RUN: Supabase SQL editor (project eymgqjeudrmeofytnwgs). Re-runnable.

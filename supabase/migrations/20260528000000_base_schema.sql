@@ -1,5 +1,5 @@
 -- ============================================================================
--- Hope AI - Database Schema
+-- CaseLift - Database Schema
 -- AI-powered sales recovery for dental implant practices.
 --
 -- Run this in the Supabase SQL editor (or via the CLI / MCP apply_migration).
@@ -616,7 +616,7 @@ alter table public.practices
 alter table public.consults
   add column if not exists pms_appointment_id text,
   add column if not exists pms_synced boolean not null default false,
-  add column if not exists attribution_model text; -- consultiq_recovered | practice_recovered | unknown
+  add column if not exists attribution_model text; -- caselift_recovered | practice_recovered | unknown
 
 alter table public.cancellation_feedback
   add column if not exists messages_sent int;
@@ -727,7 +727,7 @@ begin
   if NEW.status = OLD.status then return NEW; end if;
   if NEW.status = 'closed_won' then
     select exists (select 1 from public.message_outcomes mo where mo.consult_id = NEW.id and (mo.replied or mo.booked_after)) into engaged;
-    NEW.attribution_model := case when engaged then 'consultiq_recovered' else 'practice_recovered' end;
+    NEW.attribution_model := case when engaged then 'caselift_recovered' else 'practice_recovered' end;
   elsif NEW.status = 'closed_lost' then
     NEW.attribution_model := coalesce(NEW.attribution_model, 'unknown');
   end if;
@@ -742,14 +742,14 @@ create trigger trg_set_consult_attribution before update of status on public.con
 -- (mirrors migration 20260530010000_attribution_events.sql)
 -- ============================================================================
 alter table public.consults
-  add column if not exists attribution_status text,        -- consultiq_assisted | consultiq_recovered | practice_direct | unknown
+  add column if not exists attribution_status text,        -- caselift_assisted | caselift_recovered | practice_direct | unknown
   add column if not exists attribution_confirmed_at timestamptz,
   add column if not exists attribution_source text;        -- pms_sync | manual | webhook
 
 alter table public.consults drop constraint if exists consults_attribution_status_check;
 alter table public.consults add constraint consults_attribution_status_check
   check (attribution_status is null or attribution_status in
-    ('consultiq_assisted', 'consultiq_recovered', 'practice_direct', 'unknown'));
+    ('caselift_assisted', 'caselift_recovered', 'practice_direct', 'unknown'));
 
 create table if not exists public.attribution_events (
   id          uuid primary key default gen_random_uuid(),
@@ -757,7 +757,7 @@ create table if not exists public.attribution_events (
   practice_id uuid not null references public.practices(id) on delete cascade,
   event_type  text not null,                     -- message_sent | patient_replied | treatment_accepted
   event_date  timestamptz not null default now(),
-  source      text not null default 'consultiq', -- consultiq | pms | manual
+  source      text not null default 'caselift', -- caselift | pms | manual
   created_at  timestamptz not null default now()
 );
 create index if not exists idx_attr_events_consult  on public.attribution_events(consult_id);
@@ -790,8 +790,8 @@ begin
     select 1 from public.attribution_events ae
     where ae.consult_id = p_consult_id and ae.event_type = 'message_sent'
   ) into sent;
-  if replied then return 'consultiq_recovered'; end if;
-  if sent then return 'consultiq_assisted'; end if;
+  if replied then return 'caselift_recovered'; end if;
+  if sent then return 'caselift_assisted'; end if;
   return 'practice_direct';
 end $$;
 grant execute on function public.derive_attribution_status(uuid) to authenticated, service_role;
@@ -802,7 +802,7 @@ begin
   if NEW.status = 'sent' and (TG_OP = 'INSERT' or OLD.status is distinct from 'sent')
      and NEW.consult_id is not null then
     insert into public.attribution_events (consult_id, practice_id, event_type, event_date, source)
-    values (NEW.consult_id, NEW.practice_id, 'message_sent', coalesce(NEW.sent_at, now()), 'consultiq');
+    values (NEW.consult_id, NEW.practice_id, 'message_sent', coalesce(NEW.sent_at, now()), 'caselift');
   end if;
   return NEW;
 end $$;
@@ -819,7 +819,7 @@ begin
       from public.conversations where id = NEW.conversation_id;
     if cv_consult is not null then
       insert into public.attribution_events (consult_id, practice_id, event_type, event_date, source)
-      values (cv_consult, cv_practice, 'patient_replied', coalesce(NEW.sent_at, NEW.created_at, now()), 'consultiq');
+      values (cv_consult, cv_practice, 'patient_replied', coalesce(NEW.sent_at, NEW.created_at, now()), 'caselift');
     end if;
   end if;
   return NEW;
@@ -846,7 +846,7 @@ begin
   NEW.attribution_confirmed_at := now();
   NEW.attribution_source       := coalesce(NEW.attribution_source, 'manual');
   NEW.attribution_model := case
-    when new_status in ('consultiq_recovered', 'consultiq_assisted') then 'consultiq_recovered'
+    when new_status in ('caselift_recovered', 'caselift_assisted') then 'caselift_recovered'
     else 'practice_recovered' end;
   insert into public.attribution_events (consult_id, practice_id, event_type, event_date, source)
   values (NEW.id, NEW.practice_id, 'treatment_accepted', now(), coalesce(NEW.attribution_source, 'manual'));

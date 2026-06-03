@@ -10,9 +10,11 @@ import { AdminProvider, useAdmin } from '../../context/AdminContext'
 const TABS = [
   { to: '/admin', label: 'Overview', end: true },
   { to: '/admin/agencies', label: 'Resellers' },
+  { to: '/admin/resellers', label: 'SaaS' },
   { to: '/admin/practices', label: 'Practices' },
   { to: '/admin/revenue', label: 'Revenue' },
   { to: '/admin/billing', label: 'Billing' },
+  { to: '/admin/referrals', label: 'Referrals' },
 ]
 
 // Breadcrumb segments are derived from the path; detail pages can override the
@@ -55,7 +57,7 @@ function Chrome() {
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
             <Logo />
-            <span className="text-sm font-semibold text-slate-200">Hope AI · Admin</span>
+            <span className="text-sm font-semibold text-slate-200">CaseLift Admin</span>
             <span className="rounded-full bg-rose-500/15 px-2.5 py-0.5 text-xs font-semibold text-rose-300">ADMIN</span>
           </div>
           <div className="flex items-center gap-2">
@@ -106,6 +108,7 @@ function Chrome() {
           </Suspense>
         )}
       </main>
+      <footer className="border-t border-white/[0.07] px-4 py-5 text-center text-xs text-slate-500">CaseLift Platform · caselift.io</footer>
     </div>
   )
 }

@@ -69,6 +69,10 @@ export default function Layout() {
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
   const showPaywall = Boolean(practiceId) && needsPaywall(practice)
+  // Reseller wholesale billing failed → their account is suspended, so their
+  // client subaccounts show a "service paused" banner until the reseller pays.
+  const resellerSuspended =
+    Boolean(practiceId) && (practice?.agency?.status === 'suspended' || practice?.agency?.active === false)
   // Full-bleed pages own the entire content area (no padding/max-width/scroll)
   // so they can manage their own internal scrolling - e.g. the chat view.
   const fullBleed = location.pathname === '/conversations'
@@ -94,10 +98,10 @@ export default function Layout() {
 
   const SidebarContent = () => (
     <>
-      <div className="px-4 pb-3 pt-6">
+      <div className="flex justify-center px-4 pb-5 pt-7">
         {/* Logo resolves the white-label brand via BrandingContext, which already
-            honors the super-admin override (Devyn always sees Hope AI). */}
-        <Logo />
+            honors the super-admin override (Devyn always sees CaseLift). */}
+        <Logo size="lg" />
       </div>
       <AccountSwitcher />
 
@@ -193,6 +197,22 @@ export default function Layout() {
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* Service paused - the reseller behind this practice is past due on
+            their CaseLift wholesale bill, so their subaccounts are paused. */}
+        {resellerSuspended && (
+          <div
+            className={`flex flex-wrap items-center gap-2 border-b px-4 py-2.5 text-sm ${
+              isLight ? 'border-rose-200 bg-rose-50 text-rose-900' : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+            }`}
+          >
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>
+              Service is temporarily paused. Please contact{' '}
+              <span className="font-semibold">{practice?.agency?.company_name || practice?.agency?.name || 'your provider'}</span> to restore access.
+            </span>
+          </div>
+        )}
+
         {/* Soft paywall - trial ended / subscription not active. Access is not
             blocked yet; this is a persistent upgrade nudge. */}
         {showPaywall && (
@@ -204,11 +224,11 @@ export default function Layout() {
             <span className={`flex items-center gap-2 ${isLight ? 'text-amber-900' : 'text-amber-200'}`}>
               <AlertTriangle className="h-4 w-4 shrink-0" />
               {practice?.subscription_status === 'past_due'
-                ? 'Your last payment failed. Update your billing to keep Hope AI active.'
+                ? 'Your last payment failed. Update your billing to keep CaseLift active.'
                 : practice?.subscription_status === 'cancelled' ||
                     practice?.subscription_status === 'canceled'
                   ? 'Your subscription is cancelled. Reactivate to keep full access.'
-                  : 'Your free trial has ended. Upgrade to keep using Hope AI.'}
+                  : 'Your free trial has ended. Upgrade to keep using CaseLift.'}
             </span>
             <Link
               to="/settings/billing"
@@ -280,7 +300,7 @@ export default function Layout() {
           even when previewing a client's white-label brand. */}
       {isSuperAdmin && (
         <div className="pointer-events-none fixed bottom-3 right-3 z-30 rounded-full border border-white/10 bg-surface-900/90 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-slate-400 shadow-lg backdrop-blur">
-          Hope AI Admin
+          CaseLift Admin
         </div>
       )}
       </div>

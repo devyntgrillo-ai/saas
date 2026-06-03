@@ -184,13 +184,13 @@ function deriveRow(c, holdMs, now) {
   // ── Next message label + sort key ──────────────────────────────────────────
   let nextLabel
   let sortNext = Infinity
-  if (status === 'replied') nextLabel = 'Hope paused this sequence - patient replied'
+  if (status === 'replied') nextLabel = 'CaseLift paused this sequence - patient replied'
   else if (status === 'paused') nextLabel = 'Paused'
   else if (status === 'won') nextLabel = 'Sequence ended'
   else if (status === 'not_fit') nextLabel = 'Not a fit'
   else if (status === 'completed') nextLabel = 'Sequence complete'
   else if (status === 'pending') {
-    nextLabel = `Hope is ready to follow up - starts in ${fmtRemaining(firstSendAt - now)}`
+    nextLabel = `CaseLift is ready to follow up - starts in ${fmtRemaining(firstSendAt - now)}`
     sortNext = firstSendAt
   } else {
     // active - earliest future scheduled message
@@ -501,7 +501,7 @@ function SequenceDrawer({ row, practice, onClose, onChanged, onReload }) {
                 <button onClick={() => setEditingTiming(true)} className="inline-flex items-center gap-1 text-xs font-medium text-primary-300 hover:underline"><Sliders className="h-3.5 w-3.5" /> Change timing</button>
               </div>
               <p className="mt-1.5 text-xs text-slate-400">
-                Hope is following up with {row.name} — {msgs.length} message{msgs.length === 1 ? '' : 's'}
+                CaseLift is following up with {row.name} — {msgs.length} message{msgs.length === 1 ? '' : 's'}
                 {msgs.length > 0 && (
                   <> through day {Math.max(...msgs.map((m) => dayOf(m, new Date(c.created_at).getTime())))}</>
                 )}.
@@ -555,7 +555,7 @@ function SequenceDrawer({ row, practice, onClose, onChanged, onReload }) {
                               <p><span className="text-slate-500">Opening:</span> “Hi {row.name?.split(' ')[0] || 'there'}, this is {tcName} from Dr. {doctorLast}'s office...”</p>
                               <p><span className="text-slate-500">Context:</span> {daysSince()} since their consult about {row.serviceType.toLowerCase()}.</p>
                               {c.personal_detail && <p><span className="text-slate-500">Reference:</span> {stripEmDashes(c.personal_detail)}</p>}
-                              {c.tc_action && <p><span className="text-slate-500">Hope&apos;s recommended next step:</span> {stripEmDashes(c.tc_action)}</p>}
+                              {c.tc_action && <p><span className="text-slate-500">CaseLift&apos;s recommended next step:</span> {stripEmDashes(c.tc_action)}</p>}
                               <p><span className="text-slate-500">If they object:</span> {objResponse}</p>
                             </div>
                           ) : editingMsg === m.id ? (
@@ -819,7 +819,7 @@ export default function Sequences() {
         <EmptyState
           icon={GitBranch}
           title="No active sequences yet"
-          description="Approve a consult to let Hope start following up."
+          description="Approve a consult to let CaseLift start following up."
           to="/consults"
           actionLabel="Go to Consults"
         />

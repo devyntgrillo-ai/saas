@@ -25,8 +25,8 @@ function scheduleReminder(appt) {
   if (delay <= 0 || delay > 12 * 60 * 60 * 1000) return
   const name = [appt.patient_first, appt.patient_last].filter(Boolean).join(' ') || 'your patient'
   const notify = () =>
-    new Notification('Hope AI', {
-      body: `Consult with ${name} starts in 2 minutes - open Hope AI and hit record`,
+    new Notification('CaseLift', {
+      body: `Consult with ${name} starts in 2 minutes - open CaseLift and hit record`,
     })
   const arm = () => setTimeout(notify, delay)
   if (Notification.permission === 'granted') arm()

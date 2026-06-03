@@ -65,8 +65,8 @@ export default function OutcomeControls({ consult, holdHours = 24, scheduledCoun
       await cancelPendingMessages(consult.id)
     }
     const { error } = await supabase.from('consults').update(patch).eq('id', consult.id)
-    // A treatment acceptance triggers attribution: compute consultiq_assisted /
-    // consultiq_recovered / practice_direct, persist it, and log the event.
+    // A treatment acceptance triggers attribution: compute caselift_assisted /
+    // caselift_recovered / practice_direct, persist it, and log the event.
     let extra = {}
     if (!error && ['accepted', 'closed_won'].includes(value)) {
       extra = await recordCloseAttribution({ ...consult, ...patch }, { source: 'manual' })

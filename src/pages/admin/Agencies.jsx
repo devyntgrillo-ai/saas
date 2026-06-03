@@ -33,12 +33,12 @@ export default function Agencies() {
       if (sort === 'name') return a.name.localeCompare(b.name)
       if (sort === 'joined') return new Date(b.created_at) - new Date(a.created_at)
       if (sort === 'activity') return new Date(b.last_activity || 0) - new Date(a.last_activity || 0)
-      return (b.mrrToHopeAI || 0) - (a.mrrToHopeAI || 0)
+      return (b.mrrToCaseLift || 0) - (a.mrrToCaseLift || 0)
     })
     return list
   }, [data.agencies, q, status, sort])
 
-  const totalMrr = data.agencies.reduce((s, a) => s + (a.mrrToHopeAI || 0), 0)
+  const totalMrr = data.agencies.reduce((s, a) => s + (a.mrrToCaseLift || 0), 0)
   const totalMargin = data.agencies.reduce((s, a) => s + (a.margin || 0), 0)
 
   return (
@@ -46,7 +46,7 @@ export default function Agencies() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-white">Resellers</h1>
-          <p className="text-sm text-slate-500">{data.agencies.length} total · {money(totalMrr)} MRR to Hope AI</p>
+          <p className="text-sm text-slate-500">{data.agencies.length} total · {money(totalMrr)} MRR to CaseLift</p>
         </div>
         <button onClick={() => setAdding(true)} className="btn-primary">
           <Plus className="h-4 w-4" /> Add reseller
@@ -54,7 +54,7 @@ export default function Agencies() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Reseller MRR (to Hope AI)" value={money(totalMrr)} accent="text-emerald-300" />
+        <StatCard label="Reseller MRR (to CaseLift)" value={money(totalMrr)} accent="text-emerald-300" />
         <StatCard label="Resellers' client MRR" value={money(data.agencies.reduce((s, a) => s + (a.clientMrr || 0), 0))} />
         <StatCard label="Their combined margin" value={money(totalMargin)} />
       </div>
@@ -97,7 +97,7 @@ export default function Agencies() {
           </div>,
           a.owner_email || '-',
           <span className="text-primary-300">{a.practiceCount}</span>,
-          money(a.mrrToHopeAI),
+          money(a.mrrToCaseLift),
           money(a.clientMrr),
           <span className="text-emerald-300">{money(a.margin)}</span>,
           <Badge className={agencyStatusMeta(a.status).classes}>{agencyStatusMeta(a.status).label}</Badge>,
@@ -107,7 +107,7 @@ export default function Agencies() {
             <button onClick={() => navigate(`/admin/agencies/${a.id}`)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-slate-300 transition hover:bg-surface-700" title="View">
               <Eye className="h-3.5 w-3.5" />
             </button>
-            <button onClick={() => impersonateAgency(a)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-violet-300 transition hover:bg-surface-700">
+            <button onClick={() => impersonateAgency(a)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-primary-300 transition hover:bg-surface-700">
               Impersonate
             </button>
           </div>,

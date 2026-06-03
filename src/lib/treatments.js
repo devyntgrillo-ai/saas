@@ -1,5 +1,5 @@
 // ============================================================================
-// Treatment types - the core taxonomy for Hope AI. Hope AI recovers
+// Treatment types - the core taxonomy for CaseLift. CaseLift recovers
 // unconverted patients across ALL high-value dental treatments, not just
 // implants. This module is the single source of truth for the treatment list,
 // per-treatment objection categories, and treatment-plan-value resolution.

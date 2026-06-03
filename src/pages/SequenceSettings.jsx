@@ -132,7 +132,7 @@ export default function SequenceSettings() {
           {[
             ['stopOnReply', 'Replies to any message'],
             ['stopOnBooking', 'Books an appointment (detected via PMS sync)'],
-            ['stopOnNotConverting', 'Is marked “Not converting” in Hope AI'],
+            ['stopOnNotConverting', 'Is marked “Not converting” in CaseLift'],
           ].map(([k, label]) => (
             <label key={k} className="flex items-center gap-3 text-sm text-slate-200">
               <input type="checkbox" checked={Boolean(rules[k])} onChange={(e) => setRule(k, e.target.checked)}

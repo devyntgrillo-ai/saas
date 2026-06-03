@@ -1,7 +1,7 @@
-ConsultIQ PMS Bridge — Windows installer (PLACEHOLDER STUB)
+CaseLift PMS Bridge — Windows installer (PLACEHOLDER STUB)
 
 This is a placeholder file, NOT a real executable. The production Windows
 installer (.exe) installs a small local service that securely syncs your
-on-premise PMS (e.g. Open Dental, Dentrix) with ConsultIQ.
+on-premise PMS (e.g. Open Dental, Dentrix) with CaseLift.
 
 Coming soon. This stub makes no changes to your system.

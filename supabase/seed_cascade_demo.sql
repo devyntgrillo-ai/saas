@@ -171,7 +171,7 @@ begin
      'Financing closed this one. Note the plan that worked for similar future cases.',
      'Schedule surgical date and send pre-op instructions.', 'full_arch', 36500,
      'Frank Donovan', '(509) 555-0368', 'fdonovan@cascade.seedseq.test', 'accepted', now() - interval '5 days',
-     'consultiq_recovered', 'consultiq_recovered',
+     'caselift_recovered', 'caselift_recovered',
      now() - interval '6 days', now() - interval '5 days', 'accepted', now() - interval '7 days')
   returning id into c5;
   insert into public.messages (consult_id, practice_id, type, channel, subject, body, status, send_day, sent_at, scheduled_for, created_at) values

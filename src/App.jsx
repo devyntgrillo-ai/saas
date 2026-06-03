@@ -16,6 +16,8 @@ import AdminShell from './components/admin/AdminShell'
 //    fetch. Their charts/heavy panels are split out separately (see below). ──
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import ResellerSignup from './pages/ResellerSignup'
+import ReferralRedirect from './components/ReferralRedirect'
 import BAA from './pages/BAA'
 import Onboarding from './pages/Onboarding'
 import AcceptInvite from './pages/AcceptInvite'
@@ -37,16 +39,19 @@ const Settings = lazy(() => import('./pages/Settings'))
 const Training = lazy(() => import('./pages/Training'))
 const Community = lazy(() => import('./pages/Community'))
 const Agency = lazy(() => import('./pages/Agency'))
+const AgencySaaSMode = lazy(() => import('./pages/AgencySaaSMode'))
 const AgencyAnalytics = lazy(() => import('./pages/AgencyAnalytics'))
 const AgencyKnowledgeBase = lazy(() => import('./pages/AgencyKnowledgeBase'))
 const AgencyTeam = lazy(() => import('./pages/AgencyTeam'))
 const AdminOverview = lazy(() => import('./pages/admin/Overview'))
 const AdminAgencies = lazy(() => import('./pages/admin/Agencies'))
+const AdminResellers = lazy(() => import('./pages/admin/Resellers'))
 const AdminAgencyDetail = lazy(() => import('./pages/admin/AgencyDetail'))
 const AdminPractices = lazy(() => import('./pages/admin/Practices'))
 const AdminPracticeDetail = lazy(() => import('./pages/admin/PracticeDetail'))
 const AdminRevenue = lazy(() => import('./pages/admin/Revenue'))
 const AdminBilling = lazy(() => import('./pages/admin/Billing'))
+const AdminReferrals = lazy(() => import('./pages/admin/Referrals'))
 
 export default function App() {
   return (
@@ -59,6 +64,10 @@ export default function App() {
               {/* Public */}
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              {/* White-labeled reseller client signup (SaaS mode). Public. */}
+              <Route path="/signup/:slug" element={<ResellerSignup />} />
+              {/* Referral link entry: stores the code and forwards to signup. */}
+              <Route path="/r/:code" element={<ReferralRedirect />} />
               <Route path="/accept-invite" element={<AcceptInvite />} />
               <Route path="/invite/:token" element={<AcceptInvitation />} />
 
@@ -86,11 +95,13 @@ export default function App() {
                 <Route path="/admin" element={<AdminShell />}>
                   <Route index element={<AdminOverview />} />
                   <Route path="agencies" element={<AdminAgencies />} />
+                  <Route path="resellers" element={<AdminResellers />} />
                   <Route path="agencies/:id" element={<AdminAgencyDetail />} />
                   <Route path="practices" element={<AdminPractices />} />
                   <Route path="practices/:id" element={<AdminPracticeDetail />} />
                   <Route path="revenue" element={<AdminRevenue />} />
                   <Route path="billing" element={<AdminBilling />} />
+                  <Route path="referrals" element={<AdminReferrals />} />
                 </Route>
 
                 {/* App shell - gated behind BAA acceptance + onboarding completion */}
@@ -105,6 +116,7 @@ export default function App() {
                 >
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/agency" element={<Agency />} />
+                  <Route path="/agency/saas-mode" element={<AgencySaaSMode />} />
                   <Route path="/agency/analytics" element={<AgencyAnalytics />} />
                   <Route path="/agency/knowledge-base" element={<AgencyKnowledgeBase />} />
                   <Route path="/agency/team" element={<AgencyTeam />} />

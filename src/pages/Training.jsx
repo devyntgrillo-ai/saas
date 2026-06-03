@@ -150,9 +150,9 @@ export default function Training() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight text-white">Training</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-white">CaseLift Academy</h1>
         <p className="text-sm text-slate-400">
-          Sales-training modules to sharpen your treatment coordinators.
+          Everything your team needs to lift case acceptance.
           {!loading && modules.length > 0 && (
             <span className="ml-1 text-slate-500">
               {completedCount} of {modules.length} modules completed.

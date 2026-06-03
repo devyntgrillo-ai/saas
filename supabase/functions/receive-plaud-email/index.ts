@@ -1,6 +1,6 @@
 // receive-plaud-email - inbound webhook for Plaud AutoFlow forwarded emails
 // (e.g. SendGrid Inbound Parse). Resolves the practice from the recipient
-// address consults+{practice_id}@heyhope.ai, extracts the transcript, creates
+// address consults+{practice_id}@caselift.io, extracts the transcript, creates
 // a consult, and kicks off analyze-consult. Always 200s to avoid retries.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 

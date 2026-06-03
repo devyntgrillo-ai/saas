@@ -20,7 +20,7 @@ create unique index if not exists uq_pms_appts_practice_extid
   on public.pms_appointments(practice_id, pms_appointment_id);
 
 -- Unlinked Sikka registrations for admin review (when the connect webhook can't
--- match a Sikka practice to a Hope AI practice).
+-- match a Sikka practice to a CaseLift practice).
 create table if not exists public.sikka_registrations (
   id                uuid primary key default gen_random_uuid(),
   sikka_practice_id text,

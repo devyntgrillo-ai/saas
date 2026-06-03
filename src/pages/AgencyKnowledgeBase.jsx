@@ -45,7 +45,7 @@ export default function AgencyKnowledgeBase() {
               <BookOpen className="h-6 w-6 text-primary-400" /> Knowledge Base
             </h1>
             <p className="mt-1 text-sm text-slate-400">
-              Add your practice details so Hope can personalize every message.
+              Add your practice details so CaseLift can personalize every message.
             </p>
           </div>
           <label className="flex items-center gap-2 text-sm">

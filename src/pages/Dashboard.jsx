@@ -70,7 +70,7 @@ function KpiCard({ icon: Icon, label, value, sub, accent = 'primary', to }) {
     primary: 'bg-primary/10 text-primary-400',
     green: 'bg-emerald-500/10 text-emerald-400',
     amber: 'bg-amber-500/10 text-amber-400',
-    violet: 'bg-violet-500/10 text-violet-400',
+    violet: 'bg-[var(--accent-subtle)] text-[var(--accent)]',
     sky: 'bg-sky-500/10 text-sky-400',
   }
   const valueTone = accent === 'green' ? 'text-emerald-300' : 'text-white'
@@ -272,7 +272,7 @@ export default function Dashboard() {
 
     const prodRecovered = production?.recovered ?? 0
     const pipelineValue = activity.active * avgSetting
-    // Hours saved vs. manual follow-up: each automated message Hope AI sends
+    // Hours saved vs. manual follow-up: each automated message CaseLift sends
     // replaces a follow-up the team would otherwise text/call/email by hand,
     // estimated at minPerFollowup minutes each.
     const minPerFollowup = 5
@@ -298,13 +298,13 @@ export default function Dashboard() {
   }, [consults, messages, production, activity, practice, implantApptsWeek, repliesThisWeek, kpi])
 
   // Production recovered - split into confirmed (PMS/manual treatment-plan values)
-  // vs estimated pipeline (practice default / type-average). Only Hope AI-
+  // vs estimated pipeline (practice default / type-average). Only CaseLift-
   // attributed consults count. We never collapse these into a single number.
   const prodSplit = useMemo(() => {
     let confirmed = 0
     let pipeline = 0
     for (const c of consults) {
-      if (c.attribution_status !== 'consultiq_assisted' && c.attribution_status !== 'consultiq_recovered') continue
+      if (c.attribution_status !== 'caselift_assisted' && c.attribution_status !== 'caselift_recovered') continue
       const { value, source } = consultTxValue(c, practice)
       if (isConfirmedSource(source)) confirmed += value
       else pipeline += value
@@ -323,7 +323,7 @@ export default function Dashboard() {
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-white">
-          Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}. Here's what Hope has been working on.
+          Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}. Here's what CaseLift has been working on.
         </h1>
         <p className="mt-1 text-slate-400">
           Here's how your practice is recovering unconverted patients this month.
@@ -361,10 +361,10 @@ export default function Dashboard() {
               <div className="card p-5">
                 <div className="flex items-center justify-between">
                   <p className="flex items-center gap-1.5 text-sm text-slate-400">
-                    Production Recovered by Hope
+                    Production Lifted by CaseLift
                     <Info
                       className="h-3.5 w-3.5 cursor-help text-slate-500"
-                      title="Confirmed = actual treatment plan values from your PMS or manual entry, attributed to Hope AI."
+                      title="Confirmed = actual treatment plan values from your PMS or manual entry, attributed to CaseLift."
                     />
                   </p>
                   <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
@@ -374,7 +374,7 @@ export default function Dashboard() {
                 <p className="mt-3 text-3xl font-bold tracking-tight text-emerald-300">
                   {formatMoney(prodSplit.confirmed)}
                 </p>
-                <p className="mt-0.5 text-xs text-slate-500">Confirmed recovered · Hope AI attributed</p>
+                <p className="mt-0.5 text-xs text-slate-500">Confirmed recovered · CaseLift attributed</p>
               </div>
               <KpiCard icon={TrendingUp} accent="primary" label="Pipeline Value" value={formatMoney(kpis.pipelineValue)} sub={`${activity.active} patients nurtured`} />
               <KpiCard icon={Clock} accent="violet" label="Hours Saved" value={`${kpis.hoursSaved}h`} sub={`${kpis.messagesSent} auto follow-ups · ~${kpis.minPerFollowup} min each`} />
@@ -396,7 +396,7 @@ export default function Dashboard() {
                 <Network className="h-4 w-4 text-primary-400" /> You vs the network
               </h2>
               <p className="mt-1 text-xs text-slate-500">
-                How your sequences compare to similar practices across Hope AI.
+                How your sequences compare to similar practices across CaseLift.
               </p>
 
               <div className="mt-4 rounded-xl border border-surface-700 bg-surface-800/50 p-4 text-center">

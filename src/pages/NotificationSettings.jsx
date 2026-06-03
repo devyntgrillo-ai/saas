@@ -95,7 +95,7 @@ export default function NotificationSettings() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-base font-semibold text-white">Hope AI Notifications</h2>
+          <h2 className="text-base font-semibold text-white">CaseLift Notifications</h2>
           <p className="text-sm text-slate-400">Choose how and when your team is alerted.</p>
         </div>
         {flash && <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-300"><Check className="h-3.5 w-3.5" /> {flash}</span>}

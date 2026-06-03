@@ -3,8 +3,8 @@ import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, Tooltip } from 'rechar
 import { fetchRecordingRate } from '../lib/pms'
 
 const tooltipStyle = {
-  contentStyle: { background: '#1a1d26', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '0.5rem', fontSize: '0.75rem' },
-  labelStyle: { color: '#8b92a8' },
+  contentStyle: { background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '0.5rem', fontSize: '0.75rem', color: 'var(--text-primary)' },
+  labelStyle: { color: 'var(--text-secondary)' },
 }
 
 // Performance tiers drive the ring color, status pill, and bar fills. Solid
@@ -93,7 +93,7 @@ export default function RecordingRateCard({ practiceId, compact = false }) {
             <span className="text-3xl font-semibold tabular-nums text-slate-100">{current.recorded}</span>
             <span className="text-lg font-medium tabular-nums text-slate-500">/ {current.total}</span>
           </div>
-          <p className="mt-1 text-sm text-slate-400">Hope recorded {current.recorded} of {current.total} consults this week</p>
+          <p className="mt-1 text-sm text-slate-400">CaseLift recorded {current.recorded} of {current.total} consults this week</p>
           <p className="mt-2 text-xs text-slate-500">{footnote}</p>
         </div>
       </div>
@@ -104,7 +104,7 @@ export default function RecordingRateCard({ practiceId, compact = false }) {
           <div className="h-24">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={trend} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
-                <XAxis dataKey="label" tick={{ fill: '#8b92a8', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip
                   {...tooltipStyle}
                   formatter={(v, _n, p) => [`${v}% (${p.payload.recorded}/${p.payload.total})`, 'Recorded']}

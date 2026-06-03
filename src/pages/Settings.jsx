@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   Building2,
   Plug,
@@ -20,6 +20,7 @@ import {
   Sun,
   Moon,
   BookOpen,
+  Gift,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
@@ -31,6 +32,7 @@ import PMSIntegration from './PMSIntegration'
 import PhoneMessaging from './PhoneMessaging'
 import Integrations from './Integrations'
 import NotificationSettings from './NotificationSettings'
+import ReferralsPanel from './Referrals'
 import CancellationFlow from '../components/CancellationFlow'
 import InviteModal from '../components/InviteModal'
 import { usePermissions, ACCESS_LABELS } from '../lib/permissions'
@@ -42,8 +44,6 @@ import {
   trialDaysRemaining,
   isTrialExpired,
   createCheckout,
-  detectBillingTestMode,
-  getCachedBillingTestMode,
   getBillingStatus,
   createPortalSession,
 } from '../lib/billing'
@@ -54,6 +54,8 @@ const TABS = [
   { key: 'team', label: 'Team', icon: Users },
   { key: 'knowledge-base', label: 'Knowledge Base', icon: BookOpen },
   { key: 'notifications', label: 'Notifications', icon: Bell },
+  // Only for direct (non-reseller) practices - filtered out below when agency_id is set.
+  { key: 'referrals', label: 'Referrals', icon: Gift, directOnly: true },
   { key: 'billing', label: 'Billing', icon: CreditCard },
   { key: 'audit-log', label: 'Audit Log', icon: ScrollText, adminOnly: true },
   // Reachable via Integrations cards / deep links, hidden from the tab rail.
@@ -92,6 +94,8 @@ export default function Settings() {
     if (t.hidden) return false
     if (t.adminOnly && !isAdmin) return false
     if (t.key === 'billing' && !perms.canViewBilling) return false
+    // Reseller-onboarded practices refer through their reseller, not directly.
+    if (t.directOnly && practice?.agency_id) return false
     return true
   })
   const navigate = useNavigate()
@@ -114,11 +118,8 @@ export default function Settings() {
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [checkoutError, setCheckoutError] = useState('')
   const [showSuccess, setShowSuccess] = useState(false)
-  // Whether Lemon Squeezy is in test mode (drives the test-mode banner). Seed
-  // from cache for an instant render, then confirm with a background probe.
-  const [billingTestMode, setBillingTestMode] = useState(() => getCachedBillingTestMode())
 
-  // After returning from a Lemon Squeezy checkout, the webhook updates the
+  // After returning from a Chargebee checkout, the webhook updates the
   // practice asynchronously - refresh the profile and surface a confirmation.
   useEffect(() => {
     if (searchParams.get('success') === 'true') {
@@ -137,34 +138,18 @@ export default function Settings() {
     setCheckoutError('')
     setCheckoutLoading(true)
     try {
-      const { url, testMode } = await createCheckout({ practiceId: practice.id, email: practice.email })
-      setBillingTestMode(testMode)
+      const { url } = await createCheckout({ practiceId: practice.id, email: practice.email })
       window.location.href = url
     } catch (e) {
       const msg = e?.message || ''
       setCheckoutError(
-        /lemonsqueezy|not configured/i.test(msg)
-          ? 'Online checkout isn’t available yet - billing isn’t fully configured. Please contact support@heyhope.ai.'
+        /chargebee|not configured/i.test(msg)
+          ? 'Online checkout isn’t available yet - billing isn’t fully configured. Please contact support@caselift.io.'
           : msg || 'Could not start checkout. Please try again.',
       )
       setCheckoutLoading(false)
     }
   }
-
-  // On the billing tab, confirm Lemon Squeezy's mode in the background so the
-  // test-mode banner reflects reality (and hides automatically once live keys
-  // are in place). Cached client-side, so this is a no-op on most visits.
-  useEffect(() => {
-    if (tab !== 'billing' || !practice?.id) return
-    let active = true
-    ;(async () => {
-      const mode = await detectBillingTestMode({ practiceId: practice.id, email: practice.email })
-      if (active && typeof mode === 'boolean') setBillingTestMode(mode)
-    })()
-    return () => {
-      active = false
-    }
-  }, [tab, practice?.id, practice?.email])
 
   // Seed the local form once the practice loads.
   useEffect(() => {
@@ -235,7 +220,7 @@ export default function Settings() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Hope AI Settings</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-white">CaseLift Settings</h1>
           <p className="mt-1 text-sm text-slate-400">
             Practice profile, integrations, notifications, and billing.
           </p>
@@ -408,6 +393,14 @@ export default function Settings() {
           {/* Notifications */}
           {tab === 'notifications' && <NotificationSettings />}
 
+          {/* Referrals (direct practices only) */}
+          {tab === 'referrals' &&
+            (practice?.agency_id ? (
+              <Navigate to="/settings" replace />
+            ) : (
+              <ReferralsPanel practice={practice} />
+            ))}
+
           {/* Team */}
           {tab === 'team' && <PracticeTeamPanel practice={practice} />}
 
@@ -416,7 +409,6 @@ export default function Settings() {
             <BillingPanel
               practice={practice}
               showSuccess={showSuccess}
-              testMode={billingTestMode}
               checkoutLoading={checkoutLoading}
               checkoutError={checkoutError}
               onActivate={startCheckout}
@@ -441,7 +433,7 @@ function HipaaBadge() {
   return (
     <div className="flex shrink-0 items-center gap-1.5 px-3 py-2 text-xs font-normal text-slate-500 lg:mt-2 lg:border-t lg:border-surface-700 lg:pt-3">
       <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-      Hope AI is HIPAA Compliant
+      CaseLift is HIPAA Compliant
     </div>
   )
 }
@@ -452,7 +444,7 @@ function AppearanceCard() {
   return (
     <div className="card p-6">
       <h2 className="text-base font-semibold text-white">Appearance</h2>
-      <p className="mt-2 text-sm text-slate-400">Choose how Hope AI looks on this device.</p>
+      <p className="mt-2 text-sm text-slate-400">Choose how CaseLift looks on this device.</p>
       <div className="mt-4 flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-slate-200">Theme</p>
@@ -556,7 +548,7 @@ function ActivateButton({ label, loading, onClick }) {
   )
 }
 
-function BillingPanel({ practice, showSuccess, testMode, checkoutLoading, checkoutError, onActivate, onCancel, onResume }) {
+function BillingPanel({ practice, showSuccess, checkoutLoading, checkoutError, onActivate, onCancel, onResume }) {
   // Authoritative status from the edge function; falls back to the practice
   // record so a fetch failure never blocks the page.
   const [live, setLive] = useState(null)
@@ -581,7 +573,7 @@ function BillingPanel({ practice, showSuccess, testMode, checkoutLoading, checko
   const trialExpired = isTrial && isTrialExpired(eff)
   const daysLeft = trialDaysRemaining(eff)
 
-  // Lemon Squeezy customer-portal (update payment method).
+  // Chargebee customer-portal (update payment method / manage subscription).
   const [portalBusy, setPortalBusy] = useState(false)
   const [portalErr, setPortalErr] = useState('')
   async function openPortal() {
@@ -682,7 +674,7 @@ function BillingPanel({ practice, showSuccess, testMode, checkoutLoading, checko
           </p>
         )}
         {status === 'paused' && (
-          <p className="mt-4 text-sm text-indigo-300">
+          <p className="mt-4 text-sm text-primary-300">
             Your account is paused
             {practice?.pause_ends_at ? ` until ${formatDate(practice.pause_ends_at)}` : ''}. No charges during the
             pause - resume any time.
@@ -693,16 +685,6 @@ function BillingPanel({ practice, showSuccess, testMode, checkoutLoading, checko
       {checkoutError && (
         <p className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
           {checkoutError}
-        </p>
-      )}
-
-      {/* Test mode banner - only shown when Lemon Squeezy actually reports
-          test_mode (gated on the create-checkout response). Hides itself
-          automatically once live keys are in place. */}
-      {testMode === true && (
-        <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
-          Test mode active - use card <span className="font-medium text-amber-200">4242 4242 4242 4242</span> (any
-          future expiry and CVC) for testing. No real charges are made.
         </p>
       )}
 

@@ -62,7 +62,7 @@ export function redirectUri(): string {
 
 // Where the user lands back in the SPA after the callback finishes.
 export function appUrl(): string {
-  return (Deno.env.get("APP_URL") || "https://app.heyhope.ai").replace(/\/$/, "");
+  return (Deno.env.get("APP_URL") || "https://app.caselift.io").replace(/\/$/, "");
 }
 
 // Build the portal authorize URL the practice is sent to. `state` carries the
@@ -188,7 +188,7 @@ export function unwrapList(data: any, ...keys: string[]): any[] {
 
 // ---- Treatment-type + value mapping ----------------------------------------
 // Mirrors src/lib/treatments.js normalizeTreatment so PMS appointment/treatment
-// descriptions map to the same Hope AI treatment_type values the app uses.
+// descriptions map to the same CaseLift treatment_type values the app uses.
 const KNOWN_TREATMENTS = new Set([
   "dental_implants", "full_arch", "invisalign", "cosmetic_veneers",
   "sleep_apnea", "periodontal", "full_mouth_rehab", "other",

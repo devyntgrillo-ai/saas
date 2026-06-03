@@ -12,7 +12,7 @@ export default function Revenue() {
   const costs = estimateCosts(data)
   const series = useMemo(() => mrrSeries12(data.mrrHistory), [data.mrrHistory])
 
-  // Hope AI attribution per practice (production we can defensibly claim).
+  // CaseLift attribution per practice (production we can defensibly claim).
   const [attribution, setAttribution] = useState({})
   useEffect(() => {
     let active = true
@@ -62,7 +62,7 @@ export default function Revenue() {
     <div className="space-y-8">
       <div>
         <h1 className="text-xl font-bold text-white">Revenue</h1>
-        <p className="text-sm text-slate-500">Hope AI business financials</p>
+        <p className="text-sm text-slate-500">CaseLift business financials</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
@@ -87,9 +87,9 @@ export default function Revenue() {
                 <span className="font-medium text-slate-100">{a.name}</span>,
                 a.practiceCount,
                 money(a.perLocationFee),
-                money(a.mrrToHopeAI),
+                money(a.mrrToCaseLift),
                 new Date(a.created_at).toLocaleDateString(),
-                money(a.mrrToHopeAI * monthsActive),
+                money(a.mrrToCaseLift * monthsActive),
               ]
             }),
             [
@@ -119,12 +119,12 @@ export default function Revenue() {
         />
       </section>
 
-      {/* Hope AI attribution by practice */}
+      {/* CaseLift attribution by practice */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">Hope AI attribution by practice</h2>
+          <h2 className="text-sm font-semibold text-white">CaseLift attribution by practice</h2>
           <span className="text-xs text-slate-500">
-            {attrTotals.rate}% of closed cases had Hope AI touchpoints
+            {attrTotals.rate}% of closed cases had CaseLift touchpoints
           </span>
         </div>
         <Table
@@ -149,7 +149,7 @@ export default function Revenue() {
                 ]]
               : []),
           ]}
-          empty="No attributed production yet - closed cases with Hope AI touchpoints will appear here."
+          empty="No attributed production yet - closed cases with CaseLift touchpoints will appear here."
         />
       </section>
 

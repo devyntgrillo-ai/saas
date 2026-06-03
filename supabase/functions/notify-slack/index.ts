@@ -2,7 +2,7 @@
 // notify-slack - post a message to a Slack Incoming Webhook.
 //
 // Used for high-signal events (e.g. a treatment acceptance attributed to
-// Hope AI). Callable with the service-role key from other edge functions, or
+// CaseLift). Callable with the service-role key from other edge functions, or
 // directly with { text } | { blocks }. Degrades gracefully (200, sent:false)
 // when SLACK_WEBHOOK_URL is not configured so callers never have to special-case it.
 // ============================================================================

@@ -1,6 +1,6 @@
 # Two-way SMS (Twilio)
 
-Hope sends and receives patient SMS through Supabase Edge Functions. Outbound
+CaseLift sends and receives patient SMS through Supabase Edge Functions. Outbound
 messages go through **`twilio-send`**; inbound replies hit **`twilio-inbound`**.
 
 ## Architecture

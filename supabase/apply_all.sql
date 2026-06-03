@@ -1,5 +1,5 @@
 -- ============================================================================
--- apply_all.sql - bring a Hope AI database fully up to date in one run.
+-- apply_all.sql - bring a CaseLift database fully up to date in one run.
 --
 -- Bundles every SCHEMA migration (idempotent column/table/RLS additions) in
 -- dependency order, wrapped in a single transaction. Safe to re-run.
@@ -75,23 +75,22 @@ create policy "audit_logs_select_own_practice" on public.audit_logs
 
 
 -- ════════════════════════════════════════════════════════════════════════
--- >>> migrations/20260529010000_billing_columns.sql
+-- >>> migrations/20260602010000_chargebee_billing_columns.sql
 -- ════════════════════════════════════════════════════════════════════════
 -- ============================================================================
--- Billing columns on practices (Lemon Squeezy). Idempotent.
+-- Billing columns on practices (Chargebee). Idempotent.
 -- Run in the Supabase SQL editor (project eymgqjeudrmeofytnwgs).
 -- ============================================================================
-alter table public.practices add column if not exists subscription_status text default 'trial';
-alter table public.practices add column if not exists ls_subscription_id   text;
-alter table public.practices add column if not exists ls_customer_id       text;
-alter table public.practices add column if not exists ls_variant_id        text;
-alter table public.practices add column if not exists trial_ends_at        timestamptz;
-alter table public.practices add column if not exists current_period_end   timestamptz;
--- next_billing_date is already written by ls-webhook; keep it for back-compat.
-alter table public.practices add column if not exists next_billing_date    date;
+alter table public.practices add column if not exists subscription_status      text default 'trial';
+alter table public.practices add column if not exists chargebee_customer_id     text;
+alter table public.practices add column if not exists chargebee_subscription_id text;
+alter table public.practices add column if not exists trial_ends_at             timestamptz;
+alter table public.practices add column if not exists current_period_end        timestamptz;
+-- next_billing_date is written by chargebee-webhook for display.
+alter table public.practices add column if not exists next_billing_date         date;
 
-create index if not exists idx_practices_ls_subscription on public.practices(ls_subscription_id);
-create index if not exists idx_practices_ls_customer     on public.practices(ls_customer_id);
+create index if not exists idx_practices_chargebee_customer     on public.practices(chargebee_customer_id);
+create index if not exists idx_practices_chargebee_subscription on public.practices(chargebee_subscription_id);
 
 
 -- ════════════════════════════════════════════════════════════════════════
@@ -148,7 +147,7 @@ create unique index if not exists uq_pms_appts_practice_extid
   on public.pms_appointments(practice_id, pms_appointment_id);
 
 -- Unlinked Sikka registrations for admin review (when the connect webhook can't
--- match a Sikka practice to a Hope AI practice).
+-- match a Sikka practice to a CaseLift practice).
 create table if not exists public.sikka_registrations (
   id                uuid primary key default gen_random_uuid(),
   sikka_practice_id text,
@@ -408,7 +407,7 @@ alter table public.conversations
   add column if not exists reactivation_campaign_id uuid
     references public.reactivation_campaigns(id) on delete set null;
 
--- Attribution status on consults (reporting): consultiq_recovered etc.
+-- Attribution status on consults (reporting): caselift_recovered etc.
 alter table public.consults add column if not exists attribution_status text;
 alter table public.consults add column if not exists conversion_source  text;
 alter table public.consults add column if not exists closed_at          timestamptz;

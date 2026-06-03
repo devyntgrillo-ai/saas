@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>ConsultIQ uses your microphone to record patient consultations so they can be transcribed and analyzed.</string>
+	<string>CaseLift uses your microphone to record patient consultations so they can be transcribed and analyzed.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>ConsultIQ</string>
+        <string>CaseLift</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

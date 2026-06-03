@@ -262,8 +262,8 @@ export function rateColor(pct) {
   return { text: 'text-rose-400', bar: 'bg-rose-500' }
 }
 
-// Attribution split: total production from Hope AI patients vs the portion
-// conservatively attributed to Hope AI sequences.
+// Attribution split: total production from CaseLift patients vs the portion
+// conservatively attributed to CaseLift sequences.
 export async function fetchAttribution(practiceId) {
   const { data } = await supabase
     .from('consults')
@@ -273,13 +273,13 @@ export async function fetchAttribution(practiceId) {
   const rows = data || []
   const total = rows.reduce((s, c) => s + (Number(c.case_value) || 0), 0)
   const attributed = rows
-    .filter((c) => c.attribution_model === 'consultiq_recovered')
+    .filter((c) => c.attribution_model === 'caselift_recovered')
     .reduce((s, c) => s + (Number(c.case_value) || 0), 0)
   return { total, attributed }
 }
 
 export const ATTRIBUTION_BADGES = {
-  consultiq_recovered: { label: 'Recovered by Hope AI', classes: 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/20' },
+  caselift_recovered: { label: 'Recovered by CaseLift', classes: 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/20' },
   practice_recovered: { label: 'Closed independently', classes: 'bg-slate-500/15 text-slate-300 ring-slate-400/20' },
   unknown: { label: 'Attribution pending', classes: 'bg-slate-500/10 text-slate-400 ring-slate-400/10' },
 }

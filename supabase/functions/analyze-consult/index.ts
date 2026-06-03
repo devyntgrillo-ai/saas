@@ -28,7 +28,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 // ---- Claude analysis --------------------------------------------------------
-const analysisSystemPrompt = (treatmentType: string) => `You are Hope AI, an AI system that analyzes dental consultation recordings to help treatment coordinators recover unconverted patients.
+const analysisSystemPrompt = (treatmentType: string) => `You are CaseLift, an AI system that analyzes dental consultation recordings to help treatment coordinators recover unconverted patients.
 
 Treatment type being analyzed: ${treatmentType}
 

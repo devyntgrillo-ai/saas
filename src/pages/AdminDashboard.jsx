@@ -184,7 +184,7 @@ export default function AdminDashboard() {
             p.doctor ? `Dr. ${p.doctor}` : '-',
             p.consults_month,
             <span className={`rounded-full px-2 py-0.5 text-xs ${subStatusMeta(p.subscription_status).classes}`}>{subStatusMeta(p.subscription_status).label}</span>,
-            <button onClick={() => viewAs(p.id)} className="inline-flex items-center gap-1 rounded-lg border border-surface-700 bg-surface-800 px-2.5 py-1 text-xs font-medium text-violet-300 transition hover:bg-surface-700">
+            <button onClick={() => viewAs(p.id)} className="inline-flex items-center gap-1 rounded-lg border border-surface-700 bg-surface-800 px-2.5 py-1 text-xs font-medium text-primary-300 transition hover:bg-surface-700">
               <Eye className="h-3.5 w-3.5" /> View
             </button>,
           ])}
@@ -318,7 +318,7 @@ function SettingsTab() {
       </div>
       <p className="mt-4 text-sm font-semibold text-slate-200">Platform settings</p>
       <p className="mx-auto mt-1 max-w-sm text-xs text-slate-500">
-        Global Hope AI configuration lives here - default plans, network-wide AI tuning, and platform
+        Global CaseLift configuration lives here - default plans, network-wide AI tuning, and platform
         announcements. More controls coming soon.
       </p>
     </div>

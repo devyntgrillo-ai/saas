@@ -363,7 +363,7 @@ export default function PhoneMessaging() {
 
         <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-surface-700 bg-surface-800/50 px-4 py-3 text-sm text-slate-400">
           <Mail className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
-          Emails are sent via Hope AI's delivery system - no setup required.
+          Emails are sent via CaseLift's delivery system - no setup required.
         </div>
 
         <div className="mt-5 rounded-lg border border-surface-700 bg-surface-800/40 p-4">
@@ -430,7 +430,7 @@ export default function PhoneMessaging() {
         <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-sky-500/25 bg-sky-500/10 px-4 py-3 text-sm text-sky-200">
           <Lock className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            Hope AI automatically handles STOP/UNSUBSCRIBE replies and removes patients from
+            CaseLift automatically handles STOP/UNSUBSCRIBE replies and removes patients from
             sequences. This is required for TCPA compliance and cannot be disabled.
           </span>
         </div>

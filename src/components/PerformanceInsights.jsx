@@ -105,7 +105,7 @@ export default function PerformanceInsights({ consults = [], messages = [], comp
 
   const youClose = Math.round((comparison?.practice?.closeRate || 0) * 100)
   const netClose = Math.round((comparison?.network?.closeRate || 28) * 100)
-  const axis = { fontSize: 11, fill: '#94a3b8' }
+  const axis = { fontSize: 11, fill: 'var(--text-muted)' }
 
   return (
     <div className="space-y-4">
@@ -118,7 +118,7 @@ export default function PerformanceInsights({ consults = [], messages = [], comp
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={recordingTrend}>
               <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} />
-              <Tooltip cursor={{ fill: 'rgba(148,163,184,0.1)' }} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+              <Tooltip cursor={{ fill: 'rgba(148,163,184,0.1)' }} contentStyle={{ fontSize: 12, borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
               <Bar dataKey="count" fill="#0EA5E9" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -128,7 +128,7 @@ export default function PerformanceInsights({ consults = [], messages = [], comp
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={bestMessage}>
               <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} />
-              <Tooltip cursor={{ fill: 'rgba(148,163,184,0.1)' }} contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v) => [`${v}%`, 'Reply rate']} />
+              <Tooltip cursor={{ fill: 'rgba(148,163,184,0.1)' }} contentStyle={{ fontSize: 12, borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} formatter={(v) => [`${v}%`, 'Reply rate']} />
               <Bar dataKey="rate" fill="#10b981" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -141,7 +141,7 @@ export default function PerformanceInsights({ consults = [], messages = [], comp
                 <Pie data={objection} dataKey="value" nameKey="name" innerRadius={42} outerRadius={64} paddingAngle={2}>
                   {objection.map((o) => <Cell key={o.name} fill={o.color} />)}
                 </Pie>
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
               </PieChart>
             </ResponsiveContainer>
           ) : <p className="py-12 text-center text-sm text-slate-500">No consults this month yet.</p>}
@@ -157,10 +157,10 @@ export default function PerformanceInsights({ consults = [], messages = [], comp
         <Panel title="Close rate trend (3 months)">
           <ResponsiveContainer width="100%" height={160}>
             <LineChart data={closeTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
               <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} />
               <YAxis tick={axis} axisLine={false} tickLine={false} width={28} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v) => [`${v}%`, 'Close rate']} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} formatter={(v) => [`${v}%`, 'Close rate']} />
               <Line type="monotone" dataKey="rate" stroke="#0EA5E9" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>

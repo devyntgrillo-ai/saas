@@ -121,7 +121,7 @@ export default function BAA() {
             <>
               <div className="max-h-[46vh] overflow-y-auto px-6 py-5 text-sm leading-relaxed text-slate-300">
                 <p className="text-xs text-slate-500">
-                  Between <span className="text-slate-300">Hope AI, Inc.</span> ("Business
+                  Between <span className="text-slate-300">CaseLift, Inc.</span> ("Business
                   Associate") and{' '}
                   <span className="text-slate-300">{practice?.name || 'your practice'}</span>{' '}
                   ("Covered Entity"), effective on acceptance.
@@ -130,21 +130,21 @@ export default function BAA() {
                 <h2 className="mt-5 font-semibold text-slate-100">1. Purpose</h2>
                 <p className="mt-1">
                   This Agreement governs the use and disclosure of Protected Health Information
-                  ("PHI") by Hope AI in the course of providing AI-assisted consult analysis and
+                  ("PHI") by CaseLift in the course of providing AI-assisted consult analysis and
                   patient follow-up services to the Covered Entity, in compliance with HIPAA
                   (45 CFR Parts 160 and 164).
                 </p>
 
                 <h2 className="mt-5 font-semibold text-slate-100">2. Permitted Uses</h2>
                 <p className="mt-1">
-                  Hope AI will use PHI solely to perform the services described, including
+                  CaseLift will use PHI solely to perform the services described, including
                   de-identification, analysis, and follow-up messaging. PHI will not be used or
                   disclosed for any other purpose without authorization.
                 </p>
 
                 <h2 className="mt-5 font-semibold text-slate-100">3. Safeguards</h2>
                 <p className="mt-1">
-                  Hope AI implements administrative, physical, and technical safeguards including:
+                  CaseLift implements administrative, physical, and technical safeguards including:
                   de-identification of all transcripts via automated PHI detection before analysis;
                   encryption of data in transit and at rest; row-level access controls scoped to
                   your practice; and a tamper-resistant audit log of every access to patient
@@ -153,21 +153,21 @@ export default function BAA() {
 
                 <h2 className="mt-5 font-semibold text-slate-100">4. De-identification</h2>
                 <p className="mt-1">
-                  Raw consult transcripts are never stored. Hope AI strips direct identifiers
+                  Raw consult transcripts are never stored. CaseLift strips direct identifiers
                   (names, phone numbers, email addresses, dates of birth, and addresses) before any
                   third-party AI processing, and retains only the de-identified version.
                 </p>
 
                 <h2 className="mt-5 font-semibold text-slate-100">5. Breach Notification</h2>
                 <p className="mt-1">
-                  Hope AI will report any use or disclosure of PHI not provided for by this
+                  CaseLift will report any use or disclosure of PHI not provided for by this
                   Agreement, including breaches of unsecured PHI, without unreasonable delay.
                 </p>
 
                 <h2 className="mt-5 font-semibold text-slate-100">6. Term &amp; Termination</h2>
                 <p className="mt-1">
-                  This Agreement remains in effect for the duration of your use of Hope AI. Upon
-                  termination, Hope AI will return or destroy all PHI where feasible.
+                  This Agreement remains in effect for the duration of your use of CaseLift. Upon
+                  termination, CaseLift will return or destroy all PHI where feasible.
                 </p>
               </div>
 

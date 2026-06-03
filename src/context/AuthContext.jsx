@@ -207,7 +207,7 @@ export function AuthProvider({ children }) {
 
   // White-label theming (primary color, logo, title, favicon) is resolved and
   // applied by BrandingContext, which reads this auth context. On sign-out we
-  // still reset the palette here so the login screen returns to Hope AI.
+  // still reset the palette here so the login screen returns to CaseLift.
   const signOut = useCallback(async () => {
     localStorage.removeItem(VIEW_KEY)
     setViewingPracticeId(null)

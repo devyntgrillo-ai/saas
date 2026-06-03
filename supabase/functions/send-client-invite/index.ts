@@ -11,7 +11,7 @@
 //   3. Generate a Supabase magic invite link server-side.
 //   4. Email it via Mailgun using the reseller's white-label brand (logo header,
 //      company name, the practice's price, a "Get Started" button, "Powered by
-//      Hope AI" footer). Falls back to returning the link if Mailgun isn't
+//      CaseLift" footer). Falls back to returning the link if Mailgun isn't
 //      configured.
 //
 // Uses the service role for admin auth + privileged writes; the caller's own JWT
@@ -167,7 +167,7 @@ Deno.serve(async (req: Request) => {
 
     // Super admins may target a specific reseller via body.agency_id; otherwise
     // the practice is attached to the caller's own reseller (may be null for a
-    // super admin acting directly, which falls back to the Hope AI brand).
+    // super admin acting directly, which falls back to the CaseLift brand).
     const agencyId: string | null =
       (isSuperAdmin && body.agency_id) || membership?.agency_id || null;
 

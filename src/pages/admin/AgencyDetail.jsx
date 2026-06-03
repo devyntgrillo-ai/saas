@@ -59,7 +59,7 @@ export default function AgencyDetail() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => impersonateAgency(agency)} className="btn-ghost text-violet-300">
+          <button onClick={() => impersonateAgency(agency)} className="btn-ghost text-primary-300">
             <UserCog className="h-4 w-4" /> Impersonate
           </button>
           <button onClick={() => setConfirmSuspend(true)} className="btn-ghost text-rose-300">
@@ -70,7 +70,7 @@ export default function AgencyDetail() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
-        <StatCard label="MRR to Hope AI" value={money(agency.mrrToHopeAI)} accent="text-emerald-300" />
+        <StatCard label="MRR to CaseLift" value={money(agency.mrrToCaseLift)} accent="text-emerald-300" />
         <StatCard label="Their client MRR" value={money(agency.clientMrr)} />
         <StatCard label="Their margin" value={money(agency.margin)} />
         <StatCard label="Active practices" value={practices.filter((p) => p.subscription_status === 'active').length} />
@@ -92,7 +92,7 @@ export default function AgencyDetail() {
             money(p.recovered),
             <div className="flex items-center gap-1.5" onClick={stop}>
               <button onClick={() => navigate(`/admin/practices/${p.id}`)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-slate-300 transition hover:bg-surface-700" title="View"><Eye className="h-3.5 w-3.5" /></button>
-              <button onClick={() => impersonatePractice(p)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-violet-300 transition hover:bg-surface-700">Impersonate</button>
+              <button onClick={() => impersonatePractice(p)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-primary-300 transition hover:bg-surface-700">Impersonate</button>
             </div>,
           ])}
           empty="No practices under this reseller yet."
@@ -130,7 +130,7 @@ function WhiteLabelCard({ wl }) {
     <div className="card p-5">
       <h2 className="text-sm font-semibold text-white">White label</h2>
       {!wl ? (
-        <p className="mt-3 text-sm text-slate-500">Not white-labeled - uses default Hope AI branding.</p>
+        <p className="mt-3 text-sm text-slate-500">Not white-labeled - uses default CaseLift branding.</p>
       ) : (
         <dl className="mt-3 space-y-2.5 text-sm">
           <Row label="Brand name" value={wl.brand_name} />
@@ -199,8 +199,8 @@ function InternalNotes({ agency, onSaved }) {
 }
 
 function BillingHistory({ agency }) {
-  // Seed 3 months of charges from the agency's MRR-to-Hope AI.
-  const amount = agency.mrrToHopeAI || agency.practiceCount * PRICING.agencyPerLocation
+  // Seed 3 months of charges from the agency's MRR-to-CaseLift.
+  const amount = agency.mrrToCaseLift || agency.practiceCount * PRICING.agencyPerLocation
   const months = [0, 1, 2].map((i) => {
     const d = new Date()
     d.setMonth(d.getMonth() - i)

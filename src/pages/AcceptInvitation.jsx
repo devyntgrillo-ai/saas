@@ -32,7 +32,7 @@ export default function AcceptInvitation() {
     }
   }, [token])
 
-  const scopeName = invite?.agency_name || invite?.practice_name || 'Hope AI'
+  const scopeName = invite?.agency_name || invite?.practice_name || 'CaseLift'
   const expired = invite && (invite.accepted_at || new Date(invite.expires_at) < new Date())
 
   async function finalize() {

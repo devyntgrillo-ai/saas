@@ -20,7 +20,7 @@ export default function SequencesMobileGate() {
         <h2 className="mt-4 text-base font-semibold text-white">Open on desktop to view &amp; edit</h2>
         <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-slate-400">
           Follow-up sequences - timing, pauses, and reactivation campaigns - are managed on the
-          desktop app. Sign in to Hope AI on your computer to make changes.
+          desktop app. Sign in to CaseLift on your computer to make changes.
         </p>
       </div>
     </div>

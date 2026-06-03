@@ -351,7 +351,7 @@ export default function RecordingModal({ onClose, patient = null }) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-surface-700 px-5 py-3.5">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-            <Mic className="h-4 w-4 text-primary-400" /> Hey, I&apos;m Hope
+            <Mic className="h-4 w-4 text-primary-400" /> Hey, I&apos;m CaseLift
           </h2>
           {!locked && (
             <button onClick={requestCancel} className="rounded-md p-1.5 text-slate-400 transition hover:bg-surface-800 hover:text-white">
@@ -378,7 +378,7 @@ export default function RecordingModal({ onClose, patient = null }) {
               <p className="mt-4 text-sm font-semibold text-slate-200">Microphone access is blocked</p>
               <p className="mt-1.5 max-w-xs text-xs leading-relaxed text-slate-500">
                 {native ? (
-                  <>Open <span className="text-slate-300">Settings → Hope AI → Microphone</span> and turn it on, then try again.</>
+                  <>Open <span className="text-slate-300">Settings → CaseLift → Microphone</span> and turn it on, then try again.</>
                 ) : (
                   <>Click the camera/lock icon in your browser's address bar, set Microphone to{' '}
                   <span className="text-slate-300">Allow</span>, then try again. On iPhone, allow mic access in
@@ -434,9 +434,9 @@ export default function RecordingModal({ onClose, patient = null }) {
                 {fmt(seconds)}
               </p>
               <p className="mt-1 h-4 text-xs font-medium">
-                {recording && <span className="text-primary-400">Hope is listening…</span>}
+                {recording && <span className="text-primary-400">CaseLift is listening…</span>}
                 {paused && <span className="text-amber-300">❚❚ Paused</span>}
-                {phase === 'ready' && <span className="text-slate-500">Hey, I&apos;m Hope. I&apos;m ready to listen to your consult.</span>}
+                {phase === 'ready' && <span className="text-slate-500">Hey, I&apos;m CaseLift. I&apos;m ready to listen to your consult.</span>}
               </p>
 
               {/* Big record button */}
@@ -507,7 +507,7 @@ export default function RecordingModal({ onClose, patient = null }) {
           {phase === 'processing' && (
             <div className="flex flex-col items-center py-10 text-center">
               <Loader2 className="h-8 w-8 animate-spin text-primary-300" />
-              <p className="mt-4 text-sm font-semibold text-white">Hope is transcribing your recording…</p>
+              <p className="mt-4 text-sm font-semibold text-white">CaseLift is transcribing your recording…</p>
               <p className="mt-1 text-xs text-slate-500">This only takes a moment.</p>
             </div>
           )}

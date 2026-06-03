@@ -137,7 +137,7 @@ begin
     (c4, pid, 'followup', 'sms',   null, 'Hi James, great meeting you. I will send over the details we discussed today.', 'sent', 1, now() - interval '4 days', null, now() - interval '4 days'),
     (c4, pid, 'followup', 'email', 'Your treatment summary', 'Hi James, here is the full summary and pricing. Safe travels, and we will pick this up when you are back.', 'sent', 1, now() - interval '4 days', null, now() - interval '4 days'),
     (c4, pid, 'followup', 'sms',   null, 'Welcome back, James! Ready to find a time whenever you are.', 'scheduled', 3, null, now() + interval '1 day', now() - interval '4 days'),
-    (c4, pid, 'followup', 'email', 'Picking back up', 'Hope the trip was great. Here are a few openings if you would like to move forward.', 'scheduled', 7, null, now() + interval '5 days', now() - interval '4 days'),
+    (c4, pid, 'followup', 'email', 'Picking back up', 'CaseLift the trip was great. Here are a few openings if you would like to move forward.', 'scheduled', 7, null, now() + interval '5 days', now() - interval '4 days'),
     (c4, pid, 'followup', 'sms',   null, 'Still glad to get you scheduled whenever the timing is right.', 'scheduled', 7, null, now() + interval '5 days', now() - interval '4 days'),
     (c4, pid, 'followup', 'email', 'Financing reminder', 'A quick reminder of the financing options in case it helps your decision.', 'scheduled', 14, null, now() + interval '10 days', now() - interval '4 days');
 

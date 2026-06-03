@@ -170,7 +170,7 @@ export default function AuditLog() {
         <EmptyState
           icon={ScrollText}
           title="No audit events"
-          description="Patient-data access events will be recorded here as your team uses Hope AI."
+          description="Patient-data access events will be recorded here as your team uses CaseLift."
         />
       ) : (
         <div className="card overflow-hidden">

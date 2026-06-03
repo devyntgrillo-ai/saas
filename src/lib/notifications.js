@@ -4,16 +4,16 @@ import { supabase } from './supabase'
 // Visual config + default copy per notification type. `tone` drives the colored
 // left border in the bell: green = positive, amber = action, blue = info.
 export const NOTIFICATION_TYPES = {
-  consult_analyzed: { label: 'Hope analyzed a new consult', icon: 'PhoneCall', tone: 'amber', classes: 'bg-amber-500/10 text-amber-400' },
-  patient_replied: { label: 'Hope got a reply', icon: 'MessageSquare', tone: 'green', classes: 'bg-emerald-500/10 text-emerald-400' },
-  case_converted: { label: 'Hope recovered a case', icon: 'CheckCircle2', tone: 'green', classes: 'bg-emerald-500/10 text-emerald-400' },
-  patient_waiting: { label: 'A patient is waiting on Hope', icon: 'Clock', tone: 'amber', classes: 'bg-amber-500/10 text-amber-400' },
-  low_recording_rate: { label: 'Hope noticed your recording rate dropped', icon: 'PhoneCall', tone: 'amber', classes: 'bg-amber-500/10 text-amber-400' },
-  call_due: { label: 'Hope has follow-ups due today', icon: 'PhoneCall', tone: 'amber', classes: 'bg-amber-500/10 text-amber-400' },
-  ai_update: { label: 'Hope updated your sequences', icon: 'Sparkles', tone: 'blue', classes: 'bg-sky-500/10 text-sky-400' },
-  sequence_started: { label: 'Hope started a follow-up sequence', icon: 'Send', tone: 'blue', classes: 'bg-violet-500/10 text-violet-400' },
-  sequence_paused: { label: 'Hope paused a sequence', icon: 'PauseCircle', tone: 'amber', classes: 'bg-amber-500/10 text-amber-400' },
-  reactivation_reply: { label: 'Hope got a reactivation reply', icon: 'MessageSquare', tone: 'green', classes: 'bg-emerald-500/10 text-emerald-400' },
+  consult_analyzed: { label: 'CaseLift analyzed a new consult', icon: 'PhoneCall', tone: 'amber', classes: 'bg-amber-500/10 text-amber-400' },
+  patient_replied: { label: 'CaseLift got a reply', icon: 'MessageSquare', tone: 'green', classes: 'bg-emerald-500/10 text-emerald-400' },
+  case_converted: { label: 'CaseLift recovered a case', icon: 'CheckCircle2', tone: 'green', classes: 'bg-emerald-500/10 text-emerald-400' },
+  patient_waiting: { label: 'A patient is waiting on CaseLift', icon: 'Clock', tone: 'amber', classes: 'bg-amber-500/10 text-amber-400' },
+  low_recording_rate: { label: 'CaseLift noticed your recording rate dropped', icon: 'PhoneCall', tone: 'amber', classes: 'bg-amber-500/10 text-amber-400' },
+  call_due: { label: 'CaseLift has follow-ups due today', icon: 'PhoneCall', tone: 'amber', classes: 'bg-amber-500/10 text-amber-400' },
+  ai_update: { label: 'CaseLift updated your sequences', icon: 'Sparkles', tone: 'blue', classes: 'bg-sky-500/10 text-sky-400' },
+  sequence_started: { label: 'CaseLift started a follow-up sequence', icon: 'Send', tone: 'blue', classes: 'bg-[var(--accent-subtle)] text-[var(--accent)]' },
+  sequence_paused: { label: 'CaseLift paused a sequence', icon: 'PauseCircle', tone: 'amber', classes: 'bg-amber-500/10 text-amber-400' },
+  reactivation_reply: { label: 'CaseLift got a reactivation reply', icon: 'MessageSquare', tone: 'green', classes: 'bg-emerald-500/10 text-emerald-400' },
   info: { label: 'Notification', icon: 'Bell', tone: 'blue', classes: 'bg-slate-500/10 text-slate-400' },
 }
 

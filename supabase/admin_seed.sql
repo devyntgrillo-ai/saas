@@ -29,7 +29,7 @@ delete from public.agency_accounts
 where name in ('dsd', 'Coastal Smiles Network', 'Mountain West Dental', 'Summit Dental Partners');
 
 -- 2) Ensure the two real agencies exist (idempotent by name) ------------------
---    $500/location to Hope AI → 3 locations = $1,500, 2 locations = $1,000.
+--    $500/location to CaseLift → 3 locations = $1,500, 2 locations = $1,000.
 insert into public.agency_accounts (name, owner_name, owner_email, monthly_fee, active, admin_notes)
 select 'Northwest Implant Group', 'Marcus Webb', 'agency@nwimplant.com', 500, true,
        'Founding partner. Expanding into Idaho in Q3 - likely +2 locations.'

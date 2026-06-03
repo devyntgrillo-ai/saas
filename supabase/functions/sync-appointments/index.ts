@@ -130,7 +130,7 @@ async function syncOnePractice(admin: any, practice: SikkaPracticeRow) {
 
   // PMS close-guard + attribution: a treatment/procedure (or completed)
   // appointment means the patient booked/started. Auto-close the matching
-  // consult, stop its sequence, determine Hope AI attribution, store the
+  // consult, stop its sequence, determine CaseLift attribution, store the
   // treatment value, log the auditable event, and ping Slack.
   try {
     // deno-lint-ignore no-explicit-any
@@ -168,7 +168,7 @@ async function syncOnePractice(admin: any, practice: SikkaPracticeRow) {
             .eq("direction", "inbound").in("conversation_id", convIds);
           replied = (inCount || 0) > 0;
         }
-        const status = replied ? "consultiq_recovered" : (sentCount || 0) > 0 ? "consultiq_assisted" : "practice_direct";
+        const status = replied ? "caselift_recovered" : (sentCount || 0) > 0 ? "caselift_assisted" : "practice_direct";
 
         // deno-lint-ignore no-explicit-any
         const patch: Record<string, any> = {
@@ -178,7 +178,7 @@ async function syncOnePractice(admin: any, practice: SikkaPracticeRow) {
           attribution_status: status,
           attribution_confirmed_at: new Date().toISOString(),
           attribution_source: "pms_sync",
-          attribution_model: status === "practice_direct" ? "practice_recovered" : "consultiq_recovered",
+          attribution_model: status === "practice_direct" ? "practice_recovered" : "caselift_recovered",
         };
         if (value != null) {
           patch.case_value = value;
@@ -220,7 +220,7 @@ async function syncOnePractice(admin: any, practice: SikkaPracticeRow) {
             || match.patient_name || "A patient";
           const valStr = value != null ? `$${value.toLocaleString()}` : "value pending";
           await postSlackInline(
-            `🟢 Treatment accepted - ${name} - ${valStr} - Attributed to Hope AI (${status === "consultiq_recovered" ? "Recovered" : "Assisted"})`,
+            `🟢 Treatment accepted - ${name} - ${valStr} - Attributed to CaseLift (${status === "caselift_recovered" ? "Recovered" : "Assisted"})`,
           );
         }
       }

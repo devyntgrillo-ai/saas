@@ -7,8 +7,8 @@
 // If there's no paid subscription, returns a 14-day trial window derived from
 // the practice's created_at.
 //
-// Subscription state lives on the practices table (written by ls-webhook):
-//   subscription_status, trial_ends_at, created_at, ls_subscription_id.
+// Subscription state lives on the practices table (written by chargebee-webhook):
+//   subscription_status, trial_ends_at, created_at, chargebee_subscription_id.
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
@@ -58,7 +58,7 @@ Deno.serve(async (req: Request) => {
     if (!practice) return json({ error: "Practice not found or not accessible." }, 403);
 
     const status: string | null = practice.subscription_status ?? null;
-    const subscriptionId = practice.ls_subscription_id ?? practice.subscription_id ?? null;
+    const subscriptionId = practice.chargebee_subscription_id ?? practice.subscription_id ?? null;
 
     // No paid subscription (or explicit trial) → return a 14-day trial window.
     if (!status || status === "trial") {
@@ -72,7 +72,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // active / past_due / paused / cancelled - report the real status.
-    const plan = status === "active" ? "consultiq" : status;
+    const plan = status === "active" ? "caselift" : status;
     return json({
       plan,
       status,

@@ -1,20 +1,20 @@
-// Shared billing / subscription helpers for Hope AI (Lemon Squeezy).
+// Shared billing / subscription helpers for CaseLift (Chargebee).
 //
 // Subscription lifecycle (practices.subscription_status):
 //   trial     - new signups; full access until trial_ends_at (14 days)
-//   active    - paid Lemon Squeezy subscription
+//   active    - paid Chargebee subscription
 //   past_due  - a renewal payment failed
 //   cancelled - subscription cancelled (access until end of paid period)
 import { supabase } from './supabase'
 
-export const PLAN_NAME = 'Hope AI'
+export const PLAN_NAME = 'CaseLift'
 export const PLAN_PRICE = '$997/month'
 
 // Visual treatment for each subscription status badge.
 export const SUBSCRIPTION_STATUS = {
   trial: { label: 'Trial', classes: 'bg-sky-500/15 text-sky-300 ring-sky-400/20' },
   active: { label: 'Active', classes: 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/20' },
-  paused: { label: 'Paused', classes: 'bg-indigo-500/15 text-indigo-300 ring-indigo-400/20' },
+  paused: { label: 'Paused', classes: 'bg-[var(--bg-subtle)] text-[var(--text-muted)]' },
   past_due: { label: 'Past Due', classes: 'bg-amber-500/15 text-amber-300 ring-amber-400/20' },
   unpaid: { label: 'Unpaid', classes: 'bg-rose-500/15 text-rose-300 ring-rose-400/20' },
   cancelled: { label: 'Cancelled', classes: 'bg-rose-500/15 text-rose-300 ring-rose-400/20' },
@@ -54,38 +54,8 @@ export function needsPaywall(practice) {
   return status === 'past_due' || status === 'cancelled' || status === 'canceled'
 }
 
-// Whether Lemon Squeezy is running in test mode is determined by the API key,
-// and surfaced by create-checkout as `test_mode`. We cache the last-known value
-// so the billing UI can decide whether to show the test-mode banner without
-// blocking on a probe, and so it self-heals (flips to false) once live keys go in.
-const LS_TEST_MODE_KEY = 'ciq_ls_test_mode'
-const LS_TEST_MODE_TTL = 6 * 60 * 60 * 1000 // re-probe the mode at most every 6h
-
-function readTestModeEntry() {
-  try {
-    const raw = localStorage.getItem(LS_TEST_MODE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    return typeof parsed?.val === 'boolean' ? parsed : null
-  } catch {
-    return null
-  }
-}
-
-export function getCachedBillingTestMode() {
-  return readTestModeEntry()?.val ?? null
-}
-
-function setCachedBillingTestMode(val) {
-  try {
-    localStorage.setItem(LS_TEST_MODE_KEY, JSON.stringify({ val: val === true, ts: Date.now() }))
-  } catch {
-    /* ignore storage errors */
-  }
-}
-
-// Create a Lemon Squeezy checkout for this practice and return the hosted URL
-// plus whether it's a test-mode checkout (also cached for the banner).
+// Create a Chargebee hosted-page checkout for this practice and return the
+// hosted-page URL for redirect.
 export async function createCheckout({ practiceId, email }) {
   const { data, error } = await supabase.functions.invoke('create-checkout', {
     body: {
@@ -96,27 +66,7 @@ export async function createCheckout({ practiceId, email }) {
   })
   if (error) throw new Error(await edgeErrorMessage(error))
   if (!data?.url) throw new Error('No checkout URL returned')
-  if (typeof data.test_mode === 'boolean') setCachedBillingTestMode(data.test_mode)
-  return { url: data.url, testMode: data.test_mode === true }
-}
-
-// Probe Lemon Squeezy for the current key's mode without starting a real
-// checkout flow. Returns true/false (and refreshes the cache), or the cached
-// value if the probe can't be reached (function not deployed, no key, offline).
-export async function detectBillingTestMode({ practiceId, email }) {
-  // Fresh cache → skip the probe entirely (no throwaway checkout created).
-  const entry = readTestModeEntry()
-  if (entry && Date.now() - entry.ts < LS_TEST_MODE_TTL) return entry.val
-  try {
-    const { data, error } = await supabase.functions.invoke('create-checkout', {
-      body: { mode_check: true, practice_id: practiceId, email },
-    })
-    if (error || typeof data?.test_mode !== 'boolean') return getCachedBillingTestMode()
-    setCachedBillingTestMode(data.test_mode)
-    return data.test_mode
-  } catch {
-    return getCachedBillingTestMode()
-  }
+  return { url: data.url }
 }
 
 // supabase-js surfaces non-2xx edge responses as a generic
@@ -142,7 +92,7 @@ export async function getBillingStatus(practiceId) {
   return data
 }
 
-// Create a Lemon Squeezy customer-portal URL (update payment method / manage sub).
+// Create a Chargebee customer-portal URL (update payment method / manage sub).
 export async function createPortalSession(practiceId) {
   const { data, error } = await supabase.functions.invoke('create-portal-session', {
     body: { practice_id: practiceId },
@@ -191,10 +141,10 @@ export async function fetchCancellationImpact(practiceId) {
       .in('status', ['active', 'approved']),
   ])
   const consults = consultsRes.data || []
-  // Production attributed to Hope AI (conservative attribution model); fall
+  // Production attributed to CaseLift (conservative attribution model); fall
   // back to all closed-won if attribution hasn't been computed yet.
   const attributed = consults
-    .filter((c) => c.attribution_model === 'consultiq_recovered')
+    .filter((c) => c.attribution_model === 'caselift_recovered')
     .reduce((s, c) => s + (Number(c.case_value) || 0), 0)
   const production = attributed || consults
     .filter((c) => c.status === 'closed_won' || c.status === 'recovered')
@@ -224,9 +174,9 @@ export async function pauseSubscription(practiceId, months) {
   return iso
 }
 
-// Downsell: keep them active and record the accepted retention offer. A real LS
-// discount is applied server-side via the billing portal; we lock in the intent
-// here so the account stays active and the offer is auditable.
+// Downsell: keep them active and record the accepted retention offer. A real
+// Chargebee discount is applied server-side via the billing portal; we lock in
+// the intent here so the account stays active and the offer is auditable.
 export async function acceptDownsell(practiceId) {
   const { error } = await supabase
     .from('practices')
@@ -248,7 +198,7 @@ export async function submitCancellationFeedback({ practiceId, reason, elaborati
   if (error) throw error
 }
 
-// Final cancel - calls the edge function (Lemon Squeezy) and falls back to a
+// Final cancel - calls the edge function (Chargebee) and falls back to a
 // direct status flip so the flow always completes.
 export async function cancelSubscription(practiceId) {
   try {
@@ -264,7 +214,7 @@ export async function cancelSubscription(practiceId) {
 }
 
 // Client-side export of the practice's data (preserved for 90 days regardless).
-export async function exportPracticeData(practiceId, practiceName = 'hopeai') {
+export async function exportPracticeData(practiceId, practiceName = 'caselift') {
   const [c, m, conv] = await Promise.all([
     supabase.from('consults').select('*').eq('practice_id', practiceId),
     supabase.from('messages').select('*').eq('practice_id', practiceId),
@@ -281,7 +231,7 @@ export async function exportPracticeData(practiceId, practiceName = 'hopeai') {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${String(practiceName).replace(/\s+/g, '-').toLowerCase()}-hopeai-export.json`
+  a.download = `${String(practiceName).replace(/\s+/g, '-').toLowerCase()}-caselift-export.json`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)

@@ -1,4 +1,4 @@
-# ConsultIQ — iOS (Capacitor) build & App Store submission
+# CaseLift — iOS (Capacitor) build & App Store submission
 
 The React/Vite web app is now wrapped with **Capacitor 8**. The web UI is built
 to `dist/` and copied into a native iOS shell under `ios/`. This document covers
@@ -8,7 +8,7 @@ Developer account** — they cannot be done from the build agent environment
 
 ## What's already configured (committed + integrated)
 
-- `capacitor.config.json` — `appId: com.consultiq.app`, `appName: ConsultIQ`, `webDir: dist`.
+- `capacitor.config.json` — `appId: com.caselift.app`, `appName: CaseLift`, `webDir: dist`.
 - `ios/` native project **using CocoaPods**, with pods already installed:
   `Capacitor 8.3.4`, `CapacitorCordova 8.3.4`, `CapacitorVoiceRecorder 7.0.6`.
   Open **`ios/App/App.xcworkspace`** (the workspace, not the `.xcodeproj`).
@@ -47,7 +47,7 @@ npx cap open ios          # opens ios/App/App.xcworkspace
 In Xcode:
 1. Select the **App** target → **Signing & Capabilities** → choose your Team
    (this sets the provisioning profile). Confirm the **Bundle Identifier**
-   (`com.consultiq.app` — change if you own a different one).
+   (`com.caselift.app` — change if you own a different one).
 2. Set **Display Name**, **Version** (e.g. `1.0.0`) and **Build** (e.g. `1`).
 3. Add an app icon set in `Assets.xcassets` (1024×1024 marketing icon required).
 4. Pick a real device or "Any iOS Device (arm64)" and **Product → Run** to smoke-test

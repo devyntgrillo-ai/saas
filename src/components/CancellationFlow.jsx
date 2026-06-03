@@ -130,7 +130,7 @@ export default function CancellationFlow({ onClose }) {
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/15 text-rose-400">
             <AlertTriangle className="h-6 w-6" />
           </div>
-          <h2 className="mt-4 text-xl font-bold text-white">Before you go - here's what Hope AI has done for you</h2>
+          <h2 className="mt-4 text-xl font-bold text-white">Before you go - here's what CaseLift has done for you</h2>
           <p className="mt-1 text-sm text-slate-400">Cancelling ends this. Take a look first.</p>
         </div>
 
@@ -146,7 +146,7 @@ export default function CancellationFlow({ onClose }) {
                 <p className="mt-1 text-5xl font-black tracking-tight text-white">
                   {formatMoney(impact?.production || 0)}
                 </p>
-                <p className="mt-1 text-sm text-slate-400">recovered through Hope AI follow-ups</p>
+                <p className="mt-1 text-sm text-slate-400">recovered through CaseLift follow-ups</p>
               </div>
 
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -196,7 +196,7 @@ export default function CancellationFlow({ onClose }) {
     return (
       <Shell onClose={onClose}>
         <div className="p-6 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-300">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--accent-subtle)] text-[var(--accent)]">
             <PauseCircle className="h-6 w-6" />
           </div>
           <h2 className="mt-4 text-xl font-bold text-white">Life gets busy. Want to pause instead?</h2>
@@ -211,11 +211,11 @@ export default function CancellationFlow({ onClose }) {
                 key={months}
                 onClick={() => doPause(months)}
                 disabled={busy}
-                className="group rounded-xl border border-surface-700 bg-surface-800/50 p-5 text-left transition hover:border-indigo-400/40 hover:bg-indigo-500/10 disabled:opacity-50"
+                className="group rounded-xl border border-surface-700 bg-surface-800/50 p-5 text-left transition hover:border-[var(--accent-border)] hover:bg-[var(--accent-subtle)] disabled:opacity-50"
               >
                 <p className="text-lg font-bold text-white">Pause for {months} month{months > 1 ? 's' : ''}</p>
                 <p className="mt-1 text-xs text-slate-400">No charge · sequences paused · data preserved</p>
-                <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-indigo-300">
+                <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent)]">
                   {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" />}
                   Pause now
                 </span>
@@ -359,7 +359,7 @@ export default function CancellationFlow({ onClose }) {
     return (
       <Shell onClose={onClose}>
         <div className="p-8 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-300">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent-subtle)] text-[var(--accent)]">
             <PauseCircle className="h-7 w-7" />
           </div>
           <h2 className="mt-5 text-xl font-bold text-white">Your account is paused</h2>
@@ -401,7 +401,7 @@ export default function CancellationFlow({ onClose }) {
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-800 text-primary-300">
             <Heart className="h-7 w-7" />
           </div>
-          <h2 className="mt-5 text-xl font-bold text-white">Thank you for being a Hope AI client</h2>
+          <h2 className="mt-5 text-xl font-bold text-white">Thank you for being a CaseLift client</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-slate-400">
             Your subscription has been cancelled. We've genuinely valued working with {practice?.name || 'your practice'}.
           </p>

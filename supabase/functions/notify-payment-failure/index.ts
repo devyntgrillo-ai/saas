@@ -2,18 +2,18 @@
 // notify-payment-failure - email the practice admin, their reseller, and the
 // super admin when a practice's subscription goes past_due / unpaid.
 //
-// Called server-to-server by ls-webhook with { practice_id } and a service-role
-// bearer. Resolves contacts and sends via Mailgun. Best-effort: if Mailgun
+// Called server-to-server by chargebee-webhook with { practice_id } and a
+// service-role bearer. Resolves contacts and sends via Mailgun. Best-effort: if Mailgun
 // isn't configured it logs and returns ok:false rather than failing the webhook.
 //
 // The practice-facing email is white-labeled to the practice's reseller brand
 // (see _shared/brand.ts); internal copies to the reseller owner + super admin
-// stay Hope AI-branded and prefixed "[Internal]".
+// stay CaseLift-branded and prefixed "[Internal]".
 //
 // Secrets: SUPABASE_SERVICE_ROLE_KEY, MAILGUN_API_KEY, MAILGUN_DOMAIN.
 // Optional: MAILGUN_FROM (only the <noreply@domain> address is reused; the
 //           display name is branded per-recipient),
-//           APP_URL (defaults to https://app.heyhope.ai) for the billing link.
+//           APP_URL (defaults to https://app.caselift.io) for the billing link.
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
@@ -58,7 +58,7 @@ Deno.serve(async (req: Request) => {
 
     const name = practice.name || "your practice";
     const failedOn = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-    const appUrl = Deno.env.get("APP_URL") || "https://app.heyhope.ai";
+    const appUrl = Deno.env.get("APP_URL") || "https://app.caselift.io";
     const billingUrl = `${appUrl}/settings/billing`;
 
     // Resolve the reseller brand for the practice-facing email.
@@ -98,7 +98,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Internal copies (reseller owner + super admin) stay Hope AI-branded.
+    // Internal copies (reseller owner + super admin) stay CaseLift-branded.
     const internal = [...new Set([resellerEmail, SUPER_ADMIN_EMAIL].filter(Boolean))] as string[];
     if (internal.length) {
       const { subject, text, htmlBody } = buildEmail(CONSULTIQ_BRAND);

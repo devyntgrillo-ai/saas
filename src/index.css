@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    /* Hope AI primary - sky blue (#0EA5E9): clean, medical, trustworthy. Channels
+    /* CaseLift primary - sky blue (#0EA5E9): clean, medical, trustworthy. Channels
        as "R G B". White-label themes override these on <html> at runtime. */
     --primary-50: 240 249 255;
     --primary-100: 224 242 254;
@@ -14,61 +14,70 @@
     --primary-300: 125 211 252;
     --primary-400: 56 189 248;
     --primary-500: 14 165 233;
-    --primary-600: 14 165 233; /* #0EA5E9 - Hope AI brand */
+    --primary-600: 14 165 233; /* #0EA5E9 - CaseLift brand */
     --primary-700: 2 132 199;
     --primary-800: 3 105 161;
     --primary-900: 12 74 110;
     --primary-950: 8 47 73;
 
-    /* Surface channels (R G B) that drive the Tailwind `surface` scale - dark. */
-    --s-base: 10 11 15; /* #0a0b0f */
-    --s-surface: 17 19 24; /* #111318 */
-    --s-elevated: 26 29 38; /* #1a1d26 */
-    --s-subtle: 35 38 52; /* #232634 */
-    --s-strong: 46 51 66; /* #2e3342 */
+    /* LIGHT is the default theme (Stripe-style clean white). Dark mode applies
+       via the `.dark` class on <html> (ThemeContext / system preference). */
 
-    /* Named theme tokens - dark defaults. Light overrides live in :root.light. */
-    --bg-base: #0a0b0f;
-    --bg-surface: #111318;
-    --bg-elevated: #1a1d26;
-    --bg-subtle: #232634;
-    --border: rgba(255, 255, 255, 0.07);
-    --border-strong: rgba(255, 255, 255, 0.14);
-    --text-primary: #f1f5f9;
-    --text-secondary: #cbd5e1;
-    --text-muted: rgba(255, 255, 255, 0.4);
-    --accent: #6366F1;
-    --accent-subtle: rgba(99, 102, 241, 0.12);
-    --accent-border: rgba(99, 102, 241, 0.25);
-    --success: #34d399;
-    --warning: #fbbf24;
-    --danger: #f87171;
+    /* Surface channels (R G B) that drive the Tailwind `surface` scale - light. */
+    --s-base: 248 250 252;  /* #F8FAFC - page background */
+    --s-surface: 255 255 255; /* #FFFFFF - cards / panels */
+    --s-elevated: 241 245 249; /* #F1F5F9 - modals / dropdowns / hover */
+    --s-subtle: 226 232 240; /* #E2E8F0 - dividers & input bg */
+    --s-strong: 203 213 225; /* #CBD5E1 - strong border / hover */
+
+    /* Named theme tokens - light defaults. Dark overrides live in :root.dark. */
+    --bg-base: #F8FAFC;
+    --bg-surface: #FFFFFF;
+    --bg-elevated: #F1F5F9;
+    --bg-subtle: #E2E8F0;
+    --border: #E2E8F0;
+    --border-strong: #CBD5E1;
+    --text-primary: #0F172A;
+    --text-secondary: #64748B;
+    --text-muted: #94A3B8;
+    --accent: #0EA5E9; /* Sky Blue - CaseLift brand */
+    --accent-subtle: rgba(14, 165, 233, 0.1);
+    --accent-border: rgba(14, 165, 233, 0.25);
+    --accent-dark: #0284C7;
+    --success: #10B981;
+    --success-subtle: rgba(16, 185, 129, 0.1);
+    --warning: #F59E0B;
+    --danger: #EF4444;
+    --record: #EF4444; /* Record button - always red, never themed */
   }
 
-  /* Light theme - ThemeContext adds `.light` to <html>. */
-  :root.light {
-    --bg-base: #ffffff;
-    --bg-surface: #f8f9fb;
-    --bg-elevated: #f0f2f5;
-    --bg-subtle: #e8eaed;
-    --border: #e5e7eb; /* gray-200 */
-    --border-strong: rgba(0, 0, 0, 0.14);
-    --text-primary: #111827; /* gray-900 - body text */
-    --text-secondary: #4b5563; /* gray-600 - secondary content */
-    --text-muted: #9ca3af; /* gray-400 - placeholders & timestamps only */
-    --accent: #6366F1;
-    --accent-subtle: rgba(99, 102, 241, 0.08);
-    --accent-border: rgba(99, 102, 241, 0.2);
-    --success: #16a34a;
-    --warning: #d97706;
-    --danger: #dc2626;
+  /* Dark theme - ThemeContext adds `.dark` to <html>. */
+  :root.dark {
+    /* Dark surface channels for the Tailwind `surface` scale. */
+    --s-base: 11 15 25;    /* #0B0F19 - page background */
+    --s-surface: 17 24 39;  /* #111827 - cards / panels */
+    --s-elevated: 26 34 53; /* #1A2235 - modals / dropdowns / hover */
+    --s-subtle: 30 41 59;   /* #1E293B - dividers & input bg */
+    --s-strong: 51 65 85;   /* #334155 - strong border / hover */
 
-    /* Light surface channels for the Tailwind `surface` scale. */
-    --s-base: 255 255 255; /* #ffffff */
-    --s-surface: 248 249 251; /* #f8f9fb */
-    --s-elevated: 240 242 245; /* #f0f2f5 */
-    --s-subtle: 232 234 237; /* #e8eaed */
-    --s-strong: 209 213 219; /* #d1d5db */
+    --bg-base: #0B0F19;
+    --bg-surface: #111827;
+    --bg-elevated: #1A2235;
+    --bg-subtle: #1E293B;
+    --border: rgba(255, 255, 255, 0.07);
+    --border-strong: rgba(255, 255, 255, 0.12);
+    --text-primary: #F8FAFC;
+    --text-secondary: #94A3B8; /* slate-400 - readable secondary on dark */
+    --text-muted: rgba(255, 255, 255, 0.3);
+    --accent: #0EA5E9;
+    --accent-subtle: rgba(14, 165, 233, 0.12);
+    --accent-border: rgba(14, 165, 233, 0.25);
+    --accent-dark: #38BDF8;
+    --success: #10B981;
+    --success-subtle: rgba(16, 185, 129, 0.12);
+    --warning: #F59E0B;
+    --danger: #EF4444;
+    --record: #EF4444;
   }
   html {
     font-size: 15px;
@@ -130,11 +139,11 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: #232634;
+    background: var(--border-strong);
     border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #2e3342;
+    background: var(--text-muted);
   }
 }
 
@@ -182,7 +191,7 @@
   }
   /* Three button styles only. */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold transition hover:bg-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold transition hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40 disabled:opacity-50 disabled:cursor-not-allowed;
     color: #fff; /* set directly (not @apply text-white) to avoid circular dep with the light override */
   }
   .btn-ghost {
@@ -225,27 +234,27 @@
 /* ---------------------------------------------------------------------------
    Light-mode overrides for hardcoded slate/white utilities used directly in
    components. These let the theme flip app-wide without rewriting every file.
-   `:root.light .x` (two classes) outranks Tailwind's single-class utility.
+   `:root:not(.dark) .x` (two classes) outranks Tailwind's single-class utility.
    --------------------------------------------------------------------------- */
-:root.light .text-white,
-:root.light .text-slate-50,
-:root.light .text-slate-100,
-:root.light .text-slate-200 {
+:root:not(.dark) .text-white,
+:root:not(.dark) .text-slate-50,
+:root:not(.dark) .text-slate-100,
+:root:not(.dark) .text-slate-200 {
   color: var(--text-primary); /* #111827 gray-900 */
 }
-:root.light .text-slate-300,
-:root.light .text-slate-400 {
+:root:not(.dark) .text-slate-300,
+:root:not(.dark) .text-slate-400 {
   color: var(--text-secondary); /* #4b5563 gray-600 */
 }
 /* Labels & metadata - gray-500 minimum, never the lighter muted token. */
-:root.light .text-slate-500,
-:root.light .text-slate-600 {
+:root:not(.dark) .text-slate-500,
+:root:not(.dark) .text-slate-600 {
   color: #6b7280; /* gray-500 */
 }
 /* Hardcoded gray-* utilities used directly in a few pages. In light mode the
    lightest shades fail contrast on main content, so floor them at gray-600. */
-:root.light .text-gray-300,
-:root.light .text-gray-400 {
+:root:not(.dark) .text-gray-300,
+:root:not(.dark) .text-gray-400 {
   color: #4b5563; /* gray-600 */
 }
 
@@ -255,58 +264,58 @@
    so darken them to ~700 shades that pass WCAG AA on their pale /15 fills.
    Light mode only - dark mode keeps the original brighter shades.
    --------------------------------------------------------------------------- */
-:root.light .text-emerald-300,
-:root.light .text-emerald-400,
-:root.light .text-green-300,
-:root.light .text-green-400 {
+:root:not(.dark) .text-emerald-300,
+:root:not(.dark) .text-emerald-400,
+:root:not(.dark) .text-green-300,
+:root:not(.dark) .text-green-400 {
   color: #047857; /* emerald-700 */
 }
-:root.light .text-amber-300,
-:root.light .text-amber-400,
-:root.light .text-yellow-300,
-:root.light .text-yellow-400 {
+:root:not(.dark) .text-amber-300,
+:root:not(.dark) .text-amber-400,
+:root:not(.dark) .text-yellow-300,
+:root:not(.dark) .text-yellow-400 {
   color: #b45309; /* amber-700 */
 }
-:root.light .text-sky-300,
-:root.light .text-sky-400,
-:root.light .text-blue-300,
-:root.light .text-blue-400 {
+:root:not(.dark) .text-sky-300,
+:root:not(.dark) .text-sky-400,
+:root:not(.dark) .text-blue-300,
+:root:not(.dark) .text-blue-400 {
   color: #0369a1; /* sky-700 */
 }
-:root.light .text-rose-300,
-:root.light .text-rose-400,
-:root.light .text-red-300,
-:root.light .text-red-400 {
+:root:not(.dark) .text-rose-300,
+:root:not(.dark) .text-rose-400,
+:root:not(.dark) .text-red-300,
+:root:not(.dark) .text-red-400 {
   color: #be123c; /* rose-700 */
 }
-:root.light .text-purple-300,
-:root.light .text-purple-400,
-:root.light .text-violet-300,
-:root.light .text-violet-400 {
+:root:not(.dark) .text-purple-300,
+:root:not(.dark) .text-purple-400,
+:root:not(.dark) .text-violet-300,
+:root:not(.dark) .text-violet-400 {
   color: #6d28d9; /* violet-700 */
 }
-:root.light .text-primary-300 {
+:root:not(.dark) .text-primary-300 {
   color: var(--accent); /* brand accent, AA on light */
 }
 /* Arbitrary hex text colors used by the shared badge config (lib/consults.js). */
-:root.light .text-\[\#34d399\] {
-  color: #047857; /* emerald-700 */
+:root:not(.dark) .text-\[\#10b981\] {
+  color: #047857; /* emerald-700 - readable success on light */
 }
-:root.light .text-\[\#60a5fa\] {
+:root:not(.dark) .text-\[\#60a5fa\] {
   color: #0369a1; /* sky-700 */
 }
-:root.light .text-\[\#f87171\],
-:root.light .text-\[\#f43f5e\] {
+:root:not(.dark) .text-\[\#f87171\],
+:root:not(.dark) .text-\[\#f43f5e\] {
   color: #be123c; /* rose-700 */
 }
 /* White hairline borders → theme border. */
-:root.light .border-white\/\[0\.07\] {
+:root:not(.dark) .border-white\/\[0\.07\] {
   border-color: var(--border);
 }
-:root.light .border-white\/\[0\.12\] {
+:root:not(.dark) .border-white\/\[0\.12\] {
   border-color: var(--border-strong);
 }
-:root.light .border-surface-700 {
+:root:not(.dark) .border-surface-700 {
   border-color: var(--border);
 }
 /* Smooth the swap on the most common chrome surfaces. */

@@ -391,6 +391,12 @@ verify_jwt = false
 verify_jwt = false
 [functions.sikka-oauth-callback]
 verify_jwt = false
+# Chargebee billing webhook — authenticated via CHARGEBEE_WEBHOOK_SECRET, not a JWT.
+[functions.chargebee-webhook]
+verify_jwt = false
+# Public white-labeled client signup (/signup/<reseller-slug>) — no caller JWT.
+[functions.reseller-signup]
+verify_jwt = false
 
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
