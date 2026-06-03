@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 
 export const RECORDING_SOURCES = {
   browser: { label: '📱 Phone Recording', classes: 'bg-primary/10 text-primary-300 ring-primary-400/20' },
+  native_mobile: { label: '📱 Phone Recording', classes: 'bg-primary/10 text-primary-300 ring-primary-400/20' },
   pms_autosync: { label: '🔗 PMS AutoSync', classes: 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/20' },
   plaud_autoflow: { label: 'Plaud AutoFlow', classes: 'bg-[var(--accent-subtle)] text-[var(--accent)]' },
   plaud_device: { label: 'Plaud Device', classes: 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/20' },
@@ -32,12 +33,13 @@ export function plaudAutoflowEmail(practiceId) {
 // Create a placeholder consult row up front so we can redirect to it.
 // `patient` (optional) attaches appointment + contact info so the DB triggers
 // link the appointment and the generated messages have the right recipient.
-export async function createBrowserConsult(practiceId, { durationSec, patient } = {}) {
+// `source` distinguishes native (Capacitor) vs browser recording.
+export async function createBrowserConsult(practiceId, { durationSec, patient, source } = {}) {
   const now = new Date()
   const row = {
     practice_id: practiceId,
     status: 'analyzing',
-    recording_source: 'browser',
+    recording_source: source || 'browser',
     recording_date: now.toISOString().slice(0, 10),
     recording_time: now.toTimeString().slice(0, 8),
     duration: durationSec || null,

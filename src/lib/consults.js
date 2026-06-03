@@ -19,6 +19,8 @@ export const CONSULT_STATUS = {
   // legacy
   new: { label: 'New', classes: `${BADGE} text-slate-400` },
   analyzing: { label: 'Analyzing', classes: `${BADGE} text-[#60a5fa]` },
+  transcribed: { label: 'Transcribed', classes: `${BADGE} text-[#60a5fa]` },
+  transcription_error: { label: 'Transcription Error', classes: `${BADGE} text-[#f87171]` },
   analyzed: { label: 'Analyzed', classes: `${BADGE} text-primary-300` },
   followed_up: { label: 'Followed up', classes: `${BADGE} text-primary-300` },
   recovered: { label: 'Recovered', classes: `${BADGE} text-[#10b981]` },

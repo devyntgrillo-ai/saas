@@ -257,19 +257,22 @@ export default function RecordingModal({ onClose, patient = null }) {
     setError('')
     let id
     try {
-      id = await createBrowserConsult(practiceId, { durationSec, patient })
+      id = await createBrowserConsult(practiceId, { durationSec, patient, source: native ? 'native_mobile' : undefined })
       const path = await uploadRecording(practiceId, id, blob)
       setConsultId(id)
 
       // Upload is complete - kick off transcription + analysis in the background
       // (don't await it) and immediately ask the TC for the consult outcome.
       transcribeRecording({ consultId: id, audioPath: path, durationSec, appointmentId: patient.appointmentId, patient })
-        .catch((e) => console.warn('[transcribe] background failed:', e?.message || e))
+        .catch((e) => {
+          console.warn('[transcribe] background failed:', e?.message || e)
+          supabase.from('consults').update({ status: 'transcription_error', audio_storage_path: path, transcript_error: e?.message || 'Transcription failed' }).eq('id', id).then().catch(() => {})
+        })
       setPhase('outcome')
     } catch (e) {
-      setError(e?.message || 'Something went wrong while processing your recording.')
+      const step = id ? 'upload' : 'create'
+      setError(`${e?.message || 'Something went wrong'} (step: ${step})`)
       setPhase('error')
-      // The consult row may exist but un-processed; let the user still reach it.
       if (id) {
         setConsultId(id)
         setTimeout(() => {
@@ -286,15 +289,19 @@ export default function RecordingModal({ onClose, patient = null }) {
     if (!consultId) return
     setChosenOutcome(option)
     setPhase('confirmed')
-    supabase
-      .from('consults')
-      .update({
-        outcome: option.value,
-        outcome_set_at: new Date().toISOString(),
-        outcome_set_by: user?.id || null,
-      })
-      .eq('id', consultId)
-      .then(({ error: e }) => e && console.warn('[outcome] save failed:', e.message))
+    try {
+      const { error: e } = await supabase
+        .from('consults')
+        .update({
+          outcome: option.value,
+          outcome_set_at: new Date().toISOString(),
+          outcome_set_by: user?.id || null,
+        })
+        .eq('id', consultId)
+      if (e) console.warn('[outcome] save failed:', e.message)
+    } catch (e) {
+      console.warn('[outcome] save failed:', e?.message || e)
+    }
     setTimeout(() => {
       onClose()
       navigate(`/consults/${consultId}`)

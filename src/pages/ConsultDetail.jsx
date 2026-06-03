@@ -36,7 +36,7 @@ import { stripEmDashes } from '../lib/sanitize'
 import { auditConsultViewed, auditPatientAccessed } from '../lib/audit'
 import { optimizeMessage, acceptOptimization } from '../lib/insights'
 import { attributionStatusBadge, fetchConsultAttribution } from '../lib/attribution'
-import { requestAnalysis } from '../lib/recording'
+import { requestAnalysis, transcribeRecording } from '../lib/recording'
 import OutcomeControls from '../components/OutcomeControls'
 import {
   parseSequenceConfig,
@@ -117,6 +117,7 @@ const STATUS_PILL = {
   closed_lost: 'bg-red-100 text-red-700',
   lost: 'bg-red-100 text-red-700',
   analyzing: 'bg-amber-100 text-amber-700',
+  transcription_error: 'bg-red-100 text-red-700',
   pending: 'bg-gray-100 text-gray-600',
   new: 'bg-gray-100 text-gray-600',
 }
@@ -129,11 +130,14 @@ function StatusPill({ status }) {
   )
 }
 
-// With no per-message "day" field, label the sequence by index per spec:
-// Day 1, Day 1, Day 3, Day 3, Day 7, Day 7 …
 function dayLabelForIndex(i) {
-  const days = [1, 1, 3, 3, 7, 7]
-  return `Day ${days[i] ?? 7}`
+  return `Message ${i + 1}`
+}
+
+function dayLabelForMessage(m, i) {
+  const day = m.send_day
+  if (day != null) return `Day ${day}`
+  return `Message ${i + 1}`
 }
 
 // Colored day pill: Day 1 = blue, Day 3 = indigo, Day 7 = purple.
@@ -658,6 +662,39 @@ export default function ConsultDetail() {
     return () => clearInterval(t)
   }, [analysisPending, consult?.id, load])
 
+  const transcriptionError = consult?.status === 'transcription_error'
+  const [retryingTranscription, setRetryingTranscription] = useState(false)
+
+  async function retryTranscription() {
+    if (!consult?.id) return
+    setRetryingTranscription(true)
+    triggeredRef.current = false
+    try {
+      if (consult.audio_storage_path) {
+        await transcribeRecording({
+          consultId: consult.id,
+          audioPath: consult.audio_storage_path,
+          durationSec: consult.duration,
+          patient: {
+            firstName: consult.patient_first,
+            lastName: consult.patient_last,
+            phone: consult.patient_phone,
+            email: consult.patient_email,
+          },
+        })
+        await load(true)
+      } else {
+        const { error } = await supabase.from('consults').update({ status: 'analyzing', transcript_error: null }).eq('id', consult.id)
+        if (!error) setConsult((prev) => ({ ...prev, status: 'analyzing', transcript_error: null }))
+      }
+    } catch (e) {
+      console.warn('[retry] transcription failed:', e?.message || e)
+      const { error } = await supabase.from('consults').update({ status: 'transcription_error', transcript_error: e?.message || 'Transcription failed' }).eq('id', consult.id)
+      if (!error) setConsult((prev) => ({ ...prev, status: 'transcription_error', transcript_error: e?.message || 'Transcription failed' }))
+    }
+    setRetryingTranscription(false)
+  }
+
   async function savePatientInfo(fields) {
     const { error } = await supabase.from('consults').update(fields).eq('id', consult.id)
     if (!error) {
@@ -899,6 +936,26 @@ export default function ConsultDetail() {
             </div>
           )}
 
+          {/* Transcription error - shown when speech-to-text failed */}
+          {transcriptionError && (
+            <div className="mt-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-red-800">Transcription failed</p>
+                <p className="mt-0.5 text-sm text-red-700">{consult.transcript_error || 'Could not transcribe the recording.'}</p>
+                <p className="mt-1 text-xs text-red-600">The consult was saved but could not be transcribed. Analysis and follow-up messages cannot be generated without a transcript.</p>
+                <button
+                  onClick={retryTranscription}
+                  disabled={retryingTranscription}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-60"
+                >
+                  {retryingTranscription ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
+                  Retry transcription
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Outcome decision - equal-weight button group inside the header */}
           <div className="mt-5 border-t border-gray-200 pt-4">
             <OutcomeControls
@@ -1074,7 +1131,7 @@ export default function ConsultDetail() {
                       index={i}
                       practiceId={practiceId}
                       aiBaseline={aiBaselines[m.id]}
-                      dayLabel={dayLabelForIndex(i)}
+                      dayLabel={dayLabelForMessage(m, i)}
                       createdAt={consult.created_at}
                       rules={seqRules}
                       onChange={handleMessageChange}

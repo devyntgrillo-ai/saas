@@ -10,6 +10,7 @@
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
+import { resolveAuth } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -77,28 +78,13 @@ Deno.serve(async (req: Request) => {
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const authHeader = req.headers.get("Authorization") || "";
-    const token = authHeader.replace(/^Bearer\s+/i, "");
     const body = await req.json().catch(() => ({}));
-
+    const { ctx, error: authErr } = await resolveAuth(req, body);
+    if (authErr || !ctx) return authErr ?? json({ error: "Unauthorized" }, 401);
+    const { practiceId } = ctx;
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-    let practiceId: string | null = null;
-    let auditClient = admin;
-    if (token && token === SERVICE_KEY) {
-      practiceId = body.practice_id ?? null;
-      if (!practiceId) return json({ error: "practice_id required for service calls" }, 400);
-    } else {
-      if (!authHeader) return json({ error: "Missing Authorization header" }, 401);
-      const userClient = createClient(SUPABASE_URL, ANON, { global: { headers: { Authorization: authHeader } } });
-      const { data: { user } } = await userClient.auth.getUser();
-      if (!user) return json({ error: "Unauthorized" }, 401);
-      const { data: profile } = await userClient.from("users").select("practice_id").eq("id", user.id).maybeSingle();
-      if (!profile?.practice_id) return json({ error: "Your account is not linked to a practice." }, 403);
-      practiceId = profile.practice_id;
-      auditClient = userClient;
-    }
+    const auditClient = createClient(SUPABASE_URL, SERVICE_KEY);
 
     // Transcript: text passthrough or transcribe stored audio.
     let transcript: string | undefined = body.transcript;

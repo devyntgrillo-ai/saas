@@ -3,13 +3,16 @@
 // whose scheduled_for has arrived and whose consult still allows sending, then
 // dispatches each via the channel transport and marks it sent/failed.
 //
+// Retry: transient errors keep the message in 'scheduled' so the next cron tick
+// retries it. Messages more than 24h past their scheduled_for that still fail
+// are permanently marked 'failed' (stale cutoff).
+//
 // Eligibility (defense-in-depth with process-sequences):
-//   • message.status in (draft, scheduled) and scheduled_for <= now
+//   • message.status in (draft, scheduled, failed) and scheduled_for <= now
 //   • consult.sequence_cancelled_at is null
 //   • consult.outcome == 'pending', OR 'rescheduled' with send_day >= 30
 //
-// Transport: invokes `mailgun-send` (email) / `twilio-send` (sms). If those
-// transports aren't deployed yet, the message is marked 'failed' (not retried).
+// Transport: invokes `mailgun-send` (email) / `twilio-send` (sms).
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
@@ -17,6 +20,7 @@ import { createClient } from "@supabase/supabase-js";
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
 
 const BATCH = 100;
+const STALE_HOURS = 24;
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -25,12 +29,14 @@ Deno.serve(async (req: Request) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
 
-    // Due, not-yet-sent messages + their consult guard fields.
+    // Due, not-yet-sent messages + their consult guard fields. Includes failed
+    // messages that are still within the stale window for retry.
     const { data: due, error } = await admin
       .from("messages")
-      .select("id, consult_id, channel, subject, body, send_day, consult:consults(practice_id, outcome, sequence_status, sequence_cancelled_at, sequence_activated_at, followup_approved_at, patient_phone, patient_email)")
-      .in("status", ["draft", "scheduled"])
+      .select("id, consult_id, channel, subject, body, send_day, scheduled_for, consult:consults(practice_id, outcome, sequence_status, sequence_cancelled_at, sequence_activated_at, followup_approved_at, patient_phone, patient_email)")
+      .in("status", ["draft", "scheduled", "failed"])
       .not("scheduled_for", "is", null)
       .lte("scheduled_for", nowIso)
       .order("scheduled_for", { ascending: true })
@@ -47,7 +53,6 @@ Deno.serve(async (req: Request) => {
     let sent = 0, failed = 0, skipped = 0;
 
     for (const m of due || []) {
-      // deno-lint-ignore no-explicit-any
       const c: any = m.consult;
       const seqStatus = c?.sequence_status || "active";
       const outcome = c?.outcome || "pending";
@@ -65,9 +70,7 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      // Paused (manual toggle or auto-paused on reply): leave the message in
-      // pending state - it must NOT send and must NOT be cancelled, so it can
-      // resume cleanly when the TC toggles the sequence back on.
+      // Paused: leave the message in place but don't send.
       if (seqStatus === "paused") { skipped++; continue; }
 
       const eligible =
@@ -75,14 +78,26 @@ Deno.serve(async (req: Request) => {
         (outcome === "pending" || (outcome === "rescheduled" && (m.send_day ?? 0) >= 30));
 
       if (!eligible) {
-        // Sequence was stopped/changed - cancel this message so it won't re-surface.
         await admin.from("messages").update({ status: "cancelled" }).eq("id", m.id);
         skipped++;
         continue;
       }
 
       const to = m.channel === "email" ? c.patient_email : c.patient_phone;
-      if (!to) { await admin.from("messages").update({ status: "failed" }).eq("id", m.id); failed++; continue; }
+      if (!to) {
+        // Missing contact info is permanent - don't retry.
+        await admin.from("messages").update({ status: "failed" }).eq("id", m.id);
+        failed++;
+        continue;
+      }
+
+      // Stale check: if scheduled_for is far in the past, mark as failed permanently.
+      const schedMs = new Date(m.scheduled_for!).getTime();
+      if (nowMs - schedMs > STALE_HOURS * 3600 * 1000) {
+        await admin.from("messages").update({ status: "failed" }).eq("id", m.id);
+        failed++;
+        continue;
+      }
 
       const transport = m.channel === "email" ? "mailgun-send" : "twilio-send";
       try {
@@ -101,7 +116,8 @@ Deno.serve(async (req: Request) => {
         sent++;
       } catch (e) {
         console.error(`send-due-messages: ${transport} failed for message ${m.id}:`, (e as Error)?.message);
-        await admin.from("messages").update({ status: "failed" }).eq("id", m.id);
+        // Keep message in its current state so the next cron tick retries it.
+        // The stale cutoff above prevents indefinite retries.
         failed++;
       }
     }
