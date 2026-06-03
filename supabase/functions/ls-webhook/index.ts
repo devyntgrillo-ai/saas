@@ -105,6 +105,7 @@ Deno.serve(async (req: Request) => {
     const trialEndsAt: string | null = attributes?.trial_ends_at ?? null;
 
     let notifyFailure = false;
+    let notifySignup = false;
 
     switch (eventName) {
       case "order_created":
@@ -116,6 +117,7 @@ Deno.serve(async (req: Request) => {
         patch.subscription_status = "active";
         if (renewsAt) patch.current_period_end = renewsAt;
         if (trialEndsAt) patch.trial_ends_at = trialEndsAt;
+        notifySignup = true; // first activation → internal Slack ping
         break;
 
       case "subscription_updated":
@@ -179,6 +181,18 @@ Deno.serve(async (req: Request) => {
         },
         body: JSON.stringify({ practice_id: practiceId }),
       }).catch((e) => console.error("notify-payment-failure trigger failed:", e));
+    }
+
+    // Fire-and-forget internal Slack notification on first activation.
+    if (notifySignup) {
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: JSON.stringify({ practice_id: practiceId }),
+      }).catch((e) => console.error("notify-signup trigger failed:", e));
     }
 
     return json({ ok: true, event: eventName, practice_id: practiceId });

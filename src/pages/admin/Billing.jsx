@@ -2,14 +2,22 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DollarSign, CheckCircle2, AlertCircle, Clock, ExternalLink, Link2, Ban, CalendarPlus, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { statusMeta as subStatusMeta, cancelSubscription, getUpdatePaymentUrl } from '../../lib/billing'
-import { PRICING } from '../../lib/admin'
 import { StatCard, Table, Badge, money, stop } from '../../components/admin/ui'
-
-const MRR_PER_ACTIVE = PRICING.directPractice
 
 function lsPortalUrl(customerId) {
   return customerId ? `https://app.lemonsqueezy.com/customers/${customerId}` : 'https://app.lemonsqueezy.com'
 }
+
+// Color-code the monthly plan amount: green for full price, amber for a
+// discounted tier, gray for anything lower (or missing).
+function planAmountClass(amount) {
+  const a = Number(amount) || 0
+  if (a >= 997) return 'text-emerald-300'
+  if (a >= 797) return 'text-amber-300'
+  return 'text-slate-400'
+}
+
+const contactName = (r) => [r.doctor_first, r.doctor_last].filter(Boolean).join(' ').trim()
 
 export default function AdminBilling() {
   const [rows, setRows] = useState([])
@@ -21,8 +29,8 @@ export default function AdminBilling() {
     setLoading(true)
     const { data } = await supabase
       .from('practices')
-      .select('id, name, subscription_status, next_billing_date, trial_ends_at, ls_customer_id, agency:agency_accounts(name)')
-      .order('name')
+      .select('id, name, doctor_first, doctor_last, email, phone, pms_type, plan_amount, subscription_status, next_billing_date, trial_ends_at, created_at, ls_customer_id, agency:agency_accounts(name)')
+      .order('created_at', { ascending: false })
     setRows(data || [])
     setLoading(false)
   }, [])
@@ -30,14 +38,16 @@ export default function AdminBilling() {
   useEffect(() => { load() }, [load])
 
   const summary = useMemo(() => {
-    let active = 0, pastDue = 0, trial = 0
+    let active = 0, pastDue = 0, trial = 0, mrr = 0
     for (const r of rows) {
       const s = r.subscription_status || 'trial'
-      if (s === 'active') active++
-      else if (s === 'past_due' || s === 'unpaid') pastDue++
+      if (s === 'active') {
+        active++
+        mrr += Number(r.plan_amount) || 997
+      } else if (s === 'past_due' || s === 'unpaid') pastDue++
       else if (s === 'trial') trial++
     }
-    return { active, pastDue, trial, mrr: active * MRR_PER_ACTIVE }
+    return { active, pastDue, trial, mrr }
   }, [rows])
 
   function note(msg) {
@@ -82,19 +92,20 @@ export default function AdminBilling() {
     setBusyId(null)
   }
 
-  const head = ['Practice', 'Reseller', 'Plan', 'Status', 'Next billing', 'MRR', 'Actions']
+  const head = ['Practice', 'Contact', 'Email', 'PMS', 'Plan', 'Status', 'Signup', 'Actions']
   const tableRows = rows.map((r) => {
     const status = r.subscription_status || 'trial'
     const meta = subStatusMeta(status)
-    const mrr = status === 'active' ? MRR_PER_ACTIVE : 0
     const busy = busyId === r.id
+    const amount = Number(r.plan_amount) || 997
     return [
       <span className="font-medium text-slate-100">{r.name}</span>,
-      r.agency?.name || <span className="text-slate-500">Direct</span>,
-      status === 'active' ? 'CaseLift' : <span className="capitalize">{status}</span>,
+      contactName(r) || <span className="text-slate-500">—</span>,
+      r.email ? <span className="text-slate-300">{r.email}</span> : <span className="text-slate-500">—</span>,
+      r.pms_type || <span className="text-slate-500">—</span>,
+      <span className={`font-semibold ${planAmountClass(amount)}`}>{money(amount)}</span>,
       <Badge className={meta.classes}>{meta.label}</Badge>,
-      r.next_billing_date ? new Date(r.next_billing_date).toLocaleDateString() : '-',
-      money(mrr),
+      r.created_at ? new Date(r.created_at).toLocaleDateString() : '-',
       <div className="flex flex-wrap items-center gap-1.5" onClick={stop}>
         {busy && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />}
         <button onClick={() => sendPaymentLink(r)} disabled={busy} title="Generate + copy payment update link" className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-slate-300 transition hover:bg-surface-700">
@@ -123,8 +134,8 @@ export default function AdminBilling() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white">Billing</h1>
-          <p className="text-sm text-slate-500">{rows.length} practices · subscription management</p>
+          <h1 className="text-xl font-bold text-white">Subscriptions</h1>
+          <p className="text-sm text-slate-500">{rows.length} practices · newest first</p>
         </div>
         {flash && (
           <span className="rounded-lg border border-surface-700 bg-surface-800 px-3 py-1.5 text-xs text-slate-300">{flash}</span>
