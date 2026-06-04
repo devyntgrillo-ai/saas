@@ -124,6 +124,7 @@ Deno.serve(async (req: Request) => {
     const { subject, html, text } = buildTeamInviteEmail(brand, scopeName, inviteLink, personalMessage);
     if (!recipientEmail) return json({ error: "No recipient email" }, 400);
 
+    console.log(`invite-team-member: sending invite to ${recipientEmail} (practice="${scopeName}")`);
     const sendResult = await sendMailgunMessage({
       to: recipientEmail,
       subject,
@@ -132,6 +133,17 @@ Deno.serve(async (req: Request) => {
       fromName: brand.fromName,
       replyTo: brand.supportEmail,
     });
+    // Surface the Mailgun outcome in the function logs - the most common failure
+    // is the sending domain not being verified in Mailgun yet.
+    if (sendResult.sent) {
+      console.log(`invite-team-member: Mailgun accepted invite for ${recipientEmail}`);
+    } else {
+      console.error(
+        `invite-team-member: Mailgun did NOT send to ${recipientEmail} -`,
+        (sendResult as { reason?: string }).reason,
+        (sendResult as { detail?: string }).detail ?? "",
+      );
+    }
 
     return json({
       ok: true,

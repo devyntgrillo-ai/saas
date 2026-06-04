@@ -16,6 +16,7 @@ import {
   Trash2,
   Plus,
   Mail,
+  Send,
   Phone,
   MessageSquare,
   Sun,
@@ -37,7 +38,7 @@ import ReferralsPanel from './Referrals'
 import CancellationFlow from '../components/CancellationFlow'
 import InviteModal from '../components/InviteModal'
 import { usePermissions, ACCESS_LABELS } from '../lib/permissions'
-import { usePracticeTeam, useRemoveTeamMember, useRevokeInvitation } from '../lib/queries'
+import { usePracticeTeam, useRemoveTeamMember, useRevokeInvitation, useResendInvitation } from '../lib/queries'
 import { TREATMENT_TYPES } from '../lib/treatments'
 import {
   PLAN_NAME,
@@ -722,15 +723,32 @@ function BillingPanel({ practice, showSuccess, checkoutLoading, checkoutError, o
   )
 }
 
+// Initials for the member avatar - first letters of the name when we have one,
+// else the first two characters of the email.
+function teamInitials(nameOrEmail) {
+  const s = (nameOrEmail || '?').trim()
+  const parts = s.split(/\s+/)
+  if (parts.length >= 2 && /[a-zA-Z]/.test(parts[0])) return (parts[0][0] + parts[1][0]).toUpperCase()
+  return s.slice(0, 2).toUpperCase()
+}
+
 function PracticeTeamPanel({ practice }) {
   const { user } = useAuth()
   const perms = usePermissions()
   const { data, isLoading: loading, refetch } = usePracticeTeam(practice?.id)
   const removeMemberMutation = useRemoveTeamMember()
   const revokeInviteMutation = useRevokeInvitation()
+  const resendInviteMutation = useResendInvitation()
   const members = data?.members ?? []
   const pending = data?.pending ?? []
   const [invite, setInvite] = useState(false)
+  const [busyInvite, setBusyInvite] = useState(null)
+  const [flash, setFlash] = useState('')
+
+  function note(msg) {
+    setFlash(msg)
+    setTimeout(() => setFlash(''), 6000)
+  }
 
   async function removeMember(id) {
     await removeMemberMutation.mutateAsync({ userId: id, practiceId: practice.id })
@@ -738,13 +756,30 @@ function PracticeTeamPanel({ practice }) {
   async function cancelInvite(id) {
     await revokeInviteMutation.mutateAsync({ invitationId: id, practiceId: practice.id })
   }
+  async function resendInvite(inv) {
+    setBusyInvite(inv.id)
+    try {
+      const res = await resendInviteMutation.mutateAsync({ token: inv.token })
+      if (res?.email_sent) note(`Invite re-sent to ${inv.email}.`)
+      else note(`Couldn't email ${inv.email}${res?.reason ? ` (${res.reason})` : ''} - share the invite link from the modal instead.`)
+    } catch (e) {
+      note(e?.message || 'Could not resend invite.')
+    } finally {
+      setBusyInvite(null)
+    }
+  }
 
   return (
     <div className="space-y-4">
+      {flash && (
+        <p className="rounded-lg border border-surface-700 bg-surface-800 px-3 py-2 text-sm text-slate-300">{flash}</p>
+      )}
+
+      {/* Section 1 - Active Members */}
       <div className="card p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-semibold text-white">Team</h2>
+            <h2 className="text-base font-semibold text-white">Active Members</h2>
             <p className="mt-1 text-sm text-slate-400">People with access to {practice?.name || 'this practice'}.</p>
           </div>
           {perms.canInvite && (
@@ -759,11 +794,15 @@ function PracticeTeamPanel({ practice }) {
             {members.length === 0 && <li className="py-4 text-sm text-slate-500">No members yet.</li>}
             {members.map((m) => (
               <li key={m.id} className="flex items-center gap-3 py-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-700 text-xs font-semibold text-slate-200">
-                  {(m.email || '?').slice(0, 2).toUpperCase()}
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-700 text-xs font-semibold text-slate-200">
+                  {teamInitials(m.full_name || m.email)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-slate-200">{m.email}</p>
+                  <p className="truncate text-sm font-medium text-slate-200">
+                    {m.full_name || m.email}
+                    {m.id === user?.id && <span className="ml-1.5 text-xs font-normal text-slate-500">(you)</span>}
+                  </p>
+                  {m.full_name && <p className="truncate text-xs text-slate-500">{m.email}</p>}
                   <p className="text-xs capitalize text-slate-500">{ACCESS_LABELS[`practice_${m.role}`] || m.role}</p>
                 </div>
                 {perms.canInvite && m.id !== user?.id && (
@@ -777,22 +816,51 @@ function PracticeTeamPanel({ practice }) {
         )}
       </div>
 
-      {pending.length > 0 && (
-        <div className="card overflow-hidden">
-          <div className="border-b border-surface-700 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Pending invitations</div>
+      {/* Section 2 - Pending Invites */}
+      <div className="card overflow-hidden">
+        <div className="border-b border-surface-700 px-6 py-3.5">
+          <h2 className="text-base font-semibold text-white">Pending Invites</h2>
+        </div>
+        {loading ? (
+          <p className="px-6 py-5 text-sm text-slate-500">Loading…</p>
+        ) : pending.length === 0 ? (
+          <p className="px-6 py-5 text-sm text-slate-500">No pending invites.</p>
+        ) : (
           <ul className="divide-y divide-surface-700">
             {pending.map((i) => (
-              <li key={i.id} className="flex items-center gap-3 px-5 py-3.5">
-                <Mail className="h-4 w-4 text-slate-500" />
-                <span className="min-w-0 flex-1 truncate text-sm text-slate-200">{i.email} · {ACCESS_LABELS[i.role] || i.role}</span>
+              <li key={i.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-6 py-3.5">
+                <Mail className="h-4 w-4 shrink-0 text-slate-500" />
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-2 text-sm text-slate-200">
+                    <span className="truncate">{i.email}</span>
+                    <span className="inline-flex shrink-0 items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300 ring-1 ring-inset ring-amber-400/20">
+                      Pending
+                    </span>
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {ACCESS_LABELS[i.role] || i.role} · invited {formatDate(i.created_at)}
+                  </p>
+                </div>
                 {perms.canInvite && (
-                  <button onClick={() => cancelInvite(i.id)} className="text-xs font-medium text-slate-500 hover:text-rose-300">Cancel</button>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <button
+                      onClick={() => resendInvite(i)}
+                      disabled={busyInvite === i.id || !i.token}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-300 transition hover:text-primary-200 disabled:opacity-50"
+                    >
+                      {busyInvite === i.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                      Resend
+                    </button>
+                    <button onClick={() => cancelInvite(i.id)} className="text-xs font-medium text-slate-500 transition hover:text-rose-300">
+                      Cancel
+                    </button>
+                  </div>
                 )}
               </li>
             ))}
           </ul>
-        </div>
-      )}
+        )}
+      </div>
 
       {invite && practice && (
         <InviteModal scope="practice" practiceId={practice.id} onClose={() => setInvite(false)} onSent={() => refetch()} />
