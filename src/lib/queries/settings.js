@@ -8,7 +8,7 @@ export async function fetchPracticeTeam(practiceId) {
     supabase.from('users').select('id, email, full_name, role, created_at').eq('practice_id', practiceId).order('created_at'),
     supabase
       .from('invitations')
-      .select('id, email, role, created_at')
+      .select('id, email, role, created_at, token')
       .eq('practice_id', practiceId)
       .is('accepted_at', null)
       .order('created_at', { ascending: false }),
@@ -49,6 +49,21 @@ export function useRevokeInvitation() {
     },
     onSuccess: ({ practiceId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.practiceTeam(practiceId) })
+    },
+  })
+}
+
+// Resend a pending invite by re-invoking the edge function with its existing
+// token (no new invitations row). Returns the function result so the caller can
+// surface whether the email actually went out vs. needs the share link.
+export function useResendInvitation() {
+  return useMutation({
+    mutationFn: async ({ token }) => {
+      const { data, error } = await supabase.functions.invoke('invite-team-member', {
+        body: { invitation_token: token, app_origin: window.location.origin },
+      })
+      if (error) throw error
+      return data
     },
   })
 }

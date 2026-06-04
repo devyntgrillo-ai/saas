@@ -19,6 +19,9 @@ export default function InviteModal({ scope, agencyId, practiceId, practices = [
   const [error, setError] = useState('')
   const [link, setLink] = useState('')
   const [copied, setCopied] = useState(false)
+  // Whether the invite email actually went out (vs. needing the share link).
+  const [emailSent, setEmailSent] = useState(null) // null = unknown, true/false
+  const [emailReason, setEmailReason] = useState('')
 
   const showPracticePicker = role === 'agency_member' && practices.length > 0
 
@@ -49,14 +52,23 @@ export default function InviteModal({ scope, agencyId, practiceId, practices = [
     const link = `${window.location.origin}/invite/${data.token}`
     setLink(link)
     try {
-      await supabase.functions.invoke('invite-team-member', {
+      const { data: fnData, error: fnErr } = await supabase.functions.invoke('invite-team-member', {
         body: {
           invitation_token: data.token,
           app_origin: window.location.origin,
         },
       })
+      if (fnErr) {
+        setEmailSent(false)
+        setEmailReason('the email service errored')
+      } else {
+        setEmailSent(fnData?.email_sent === true)
+        setEmailReason(fnData?.reason ? `reason: ${fnData.reason}` : '')
+      }
     } catch {
-      /* invitation row exists; user can copy link manually */
+      // invitation row exists; user can still copy the link manually
+      setEmailSent(false)
+      setEmailReason('the email service is unreachable')
     }
     onSent?.()
   }
@@ -91,10 +103,20 @@ export default function InviteModal({ scope, agencyId, practiceId, practices = [
     >
       {link ? (
         <div className="space-y-3">
-          <div className="flex items-start gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-            <UserPlus className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>Invitation created for <span className="font-semibold">{email}</span>. Share this link:</span>
-          </div>
+          {emailSent ? (
+            <div className="flex items-start gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+              <UserPlus className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>Invitation emailed to <span className="font-semibold">{email}</span>. You can also share this link:</span>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+              <UserPlus className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Invitation created for <span className="font-semibold">{email}</span>, but the email couldn’t be sent automatically
+                {emailReason ? ` (${emailReason})` : ''}. Share this link directly:
+              </span>
+            </div>
+          )}
           <div className="flex gap-2">
             <input readOnly value={link} className="input font-mono text-xs" />
             <button onClick={copy} className="btn-ghost shrink-0">
