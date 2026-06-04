@@ -35,6 +35,10 @@ export function statusMeta(status) {
 export const WON_STATUSES = ['active', 'closed_won', 'recovered']
 export const isWonStatus = (status) => WON_STATUSES.includes(status)
 
+// Closed-won only (excludes in-sequence "active") — use for close-rate %.
+export const CLOSED_WON_STATUSES = ['closed_won', 'recovered']
+export const isClosedWonStatus = (status) => CLOSED_WON_STATUSES.includes(status)
+
 // The statuses surfaced in filters / dashboards (in workflow order).
 export const CONSULT_STATUS_ORDER = ['pending', 'approved', 'active', 'replied', 'closed_won', 'closed_lost']
 

@@ -46,7 +46,8 @@ import { auditConversationViewed, auditPatientAccessed, auditMessageSent } from 
 import { SkeletonList } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
 import { formatMoney } from '../lib/analytics'
-import { loadRecordingUrl, formatCallTime, useTwilioVoiceDevice } from '../lib/voice'
+import { formatCallTime, useTwilioVoiceDevice } from '../lib/voice'
+import CallMessageBubble from '../components/CallMessageBubble'
 
 function initials(first, last) {
   return `${(first || '?')[0]}${(last || '')[0] || ''}`.toUpperCase()
@@ -508,13 +509,12 @@ export default function Conversations() {
   const [activeId, setActiveId] = useState(deepLinkId || null)
   const [thread, setThread] = useState([])
   const [callRecordings, setCallRecordings] = useState({}) // call_log_id -> { recording_url, ... }
-  const [playingCall, setPlayingCall] = useState(null) // { id, url }
-  const [loadingCallId, setLoadingCallId] = useState(null)
   const [loadingList, setLoadingList] = useState(true)
   const [loadingThread, setLoadingThread] = useState(false)
   const [draft, setDraft] = useState('')
   const [aiSuggested, setAiSuggested] = useState(false)
   const [channel, setChannel] = useState('sms')
+  const [emailSubject, setEmailSubject] = useState('')
   const [sending, setSending] = useState(false)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all') // all | unread | active
@@ -615,7 +615,6 @@ export default function Conversations() {
         setLoadingThread(false)
       })
     // Recordings for this conversation's calls, so call entries can play inline.
-    setPlayingCall(null)
     supabase.from('call_logs').select('id, recording_url, duration_seconds, disposition').eq('conversation_id', activeId)
       .then(({ data }) => {
         if (!active) return
@@ -689,23 +688,6 @@ export default function Conversations() {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [thread, loadingThread])
-
-  // Revoke a playing recording's object URL when it changes / on unmount.
-  useEffect(() => () => { if (playingCall?.url) URL.revokeObjectURL(playingCall.url) }, [playingCall])
-
-  // Load + play a call recording inline (auth-proxied).
-  async function playCallRecording(callLogId) {
-    if (playingCall?.url) { URL.revokeObjectURL(playingCall.url); setPlayingCall(null) }
-    setLoadingCallId(callLogId)
-    try {
-      const url = await loadRecordingUrl(callLogId)
-      setPlayingCall({ id: callLogId, url })
-    } catch {
-      /* surfaced as a no-op; the button just resets */
-    } finally {
-      setLoadingCallId(null)
-    }
-  }
 
   // Auto-grow the compose box (starts at 2 lines, grows up to ~5), including when
   // AI fills it in.
@@ -998,27 +980,51 @@ export default function Conversations() {
     e?.preventDefault?.()
     const body = draft.trim()
     if (!body || !activeId || sending) return
+    const isEmail = channel === 'email'
+    if (isEmail && !activeConv?.patient_email) {
+      showToast('Add a patient email on this conversation or linked consult first.')
+      return
+    }
     setSending(true)
     const nowIso = new Date().toISOString()
+    const subject = isEmail
+      ? (emailSubject.trim() || `Message from ${practice?.name || 'your care team'}`)
+      : null
+    const meta = isEmail ? { subject } : {}
     const { data, error } = await supabase
       .from('conversation_messages')
-      .insert({ conversation_id: activeId, direction: 'outbound', channel, body, sent_at: nowIso })
+      .insert({
+        conversation_id: activeId,
+        direction: 'outbound',
+        channel,
+        body,
+        sent_at: nowIso,
+        meta,
+      })
       .select()
       .single()
     if (!error && data) {
       setThread((prev) => [...prev, { ...data, status: 'sent' }])
       setDraft('')
+      setEmailSubject('')
       setAiSuggested(false)
       auditMessageSent(activeId)
       // Internal notes are practice-only: never dispatched to the patient.
       if (!isNote) {
         // Fire the real sender (no-op/queued if Twilio/Mailgun unconfigured).
-        const fn = channel === 'email' ? 'mailgun-send' : 'twilio-send'
-        const target = channel === 'email' ? activeConv?.patient_email : activeConv?.patient_phone
+        const fn = isEmail ? 'mailgun-send' : 'twilio-send'
+        const target = isEmail ? activeConv?.patient_email : activeConv?.patient_phone
         if (target) {
           supabase.functions.invoke(fn, {
-            body: { practice_id: practiceId, to: target, body, conversation_message_id: data.id, consult_id: activeConv?.consult_id },
-          }).catch(() => {})
+            body: {
+              practice_id: practiceId,
+              to: target,
+              body,
+              subject,
+              conversation_message_id: data.id,
+              consult_id: activeConv?.consult_id,
+            },
+          }).catch(() => showToast('Could not send — check messaging settings.'))
         }
       }
       await supabase.from('conversations').update({ last_message_at: nowIso }).eq('id', activeId)
@@ -1361,16 +1367,12 @@ export default function Conversations() {
                     )
                   }
 
-                  // Call events: centered gray pill (like GHL). Inbound or outbound.
+                  // Call events: GHL-style aligned bubbles with inline recording player.
                   if (m.channel === 'call') {
                     const inbound = m.direction === 'inbound'
-                    const actor = m.meta?.actor || (inbound ? (activeConv.patient_first || 'Patient') : tcName)
-                    const label = inbound ? 'Inbound call' : 'Outbound call'
-                    const durSec = m.meta?.duration_sec
-                    const durTxt = durSec ? formatCallTime(durSec) : (m.meta?.duration_min ? `${m.meta.duration_min} min` : null)
-                    const extra = [m.meta?.outcome, durTxt].filter(Boolean).join(' · ')
-                    const rec = m.call_log_id && callRecordings[m.call_log_id]?.recording_url ? callRecordings[m.call_log_id] : null
-                    const isPlaying = playingCall?.id === m.call_log_id
+                    const recMeta = m.call_log_id ? callRecordings[m.call_log_id] : null
+                    const hasRecording = Boolean(recMeta?.recording_url)
+                    const seed = `${activeConv.patient_first || ''}${activeConv.patient_last || ''}`
                     return (
                       <Fragment key={m.id}>
                         {newDay && (
@@ -1378,27 +1380,19 @@ export default function Conversations() {
                             <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-medium text-gray-500">{dayLabel(ts)}</span>
                           </div>
                         )}
-                        <div className="mt-2.5 flex justify-center">
-                          <div className="inline-flex max-w-[85%] flex-col items-center rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-center">
-                            <span className="flex items-center gap-1.5 text-[12px] font-medium text-gray-600">
-                              <Phone className="h-3.5 w-3.5 text-gray-400" /> {label} · {messageTime(ts)} · {actor}
-                            </span>
-                            {extra && <span className="mt-0.5 text-[11px] text-gray-400">{extra}</span>}
-                            {m.meta?.note && <span className="mt-0.5 max-w-[320px] text-[11px] italic text-gray-500">“{m.meta.note}”</span>}
-                            {rec && !isPlaying && (
-                              <button
-                                onClick={() => playCallRecording(m.call_log_id)}
-                                disabled={loadingCallId === m.call_log_id}
-                                className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
-                              >
-                                {loadingCallId === m.call_log_id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />} Play recording
-                              </button>
-                            )}
-                            {rec && isPlaying && (
-                              // eslint-disable-next-line jsx-a11y/media-has-caption
-                              <audio src={playingCall.url} controls autoPlay className="mt-1.5 h-8 w-[280px] max-w-full" />
-                            )}
-                          </div>
+                        <div className={`mt-2.5 ${inbound ? '' : 'flex justify-end'}`}>
+                          <CallMessageBubble
+                            inbound={inbound}
+                            sentAt={ts}
+                            callLogId={m.call_log_id}
+                            hasRecording={hasRecording}
+                            recordingDuration={recMeta?.duration_seconds}
+                            patientFirst={activeConv.patient_first}
+                            patientLast={activeConv.patient_last}
+                            avatarClass={avatarColor(seed)}
+                            patientInitials={initials(activeConv.patient_first, activeConv.patient_last)}
+                            meta={m.meta}
+                          />
                         </div>
                       </Fragment>
                     )
@@ -1435,8 +1429,10 @@ export default function Conversations() {
                               {outbound ? tcName : (activeConv.patient_first || 'Patient')}
                             </p>
                           )}
-                          {m.channel === 'email' && m.subject && clusterStart && (
-                            <p className={`mb-1 text-xs font-semibold text-gray-500 ${outbound ? 'text-right' : ''}`}>{cleanBody(m.subject)}</p>
+                          {m.channel === 'email' && (m.meta?.subject || m.subject) && clusterStart && (
+                            <p className={`mb-1 text-xs font-semibold text-gray-500 ${outbound ? 'text-right' : ''}`}>
+                              {cleanBody(m.meta?.subject || m.subject)}
+                            </p>
                           )}
                           {/* Bubble bg is fixed in both themes, so set text via an arbitrary
                               color utility - plain `text-white` gets flipped dark by the
@@ -1482,6 +1478,21 @@ export default function Conversations() {
                   <Sparkles className="h-3 w-3" /> CaseLift recommended
                 </div>
               )}
+              {channel === 'email' && !activeConv?.patient_email && (
+                <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  This conversation has no patient email — add one on the consult or contact panel before sending.
+                </p>
+              )}
+              <div className="flex flex-col gap-2">
+                {channel === 'email' && (
+                  <input
+                    type="text"
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    placeholder="Email subject"
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                )}
               <div className="flex items-start gap-2">
                 {/* Channel selector: SMS / Email / Note */}
                 <select
@@ -1504,6 +1515,7 @@ export default function Conversations() {
                   placeholder={isNote ? 'Add an internal note (not sent to the patient)' : 'Message'}
                   className={`min-h-[56px] max-h-32 flex-1 resize-none overflow-y-auto rounded-2xl border px-4 py-2.5 text-[15px] text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 ${isNote ? 'border-amber-300 bg-amber-50/40 focus:border-amber-400 focus:ring-amber-500/20' : 'border-gray-200 bg-white focus:border-blue-400 focus:ring-blue-500/20'}`}
                 />
+              </div>
               </div>
 
               {/* Toolbar: placeholders on the left, AI Suggest + Send on the right */}

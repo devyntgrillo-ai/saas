@@ -8,7 +8,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { resolveBrand } from "../_shared/brand.ts";
-import { sendMailgunMessage } from "../_shared/mailgun.ts";
+import { conversationReplyAddress, sendMailgunMessage } from "../_shared/mailgun.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -82,7 +82,20 @@ Deno.serve(async (req: Request) => {
 
     const brand = await resolveBrand(admin, pr);
     const fromName = pr.email_from_name || brand.companyName || pr.name || "Hope AI";
-    const replyTo = pr.email_reply_to || brand.supportEmail || null;
+    let replyTo = pr.email_reply_to || brand.supportEmail || null;
+
+    // Route patient replies back into Conversations via mailgun-inbound.
+    let conversationId: string | null = null;
+    if (payload.conversation_message_id) {
+      const { data: cm } = await admin
+        .from("conversation_messages")
+        .select("conversation_id")
+        .eq("id", payload.conversation_message_id)
+        .maybeSingle();
+      conversationId = cm?.conversation_id || null;
+    }
+    const inboundReply = conversationId ? conversationReplyAddress(conversationId) : null;
+    if (inboundReply) replyTo = inboundReply;
 
     const text = body;
     const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.6;color:#111827;white-space:pre-wrap">${escapeHtml(body)}</div>`;
@@ -101,19 +114,20 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
       const meta = (msg?.meta && typeof msg.meta === "object" ? msg.meta : {}) as Record<string, unknown>;
       await admin.from("conversation_messages").update({
-        meta: { ...meta, mailgun_id: result.id, delivery_status: "sent" },
+        meta: {
+          ...meta,
+          mailgun_id: result.id,
+          delivery_status: "sent",
+          subject: subject || null,
+          reply_to: inboundReply || replyTo,
+        },
       }).eq("id", payload.conversation_message_id);
 
-      const { data: cm } = await admin
-        .from("conversation_messages")
-        .select("conversation_id")
-        .eq("id", payload.conversation_message_id)
-        .maybeSingle();
-      if (cm?.conversation_id) {
+      if (conversationId) {
         await admin.from("conversations").update({
           last_message_at: nowIso,
           last_message_preview: preview(body),
-        }).eq("id", cm.conversation_id);
+        }).eq("id", conversationId);
       }
     }
 

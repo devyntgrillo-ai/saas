@@ -19,11 +19,14 @@ const PerformanceInsights = lazy(() => import('../components/PerformanceInsights
 import ErrorState, { friendlyError } from '../components/ErrorState'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { isWonStatus } from '../lib/consults'
 import { fetchNetworkComparison } from '../lib/insights'
-import { fetchProductionAttribution } from '../lib/attribution'
 import { formatMoney } from '../lib/analytics'
-import { consultTxValue, isConfirmedSource } from '../lib/treatments'
+import {
+  computeAttributedProduction,
+  countSentMessages,
+  closeRateForRows,
+  fetchDashboardExtras,
+} from '../lib/dashboard'
 
 function parseDate(d) {
   if (!d) return null
@@ -31,7 +34,6 @@ function parseDate(d) {
   return y ? new Date(y, m - 1, day) : new Date(d)
 }
 const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-const isWon = (c) => isWonStatus(c.status)
 
 function startOfWeek() {
   const d = new Date()
@@ -91,13 +93,19 @@ function KpiCard({ icon: Icon, label, value, sub, accent = 'primary', to }) {
     : <div className="card p-5">{body}</div>
 }
 
+const EMPTY_EXTRAS = {
+  sentConsultIds: new Set(),
+  repliedConsultIds: new Set(),
+  inboundRepliesWeek: 0,
+  messageOutcomes: [],
+}
+
 export default function Dashboard() {
   const { practiceId, practice, user, isAgencyUser } = useAuth()
   const [consults, setConsults] = useState([])
   const [messages, setMessages] = useState([])
-  const [repliesThisWeek, setRepliesThisWeek] = useState(0)
+  const [dashExtras, setDashExtras] = useState(EMPTY_EXTRAS)
   const [comparison, setComparison] = useState(null)
-  const [production, setProduction] = useState(null)
   const [, setUnreadConvos] = useState(0)
   const [implantApptsWeek, setImplantApptsWeek] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -112,8 +120,9 @@ export default function Dashboard() {
       setLoading(true)
       setError(null)
       const weekStart = startOfWeek()
+      const weekStartIso = weekStart.toISOString()
       try {
-        const [{ data: c, error: ce }, { data: m, error: me }, repliesRes, convosRes, apptRes] = await Promise.all([
+        const [{ data: c, error: ce }, { data: m, error: me }, convosRes, apptRes, extras] = await Promise.all([
           supabase
             .from('consults')
             .select('id, recording_date, status, outcome, objection_type, case_value, created_at, attribution_status, treatment_type, tx_plan_value, tx_plan_value_source')
@@ -123,12 +132,6 @@ export default function Dashboard() {
             .select('consult_id, channel, status, scheduled_for, sent_at, created_at')
             .eq('practice_id', practiceId),
           supabase
-            .from('message_logs')
-            .select('id', { count: 'exact', head: true })
-            .eq('practice_id', practiceId)
-            .eq('direction', 'inbound')
-            .gte('created_at', weekStart.toISOString()),
-          supabase
             .from('conversations')
             .select('unread_count')
             .eq('practice_id', practiceId),
@@ -137,12 +140,13 @@ export default function Dashboard() {
             .select('id', { count: 'exact', head: true })
             .eq('practice_id', practiceId)
             .eq('is_implant_consult', true)
-            .gte('appointment_time', weekStart.toISOString()),
+            .gte('appointment_time', weekStartIso),
+          fetchDashboardExtras(practiceId, weekStartIso),
         ])
         if (ce || me) throw ce || me
         setConsults(c || [])
         setMessages(m || [])
-        setRepliesThisWeek(repliesRes.count || 0)
+        setDashExtras(extras)
         setUnreadConvos((convosRes.data || []).filter((x) => (x.unread_count || 0) > 0).length)
         setImplantApptsWeek(apptRes.count || 0)
       } catch (e) {
@@ -169,84 +173,28 @@ export default function Dashboard() {
     fetchNetworkComparison(practiceId)
       .then((c) => active && setComparison(c))
       .catch(() => {})
-    fetchProductionAttribution(practiceId)
-      .then((p) => active && setProduction(p))
-      .catch(() => {})
     return () => {
       active = false
     }
   }, [practiceId])
 
-  // Conversion KPIs (top row) - month-over-month deltas + best message.
-  const kpi = useMemo(() => {
-    const now = new Date()
-    const thisKey = monthKey(now)
-    const lastKey = monthKey(new Date(now.getFullYear(), now.getMonth() - 1, 1))
+  const prodMetrics = useMemo(
+    () =>
+      computeAttributedProduction(consults, practice, {
+        sentSet: dashExtras.sentConsultIds,
+        repliedSet: dashExtras.repliedConsultIds,
+      }),
+    [consults, practice, dashExtras.sentConsultIds, dashExtras.repliedConsultIds],
+  )
 
-    const msgByConsult = new Map()
-    for (const m of messages) {
-      if (!msgByConsult.has(m.consult_id)) msgByConsult.set(m.consult_id, [])
-      msgByConsult.get(m.consult_id).push(m)
-    }
-
-    function monthSlice(key) {
-      const rows = consults.filter((c) => {
-        const d = parseDate(c.recording_date)
-        return d && monthKey(d) === key
-      })
-      const total = rows.length
-      const followed = rows.filter((c) => (msgByConsult.get(c.id) || []).length > 0).length
-      const won = rows.filter(isWon).length
-      return {
-        followRate: total ? Math.round((followed / total) * 100) : 0,
-        closeRate: total ? Math.round((won / total) * 100) : 0,
-      }
-    }
-
-    const thisMonth = monthSlice(thisKey)
-    const lastMonth = monthSlice(lastKey)
-
-    // Avg days to close - recording_date → latest message timestamp, for won consults.
-    const wonRows = consults.filter(isWon)
-    let dayTotals = 0
-    let dayCount = 0
-    for (const c of wonRows) {
-      const start = parseDate(c.recording_date)
-      const msgs = msgByConsult.get(c.id) || []
-      const stamps = msgs
-        .map((m) => new Date(m.sent_at || m.scheduled_for || m.created_at).getTime())
-        .filter((t) => !Number.isNaN(t))
-      const end = stamps.length ? Math.max(...stamps) : null
-      if (start && end && end >= start.getTime()) {
-        dayTotals += (end - start.getTime()) / 86400000
-        dayCount += 1
-      }
-    }
-    const avgDaysToClose = dayCount ? Math.round(dayTotals / dayCount) : 0
-
-    // Best performing message by sequence position (most replies).
-    const positions = {}
-    for (const msgs of msgByConsult.values()) {
-      const sorted = [...msgs].sort(
-        (a, b) => new Date(a.scheduled_for || a.created_at) - new Date(b.scheduled_for || b.created_at)
-      )
-      sorted.forEach((m, i) => {
-        if (!positions[i]) positions[i] = { sent: 0, replied: 0 }
-        positions[i].sent += 1
-        if (m.status === 'replied') positions[i].replied += 1
-      })
-    }
-    const best =
-      Object.entries(positions)
-        .map(([i, v]) => ({
-          label: `Message ${Number(i) + 1}`,
-          replies: v.replied,
-          rate: v.sent ? Math.round((v.replied / v.sent) * 100) : 0,
-        }))
-        .sort((a, b) => b.replies - a.replies)[0] || null
-
-    return { thisMonth, lastMonth, avgDaysToClose, best }
-  }, [consults, messages])
+  const closeRateThisMonth = useMemo(() => {
+    const thisKey = monthKey(new Date())
+    const rows = consults.filter((c) => {
+      const d = parseDate(c.recording_date)
+      return d && monthKey(d) === thisKey
+    })
+    return closeRateForRows(rows)
+  }, [consults])
 
   // Activity summary (second row).
   const activity = useMemo(() => {
@@ -264,53 +212,35 @@ export default function Dashboard() {
     return { recordedThisWeek, active, acceptedThisMonth }
   }, [consults])
 
-  // 3-row KPI model (revenue / activity / today's focus).
   const kpis = useMemo(() => {
     const monthStart = startOfMonth()
-    const todayStr = new Date().toLocaleDateString('en-CA')
     const avgSetting = Number(practice?.avg_case_value) || 30000
-
-    const prodRecovered = production?.recovered ?? 0
     const pipelineValue = activity.active * avgSetting
-    // Hours saved vs. manual follow-up: each automated message CaseLift sends
-    // replaces a follow-up the team would otherwise text/call/email by hand,
-    // estimated at minPerFollowup minutes each.
     const minPerFollowup = 5
-    const messagesSent = messages.filter((m) => m.sent_at || ['sent', 'delivered', 'opened', 'replied'].includes(m.status)).length
+    const messagesSent = countSentMessages(messages)
     const hoursSaved = Math.round((messagesSent * minPerFollowup / 60) * 10) / 10
-    const roi = prodRecovered > 0 ? Math.max(1, Math.round(prodRecovered / 997)) : 0
-
     const monthRows = consults.filter((c) => { const d = parseDate(c.recording_date); return d && d >= monthStart })
     const activated = monthRows.filter((c) => ['approved', 'active'].includes(c.status)).length
     const activationRate = monthRows.length ? Math.round((activated / monthRows.length) * 100) : 0
-    const recordingRate = implantApptsWeek ? Math.round((activity.recordedThisWeek / implantApptsWeek) * 100) : (activity.recordedThisWeek ? 100 : 0)
-    const replyRate = activity.active ? Math.min(100, Math.round((repliesThisWeek / activity.active) * 100)) : 0
-    const closeRate = kpi.thisMonth.closeRate
+    const recordingRate = implantApptsWeek
+      ? Math.round((activity.recordedThisWeek / implantApptsWeek) * 100)
+      : (activity.recordedThisWeek ? 100 : 0)
+    const replyRate = activity.active
+      ? Math.min(100, Math.round((dashExtras.inboundRepliesWeek / activity.active) * 100))
+      : 0
 
-    const dueToday = messages.filter((m) =>
-      ['scheduled', 'draft'].includes(m.status) &&
-      m.scheduled_for &&
-      String(m.scheduled_for).slice(0, 10) === todayStr
-    ).length
-    const pending = consults.filter((c) => c.status === 'pending' || c.outcome === 'pending' && c.status === 'analyzed').length
-
-    return { prodRecovered, pipelineValue, hoursSaved, messagesSent, minPerFollowup, roi, recordingRate, activationRate, replyRate, closeRate, dueToday, pending }
-  }, [consults, messages, production, activity, practice, implantApptsWeek, repliesThisWeek, kpi])
-
-  // Production recovered - split into confirmed (PMS/manual treatment-plan values)
-  // vs estimated pipeline (practice default / type-average). Only CaseLift-
-  // attributed consults count. We never collapse these into a single number.
-  const prodSplit = useMemo(() => {
-    let confirmed = 0
-    let pipeline = 0
-    for (const c of consults) {
-      if (c.attribution_status !== 'caselift_assisted' && c.attribution_status !== 'caselift_recovered') continue
-      const { value, source } = consultTxValue(c, practice)
-      if (isConfirmedSource(source)) confirmed += value
-      else pipeline += value
+    return {
+      pipelineValue,
+      hoursSaved,
+      messagesSent,
+      minPerFollowup,
+      roi: prodMetrics.roi,
+      recordingRate,
+      activationRate,
+      replyRate,
+      closeRate: closeRateThisMonth,
     }
-    return { confirmed, pipeline }
-  }, [consults, practice])
+  }, [consults, messages, activity, practice, implantApptsWeek, dashExtras.inboundRepliesWeek, prodMetrics.roi, closeRateThisMonth])
 
   // Agency users with no client selected belong in the agency portal.
   if (isAgencyUser && !practiceId) {
@@ -372,9 +302,12 @@ export default function Dashboard() {
                   </span>
                 </div>
                 <p className="mt-3 text-3xl font-bold tracking-tight text-emerald-300">
-                  {formatMoney(prodSplit.confirmed)}
+                  {formatMoney(prodMetrics.confirmed)}
                 </p>
-                <p className="mt-0.5 text-xs text-slate-500">Confirmed recovered · CaseLift attributed</p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Confirmed recovered · {prodMetrics.attributedCount} CaseLift-attributed
+                  {prodMetrics.pipeline > 0 ? ` · ${formatMoney(prodMetrics.pipeline)} pipeline` : ''}
+                </p>
               </div>
               <KpiCard icon={TrendingUp} accent="primary" label="Pipeline Value" value={formatMoney(kpis.pipelineValue)} sub={`${activity.active} patients nurtured`} />
               <KpiCard icon={Clock} accent="violet" label="Hours Saved" value={`${kpis.hoursSaved}h`} sub={`${kpis.messagesSent} auto follow-ups · ~${kpis.minPerFollowup} min each`} />
@@ -451,7 +384,12 @@ export default function Dashboard() {
           {/* Performance Insights - charts + network comparison + coaching tip */}
           {practiceId && !loading && (
             <Suspense fallback={<div className="card h-64 animate-pulse" />}>
-              <PerformanceInsights consults={consults} messages={messages} comparison={comparison} practiceId={practiceId} />
+              <PerformanceInsights
+                consults={consults}
+                messageOutcomes={dashExtras.messageOutcomes}
+                comparison={comparison}
+                practiceId={practiceId}
+              />
             </Suspense>
           )}
         </>

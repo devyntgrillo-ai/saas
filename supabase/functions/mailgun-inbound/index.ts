@@ -1,0 +1,192 @@
+// ============================================================================
+// mailgun-inbound — Mailgun inbound route webhook for patient email replies.
+//
+// Configure a Mailgun route: forward all (or reply+*) to this URL.
+// Outbound conversation email sets Reply-To: reply+{conversation_id}@MAILGUN_DOMAIN
+// so replies land here and become inbound conversation_messages.
+//
+// Deploy with verify_jwt=false. Secrets: SUPABASE_*, optional MAILGUN_WEBHOOK_SIGNING_KEY.
+// ============================================================================
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "@supabase/supabase-js";
+import {
+  emailsMatch,
+  extractEmailAddress,
+  parseConversationIdFromRecipient,
+  verifyMailgunWebhook,
+} from "../_shared/mailgun.ts";
+
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function ok() {
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: { ...cors, "Content-Type": "application/json" },
+  });
+}
+
+function preview(text: string, max = 80): string {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
+}
+
+function isAutoSender(email: string): boolean {
+  const e = email.toLowerCase();
+  return e.includes("mailer-daemon") || e.includes("postmaster") || e.includes("noreply@");
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  try {
+    const form = await req.formData();
+    const timestamp = String(form.get("timestamp") || "");
+    const token = String(form.get("token") || "");
+    const signature = String(form.get("signature") || "");
+
+    const signingKey = Deno.env.get("MAILGUN_WEBHOOK_SIGNING_KEY") || "";
+    if (signingKey) {
+      const valid = await verifyMailgunWebhook(signingKey, timestamp, token, signature);
+      if (!valid) {
+        console.warn("mailgun-inbound: invalid signature");
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    const sender = String(form.get("sender") || form.get("from") || "").trim();
+    const recipient = String(form.get("recipient") || "").trim();
+    const subject = String(form.get("subject") || "").trim();
+    const body = String(
+      form.get("stripped-text") || form.get("body-plain") || form.get("body") || "",
+    ).trim();
+
+    if (!sender) return ok();
+
+    const fromEmail = extractEmailAddress(sender);
+    if (isAutoSender(fromEmail)) return ok();
+
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const nowIso = new Date().toISOString();
+    let conversationId = parseConversationIdFromRecipient(recipient);
+
+    type ConvRow = {
+      id: string;
+      practice_id: string;
+      unread_count: number | null;
+      consult_id: string | null;
+      patient_first: string | null;
+      patient_last: string | null;
+      patient_phone: string | null;
+      patient_email: string | null;
+    };
+
+    let conversation: ConvRow | null = null;
+
+    if (conversationId) {
+      const { data } = await admin
+        .from("conversations")
+        .select("id, practice_id, unread_count, consult_id, patient_first, patient_last, patient_phone, patient_email")
+        .eq("id", conversationId)
+        .maybeSingle();
+      conversation = data;
+    }
+
+    // Fallback: match sender email to an existing thread (patient hit Reply on From, etc.).
+    if (!conversation) {
+      const { data: convRows } = await admin
+        .from("conversations")
+        .select("id, practice_id, unread_count, consult_id, patient_first, patient_last, patient_phone, patient_email, last_message_at")
+        .order("last_message_at", { ascending: false })
+        .limit(500);
+
+      conversation = (convRows || []).find((c) => emailsMatch(c.patient_email || "", fromEmail)) || null;
+
+      if (!conversation) {
+        const { data: consults } = await admin
+          .from("consults")
+          .select("id, practice_id, patient_first, patient_last, patient_phone, patient_email")
+          .order("created_at", { ascending: false })
+          .limit(300);
+
+        const consult = (consults || []).find((c) => emailsMatch(c.patient_email || "", fromEmail)) || null;
+        if (consult) {
+          const linked = (convRows || []).find((c) => c.consult_id === consult.id);
+          if (linked) {
+            conversation = linked;
+          } else {
+            const { data: created, error: createErr } = await admin
+              .from("conversations")
+              .insert({
+                practice_id: consult.practice_id,
+                consult_id: consult.id,
+                patient_first: consult.patient_first,
+                patient_last: consult.patient_last,
+                patient_phone: consult.patient_phone,
+                patient_email: fromEmail,
+                last_message_at: nowIso,
+                last_message_preview: preview(body || subject || "(email)"),
+                unread_count: 1,
+              })
+              .select("id, practice_id, unread_count, consult_id, patient_first, patient_last, patient_phone, patient_email")
+              .single();
+            if (createErr) {
+              console.error("mailgun-inbound: conversation create failed:", createErr.message);
+              return ok();
+            }
+            conversation = created;
+          }
+        }
+      }
+    }
+
+    if (!conversation) {
+      console.warn(`mailgun-inbound: no conversation for from=${fromEmail} recipient=${recipient}`);
+      return ok();
+    }
+
+    conversationId = conversation.id;
+
+    await admin.from("conversations").update({
+      last_message_at: nowIso,
+      last_message_preview: preview(body || subject || "(email)"),
+      unread_count: (conversation.unread_count || 0) + 1,
+      patient_email: conversation.patient_email || fromEmail,
+    }).eq("id", conversationId);
+
+    await admin.from("conversation_messages").insert({
+      conversation_id: conversationId,
+      direction: "inbound",
+      channel: "email",
+      body: body || subject || "(empty email)",
+      sent_at: nowIso,
+      meta: {
+        mailgun_inbound: true,
+        from: sender,
+        from_email: fromEmail,
+        to: recipient,
+        subject: subject || null,
+      },
+    });
+
+    return ok();
+  } catch (e) {
+    console.error("mailgun-inbound error:", e);
+    return ok();
+  }
+});
