@@ -6,6 +6,11 @@ import { resetPrimaryColor } from '../lib/whitelabel'
 const AuthContext = createContext({})
 const VIEW_KEY = 'ciq_view_practice'
 
+// The platform super-admin is granted by email, independent of any DB column,
+// so an unset/incorrect users.access_level can never lock this account out of
+// the admin view (which is how the BAA-gate lockout happened previously).
+export const SUPER_ADMIN_EMAIL = 'devyntgrillo@gmail.com'
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -29,6 +34,8 @@ export function AuthProvider({ children }) {
 
   // Set of practices this user can switch between (drives the account switcher).
   const [accessiblePractices, setAccessiblePractices] = useState([])
+  // Resellers (agencies) a super-admin can jump into. Empty for everyone else.
+  const [accessibleResellers, setAccessibleResellers] = useState([])
 
   // --- session ---
   useEffect(() => {
@@ -120,8 +127,15 @@ export function AuthProvider({ children }) {
 
   const isAgencyUser = Boolean(agency)
 
-  // Effective access level (explicit users.access_level wins; otherwise inferred).
+  // The designated super-admin email always resolves as super_admin, ahead of
+  // any DB value — this is the role spec's source of truth for super-admin.
+  const isSuperAdminEmail =
+    (session?.user?.email || '').toLowerCase() === SUPER_ADMIN_EMAIL
+
+  // Effective access level (super-admin email wins; then explicit
+  // users.access_level; otherwise inferred from agency/practice membership).
   const accessLevel =
+    (isSuperAdminEmail ? 'super_admin' : null) ||
     profile?.access_level ||
     (isAgencyUser ? `agency_${agencyRole || 'owner'}` : null) ||
     (profile?.practice_id
@@ -192,6 +206,17 @@ export function AuthProvider({ children }) {
     ;(async () => {
       const list = await loadAccessiblePractices(accessLevel, profile, agency)
       if (active) setAccessiblePractices(list)
+      // Super-admins also see every reseller, to jump into their admin view.
+      if (accessLevel === 'super_admin') {
+        const { data } = await supabase
+          .from('agency_accounts')
+          .select('id, name')
+          .order('name')
+          .limit(100)
+        if (active) setAccessibleResellers(data || [])
+      } else if (active) {
+        setAccessibleResellers([])
+      }
     })()
     return () => {
       active = false
@@ -261,12 +286,31 @@ export function AuthProvider({ children }) {
     isSuperAdmin,
     canImpersonate,
     accessiblePractices,
+    accessibleResellers,
 
     // impersonation
     isImpersonating,
     activePractice,
     viewPractice,
     exitPractice,
+    // Spec-shaped view of the same impersonation state for UI (e.g. the banner).
+    impersonation: {
+      active: isImpersonating,
+      target: isImpersonating
+        ? {
+            id: practiceId,
+            name: activePractice?.name || 'this account',
+            email: activePractice?.email || null,
+            role: 'practice_user',
+          }
+        : null,
+      original: {
+        id: session?.user?.id || null,
+        name: profile?.full_name || session?.user?.email || null,
+        email: session?.user?.email || null,
+        role: accessLevel || null,
+      },
+    },
 
     refreshProfile: () =>
       session?.user

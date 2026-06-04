@@ -1,5 +1,5 @@
 import { Suspense, useState } from 'react'
-import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import PageLoader from './PageLoader'
 import {
   LayoutDashboard,
@@ -16,12 +16,15 @@ import {
   AlertTriangle,
   Sun,
   Moon,
+  LayoutGrid,
+  Rocket,
 } from 'lucide-react'
 import Logo from './Logo'
 import NotificationBell from './NotificationBell'
 import GlobalSearch from './GlobalSearch'
 import RecordConsultButton from './RecordConsultButton'
 import AccountSwitcher from './AccountSwitcher'
+import ImpersonationBanner from './ImpersonationBanner'
 import { RecorderProvider } from '../context/RecorderContext'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
@@ -37,6 +40,17 @@ const practiceNav = [
   { to: '/sequences', label: 'Sequences', icon: GitBranch },
   { to: '/training', label: 'Training', icon: GraduationCap },
   { to: '/community', label: 'Community', icon: Users, locked: true },
+]
+
+// Reseller (agency) portal nav - rendered vertically in the sidebar in place of
+// the old horizontal AgencyTabs bar. `key` drives active state (the Settings tab
+// lives on /agency?tab=settings, so we can't rely on NavLink path matching).
+const agencyNav = [
+  { key: 'analytics', label: 'Dashboard', icon: LayoutDashboard, to: '/agency/analytics' },
+  { key: 'overview', label: 'Subaccounts', icon: LayoutGrid, to: '/agency' },
+  { key: 'saas-mode', label: 'SaaS Mode', icon: Rocket, to: '/agency/saas-mode' },
+  { key: 'team', label: 'Team', icon: Users, to: '/agency/team' },
+  { key: 'settings', label: 'Settings', icon: Settings, to: '/agency?tab=settings' },
 ]
 
 // Shared styling for sidebar nav links (active = brand accent + left border).
@@ -56,17 +70,15 @@ export default function Layout() {
     agencyRole,
     isAgencyUser,
     isSuperAdmin,
-    isImpersonating,
-    activePractice,
     practice,
     practiceId,
-    exitPractice,
     signOut,
   } = useAuth()
   const perms = usePermissions()
   const { isLight, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const [mobileOpen, setMobileOpen] = useState(false)
   const showPaywall = Boolean(practiceId) && needsPaywall(practice)
   // Reseller wholesale billing failed → their account is suspended, so their
@@ -82,11 +94,6 @@ export default function Layout() {
     navigate('/login')
   }
 
-  const handleExit = (to) => {
-    exitPractice()
-    navigate(to || '/agency')
-  }
-
   const initials = (user?.email || '?').slice(0, 2).toUpperCase()
 
   // The sidebar shows practice nav only. Admin and Reseller portals are reached
@@ -95,6 +102,16 @@ export default function Layout() {
   // they're impersonating).
   const nav = practiceId ? practiceNav : []
   const showSettings = practiceId && perms.canViewSettings
+
+  // Reseller portal: an agency user with no practice in context (or anyone on an
+  // /agency route). Their nav lives in the sidebar instead of a horizontal bar.
+  const inResellerPortal = !practiceId && (isAgencyUser || location.pathname.startsWith('/agency'))
+  const agencyActive =
+    location.pathname.startsWith('/agency/saas-mode') ? 'saas-mode'
+    : location.pathname.startsWith('/agency/analytics') ? 'analytics'
+    : location.pathname.startsWith('/agency/team') ? 'team'
+    : searchParams.get('tab') === 'settings' ? 'settings'
+    : 'overview'
 
   const SidebarContent = () => (
     <>
@@ -109,22 +126,36 @@ export default function Layout() {
       {practiceId && <RecordConsultButton onLaunch={() => setMobileOpen(false)} />}
 
       <nav className="flex-1 space-y-0.5 px-3">
-        {nav.map(({ to, label, icon: Icon, end, locked }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            onClick={() => setMobileOpen(false)}
-            className={navItemClass}
-          >
-            {/* Icon inherits the link's text color: muted gray when inactive,
-                brand accent when active. Size 16px, 10px gap (gap-2.5 above). */}
-            {Icon && <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />}
-            <span className="flex-1">{label}</span>
-            {/* Locked tabs (e.g. Community) show a small lock - viewable as a teaser. */}
-            {locked && <Lock className="h-3 w-3 shrink-0 text-slate-500" strokeWidth={2} />}
-          </NavLink>
-        ))}
+        {inResellerPortal
+          ? // Reseller portal: agency nav. Plain Links + manual active state so the
+            // Settings tab (/agency?tab=settings) highlights correctly.
+            agencyNav.map(({ key, label, icon: Icon, to }) => (
+              <Link
+                key={key}
+                to={to}
+                onClick={() => setMobileOpen(false)}
+                className={navItemClass({ isActive: key === agencyActive })}
+              >
+                {Icon && <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />}
+                <span className="flex-1">{label}</span>
+              </Link>
+            ))
+          : nav.map(({ to, label, icon: Icon, end, locked }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                onClick={() => setMobileOpen(false)}
+                className={navItemClass}
+              >
+                {/* Icon inherits the link's text color: muted gray when inactive,
+                    brand accent when active. Size 16px, 10px gap (gap-2.5 above). */}
+                {Icon && <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />}
+                <span className="flex-1">{label}</span>
+                {/* Locked tabs (e.g. Community) show a small lock - viewable as a teaser. */}
+                {locked && <Lock className="h-3 w-3 shrink-0 text-slate-500" strokeWidth={2} />}
+              </NavLink>
+            ))}
       </nav>
 
       {/* Settings - pinned to the bottom (where Record Consult used to be). */}
@@ -170,7 +201,10 @@ export default function Layout() {
 
   return (
     <RecorderProvider>
-      <div className="app-shell flex h-screen overflow-hidden bg-surface">
+      <div className="flex h-screen flex-col overflow-hidden bg-surface">
+      {/* Impersonation bar - pinned above the nav, visible while impersonating. */}
+      <ImpersonationBanner />
+      <div className="app-shell flex min-h-0 flex-1 overflow-hidden">
       {/* Desktop sidebar */}
       <aside className="hidden w-[220px] shrink-0 flex-col border-r border-white/[0.07] bg-surface-900 lg:flex">
         <SidebarContent />
@@ -248,22 +282,6 @@ export default function Layout() {
           </div>
         )}
 
-        {/* Viewing banner - subtle 32px strip, muted text, text-link exit. */}
-        {isImpersonating && (
-          <div className="flex h-8 items-center justify-between gap-3 border-b border-white/[0.07] bg-surface-800 px-4 text-xs text-slate-400">
-            <span className="truncate">
-              Viewing <span className="text-slate-200">{activePractice?.name || 'client practice'}</span>
-              {activePractice?.agency?.name && <span> · {activePractice.agency.name}</span>}
-            </span>
-            <button
-              onClick={() => handleExit(isSuperAdmin ? '/admin' : '/agency')}
-              className="shrink-0 font-medium text-slate-400 transition hover:text-slate-200"
-            >
-              Exit
-            </button>
-          </div>
-        )}
-
         {/* Top bar - mobile menu/logo on the left, search + notifications on the right */}
         <header className="flex items-center gap-3 border-b border-white/[0.07] bg-surface-900 px-4 py-3 sm:px-6">
           <button
@@ -303,6 +321,7 @@ export default function Layout() {
           CaseLift Admin
         </div>
       )}
+      </div>
       </div>
     </RecorderProvider>
   )

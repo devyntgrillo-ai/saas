@@ -53,6 +53,9 @@ export async function createBrowserConsult(practiceId, { durationSec, patient, s
     if (patient.email) row.patient_email = patient.email
     if (patient.appointmentId) row.appointment_id = patient.appointmentId
     if (patient.pmsApptId || patient.appointmentId) row.pms_appointment_id = patient.pmsApptId || patient.appointmentId
+    // Direct PMS-patient link (from the "Select Patient" picker) for attribution
+    // even when there's no today's appointment to link through.
+    if (patient.pmsPatientId) row.pms_patient_id = patient.pmsPatientId
     // Treatment-type system (set at the recording confirm step).
     if (patient.treatmentType) row.treatment_type = patient.treatmentType
     if (patient.txPlanValue != null && patient.txPlanValue !== '') {

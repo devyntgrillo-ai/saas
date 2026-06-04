@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronsUpDown, Search, Shield, Building2, Check } from 'lucide-react'
+import { ChevronsUpDown, Search, RotateCcw, Shield } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useBranding } from '../context/BrandingContext'
 import { ACCESS_LABELS } from '../lib/permissions'
@@ -14,15 +14,22 @@ function initials(name) {
     .toUpperCase()
 }
 
+// Single leading letter for the round account avatars in the list.
+function firstLetter(name) {
+  return (name?.trim()?.[0] || '?').toUpperCase()
+}
+
 // Unified context switcher: Super Admin → Agency → Practices.
 // Clean, premium dropdown - borderless trigger, elevated panel, accent states.
 export default function AccountSwitcher() {
   const {
     accessiblePractices,
+    accessibleResellers,
     practice,
     agency,
     isAgencyUser,
     isSuperAdmin,
+    isImpersonating,
     accessLevel,
     viewPractice,
     exitPractice,
@@ -58,6 +65,11 @@ export default function AccountSwitcher() {
     )
   }, [accessiblePractices, search])
 
+  const filteredResellers = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return (accessibleResellers || []).filter((r) => !q || r.name?.toLowerCase().includes(q))
+  }, [accessibleResellers, search])
+
   // Current context shown on the trigger.
   const currentName = practice?.name || agency?.name || (isSuperAdmin ? 'Super Admin' : 'Select account')
   const currentSub = practice
@@ -71,6 +83,12 @@ export default function AccountSwitcher() {
     setOpen(false)
     navigate('/')
   }
+
+  // Practice users have nothing to switch between - hide the switcher entirely.
+  if (!isSuperAdmin && !isAgencyUser) return null
+
+  // Super-admins search across every account; resellers across their sub-accounts.
+  const searchPlaceholder = isSuperAdmin ? 'Search for an account' : 'Search for a sub-account'
 
   return (
     <div className="relative px-2 pb-2" ref={ref}>
@@ -89,73 +107,90 @@ export default function AccountSwitcher() {
         <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-500" />
       </button>
 
-      {/* Panel */}
+      {/* Panel - white/light, floating over the dark sidebar */}
       {open && (
         <div
-          className="animate-dropdown absolute left-2 z-50 mt-1 w-80 max-w-[calc(100vw-32px)] rounded-lg border border-white/[0.07] bg-surface-800 p-2 shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
+          className="animate-dropdown absolute left-2 z-50 mt-1 w-80 max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.18)]"
         >
-          {/* YOUR VIEWS */}
-          {(isSuperAdmin || isAgencyUser) && (
-            <>
-              <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                Your views
-              </p>
-              {isSuperAdmin && (
-                <button
-                  onClick={() => { exitPractice(); setOpen(false); navigate('/admin') }}
-                  className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-sm text-slate-200 transition hover:bg-surface-700"
-                >
-                  <Shield className="h-4 w-4 shrink-0 text-slate-400" /> Super Admin
-                  <span className="ml-auto rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-rose-400">ADMIN</span>
-                </button>
-              )}
-              {isAgencyUser && (
-                <button
-                  onClick={() => { exitPractice(); setOpen(false); navigate('/agency') }}
-                  className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-sm text-slate-200 transition hover:bg-surface-700"
-                >
-                  <Building2 className="h-4 w-4 shrink-0 text-slate-400" /> <span className="truncate">{agency?.name || 'Reseller'}</span>
-                  <span className="ml-auto shrink-0 rounded bg-[var(--accent-subtle)] px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-[var(--accent)]">RESELLER</span>
-                </button>
-              )}
-              <div className="my-2 border-t border-white/[0.07]" />
-            </>
-          )}
-
-          {/* CLIENT PRACTICES */}
-          <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            {isSuperAdmin || isAgencyUser ? 'Client practices' : 'Your practice'}
-          </p>
-
-          {(isSuperAdmin || isAgencyUser) && (
-            <div className="relative mb-1 mt-0.5">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+          <div className="p-2.5">
+            {/* Search */}
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 autoFocus
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search practices..."
-                className="h-7 w-full rounded-md border-0 bg-surface-700 pl-8 pr-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                placeholder={searchPlaceholder}
+                className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
-          )}
 
-          {/* Up to 6 rows visible, scroll beyond. */}
-          <div className="max-h-[216px] space-y-0.5 overflow-y-auto">
-            {filtered.length === 0 ? (
-              <p className="px-2 py-5 text-center text-xs text-slate-500">No practices found.</p>
+            {/* Super-admin: current context (not clickable). Reseller: switch action. */}
+            {isSuperAdmin ? (
+              <div className="mt-2 flex items-center gap-2.5 rounded-lg bg-slate-50 px-2 py-2">
+                <Shield className="h-4 w-4 shrink-0 text-slate-500" />
+                <span className="text-sm font-medium text-slate-700">Super Admin View</span>
+                {!isImpersonating && (
+                  <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    Current
+                  </span>
+                )}
+              </div>
             ) : (
-              filtered.map((p) => (
-                <AccountRow key={p.id} p={p} active={practice?.id === p.id} onPick={pick} />
-              ))
+              <button
+                onClick={() => { exitPractice(); setOpen(false); navigate('/agency') }}
+                className="mt-2 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-slate-50"
+              >
+                <RotateCcw className="h-4 w-4 shrink-0 text-blue-600" />
+                <span className="text-sm font-medium text-blue-600">Switch to Reseller View</span>
+              </button>
+            )}
+
+            {/* RESELLERS (super-admin only) - jump to a reseller's admin view. */}
+            {isSuperAdmin && filteredResellers.length > 0 && (
+              <>
+                <p className="px-1 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  Resellers
+                </p>
+                <div className="max-h-[150px] space-y-0.5 overflow-y-auto">
+                  {filteredResellers.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => { setOpen(false); navigate(`/admin/agencies/${r.id}`) }}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-slate-50"
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-600">
+                        {firstLetter(r.name)}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-slate-900">{r.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* ALL ACCOUNTS */}
+            <p className="px-1 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              All Accounts
+            </p>
+
+            {/* Accounts list - compact rows with a little breathing room. */}
+            <div className="max-h-[300px] space-y-0.5 overflow-y-auto">
+              {filtered.length === 0 ? (
+                <p className="px-2 py-6 text-center text-sm text-slate-400">No accounts found.</p>
+              ) : (
+                filtered.map((p) => (
+                  <AccountRow key={p.id} p={p} active={practice?.id === p.id} onPick={pick} />
+                ))
+              )}
+            </div>
+
+            {isWhiteLabeled && (
+              <p className="mt-2 border-t border-slate-100 px-2 pt-2 text-center text-[10px] text-slate-400">
+                Powered by CaseLift
+              </p>
             )}
           </div>
-
-          {isWhiteLabeled && (
-            <p className="mt-2 border-t border-white/[0.07] px-2 pt-2 text-center text-[10px] text-slate-600">
-              Powered by CaseLift
-            </p>
-          )}
         </div>
       )}
     </div>
@@ -166,15 +201,17 @@ function AccountRow({ p, active, onPick }) {
   return (
     <button
       onClick={() => onPick(p.id)}
-      className={`flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left transition ${
-        active ? 'border-l-2 border-primary bg-primary/10' : 'hover:bg-surface-700'
+      className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition ${
+        active ? 'bg-blue-50' : 'hover:bg-slate-50'
       }`}
     >
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-700 text-[10px] font-semibold text-slate-300">
-        {initials(p.name)}
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
+        {firstLetter(p.name)}
       </span>
-      <span className="min-w-0 flex-1 truncate text-sm text-slate-100">{p.name}</span>
-      {active && <Check className="h-3.5 w-3.5 shrink-0 text-primary-300" />}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-semibold leading-tight text-slate-900">{p.name}</span>
+        {p.address && <span className="block truncate text-[11px] leading-tight text-slate-500">{p.address}</span>}
+      </span>
     </button>
   )
 }
