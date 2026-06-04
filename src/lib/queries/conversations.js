@@ -37,7 +37,7 @@ export async function fetchConversationThread(practiceId, conversationId) {
       .order('created_at', { ascending: true }),
     supabase
       .from('call_logs')
-      .select('id, recording_url, duration_seconds, disposition')
+      .select('id, recording_url, duration_seconds, disposition, transcript_deidentified, transcript_status, transcript_error')
       .eq('conversation_id', conversationId),
   ])
 

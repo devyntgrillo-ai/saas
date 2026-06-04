@@ -11,6 +11,7 @@ import {
   PhoneOutgoing,
 } from 'lucide-react'
 import { loadRecordingUrl } from '../lib/voice'
+import { supabase } from '../lib/supabase'
 
 function formatPlayerTime(secs) {
   const s = Math.max(0, Math.floor(secs || 0))
@@ -251,6 +252,70 @@ function CallRecordingPlayer({ callLogId, durationHint }) {
   )
 }
 
+function CallTranscript({ callLogId, status: initialStatus, text: initialText, error: initialError, hasRecording }) {
+  const [status, setStatus] = useState(initialStatus)
+  const [text, setText] = useState(initialText || '')
+  const [error, setError] = useState(initialError || '')
+
+  useEffect(() => {
+    setStatus(initialStatus)
+    setText(initialText || '')
+    setError(initialError || '')
+  }, [callLogId, initialStatus, initialText, initialError])
+
+  useEffect(() => {
+    if (!callLogId || !hasRecording || status !== 'pending') return
+
+    let cancelled = false
+    const poll = async () => {
+      const { data } = await supabase
+        .from('call_logs')
+        .select('transcript_status, transcript_deidentified, transcript_error')
+        .eq('id', callLogId)
+        .maybeSingle()
+      if (cancelled || !data) return
+      setStatus(data.transcript_status)
+      setText(data.transcript_deidentified || '')
+      setError(data.transcript_error || '')
+    }
+
+    poll()
+    const timer = setInterval(poll, 4000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [callLogId, hasRecording, status])
+
+  if (!hasRecording || !callLogId) return null
+
+  if (status === 'pending') {
+    return (
+      <div className="mt-2 flex items-center gap-2 pl-0 text-xs text-gray-500">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Transcribing call…
+      </div>
+    )
+  }
+
+  if (status === 'failed') {
+    return (
+      <p className="mt-2 text-xs text-rose-500">
+        {error || 'Transcription failed'}
+      </p>
+    )
+  }
+
+  if (status === 'skipped' || !text?.trim()) return null
+
+  return (
+    <div className="mt-2 rounded-md border border-gray-200 bg-white px-3 py-2">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Transcript</p>
+      <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-gray-700">{text}</p>
+    </div>
+  )
+}
+
 /**
  * GHL-style call log row in the conversation thread (inbound left + avatar, outbound right).
  */
@@ -260,6 +325,9 @@ export default function CallMessageBubble({
   callLogId,
   hasRecording,
   recordingDuration,
+  transcriptStatus,
+  transcriptText,
+  transcriptError,
   avatarClass,
   patientInitials,
   meta,
@@ -287,6 +355,13 @@ export default function CallMessageBubble({
       {hasRecording && callLogId && (
         <div className={inbound ? 'pl-9' : ''}>
           <CallRecordingPlayer callLogId={callLogId} durationHint={recordingDuration} />
+          <CallTranscript
+            callLogId={callLogId}
+            status={transcriptStatus}
+            text={transcriptText}
+            error={transcriptError}
+            hasRecording={hasRecording}
+          />
         </div>
       )}
       <p className={`mt-1 text-[11px] tabular-nums text-gray-400 ${inbound ? 'pl-9' : ''}`}>

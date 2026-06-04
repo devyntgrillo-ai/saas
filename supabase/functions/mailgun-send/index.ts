@@ -8,7 +8,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { resolveBrand } from "../_shared/brand.ts";
-import { isPatientMailConfigured, sendMailgunMessage } from "../_shared/mailgun.ts";
+import {
+  isPatientMailConfigured,
+  mailgunFromAddress,
+  mailgunPlatformDomain,
+  sendMailgunMessage,
+} from "../_shared/mailgun.ts";
 import {
   conversationReplyOnPracticeHost,
   ensurePracticeMailSubdomain,
@@ -115,17 +120,84 @@ Deno.serve(async (req: Request) => {
     const text = body;
     const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.6;color:#111827;white-space:pre-wrap">${escapeHtml(body)}</div>`;
 
-    const result = await sendMailgunMessage({
-      to,
-      subject,
-      text,
-      html,
-      fromName,
-      replyTo,
-      fromAddress: mail.fromAddress,
-      audience: "patient",
-      mailgunDomain: mail.apiDomain,
-    });
+    const platformFrom = mailgunFromAddress("noreply");
+    const platformDomain = mailgunPlatformDomain();
+    const deliverViaPlatform = Deno.env.get("MAILGUN_PATIENT_DELIVER_VIA_PLATFORM") !== "false";
+    const patientApiDomain = mail.apiDomain;
+    const patientApiReady = patientApiDomain &&
+      platformDomain &&
+      patientApiDomain.toLowerCase() !== platformDomain.toLowerCase();
+
+    let result: Awaited<ReturnType<typeof sendMailgunMessage>>;
+    let usedFallback = false;
+
+    // Sandbox / single-domain Mailgun: send via verified MAILGUN_DOMAIN (From @mg…).
+    // Per-practice From (office@sub.mail…) requires wildcard mail.heyhope.ai in Mailgun.
+    if (deliverViaPlatform && platformFrom && platformDomain) {
+      const platformReply = conversationId
+        ? conversationReplyOnPracticeHost(conversationId, platformDomain)
+        : replyTo;
+      result = await sendMailgunMessage({
+        to,
+        subject,
+        text,
+        html,
+        fromName,
+        replyTo: platformReply,
+        fromAddress: platformFrom,
+        audience: "platform",
+        mailgunDomain: platformDomain,
+      });
+      usedFallback = true;
+    } else if (patientApiReady) {
+      result = await sendMailgunMessage({
+        to,
+        subject,
+        text,
+        html,
+        fromName,
+        replyTo,
+        fromAddress: mail.fromAddress,
+        audience: "patient",
+        mailgunDomain: patientApiDomain,
+      });
+      if (
+        !result.sent &&
+        platformFrom &&
+        platformDomain &&
+        (result.reason === "mailgun_401" || result.reason === "mailgun_403" || result.reason === "mailgun_404")
+      ) {
+        console.warn(`mailgun-send: patient domain failed (${result.reason}); trying ${platformDomain}`);
+        const platformReply = conversationId
+          ? conversationReplyOnPracticeHost(conversationId, platformDomain)
+          : replyTo;
+        result = await sendMailgunMessage({
+          to,
+          subject,
+          text,
+          html,
+          fromName,
+          replyTo: platformReply,
+          fromAddress: platformFrom,
+          audience: "platform",
+          mailgunDomain: platformDomain,
+        });
+        usedFallback = result.sent;
+      }
+    } else {
+      result = await sendMailgunMessage({
+        to,
+        subject,
+        text,
+        html,
+        fromName,
+        replyTo,
+        fromAddress: mail.fromAddress,
+        audience: "patient",
+        mailgunDomain: patientApiDomain,
+      });
+    }
+
     if (!result.sent) {
       return json({ error: result.reason, detail: result.detail }, result.reason === "mailgun_not_configured" ? 503 : 502);
     }
@@ -161,8 +233,9 @@ Deno.serve(async (req: Request) => {
     return json({
       ok: true,
       mailgun_id: result.id,
-      from_address: mail.fromAddress,
+      from_address: usedFallback ? mailgunFromAddress("noreply") : mail.fromAddress,
       mail_subdomain: mail.subdomain,
+      used_platform_fallback: usedFallback,
     });
   } catch (e) {
     console.error("mailgun-send error:", e);

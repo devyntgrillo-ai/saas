@@ -1,6 +1,5 @@
 import {
   ChevronDown,
-  Eye,
   FileText,
   Image,
   Link2,
@@ -105,14 +104,6 @@ export default function EmailComposer({
               </>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => onSwitchChannel('note')}
-            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-100"
-          >
-            <Eye className="h-4 w-4 shrink-0" />
-            Internal Comment
-          </button>
         </div>
         <div className="flex items-center gap-0.5 text-gray-400">
           <button

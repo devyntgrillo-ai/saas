@@ -9,7 +9,8 @@ JS SDK. Architecture:
   Returns `<Dial callerId record="record-from-answer-dual">` and inserts a
   `call_logs` row keyed by the Twilio CallSid.
 - **`twilio-recording-callback`** (`--no-verify-jwt`) - attaches the finished
-  recording (URL/sid/duration) to that `call_logs` row.
+  recording (URL/sid/duration) to that `call_logs` row, then triggers
+  **`transcribe-call-log`** (Whisper + PHI strip → `call_logs.transcript_deidentified`).
 - Frontend: `src/lib/voice.js` (`useTwilioVoiceDevice` hook) powers:
   - **Conversations** header call button (in-browser call + thread log + recording)
   - **Power Dialer** (`src/pages/PowerDialer.jsx`)
@@ -38,6 +39,15 @@ JS SDK. Architecture:
 
 Until these are set, `twilio-voice-token` returns 503 and the dialer shows
 "in-app calling isn't set up yet" and uses the device dialer instead.
+
+Deploy the transcription function (uses the same `OPENAI_API_KEY` as consult recordings):
+
+```bash
+supabase functions deploy transcribe-call-log --no-verify-jwt --project-ref eymgqjeudrmeofytnwgs
+supabase functions deploy twilio-recording-callback --no-verify-jwt --project-ref eymgqjeudrmeofytnwgs
+```
+
+Apply migration `20260604180000_call_log_transcripts.sql` (adds transcript columns on `call_logs`).
 
 ## Playback (built)
 - **`twilio-recording-audio`** (verify_jwt on) proxies the recording: the browser
