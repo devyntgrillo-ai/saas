@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { useSequences, useToggleSequenceStatus, useUpdateSequenceMessage, queryKeys } from '../lib/queries'
+import { useSequences, useToggleSequenceStatus, useUpdateSequenceMessage, useSequencesRealtime, queryKeys } from '../lib/queries'
 import { stripEmDashes } from '../lib/sanitize'
 import {
   parseSequenceConfig,
@@ -628,6 +628,7 @@ export default function Sequences() {
   const { practiceId, practice } = useAuth()
   const queryClient = useQueryClient()
   const { data: rows = [], isLoading: loading, refetch } = useSequences(practiceId)
+  useSequencesRealtime(practiceId)
   const toggleSeqMutation = useToggleSequenceStatus()
   const updateMsgMutation = useUpdateSequenceMessage()
   const [drawerRow, setDrawerRow] = useState(null)

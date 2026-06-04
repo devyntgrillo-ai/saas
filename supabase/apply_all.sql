@@ -434,23 +434,62 @@ update public.consults
 
 create index if not exists idx_consults_sequence_status on public.consults(practice_id, sequence_status);
 
+create or replace function public.normalize_sequence_config(cfg jsonb)
+returns jsonb language sql immutable set search_path = public as $$
+  select case
+    when cfg is null then null::jsonb
+    when jsonb_typeof(cfg) = 'string' then (cfg #>> '{}')::jsonb
+    else cfg
+  end;
+$$;
+
 create or replace function public.auto_pause_sequence_on_reply()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
   cid uuid;
   cfg jsonb;
   stop_on_reply boolean := true;
+  conv record;
+  digits text;
 begin
   if NEW.direction <> 'inbound' then return NEW; end if;
-  select c.consult_id into cid from public.conversations c where c.id = NEW.conversation_id;
+
+  select c.id, c.consult_id, c.practice_id, c.patient_phone
+    into conv
+    from public.conversations c
+   where c.id = NEW.conversation_id;
+
+  if conv.id is null then return NEW; end if;
+
+  cid := conv.consult_id;
+
+  if cid is null and conv.patient_phone is not null then
+    digits := regexp_replace(conv.patient_phone, '\D', '', 'g');
+    if digits <> '' then
+      select co.id into cid
+        from public.consults co
+       where co.practice_id = conv.practice_id
+         and co.patient_phone is not null
+         and regexp_replace(co.patient_phone, '\D', '', 'g') = digits
+         and co.sequence_status <> 'cancelled'
+         and co.outcome = 'pending'
+       order by co.created_at desc
+       limit 1;
+
+      if cid is not null then
+        update public.conversations
+           set consult_id = cid
+         where id = conv.id and consult_id is null;
+      end if;
+    end if;
+  end if;
+
   if cid is null then return NEW; end if;
+
   begin
-    select p.sequence_config into cfg
+    select public.normalize_sequence_config(p.sequence_config) into cfg
       from public.consults co join public.practices p on p.id = co.practice_id
      where co.id = cid;
-    if cfg is not null and jsonb_typeof(cfg) = 'string' then
-      cfg := (cfg #>> '{}')::jsonb;
-    end if;
     stop_on_reply := coalesce((cfg -> 'rules' ->> 'stopOnReply')::boolean, true);
   exception when others then
     stop_on_reply := true;
