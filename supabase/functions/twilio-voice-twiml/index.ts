@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // twilio-voice-twiml - the TwiML App Voice webhook. When the browser dialer
 // places a call, Twilio hits this URL; we return TwiML that dials the patient
@@ -73,6 +74,7 @@ Deno.serve(async (req: Request) => {
       `<Number>${esc(to)}</Number></Dial></Response>`,
     );
   } catch (e) {
+    await reportEdgeError("twilio-voice-twiml", e);
     console.error("twilio-voice-twiml error:", e);
     return xml("<Response><Say>An error occurred placing your call.</Say></Response>");
   }

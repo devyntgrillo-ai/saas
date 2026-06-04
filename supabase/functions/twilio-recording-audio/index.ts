@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // twilio-recording-audio - stream a call recording to an authenticated practice
 // member. Twilio media URLs require Twilio auth (can't be used directly in an
@@ -67,6 +68,7 @@ Deno.serve(async (req: Request) => {
     headers.set("Cache-Control", "private, max-age=3600");
     return new Response(twRes.body, { status: twRes.status, headers });
   } catch (e) {
+    await reportEdgeError("twilio-recording-audio", e);
     console.error("twilio-recording-audio error:", e);
     return err(String((e as Error)?.message ?? e), 500);
   }

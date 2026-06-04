@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // notify-payment-failure - email the practice admin, their reseller, and the
 // super admin when a practice's subscription goes past_due / unpaid.
@@ -17,7 +18,7 @@
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
-import { type Brand, CASELIFT_BRAND, emailFooter, emailHeader, emailSignature, resolveBrand } from "../_shared/brand.ts";
+import { type Brand, CASELIFT_BRAND, escapeHtml, renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
 import { sendMailgunToMany } from "../_shared/mailgun.ts";
 
 const SUPER_ADMIN_EMAIL = "devyntgrillo@gmail.com";
@@ -65,21 +66,22 @@ Deno.serve(async (req: Request) => {
     const brand = await resolveBrand(admin, practice);
 
     const buildEmail = (b: Brand) => {
-      const subject = `Action required: payment failed for ${name}`;
+      const subject = `Action required — payment issue with ${b.companyName}`;
       const text =
-        `A subscription payment failed for ${name} on ${failedOn}.\n\n` +
-        `Access will be paused until the payment method is updated.\n` +
+        `There was an issue with your payment.\n\n` +
+        `We weren't able to process your last payment for ${name} on ${failedOn}. ` +
+        `To keep your account active, please update your billing information.\n\n` +
         `Update payment method: ${billingUrl}\n\n` +
-        `The ${b.companyName} Team`;
-      const htmlBody =
-        `<div style="font-family:Inter,Arial,sans-serif;color:#1f2937">` +
-        `<div style="margin-bottom:16px">${emailHeader(b)}</div>` +
-        `<p>A subscription payment failed for <strong>${name}</strong> on ${failedOn}.</p>` +
-        `<p>Access will be paused until the payment method is updated.</p>` +
-        `<p><a href="${billingUrl}" style="color:${b.primaryColor}">Update payment method</a></p>` +
-        emailSignature(b) +
-        emailFooter(b) +
-        `</div>`;
+        `If you need help, reply to this email.`;
+      const htmlBody = renderBrandedEmail(b, {
+        heading: "There was an issue with your payment.",
+        bodyHtml:
+          `<p style="margin:0">We weren't able to process your last payment for ` +
+          `<strong style="color:#e2e8f0">${escapeHtml(name)}</strong> on ${failedOn}. ` +
+          `To keep your account active, please update your billing information.</p>`,
+        button: { label: "Update Payment Method", url: billingUrl },
+        footerNote: "If you need help, reply to this email.",
+      });
       return { subject, text, htmlBody };
     };
 
@@ -107,14 +109,15 @@ Deno.serve(async (req: Request) => {
         subject: `[Internal] ${subject}`,
         text,
         html: htmlBody,
-        fromName: CONSULTIQ_BRAND.fromName,
-        replyTo: CONSULTIQ_BRAND.supportEmail,
+        fromName: CASELIFT_BRAND.fromName,
+        replyTo: CASELIFT_BRAND.supportEmail,
       });
     }
 
     if (!practice.email && !internal.length) return json({ ok: true, sent: false, reason: "no recipients" });
     return json({ ok: true, white_labeled: brand.isWhiteLabeled, ...results });
   } catch (e) {
+    await reportEdgeError("notify-payment-failure", e);
     console.error("notify-payment-failure error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // get-billing-status - return the caller's practice subscription status.
 //
@@ -80,6 +81,7 @@ Deno.serve(async (req: Request) => {
       subscription_id: subscriptionId,
     });
   } catch (e) {
+    await reportEdgeError("get-billing-status", e);
     console.error("get-billing-status error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

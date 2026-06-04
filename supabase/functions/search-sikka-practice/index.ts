@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // search-sikka-practice - admin-only: list the Sikka offices a practice's
 // OAuth token is authorized for, so a super admin can pick the right office_id
@@ -78,6 +79,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ results });
   } catch (e) {
+    await reportEdgeError("search-sikka-practice", e);
     const msg = (e as Error)?.message ?? String(e);
     console.error("search-sikka-practice error:", msg);
     if (msg === "sikka_not_connected") return json({ error: "This practice hasn't connected to Sikka yet.", code: "not_linked" }, 409);

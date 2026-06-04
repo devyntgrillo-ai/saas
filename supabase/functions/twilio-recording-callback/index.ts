@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // twilio-recording-callback - Twilio posts here when a call recording is ready.
 // Attaches the recording to the matching call_logs row (by CallSid).
@@ -61,6 +62,7 @@ Deno.serve(async (req: Request) => {
     }
     return new Response("", { status: 204 });
   } catch (e) {
+    await reportEdgeError("twilio-recording-callback", e);
     console.error("twilio-recording-callback error:", e);
     return new Response("", { status: 204 }); // always ack so Twilio doesn't retry-storm
   }

@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // twilio-a2p — A2P 10DLC via Trust Hub (ISV API) + brand/campaign registration.
 // Actions: register, poll-status
@@ -379,6 +380,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ error: "Unknown action" }, 400);
   } catch (e) {
+    await reportEdgeError("twilio-a2p", e);
     console.error("twilio-a2p error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // twilio-send - outbound SMS via Twilio REST API.
 //
@@ -167,6 +168,7 @@ Deno.serve(async (req: Request) => {
       send_mode: ctx.mode,
     });
   } catch (e) {
+    await reportEdgeError("twilio-send", e);
     console.error("twilio-send error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

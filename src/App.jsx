@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Outlet, Navigate } from 'react-router-dom
 import { AuthProvider } from './context/AuthContext'
 import { BrandingProvider } from './context/BrandingContext'
 import { ThemeProvider } from './context/ThemeContext'
-import { ErrorBoundary } from './components/ErrorState'
+import ErrorBoundary from './components/ErrorBoundary'
 import ProtectedRoute from './components/ProtectedRoute'
 import RequireBAA from './components/RequireBAA'
 import RequireOnboarding from './components/RequireOnboarding'

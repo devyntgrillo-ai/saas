@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // notify-signup - post a Slack message to the internal CaseLift channel when a
 // practice activates a paid subscription.
@@ -75,6 +76,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ ok: true });
   } catch (e) {
+    await reportEdgeError("notify-signup", e);
     console.error("notify-signup error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

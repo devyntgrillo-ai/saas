@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // twilio-inbound - Twilio webhook for inbound SMS replies.
 //
@@ -208,6 +209,7 @@ Deno.serve(async (req: Request) => {
 
     return twiml();
   } catch (e) {
+    await reportEdgeError("twilio-inbound", e);
     console.error("twilio-inbound error:", e);
     return twiml(); // always ack so Twilio doesn't retry-storm
   }

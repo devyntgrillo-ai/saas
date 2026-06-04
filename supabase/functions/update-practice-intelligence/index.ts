@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // update-practice-intelligence - refresh a practice's living KB from its own
 // recent message outcomes (what CTAs/tones/objection handling are landing).
 // Uses the caller's JWT (service-role bearer when called server-to-server).
@@ -76,6 +77,7 @@ Deno.serve(async (req) => {
     if (ue) return json({ error: ue.message }, 400)
     return json({ ok: true, updated_at: now })
   } catch (e) {
+    await reportEdgeError("update-practice-intelligence", e);
     return json({ error: String(e?.message || e) }, 500)
   }
 })

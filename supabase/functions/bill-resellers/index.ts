@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // bill-resellers - monthly wholesale billing of resellers (cron, service role).
 //
@@ -148,6 +149,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ ok: true, dry_run: dryRun, resellers: results.length, invoiced, suspended, results });
   } catch (e) {
+    await reportEdgeError("bill-resellers", e);
     console.error("bill-resellers error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

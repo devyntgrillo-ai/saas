@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // process-sequences - the sequence ACTIVATION engine (run by cron, service role).
 //
@@ -94,6 +95,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ ok: true, activated, cancelled, rescheduled_trimmed: rescheduledTrimmed });
   } catch (e) {
+    await reportEdgeError("process-sequences", e);
     console.error("process-sequences error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

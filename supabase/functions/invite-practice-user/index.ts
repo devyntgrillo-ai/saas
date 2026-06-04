@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // invite-practice-user - agency onboarding of a new client practice + its TC.
 //
@@ -17,7 +18,7 @@
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
-import { type Brand, emailFooter, emailHeader, emailSignature, resolveBrand } from "../_shared/brand.ts";
+import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
 
 const corsHeaders = {
@@ -33,42 +34,22 @@ const json = (body: unknown, status = 200) =>
 
 // White-labeled invite email built around the reseller brand.
 function buildInviteEmail(brand: Brand, practiceName: string, inviteLink: string) {
-  const subject = `Welcome to ${brand.companyName} - Meet CaseLift`;
-  const html = `
-    <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111827">
-      <div style="margin-bottom:20px">${emailHeader(brand)}</div>
-      <h1 style="font-size:20px;margin:0 0 12px">Welcome to ${escapeHtml(brand.companyName)} - meet CaseLift</h1>
-      <p style="font-size:14px;line-height:1.6;color:#374151;margin:0 0 20px">
-        Hi - I'm CaseLift, your AI assistant at ${escapeHtml(practiceName)}. I listen to your consults,
-        follow up with patients, and recover more implant cases for you. Click below to set up your
-        account and we'll get started together.
-      </p>
-      <a href="${inviteLink}" style="display:inline-block;background:${brand.primaryColor};color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:11px 22px;border-radius:8px">
-        Accept invitation
-      </a>
-      <p style="font-size:12px;line-height:1.6;color:#6b7280;margin:20px 0 0">
-        If the button doesn't work, copy and paste this link into your browser:<br />
-        <a href="${inviteLink}" style="color:${brand.primaryColor};word-break:break-all">${inviteLink}</a>
-      </p>
-      <p style="font-size:12px;color:#6b7280;margin:16px 0 0">
-        Questions? Reach us at <a href="mailto:${brand.supportEmail}" style="color:${brand.primaryColor}">${brand.supportEmail}</a>.
-      </p>
-      ${emailSignature(brand)}
-      ${emailFooter(brand)}
-    </div>`;
+  const subject = `You've been invited to ${brand.companyName}`;
+  const bodyHtml =
+    `<p style="margin:0">Your ${escapeHtml(brand.companyName)} account for <strong style="color:#e2e8f0">${escapeHtml(practiceName)}</strong> is ready. ` +
+    `Click below to set up your login and get started.</p>`;
+  const html = renderBrandedEmail(brand, {
+    heading: `You're invited to ${brand.companyName}`,
+    bodyHtml,
+    button: { label: "Accept Invitation", url: inviteLink },
+    footerNote:
+      `If the button doesn't work, paste this link into your browser:<br />` +
+      `<span style="color:#64748b;word-break:break-all">${escapeHtml(inviteLink)}</span>`,
+  });
   const text =
-    `Welcome to ${brand.companyName} - meet CaseLift.\n\n` +
-    `I'm CaseLift, your AI assistant at ${practiceName}. Set up your account to get started: ${inviteLink}\n\n` +
-    `Questions? Email ${brand.supportEmail}`;
+    `Your ${brand.companyName} account for ${practiceName} is ready.\n\n` +
+    `Set up your account: ${inviteLink}`;
   return { subject, html, text };
-}
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 Deno.serve(async (req: Request) => {
@@ -192,6 +173,7 @@ Deno.serve(async (req: Request) => {
       invite_link: sendResult.sent === true ? null : inviteLink,
     });
   } catch (e) {
+    await reportEdgeError("invite-practice-user", e);
     console.error("invite-practice-user error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

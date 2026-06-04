@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // invite-team-member - email a team invite for an existing practice (TC onboarding,
 // practice/agency InviteModal). Creates an invitations row when needed, then sends
@@ -5,7 +6,7 @@
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
-import { type Brand, emailFooter, emailHeader, emailSignature, resolveBrand } from "../_shared/brand.ts";
+import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
 
 const cors = {
@@ -16,34 +17,25 @@ const cors = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 function buildTeamInviteEmail(brand: Brand, scopeName: string, inviteLink: string, personalMessage?: string | null) {
-  const subject = `You're invited to ${scopeName} on ${brand.companyName}`;
+  const subject = `You've been invited to ${brand.companyName}`;
   const note = personalMessage
-    ? `<p style="font-size:14px;line-height:1.6;color:#374151;margin:0 0 16px;font-style:italic">"${escapeHtml(personalMessage)}"</p>`
+    ? `<p style="color:#cbd5e1;font-size:15px;line-height:1.6;font-style:italic;margin:0 0 16px">&ldquo;${escapeHtml(personalMessage)}&rdquo;</p>`
     : "";
-  const html = `
-    <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111827">
-      <div style="margin-bottom:20px">${emailHeader(brand)}</div>
-      <h1 style="font-size:20px;margin:0 0 12px">Join ${escapeHtml(scopeName)}</h1>
-      ${note}
-      <p style="font-size:14px;line-height:1.6;color:#374151;margin:0 0 20px">
-        You've been invited to collaborate on patient follow-up and consult recovery with Hope AI.
-      </p>
-      <a href="${inviteLink}" style="display:inline-block;background:${brand.primaryColor};color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 20px;border-radius:8px">Accept invitation</a>
-      <p style="font-size:12px;color:#6b7280;margin:20px 0 0;word-break:break-all">${inviteLink}</p>
-      ${emailSignature(brand)}
-      ${emailFooter(brand)}
-    </div>`;
+  const bodyHtml =
+    note +
+    `<p style="margin:0">${escapeHtml(scopeName)} has invited you to join their ${escapeHtml(brand.companyName)} account. ` +
+    `Click below to set up your account and get started.</p>`;
+  const html = renderBrandedEmail(brand, {
+    heading: `You're invited to ${brand.companyName}`,
+    bodyHtml,
+    button: { label: "Accept Invitation", url: inviteLink },
+    footerNote: "This invitation expires in 48 hours.",
+  });
   const text =
-    `You're invited to join ${scopeName} on ${brand.companyName}.\n\nAccept: ${inviteLink}\n\n${personalMessage ? `${personalMessage}\n\n` : ""}Questions? ${brand.supportEmail}`;
+    `${scopeName} has invited you to join their ${brand.companyName} account.\n\n` +
+    `${personalMessage ? `"${personalMessage}"\n\n` : ""}` +
+    `Accept your invitation: ${inviteLink}\n\nThis invitation expires in 48 hours.`;
   return { subject, html, text };
 }
 
@@ -69,7 +61,7 @@ Deno.serve(async (req: Request) => {
     const role = body.role || "member";
     const accessLevel = body.access_level || "practice_member";
     const personalMessage = body.personal_message ?? null;
-    const appOrigin = String(body.app_origin || Deno.env.get("APP_URL") || "https://app.heyhope.ai").replace(/\/$/, "");
+    const appOrigin = String(body.app_origin || Deno.env.get("APP_URL") || "https://app.caselift.io").replace(/\/$/, "");
 
     const admin = createClient(url, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -149,6 +141,7 @@ Deno.serve(async (req: Request) => {
       detail: (sendResult as { detail?: string }).detail,
     });
   } catch (e) {
+    await reportEdgeError("invite-team-member", e);
     console.error("invite-team-member error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

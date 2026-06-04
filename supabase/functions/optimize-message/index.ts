@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // optimize-message - rewrite a single follow-up message using network insights
 // + the practice knowledge base for that patient type. Uses the caller's JWT.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -53,6 +54,7 @@ Deno.serve(async (req) => {
     try { parsed = JSON.parse(text) } catch { return json({ error: 'Could not parse AI response', raw: text }, 502) }
     return json({ ok: true, optimized: sanitizeAIOutput(parsed.optimized || ''), explanation: sanitizeAIOutput(parsed.explanation || ''), original: msg.body })
   } catch (e) {
+    await reportEdgeError("optimize-message", e);
     return json({ error: String(e?.message || e) }, 500)
   }
 })

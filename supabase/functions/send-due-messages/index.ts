@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // send-due-messages - the scheduled SENDER (cron, service role). Finds messages
 // whose scheduled_for has arrived and whose consult still allows sending, then
@@ -124,6 +125,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ ok: true, considered: (due || []).length, sent, failed, skipped });
   } catch (e) {
+    await reportEdgeError("send-due-messages", e);
     console.error("send-due-messages error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

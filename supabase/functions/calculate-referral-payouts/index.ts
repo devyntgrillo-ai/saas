@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // calculate-referral-payouts - monthly referral payout snapshot (cron, service role).
 //
@@ -102,6 +103,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ ok: true, month, created, skipped_inactive_referrer: skippedInactiveReferrer });
   } catch (e) {
+    await reportEdgeError("calculate-referral-payouts", e);
     console.error("calculate-referral-payouts error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

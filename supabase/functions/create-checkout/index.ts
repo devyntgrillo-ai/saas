@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // create-checkout - start a Chargebee hosted-page checkout for a practice's
 // CaseLift subscription.
@@ -136,6 +137,7 @@ Deno.serve(async (req: Request) => {
     if (!url) return json({ error: "Checkout created but no URL was returned." }, 502);
     return json({ url, plan_amount: planAmount });
   } catch (e) {
+    await reportEdgeError("create-checkout", e);
     console.error("create-checkout error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // cancel-subscription - cancels a practice's Chargebee subscription and flips
 // its status. Runs with the caller's JWT so RLS confirms ownership. Degrades
 // gracefully when Chargebee isn't configured.
@@ -48,6 +49,7 @@ Deno.serve(async (req) => {
 
     return json({ ok: true, cb_cancelled: cbCancelled, cb_error: cbError })
   } catch (e) {
+    await reportEdgeError("cancel-subscription", e);
     return json({ error: String(e?.message || e) }, 500)
   }
 })

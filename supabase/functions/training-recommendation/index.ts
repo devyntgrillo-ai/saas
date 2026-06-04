@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // training-recommendation - generate a short, personalized training focus
 // recommendation for a practice based on patterns in their last 10 analyzed
 // consults. Uses the caller's JWT (RLS-scoped reads).
@@ -86,6 +87,7 @@ Return ONLY a JSON object: {"recommendation": "the 2-3 sentence recommendation",
     try { parsed = JSON.parse(text) } catch { return json({ error: 'Could not parse AI response', raw: text }, 502) }
     return json({ ok: true, based_on: consults.length, recommendation: sanitizeAIOutput(parsed.recommendation || ''), focus_area: parsed.focus_area || null })
   } catch (e) {
+    await reportEdgeError("training-recommendation", e);
     return json({ error: String(e?.message || e) }, 500)
   }
 })

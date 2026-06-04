@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // receive-plaud-email - inbound webhook for Plaud AutoFlow forwarded emails
 // (e.g. SendGrid Inbound Parse). Resolves the practice from the recipient
 // address consults+{practice_id}@caselift.io, extracts the transcript, creates
@@ -74,6 +75,7 @@ Deno.serve(async (req) => {
 
     return json({ ok: true, consult_id: consult.id, subject })
   } catch (e) {
+    await reportEdgeError("receive-plaud-email", e);
     return json({ ok: false, error: String(e?.message || e) })
   }
 })

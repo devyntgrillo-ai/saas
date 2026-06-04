@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // generate-network-insights - weekly cross-practice learning.
 // Aggregates message_outcomes (sample>=10), asks Claude for plain-English
 // insights, and replaces the network_insights table. Service-role (network-wide).
@@ -78,6 +79,7 @@ Deno.serve(async (req) => {
     if (ie) return json({ error: ie.message }, 400)
     return json({ ok: true, generated: rows.length })
   } catch (e) {
+    await reportEdgeError("generate-network-insights", e);
     return json({ error: String(e?.message || e) }, 500)
   }
 })

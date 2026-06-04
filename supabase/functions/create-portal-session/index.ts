@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // create-portal-session - return a Chargebee customer-portal URL so a practice
 // can update its payment method, view invoices, or cancel its subscription.
@@ -69,6 +70,7 @@ Deno.serve(async (req: Request) => {
     if (!url) return json({ error: "Chargebee did not return a portal URL." }, 502);
     return json({ url });
   } catch (e) {
+    await reportEdgeError("create-portal-session", e);
     console.error("create-portal-session error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

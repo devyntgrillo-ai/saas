@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // process-reactivation-drip - the reactivation SENDER (cron, service role).
 // Called every 15 minutes. For each active campaign it:
@@ -222,6 +223,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ ok: true, campaigns: (campaigns || []).length, sent, replies, completed: completedCampaigns });
   } catch (e) {
+    await reportEdgeError("process-reactivation-drip", e);
     console.error("process-reactivation-drip error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // transcribe-consult - FAST path. Downloads audio, transcribes (Whisper),
 // strips PHI, and saves the consult with status = "transcribed" immediately.
@@ -153,6 +154,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ consult_id: savedId, status: "transcribed" });
   } catch (e) {
+    await reportEdgeError("transcribe-consult", e);
     console.error("transcribe-consult error:", e);
     return json({ error: "Unexpected error while transcribing.", detail: String((e as Error)?.message ?? e) }, 500);
   }

@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // doxyme-webhook - inbound webhook fired by Doxy.me when a virtual-consult
 // recording is ready. Authenticates by matching the supplied API key to a
@@ -98,6 +99,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ ok: true, consult_id: tBody.consult_id, status: "analyzing" });
   } catch (e) {
+    await reportEdgeError("doxyme-webhook", e);
     console.error("doxyme-webhook error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

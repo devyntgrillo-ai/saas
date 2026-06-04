@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // mailgun-send - outbound PATIENT email via per-practice Mailgun subdomain.
 // Conversations, send-due-messages, reactivation drip. Platform mail (invites,
@@ -93,7 +94,7 @@ Deno.serve(async (req: Request) => {
 
     const mail = await ensurePracticeMailSubdomain(admin, pr);
     const brand = await resolveBrand(admin, pr);
-    const fromName = pr.email_from_name || brand.companyName || pr.name || "Hope AI";
+    const fromName = pr.email_from_name || brand.companyName || pr.name || "CaseLift";
 
     let conversationId: string | null = null;
     if (payload.conversation_message_id) {
@@ -165,6 +166,7 @@ Deno.serve(async (req: Request) => {
       mail_subdomain: mail.subdomain,
     });
   } catch (e) {
+    await reportEdgeError("mailgun-send", e);
     console.error("mailgun-send error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

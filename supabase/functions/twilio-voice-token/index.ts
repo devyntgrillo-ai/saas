@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // twilio-voice-token - mints a Twilio Voice AccessToken (JWT) for the browser
 // dialer (@twilio/voice-sdk). The token grants outgoing calls through the
@@ -65,6 +66,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ token, identity, expires_in: 3600 });
   } catch (e) {
+    await reportEdgeError("twilio-voice-token", e);
     console.error("twilio-voice-token error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

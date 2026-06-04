@@ -1,10 +1,11 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // weekly-intelligence-digest - Monday intelligence email to each practice owner via Mailgun.
 // Runs for all practices (cron) or a single practice (body.practice_id, manual).
 // Service-role; verify_jwt=false (internal job). No-ops cleanly if Mailgun is unset.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { requireServiceRole } from "../_shared/auth.ts";
-import { resolveBrand } from "../_shared/brand.ts";
+import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand, statRows } from "../_shared/brand.ts";
 import { isMailgunConfigured, sendMailgunMessage } from "../_shared/mailgun.ts";
 
 const cors = {
@@ -18,32 +19,27 @@ const money = (n: number) => "$" + (Number(n) || 0).toLocaleString();
 const pct = (n: number) => Math.round((Number(n) || 0) * 100) + "%";
 const weekAgoISO = () => new Date(Date.now() - 7 * 86400000).toISOString();
 
-function buildHtml(p: { name?: string }, d: Record<string, unknown>, brandName: string, primaryColor: string) {
+function buildHtml(p: { name?: string }, d: Record<string, unknown>, brand: Brand) {
   const insight = d.insight as { finding?: string; recommendation?: string } | null;
-  return `<!doctype html><html><body style="margin:0;background:#0b0f17;font-family:Inter,Arial,sans-serif;color:#cbd5e1">
-  <div style="max-width:560px;margin:0 auto;padding:24px">
-    <h1 style="color:#fff;font-size:18px;margin:0 0 4px">${brandName} Weekly</h1>
-    <p style="color:#64748b;font-size:13px;margin:0 0 20px">Your practice intelligence update for ${p.name || "your practice"}</p>
-    <div style="background:#0f1521;border:1px solid #1e2738;border-radius:12px;padding:16px;margin-bottom:14px">
-      <p style="color:#94a3b8;font-size:12px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 8px">This week</p>
-      <p style="margin:0;font-size:14px;line-height:1.7">${d.consults} consults analyzed &middot; ${d.sequences} sequences started &middot; <b style="color:#fff">${d.replies} replies</b> received</p>
-    </div>
-    <div style="background:#0f1521;border:1px solid #1e2738;border-radius:12px;padding:16px;margin-bottom:14px">
-      <p style="color:#94a3b8;font-size:12px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px">Your best performing message</p>
-      <p style="margin:0;font-size:14px">${d.bestMessage}</p>
-    </div>
-    ${insight ? `<div style="background:#0f1521;border:1px solid #2563eb33;border-radius:12px;padding:16px;margin-bottom:14px">
-      <p style="color:#60a5fa;font-size:12px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px">Network insight for your patient mix</p>
-      <p style="margin:0 0 6px;font-size:14px;color:#fff">${insight.finding}</p>
-      <p style="margin:0;font-size:13px;color:#94a3b8"><b style="color:#cbd5e1">Try this:</b> ${insight.recommendation}</p>
-    </div>` : ""}
-    <div style="background:#0f1521;border:1px solid #34d39933;border-radius:12px;padding:16px;margin-bottom:14px">
-      <p style="color:#34d399;font-size:12px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px">Cases recovered this week</p>
-      <p style="margin:0;font-size:14px">${d.recoveredCount} case(s) &middot; <b style="color:#fff">${money(d.recoveredValue as number)}</b> in production</p>
-    </div>
-    <a href="https://app.heyhope.ai/" style="display:inline-block;background:${primaryColor};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:10px 16px;border-radius:8px">View your dashboard</a>
-    <p style="color:#475569;font-size:11px;margin-top:20px">You are receiving this because you own a ${brandName} practice.</p>
-  </div></body></html>`;
+  const rows = statRows([
+    { label: "Consults Recorded", value: String(d.consults ?? 0) },
+    { label: "Follow-ups Sent", value: String(d.sequences ?? 0) },
+    { label: "Patients Re-engaged", value: String(d.replies ?? 0) },
+    { label: "Estimated Production Recovered", value: money(Number(d.recoveredValue) || 0) },
+  ]);
+  const insightBlock = insight
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0"><tr><td style="background:#0f1117;border:1px solid #2a3142;border-radius:8px;padding:16px">
+         <p style="color:${brand.primaryColor};font-size:12px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px">Insight for your patient mix</p>
+         <p style="color:#e2e8f0;font-size:14px;line-height:1.6;margin:0 0 6px">${escapeHtml(insight.finding || "")}</p>
+         <p style="color:#94a3b8;font-size:13px;line-height:1.6;margin:0"><strong style="color:#cbd5e1">Try this:</strong> ${escapeHtml(insight.recommendation || "")}</p>
+       </td></tr></table>`
+    : "";
+  return renderBrandedEmail(brand, {
+    heading: `Here's what ${brand.companyName} did for you this week.`,
+    bodyHtml: `<p style="margin:0 0 4px">${escapeHtml(p.name || "Your practice")}</p>${rows}${insightBlock}`,
+    button: { label: "View Full Dashboard", url: "https://app.caselift.io" },
+    footerNote: "Manage weekly reports in Settings &rarr; Notifications.",
+  });
 }
 
 // deno-lint-ignore no-explicit-any
@@ -107,13 +103,15 @@ Deno.serve(async (req) => {
     for (const p of practices || []) {
       const d = await digestFor(supabase, p);
       const brand = await resolveBrand(supabase, p);
-      const html = buildHtml(p, d, brand.companyName, brand.primaryColor);
-      const subject = `${brand.companyName} Weekly - Your practice intelligence update`;
+      const html = buildHtml(p, d, brand);
+      const subject = `Your ${brand.companyName} Weekly Report — ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
       const text =
-        `This week: ${d.consults} consults, ${d.sequences} sequences, ${d.replies} replies.\n` +
-        `Best message: ${d.bestMessage}\n` +
-        `Recovered: ${d.recoveredCount} cases (${money(d.recoveredValue)}).\n` +
-        `https://app.heyhope.ai/`;
+        `Here's what ${brand.companyName} did for you this week.\n\n` +
+        `Consults Recorded: ${d.consults}\n` +
+        `Follow-ups Sent: ${d.sequences}\n` +
+        `Patients Re-engaged: ${d.replies}\n` +
+        `Estimated Production Recovered: ${money(d.recoveredValue)}\n\n` +
+        `View your full dashboard: https://app.caselift.io`;
 
       if (!configured) {
         results.push({ practice: p.id, sent: false, reason: "mailgun_not_configured", preview: d });
@@ -136,6 +134,7 @@ Deno.serve(async (req) => {
     }
     return json({ ok: true, configured, count: results.length, results });
   } catch (e) {
+    await reportEdgeError("weekly-intelligence-digest", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }
 });

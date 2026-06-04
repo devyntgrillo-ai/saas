@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // chargebee-webhook - Chargebee webhook receiver for CaseLift billing.
 //
@@ -204,6 +205,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ ok: true, event: eventType, practice_id: practiceId });
   } catch (e) {
+    await reportEdgeError("chargebee-webhook", e);
     console.error("chargebee-webhook error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

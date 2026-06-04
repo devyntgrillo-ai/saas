@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // twilio-provision — search & purchase US local SMS numbers per practice.
 // Actions: search-numbers, purchase-number, get-status
@@ -167,6 +168,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ error: "Unknown action" }, 400);
   } catch (e) {
+    await reportEdgeError("twilio-provision", e);
     console.error("twilio-provision error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

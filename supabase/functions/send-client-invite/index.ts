@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // send-client-invite - reseller / super-admin onboarding of a new client
 // practice.
@@ -19,7 +20,7 @@
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
-import { type Brand, emailFooter, emailHeader, resolveBrand } from "../_shared/brand.ts";
+import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
 
 const corsHeaders = {
@@ -32,14 +33,6 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 function formatPrice(price: number | null): string | null {
   if (price == null || Number.isNaN(price)) return null;
@@ -63,39 +56,29 @@ function buildInviteEmail(
   const greeting = ownerName ? `Hi ${escapeHtml(ownerName)},` : "Hello,";
   const priceLabel = formatPrice(price);
   const priceBlock = priceLabel
-    ? `<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:0 0 20px">
-         <p style="font-size:12px;color:#6b7280;margin:0 0 2px">Your plan</p>
-         <p style="font-size:18px;font-weight:700;color:#111827;margin:0">${priceLabel}<span style="font-size:13px;font-weight:500;color:#6b7280"> / month</span></p>
-       </div>`
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0"><tr><td style="background:#0f1117;border:1px solid #2a3142;border-radius:8px;padding:14px 16px">
+         <p style="color:#64748b;font-size:12px;margin:0 0 2px">Your plan</p>
+         <p style="color:#ffffff;font-size:18px;font-weight:700;margin:0">${priceLabel}<span style="color:#94a3b8;font-size:13px;font-weight:500"> / month</span></p>
+       </td></tr></table>`
     : "";
-  const html = `
-    <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111827">
-      <div style="margin-bottom:20px">${emailHeader(brand)}</div>
-      <h1 style="font-size:20px;margin:0 0 12px">Welcome to ${escapeHtml(practiceName)}</h1>
-      <p style="font-size:14px;line-height:1.6;color:#374151;margin:0 0 16px">
-        ${greeting}<br /><br />
-        ${escapeHtml(brand.companyName)} uses an AI-powered platform to help your practice recover more
-        implant consults. Click below to set up your account and get started.
-      </p>
-      ${priceBlock}
-      <a href="${inviteLink}" style="display:inline-block;background:${brand.primaryColor};color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:11px 22px;border-radius:8px">
-        Get Started
-      </a>
-      <p style="font-size:12px;line-height:1.6;color:#6b7280;margin:20px 0 0">
-        If the button doesn't work, copy and paste this link into your browser:<br />
-        <a href="${inviteLink}" style="color:${brand.primaryColor};word-break:break-all">${inviteLink}</a>
-      </p>
-      <p style="font-size:12px;color:#6b7280;margin:16px 0 0">
-        Questions? Reach us at <a href="mailto:${brand.supportEmail}" style="color:${brand.primaryColor}">${brand.supportEmail}</a>.
-      </p>
-      ${emailFooter(brand)}
-    </div>`;
+  const bodyHtml =
+    `<p style="margin:0 0 16px">${greeting}</p>` +
+    `<p style="margin:0">Your ${escapeHtml(brand.companyName)} account for <strong style="color:#e2e8f0">${escapeHtml(practiceName)}</strong> is ready. ` +
+    `Click below to set up your account and get started.</p>` +
+    priceBlock;
+  const html = renderBrandedEmail(brand, {
+    heading: `You're invited to ${brand.companyName}`,
+    bodyHtml,
+    button: { label: "Get Started", url: inviteLink },
+    footerNote:
+      `If the button doesn't work, paste this link into your browser:<br />` +
+      `<span style="color:#64748b;word-break:break-all">${escapeHtml(inviteLink)}</span>`,
+  });
   const text =
     `${ownerName ? `Hi ${ownerName},\n\n` : ""}` +
-    `Welcome to ${practiceName}. ${brand.companyName} uses an AI-powered platform to help you recover more implant consults.\n\n` +
+    `Your ${brand.companyName} account for ${practiceName} is ready.\n\n` +
     `${priceLabel ? `Your plan: ${priceLabel} / month\n\n` : ""}` +
-    `Get started: ${inviteLink}\n\n` +
-    `Questions? Email ${brand.supportEmail}`;
+    `Get started: ${inviteLink}`;
   return { subject, html, text };
 }
 
@@ -252,6 +235,7 @@ Deno.serve(async (req: Request) => {
       invite_link: sendResult.sent === true ? null : inviteLink,
     });
   } catch (e) {
+    await reportEdgeError("send-client-invite", e);
     console.error("send-client-invite error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // analyze-consult - SLOW step. Given a consult_id whose de-identified transcript
 // is already saved (by transcribe-consult, status "transcribed"), runs Claude
@@ -335,6 +336,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ consult_id: savedId, analysis: a, messages: messagesOut });
   } catch (e) {
+    await reportEdgeError("analyze-consult", e);
     console.error("analyze-consult error:", e);
     return json({ error: "Unexpected error while processing the consult.", detail: String((e as Error)?.message ?? e) }, 500);
   }

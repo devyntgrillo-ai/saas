@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // notify-slack - post a message to a Slack Incoming Webhook.
 //
@@ -43,6 +44,7 @@ Deno.serve(async (req: Request) => {
     const result = await postSlack(text);
     return json(result, result.sent || result.reason === "not_configured" ? 200 : 502);
   } catch (e) {
+    await reportEdgeError("notify-slack", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }
 });

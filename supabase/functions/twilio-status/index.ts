@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // twilio-status - Twilio delivery status callback for outbound SMS.
 // Updates conversation_messages.meta.delivery_status by MessageSid.
@@ -47,6 +48,7 @@ Deno.serve(async (req: Request) => {
 
     return new Response("", { status: 204 });
   } catch (e) {
+    await reportEdgeError("twilio-status", e);
     console.error("twilio-status error:", e);
     return new Response("", { status: 204 });
   }

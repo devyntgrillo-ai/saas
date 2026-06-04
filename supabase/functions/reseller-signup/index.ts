@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // reseller-signup - public, white-labeled client signup for a reseller's SaaS
 // offer (the /signup/<reseller-slug> page).
@@ -209,6 +210,7 @@ Deno.serve(async (req: Request) => {
       email_sent: sent.sent === true,
     });
   } catch (e) {
+    await reportEdgeError("reseller-signup", e);
     console.error("reseller-signup error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

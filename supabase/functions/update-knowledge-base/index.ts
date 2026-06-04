@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // update-knowledge-base
 // ----------------------------------------------------------------------------
 // After a consult is analyzed/approved, fold its insights into the practice's
@@ -120,6 +121,7 @@ Deno.serve(async (req) => {
 
     return json({ ok: true, updated_at: now })
   } catch (e) {
+    await reportEdgeError("update-knowledge-base", e);
     return json({ error: String(e?.message || e) }, 500)
   }
 })

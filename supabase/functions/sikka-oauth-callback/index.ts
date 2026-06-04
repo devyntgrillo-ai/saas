@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // sikka-oauth-callback - the two ends of the Sikka OAuth 2.0 flow.
 //
@@ -116,6 +117,7 @@ Deno.serve(async (req: Request) => {
 
       return redirectToApp("connected");
     } catch (e) {
+    await reportEdgeError("sikka-oauth-callback", e);
       const msg = (e as Error)?.message || String(e);
       console.error("sikka-oauth-callback exchange failed:", msg);
       return redirectToApp("error", msg.startsWith("sikka_token_") ? "token_exchange_failed" : msg);

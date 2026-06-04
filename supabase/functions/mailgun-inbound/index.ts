@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // mailgun-inbound — patient email replies (per-practice *.mail.heyhope.ai).
 //
@@ -215,6 +216,7 @@ Deno.serve(async (req: Request) => {
 
     return ok();
   } catch (e) {
+    await reportEdgeError("mailgun-inbound", e);
     console.error("mailgun-inbound error:", e);
     return ok();
   }

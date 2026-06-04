@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // sync-appointments - pull upcoming consult/implant appointments from Sikka
 // (the universal PMS middleware) into pms_appointments.
@@ -304,6 +305,7 @@ Deno.serve(async (req: Request) => {
     }
     return json({ synced, practices: practices.length, errors });
   } catch (e) {
+    await reportEdgeError("sync-appointments", e);
     console.error("sync-appointments error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

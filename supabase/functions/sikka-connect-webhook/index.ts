@@ -1,3 +1,4 @@
+import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // sikka-connect-webhook - the single Sikka webhook receiver. Routes every event
 // Sikka sends for a connected office:
@@ -348,6 +349,7 @@ Deno.serve(async (req: Request) => {
     }
     return json(result);
   } catch (e) {
+    await reportEdgeError("sikka-connect-webhook", e);
     console.error("sikka-connect-webhook error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }
