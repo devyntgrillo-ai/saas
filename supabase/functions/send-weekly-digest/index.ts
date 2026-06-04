@@ -12,7 +12,7 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireServiceRole } from "../_shared/auth.ts";
-import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand, statRows } from "../_shared/brand.ts";
+import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand, statTiles, winBox } from "../_shared/brand.ts";
 import { sendMailgunToMany } from "../_shared/mailgun.ts";
 
 const cors = {
@@ -40,15 +40,25 @@ const OBJ_LABEL: Record<string, string> = {
 
 // deno-lint-ignore no-explicit-any
 function buildHtml(p: any, d: any, brand: Brand) {
-  const rows = statRows([
+  const tiles: Array<{ label: string; value: string; accent?: string }> = [
     { label: "Consults Recorded", value: String(d.recorded) },
     { label: "Follow-ups Sent", value: String(d.sent) },
     { label: "Patients Re-engaged", value: String(d.replies) },
-    { label: "Estimated Production Recovered", value: money(d.recoveredValue || 0) },
-  ]);
+  ];
+  // Only surface a "money" stat when there's a real win - never show $0.
+  if ((d.recoveredValue || 0) > 0) {
+    tiles.push({ label: "Production Recovered", value: money(d.recoveredValue), accent: "#34d399" });
+  } else if (d.conversions > 0) {
+    tiles.push({ label: "Cases Won", value: String(d.conversions), accent: "#34d399" });
+  }
+  const win = (d.recoveredValue || 0) > 0
+    ? winBox(`💰 <strong style="color:#fff">${money(d.recoveredValue)}</strong> in production recovered this week — nice work.`)
+    : d.conversions > 0
+      ? winBox(`🎉 <strong style="color:#fff">${d.conversions}</strong> case${d.conversions === 1 ? "" : "s"} won this week — keep it going.`)
+      : "";
   return renderBrandedEmail(brand, {
     heading: `Here's what ${brand.companyName} did for you this week.`,
-    bodyHtml: `<p style="margin:0 0 4px">${escapeHtml(p.name || "Your practice")}</p>${rows}`,
+    bodyHtml: `<p style="margin:0">${escapeHtml(p.name || "Your practice")}</p>${statTiles(tiles)}${win}`,
     button: { label: "View Full Dashboard", url: "https://app.caselift.io" },
     footerNote: "Manage weekly reports in Settings &rarr; Notifications.",
   });
@@ -101,6 +111,13 @@ Deno.serve(async (req: Request) => {
       if (!body.practice_id && (p.subscription_status === "cancelled" || p.subscription_status === "canceled")) continue;
       const to = [p.email, p.email_reply_to].filter((e: string) => e && /@/.test(e));
       const d = await digestForPractice(admin, p);
+      // Don't send a flat/empty week (no activity). A manual single-practice run
+      // (body.practice_id) always sends so it can be tested.
+      const hasActivity = d.recorded > 0 || d.sent > 0 || d.replies > 0 || d.conversions > 0 || (d.recoveredValue || 0) > 0;
+      if (!body.practice_id && !hasActivity) {
+        results.push({ practice_id: p.id, skipped: "no_activity_this_week" });
+        continue;
+      }
       // Resolve the reseller brand for this practice (per-practice white-labeling).
       const brand = await resolveBrand(admin, p);
       let send: unknown = { sent: false, reason: "no_recipient" };

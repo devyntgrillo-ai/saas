@@ -5,7 +5,7 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { requireServiceRole } from "../_shared/auth.ts";
-import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand, statRows } from "../_shared/brand.ts";
+import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand, statTiles, winBox } from "../_shared/brand.ts";
 import { isMailgunConfigured, sendMailgunMessage } from "../_shared/mailgun.ts";
 
 const cors = {
@@ -21,12 +21,19 @@ const weekAgoISO = () => new Date(Date.now() - 7 * 86400000).toISOString();
 
 function buildHtml(p: { name?: string }, d: Record<string, unknown>, brand: Brand) {
   const insight = d.insight as { finding?: string; recommendation?: string } | null;
-  const rows = statRows([
+  const recovered = Number(d.recoveredValue) || 0;
+  const recoveredCount = Number(d.recoveredCount) || 0;
+  const tiles: Array<{ label: string; value: string; accent?: string }> = [
     { label: "Consults Recorded", value: String(d.consults ?? 0) },
     { label: "Follow-ups Sent", value: String(d.sequences ?? 0) },
     { label: "Patients Re-engaged", value: String(d.replies ?? 0) },
-    { label: "Estimated Production Recovered", value: money(Number(d.recoveredValue) || 0) },
-  ]);
+  ];
+  // Only show a money stat when there's an actual win - never a $0 row.
+  if (recovered > 0) tiles.push({ label: "Production Recovered", value: money(recovered), accent: "#34d399" });
+  const rows = statTiles(tiles);
+  const win = recovered > 0
+    ? winBox(`💰 <strong style="color:#fff">${money(recovered)}</strong> recovered across ${recoveredCount} case${recoveredCount === 1 ? "" : "s"} this week.`)
+    : "";
   const insightBlock = insight
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0"><tr><td style="background:#0f1117;border:1px solid #2a3142;border-radius:8px;padding:16px">
          <p style="color:${brand.primaryColor};font-size:12px;text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px">Insight for your patient mix</p>
@@ -36,7 +43,7 @@ function buildHtml(p: { name?: string }, d: Record<string, unknown>, brand: Bran
     : "";
   return renderBrandedEmail(brand, {
     heading: `Here's what ${brand.companyName} did for you this week.`,
-    bodyHtml: `<p style="margin:0 0 4px">${escapeHtml(p.name || "Your practice")}</p>${rows}${insightBlock}`,
+    bodyHtml: `<p style="margin:0">${escapeHtml(p.name || "Your practice")}</p>${rows}${win}${insightBlock}`,
     button: { label: "View Full Dashboard", url: "https://app.caselift.io" },
     footerNote: "Manage weekly reports in Settings &rarr; Notifications.",
   });
@@ -102,6 +109,13 @@ Deno.serve(async (req) => {
     const results: unknown[] = [];
     for (const p of practices || []) {
       const d = await digestFor(supabase, p);
+      // Don't send a flat/empty week. Manual single-practice runs always send.
+      const hasActivity = (Number(d.consults) || 0) > 0 || (Number(d.sequences) || 0) > 0 ||
+        (Number(d.replies) || 0) > 0 || (Number(d.recoveredValue) || 0) > 0;
+      if (!body.practice_id && !hasActivity) {
+        results.push({ practice: p.id, skipped: "no_activity_this_week" });
+        continue;
+      }
       const brand = await resolveBrand(supabase, p);
       const html = buildHtml(p, d, brand);
       const subject = `Your ${brand.companyName} Weekly Report — ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;

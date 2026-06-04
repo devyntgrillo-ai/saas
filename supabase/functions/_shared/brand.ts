@@ -156,6 +156,29 @@ export function statRows(rows: Array<{ label: string; value: string }>): string 
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 0">${cells}</table>`;
 }
 
+// Grid of metric tiles (2 per row): big number + label, optional accent color.
+export function statTiles(tiles: Array<{ label: string; value: string; accent?: string }>): string {
+  const cell = (t?: { label: string; value: string; accent?: string }) =>
+    t
+      ? `<td width="50%" valign="top" style="padding:0">
+           <div style="background:#0f1117;border:1px solid #2a3142;border-radius:10px;padding:18px 20px">
+             <div style="color:${t.accent || "#ffffff"};font-size:28px;font-weight:800;letter-spacing:-0.02em;line-height:1">${escapeHtml(t.value)}</div>
+             <div style="color:#94a3b8;font-size:13px;margin-top:6px">${escapeHtml(t.label)}</div>
+           </div>
+         </td>`
+      : `<td width="50%" style="padding:0"></td>`;
+  const rows: string[] = [];
+  for (let i = 0; i < tiles.length; i += 2) rows.push(`<tr>${cell(tiles[i])}${cell(tiles[i + 1])}</tr>`);
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="10" style="margin:18px 0 0;border-collapse:separate">${rows.join("")}</table>`;
+}
+
+// Green "win" highlight callout for a notable positive result.
+export function winBox(innerHtml: string): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0"><tr>
+    <td style="background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.4);border-radius:10px;padding:16px 18px;color:#a7f3d0;font-size:15px;line-height:1.5">${innerHtml}</td>
+  </tr></table>`;
+}
+
 export function renderBrandedEmail(brand: Brand, c: EmailContent): string {
   const accent = brand.primaryColor || "#0EA5E9";
   const button = c.button
