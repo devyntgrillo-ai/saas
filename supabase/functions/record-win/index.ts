@@ -26,12 +26,18 @@ const money = (n: number) => "$" + Math.round(Number(n) || 0).toLocaleString("en
 // "dental_implants" -> "Dental Implants"
 const prettyTreatment = (t?: string | null) =>
   (t || "treatment").replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-// "Robert", "Maxwell" -> "Robert M." (last-initial only, for privacy)
+// "Robert", "Maxwell" -> "Robert M." (last-initial only, for privacy). Falls back
+// to splitting a composite patient_name so PMS rows (no first/last) stay private.
 function privacyName(first?: string | null, last?: string | null, fallback?: string | null) {
-  const f = (first || "").trim();
-  const l = (last || "").trim();
+  let f = (first || "").trim();
+  let l = (last || "").trim();
+  if (!f && fallback) {
+    const parts = String(fallback).trim().split(/\s+/);
+    f = parts[0] || "";
+    l = parts.slice(1).join(" ");
+  }
   if (f) return l ? `${f} ${l[0].toUpperCase()}.` : f;
-  return (fallback || "A patient").trim();
+  return "A patient";
 }
 
 async function postSlack(text: string) {
