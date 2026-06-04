@@ -166,7 +166,7 @@ export async function sendMailgunMessage(opts: {
     (audience === "platform" ? mailgunFromAddress(opts.fromKind ?? "noreply") : null);
   if (!address) return { sent: false, reason: "missing_from_address" };
 
-  const fromName = opts.fromName || "Hope AI";
+  const fromName = opts.fromName || "CaseLift";
   const form = new FormData();
   form.append("from", `${fromName} <${address}>`);
   form.append("to", opts.to);
@@ -198,7 +198,7 @@ export async function sendMailgunToMany(opts: {
   const address = mailgunFromAddress(opts.fromKind ?? "noreply");
   if (!address) return { sent: false, reason: "mailgun_not_configured" };
 
-  const fromName = opts.fromName || "Hope AI";
+  const fromName = opts.fromName || "CaseLift";
   const form = new FormData();
   form.append("from", `${fromName} <${address}>`);
   for (const addr of recipients) form.append("to", addr);

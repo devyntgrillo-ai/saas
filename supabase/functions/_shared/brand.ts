@@ -25,7 +25,7 @@ export interface Brand {
 export const CASELIFT_BRAND: Brand = {
   companyName: "CaseLift",
   fromName: "CaseLift",
-  supportEmail: "support@caselift.io",
+  supportEmail: "hello@caselift.io",
   logoUrl: null,
   primaryColor: "#0EA5E9",
   isWhiteLabeled: false,
@@ -105,10 +105,94 @@ export function emailSignature(brand: Brand): string {
   return `<p style="color:#6b7280;font-size:13px;margin:20px 0 0">${line}</p>`;
 }
 
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return String(s)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+// ============================================================================
+// Master branded HTML email template (dark navy, brand-aware).
+//
+// Every transactional email renders through renderBrandedEmail() so they share
+// one consistent, professional look. It's brand-aware: white-labeled resellers
+// keep their own logo, accent color, and company name; CaseLift's own emails get
+// the "CASELIFT" wordmark with the ↑ arrow in brand blue (#0EA5E9).
+// ============================================================================
+
+export interface EmailContent {
+  heading: string;
+  /** Trusted HTML for the body (callers must escape any user-supplied values). */
+  bodyHtml: string;
+  button?: { label: string; url: string } | null;
+  /** Small centered line under the CTA (e.g. "Questions? Reply to this email."). */
+  subtext?: string | null;
+  /** Muted note above the footer (e.g. "This invitation expires in 48 hours."). */
+  footerNote?: string | null;
+}
+
+const FONT_STACK = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+
+/** Header lockup: reseller logo image, else the wordmark + ↑ arrow in brand color. */
+function emailLockup(brand: Brand): string {
+  if (brand.logoUrl) {
+    return `<img src="${brand.logoUrl}" alt="${escapeHtml(brand.companyName)}" ` +
+      `style="max-height:38px;max-width:180px;height:auto;display:inline-block" />`;
+  }
+  return `<span style="font-size:22px;font-weight:700;letter-spacing:0.06em;color:#ffffff">` +
+    `<span style="color:${brand.primaryColor}">&uarr;</span>${escapeHtml(brand.companyName.toUpperCase())}</span>`;
+}
+
+/** Stat rows for digest emails: label left, bold value right, subtle divider between. */
+export function statRows(rows: Array<{ label: string; value: string }>): string {
+  const cells = rows.map((r, i) =>
+    `<tr>
+       <td style="padding:14px 0;color:#94a3b8;font-size:15px;${i ? "border-top:1px solid #2a3142" : ""}">${escapeHtml(r.label)}</td>
+       <td style="padding:14px 0;color:#ffffff;font-size:18px;font-weight:700;text-align:right;${i ? "border-top:1px solid #2a3142" : ""}">${escapeHtml(r.value)}</td>
+     </tr>`
+  ).join("");
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 0">${cells}</table>`;
+}
+
+export function renderBrandedEmail(brand: Brand, c: EmailContent): string {
+  const accent = brand.primaryColor || "#0EA5E9";
+  const button = c.button
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:28px auto 0">
+         <tr><td align="center" style="border-radius:8px;background:${accent}">
+           <a href="${c.button.url}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;font-family:${FONT_STACK}">${escapeHtml(c.button.label)}</a>
+         </td></tr>
+       </table>`
+    : "";
+  const subtext = c.subtext
+    ? `<p style="color:#64748b;font-size:13px;line-height:1.6;text-align:center;margin:18px 0 0">${c.subtext}</p>`
+    : "";
+  const footerNote = c.footerNote
+    ? `<p style="color:#94a3b8;font-size:14px;line-height:1.6;margin:24px 0 0">${c.footerNote}</p>`
+    : "";
+  return `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>${escapeHtml(brand.companyName)}</title></head>
+<body style="margin:0;padding:0;background:#0f1117;font-family:${FONT_STACK}">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0f1117;padding:32px 16px">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#1a1f2e;border-radius:12px;border-top:3px solid ${accent}">
+        <tr><td style="padding:40px">
+          <div style="text-align:center;margin:0 0 30px">${emailLockup(brand)}</div>
+          <h1 style="color:#ffffff;font-size:22px;font-weight:600;line-height:1.3;margin:0 0 16px">${escapeHtml(c.heading)}</h1>
+          <div style="color:#94a3b8;font-size:15px;line-height:1.6">${c.bodyHtml}</div>
+          ${button}
+          ${subtext}
+          ${footerNote}
+          <div style="border-top:1px solid #2a3142;margin:32px 0 0;padding-top:20px">
+            <p style="color:#475569;font-size:12px;line-height:1.6;margin:0">You're receiving this because you have a ${escapeHtml(brand.companyName)} account.</p>
+            <p style="color:#475569;font-size:12px;line-height:1.6;margin:6px 0 0">&copy; 2026 ${escapeHtml(brand.companyName)}. All rights reserved.</p>
+          </div>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
 }
