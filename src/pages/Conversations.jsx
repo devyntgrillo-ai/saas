@@ -62,6 +62,7 @@ import { formatMoney } from '../lib/analytics'
 import { formatCallTime, useTwilioVoiceDevice } from '../lib/voice'
 import CallMessageBubble from '../components/CallMessageBubble'
 import EmailComposer from '../components/EmailComposer'
+import ChannelToggle from '../components/ChannelToggle'
 
 function initials(first, last) {
   return `${(first || '?')[0]}${(last || '')[0] || ''}`.toUpperCase()
@@ -1386,21 +1387,7 @@ export default function Conversations() {
               ) : (
                 <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
                   <div className="flex items-center gap-0.5 border-b border-gray-200 px-2 py-1.5">
-                    <button
-                      type="button"
-                      onClick={() => switchComposeChannel('email')}
-                      className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-100"
-                    >
-                      <Mail className="h-4 w-4 shrink-0" />
-                      Email
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => switchComposeChannel('sms')}
-                      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition ${channel === 'sms' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
-                    >
-                      SMS
-                    </button>
+                    <ChannelToggle channel={channel} onSwitch={switchComposeChannel} />
                   </div>
 
                   {aiSuggested && draft.trim() && (
