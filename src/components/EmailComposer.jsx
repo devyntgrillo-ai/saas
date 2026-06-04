@@ -17,6 +17,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
+import ChannelToggle from './ChannelToggle'
 
 function ToolbarIcon({ title, onClick, disabled, active, children }) {
   return (
@@ -71,40 +72,7 @@ export default function EmailComposer({
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       {/* Tab bar */}
       <div className="flex items-center justify-between border-b border-gray-200 px-2 py-1.5">
-        <div className="flex items-center gap-0.5">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => onChannelMenuOpenChange((v) => !v)}
-              className="inline-flex items-center gap-1.5 rounded-md bg-blue-50 px-2.5 py-1.5 text-sm font-medium text-blue-700"
-            >
-              <Mail className="h-4 w-4 shrink-0" />
-              Email
-              <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-            </button>
-            {channelMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-10" aria-hidden onClick={() => onChannelMenuOpenChange(false)} />
-                <div className="absolute left-0 top-full z-20 mt-1 min-w-[120px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-                  <button
-                    type="button"
-                    onClick={() => { onChannelMenuOpenChange(false); onSwitchChannel('email') }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-blue-700 hover:bg-gray-50"
-                  >
-                    <Mail className="h-4 w-4" /> Email
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { onChannelMenuOpenChange(false); onSwitchChannel('sms') }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    SMS
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <ChannelToggle channel="email" onSwitch={onSwitchChannel} />
         <div className="flex items-center gap-0.5 text-gray-400">
           <button
             type="button"
