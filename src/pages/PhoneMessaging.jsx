@@ -179,23 +179,23 @@ export default function PhoneMessaging() {
       </div>
 
       {provStatus === 'pending' && (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+        <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
           <Clock className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
           <div>
-            <p className="font-medium">SMS registration pending</p>
-            <p className="mt-0.5 text-amber-200/80">
+            <p className="font-semibold text-amber-300">SMS registration pending</p>
+            <p className="mt-0.5 leading-relaxed text-amber-300">
               Your number can receive replies. Outbound follow-up texts unlock after US carrier approval (usually 1–7 business days).
             </p>
           </div>
         </div>
       )}
       {provStatus === 'failed' && (
-        <div className="flex items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+        <div className="flex items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-400" />
           <div>
-            <p className="font-medium">SMS registration needs attention</p>
+            <p className="font-semibold text-rose-300">SMS registration needs attention</p>
             {practice?.a2p_failure_reason && (
-              <p className="mt-0.5 text-rose-200/80">{practice.a2p_failure_reason}</p>
+              <p className="mt-0.5 leading-relaxed text-rose-300">{practice.a2p_failure_reason}</p>
             )}
             <button type="button" onClick={() => setSetupOpen(true)} className="btn-primary mt-3">
               Resubmit registration

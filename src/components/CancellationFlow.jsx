@@ -338,7 +338,7 @@ export default function CancellationFlow({ onClose }) {
 
           <div className="mt-5 rounded-xl border border-rose-500/30 bg-rose-500/[0.07] p-5">
             <p className="text-3xl font-black text-white">{activePatients}</p>
-            <p className="mt-1 text-sm text-rose-200">patients will lose their follow-up forever</p>
+            <p className="mt-1 text-sm text-rose-300">patients will lose their follow-up forever</p>
           </div>
 
           <div className="mt-6 flex flex-col gap-2">
