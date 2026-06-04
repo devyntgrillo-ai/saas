@@ -1,5 +1,4 @@
 import { lazy, Suspense, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import {
   Clock,
   Award,
@@ -8,9 +7,7 @@ import {
   Plug,
   DollarSign,
   Info,
-  Trophy,
 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import { Link, Navigate } from 'react-router-dom'
 import AILearningFeed from '../components/AILearningFeed'
 import TodaysAppointmentsSnapshot from '../components/TodaysAppointmentsSnapshot'
@@ -95,22 +92,6 @@ export default function Dashboard() {
   const { practiceId, practice, user, isAgencyUser } = useAuth()
   const { data, isLoading: loading, error, refetch } = useDashboard(practiceId)
   const { data: comparison } = useNetworkComparison(practiceId)
-
-  // Assisted wins this month (count + summed case value) from assisted_wins.
-  const { data: winsData } = useQuery({
-    queryKey: ['assisted-wins', practiceId, 'month'],
-    enabled: Boolean(practiceId),
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('assisted_wins')
-        .select('case_value')
-        .eq('practice_id', practiceId)
-        .gte('won_at', startOfMonth().toISOString())
-      const rows = data || []
-      return { count: rows.length, value: rows.reduce((s, r) => s + (Number(r.case_value) || 0), 0) }
-    },
-  })
-  const wins = winsData || { count: 0, value: 0 }
 
   const consults = data?.consults ?? []
   const messages = data?.messages ?? []
@@ -253,7 +234,6 @@ export default function Dashboard() {
               <KpiCard icon={TrendingUp} accent="primary" label="Pipeline Value" value={formatMoney(kpis.pipelineValue)} sub={`${activity.active} patients nurtured`} />
               <KpiCard icon={Clock} accent="violet" label="Hours Saved" value={`${kpis.hoursSaved}h`} sub={`${kpis.messagesSent} auto follow-ups · ~${kpis.minPerFollowup} min each`} />
               <KpiCard icon={Award} accent="green" label="ROI This Month" value={kpis.roi ? `${kpis.roi}x ROI` : '-'} sub="Production ÷ $997 plan" />
-              <KpiCard icon={Trophy} accent="green" label="Wins This Month" value={wins.count} sub={`${formatMoney(wins.value)} recovered · CaseLift-assisted`} />
             </div>
           )}
 
