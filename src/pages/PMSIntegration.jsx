@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Plug, Download, Loader2, CheckCircle2, ArrowRight, ArrowLeft, Calendar, X, Building2, Clock,
 } from 'lucide-react'
@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import Modal from '../components/Modal'
 import { formatDateTime } from '../lib/consults'
 import { savePmsType, fetchAppointmentCount, disconnectPms } from '../lib/pms'
+import { usePmsAppointmentCount } from '../lib/queries'
 
 // The practice only picks a PMS by name - everything routes through Sikka behind
 // the scenes, so the practice never sees a Sikka ID or any API key.
@@ -168,19 +169,10 @@ export default function PMSIntegration() {
   const [wizard, setWizard] = useState(false)
   const [confirmDisconnect, setConfirmDisconnect] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [apptCount, setApptCount] = useState(0)
-
   const connected = Boolean(practice?.sikka_connected)
   const wizardComplete = connected || Boolean(practice?.pms_type)
   const lastSynced = practice?.pms_last_synced_at || practice?.pms_last_sync || null
-
-  const load = useCallback(async () => {
-    if (!practiceId || !wizardComplete) return
-    setApptCount(await fetchAppointmentCount(practiceId))
-  }, [practiceId, wizardComplete])
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load() }, [load])
+  const { data: apptCount = 0 } = usePmsAppointmentCount(practiceId, wizardComplete)
 
   async function handleDisconnect() {
     setBusy(true)

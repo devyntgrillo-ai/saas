@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Mic, Calendar, Search, CheckCircle2, Clock, Check, Circle,
@@ -6,13 +6,10 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useRecorder } from '../context/RecorderContext'
-import { supabase } from '../lib/supabase'
+import { useConsultsDay, useUnlinkedConsults } from '../lib/queries'
 
-const TYPE_RE = /consult|implant/i
-const todayStr = () => new Date().toLocaleDateString('en-CA') // YYYY-MM-DD, local
+const todayStr = () => new Date().toLocaleDateString('en-CA')
 
-// Seed/PMS times are stored as wall-clock in UTC; render in UTC so 8:00 shows
-// as 8:00 AM rather than being shifted by the viewer's timezone.
 function fmtTime(ts) {
   if (!ts) return '-'
   return new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }).toLowerCase().replace(' ', '')
@@ -26,8 +23,6 @@ function statusOf(a) {
   return new Date(a.appointment_time) < start ? 'missed' : 'needs'
 }
 
-// Day-sheet color coding: a faint full-row tint, green = recorded, red = not yet
-// recorded (upcoming), gray = missed (past, never recorded).
 const ROW_TINT = {
   recorded: 'bg-emerald-500/[0.06] hover:bg-emerald-500/[0.10]',
   needs:    'bg-rose-500/[0.07] hover:bg-rose-500/[0.12]',
@@ -48,49 +43,13 @@ export default function Consults() {
   const [date, setDate] = useState(todayStr())
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
-  const [appts, setAppts] = useState([])
-  const [allNote, setAllNote] = useState(false)
-  const [unlinked, setUnlinked] = useState([])
-  const [loading, setLoading] = useState(true)
 
-  // A single day's schedule, PMS day-sheet style.
-  const load = useCallback(async () => {
-    if (!practiceId) return
-    setLoading(true)
-    const start = new Date(`${date}T00:00:00`)
-    const end = new Date(start); end.setDate(end.getDate() + 1)
-    const { data } = await supabase
-      .from('pms_appointments')
-      .select('*')
-      .eq('practice_id', practiceId)
-      .gte('appointment_time', start.toISOString())
-      .lt('appointment_time', end.toISOString())
-      .order('appointment_time', { ascending: true })
-    const rows = data || []
-    const consultRows = rows.filter((a) => TYPE_RE.test(a.appointment_type || ''))
-    if (consultRows.length === 0 && rows.length > 0) { setAppts(rows); setAllNote(true) }
-    else { setAppts(consultRows); setAllNote(false) }
-    setLoading(false)
-  }, [practiceId, date])
+  const { data: dayData, isLoading: loading } = useConsultsDay(practiceId, date)
+  const { data: unlinked = [] } = useUnlinkedConsults(practiceId)
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load() }, [load])
+  const appts = dayData?.appts ?? []
+  const allNote = dayData?.allNote ?? false
 
-  useEffect(() => {
-    if (!practiceId) return
-    let on = true
-    supabase
-      .from('consults')
-      .select('id, patient_name, status, created_at')
-      .eq('practice_id', practiceId)
-      .is('appointment_id', null)
-      .order('created_at', { ascending: false })
-      .limit(50)
-      .then(({ data }) => { if (on) setUnlinked(data || []) })
-    return () => { on = false }
-  }, [practiceId])
-
-  // Search + status filter applied to the day's rows.
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
     return appts.filter((a) => {
@@ -119,7 +78,6 @@ export default function Consults() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-3">
@@ -136,7 +94,6 @@ export default function Consults() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input h-9 w-auto py-1 text-sm" />
         <div className="flex flex-wrap gap-1">
@@ -159,7 +116,6 @@ export default function Consults() {
         </p>
       )}
 
-      {/* Body - classic PMS day-sheet table */}
       {!connected ? (
         <EmptyCard icon={Plug} title="Connect your PMS to see appointments here"
           action={<Link to="/settings/pms" className="btn-primary mt-4">Connect your PMS</Link>} />
@@ -175,7 +131,6 @@ export default function Consults() {
         <RecordedTable rows={rows} navigate={navigate} openRecorder={openRecorder} />
       )}
 
-      {/* Unlinked recordings - recordings not tied to a scheduled appointment. */}
       {unlinked.length > 0 && (
         <section className="space-y-1.5">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Unlinked recordings</h2>
@@ -199,9 +154,6 @@ export default function Consults() {
   )
 }
 
-// The day-sheet itself: one row per appointment, color-coded by status. The
-// patient name links to the consult detail when recorded; otherwise the row
-// click starts a recording for that appointment.
 function RecordedTable({ rows, navigate, openRecorder, caughtUp }) {
   return (
     <div className="card overflow-hidden">
@@ -211,7 +163,6 @@ function RecordedTable({ rows, navigate, openRecorder, caughtUp }) {
         </div>
       )}
 
-      {/* Column header */}
       <div className="hidden items-center gap-3 border-b border-surface-700 bg-surface-800/40 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:flex">
         <span className="w-[70px] shrink-0">Time</span>
         <span className="flex-1">Patient</span>
@@ -232,10 +183,8 @@ function RecordedTable({ rows, navigate, openRecorder, caughtUp }) {
               onClick={onRow}
               className={`flex min-h-[60px] cursor-pointer items-center gap-3 px-4 transition ${ROW_TINT[s]}`}
             >
-              {/* Time - folded into the subtitle on mobile */}
               <span className="hidden w-[70px] shrink-0 text-sm tabular-nums text-slate-400 sm:block">{fmtTime(a.appointment_time)}</span>
 
-              {/* Patient - name links to detail when recorded */}
               <div className="min-w-0 flex-1 py-3">
                 {recorded ? (
                   <Link
@@ -252,20 +201,17 @@ function RecordedTable({ rows, navigate, openRecorder, caughtUp }) {
                   {a.appointment_type || 'Consult'}{a.provider ? ` · ${a.provider}` : ''}
                   <span className="sm:hidden"> · {fmtTime(a.appointment_time)}</span>
                 </p>
-                {/* Mobile-only status chip (the dedicated Status column is sm+) */}
                 <span className={`mt-1.5 inline-flex items-center gap-1 text-xs font-medium sm:hidden ${cfg.text}`}>
                   <cfg.Icon className={`h-3 w-3 ${cfg.dot} ${s === 'recorded' ? 'fill-current' : ''}`} />
                   {cfg.label}
                 </span>
               </div>
 
-              {/* Status (desktop column) */}
               <span className={`hidden w-[140px] shrink-0 items-center gap-1.5 text-sm font-medium sm:flex ${cfg.text}`}>
                 <cfg.Icon className={`h-3.5 w-3.5 ${cfg.dot} ${s === 'recorded' ? 'fill-current' : ''}`} />
                 {cfg.label}
               </span>
 
-              {/* Action */}
               <div className="flex shrink-0 items-center justify-end sm:w-[150px]" onClick={(e) => e.stopPropagation()}>
                 {recorded ? (
                   <button onClick={goDetail} className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3.5 py-1.5 text-sm font-medium text-green-700 transition hover:bg-green-200">

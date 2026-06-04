@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react'
 import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, Tooltip } from 'recharts'
-import { fetchRecordingRate } from '../lib/pms'
+import { useRecordingRate } from '../lib/queries'
 
 const tooltipStyle = {
   contentStyle: { background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '0.5rem', fontSize: '0.75rem', color: 'var(--text-primary)' },
@@ -50,19 +49,7 @@ function Ring({ pct, colorClass, empty }) {
 
 // Recording rate metric + 4-week trend. Shown on the Dashboard.
 export default function RecordingRateCard({ practiceId, compact = false }) {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (!practiceId) return
-    let active = true
-    fetchRecordingRate(practiceId, 4)
-      .then((d) => active && setData(d))
-      .finally(() => active && setLoading(false))
-    return () => {
-      active = false
-    }
-  }, [practiceId])
+  const { data, isLoading: loading } = useRecordingRate(practiceId, 4)
 
   if (loading) return <div className="card h-44 animate-pulse bg-surface-800" />
   if (!data) return null

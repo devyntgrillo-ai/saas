@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useResellerSignup } from '../lib/queries'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Loader2, AlertCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -15,40 +16,18 @@ export default function ResellerSignup() {
   const navigate = useNavigate()
   const { signIn } = useAuth()
 
-  const [offer, setOffer] = useState(null) // { company_name, logo_url, primary_color, client_price, trial_enabled, trial_days, ... }
-  const [resolving, setResolving] = useState(true)
-  const [notFound, setNotFound] = useState(false)
+  const { data: offer, isLoading: resolving, isError: notFound } = useResellerSignup(slug)
 
   const [form, setForm] = useState({ practice: '', firstName: '', lastName: '', email: '', phone: '', password: '' })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
-  // Resolve the reseller offer/brand for this slug.
   useEffect(() => {
-    let active = true
-    ;(async () => {
-      setResolving(true)
-      try {
-        const { data, error: err } = await supabase.rpc('get_reseller_signup', { p_slug: slug })
-        if (!active) return
-        if (err || !data) {
-          setNotFound(true)
-        } else {
-          setOffer(data)
-          if (data.primary_color) applyPrimaryColor(data.primary_color)
-          document.title = `${data.company_name} — Get Started`
-        }
-      } catch {
-        if (active) setNotFound(true)
-      } finally {
-        if (active) setResolving(false)
-      }
-    })()
-    return () => {
-      active = false
-    }
-  }, [slug])
+    if (!offer) return
+    if (offer.primary_color) applyPrimaryColor(offer.primary_color)
+    document.title = `${offer.company_name} — Get Started`
+  }, [offer])
 
   async function handleSubmit(e) {
     e.preventDefault()

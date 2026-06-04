@@ -30,6 +30,7 @@
     "@capacitor/ios": "^8.3.4",
     "@lemonsqueezy/lemonsqueezy.js": "^4.0.0",
     "@supabase/supabase-js": "^2.106.2",
+    "@tanstack/react-query": "^5.101.0",
     "@twilio/voice-sdk": "^2.18.3",
     "axios": "^1.16.1",
     "capacitor-voice-recorder": "^7.0.6",

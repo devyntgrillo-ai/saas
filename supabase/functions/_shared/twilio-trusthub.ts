@@ -67,6 +67,30 @@ export function preconfiguredA2pBundles(): { customer: string; a2p: string } | n
   return null;
 }
 
+/** ISV primary BU must not be stored as the practice secondary customer profile. */
+export function sanitizeTrustHubStored(existing: TrustHubStored = {}): TrustHubStored {
+  const primarySid = primaryCustomerProfileSid();
+  const out: TrustHubStored = { ...existing };
+  if (primarySid && out.customer_profile_sid === primarySid) {
+    delete out.customer_profile_sid;
+    delete out.trust_product_sid;
+  }
+  return out;
+}
+
+/** After a failed brand/campaign, recreate trust product + brand; keep a valid secondary profile. */
+export function trustHubForResubmit(
+  existing: TrustHubStored,
+  brandStatus: string | null | undefined,
+  campaignStatus: string | null | undefined,
+): TrustHubStored {
+  const th = sanitizeTrustHubStored(existing);
+  if (brandStatus === "failed" || campaignStatus === "failed") {
+    delete th.trust_product_sid;
+  }
+  return th;
+}
+
 function mapTwilioBusinessType(raw: string): string {
   const s = String(raw || "").toLowerCase();
   if (s.includes("sole")) return "Sole Proprietorship";
@@ -150,7 +174,7 @@ export async function ensureA2pTrustHubBundles(
   practiceName: string,
   biz: A2PBusiness,
   practiceAddress: string | null,
-  existing: TrustHubStored = {},
+  existingIn: TrustHubStored = {},
 ): Promise<A2pBundleResult> {
   const preconfig = preconfiguredA2pBundles();
   if (preconfig) {
@@ -158,11 +182,16 @@ export async function ensureA2pTrustHubBundles(
       ok: true,
       customerProfileBundleSid: preconfig.customer,
       a2pProfileBundleSid: preconfig.a2p,
-      trustHub: existing,
+      trustHub: sanitizeTrustHubStored(existingIn),
     };
   }
 
-  if (existing.customer_profile_sid && existing.trust_product_sid) {
+  const primarySid = primaryCustomerProfileSid();
+  const existing = sanitizeTrustHubStored(existingIn);
+
+  const customerIsSecondary = !!existing.customer_profile_sid &&
+    (!primarySid || existing.customer_profile_sid !== primarySid);
+  if (customerIsSecondary && existing.trust_product_sid) {
     return {
       ok: true,
       customerProfileBundleSid: existing.customer_profile_sid,
@@ -172,7 +201,6 @@ export async function ensureA2pTrustHubBundles(
   }
 
   const notifyEmail = trustHubEmail();
-  const primarySid = primaryCustomerProfileSid();
   if (!notifyEmail) {
     return {
       ok: false,

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -33,9 +34,9 @@ import Modal from '../components/Modal'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { stripEmDashes } from '../lib/sanitize'
-import { auditConsultViewed, auditPatientAccessed } from '../lib/audit'
 import { optimizeMessage, acceptOptimization } from '../lib/insights'
-import { attributionStatusBadge, fetchConsultAttribution } from '../lib/attribution'
+import { attributionStatusBadge } from '../lib/attribution'
+import { useConsultDetail, useConsultAttribution, queryKeys } from '../lib/queries'
 import { requestAnalysis, transcribeRecording } from '../lib/recording'
 import OutcomeControls from '../components/OutcomeControls'
 import {
@@ -534,14 +535,35 @@ export default function ConsultDetail() {
   const navigate = useNavigate()
   const { practiceId, practice } = useAuth()
 
-  const [consult, setConsult] = useState(null)
-  const [messages, setMessages] = useState([])
-  const [conversation, setConversation] = useState(null)
-  const [appointment, setAppointment] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [notFound, setNotFound] = useState(false)
+  const queryClient = useQueryClient()
+  const { data: bundle, isLoading: loading } = useConsultDetail(id)
+  const notFound = bundle?.notFound === true
+  const consult = bundle?.consult ?? null
+  const messages = bundle?.messages ?? []
+  const conversation = bundle?.conversation ?? null
+  const appointment = bundle?.appointment ?? null
+  const { data: attribution = null } = useConsultAttribution(consult, messages)
   const [showPatientEdit, setShowPatientEdit] = useState(false)
-  const [attribution, setAttribution] = useState(null)
+
+  function patchConsult(patch) {
+    queryClient.setQueryData(queryKeys.consult(id), (old) =>
+      old && !old.notFound ? { ...old, consult: { ...old.consult, ...patch } } : old,
+    )
+  }
+
+  function patchMessages(updater) {
+    queryClient.setQueryData(queryKeys.consult(id), (old) =>
+      old && !old.notFound ? { ...old, messages: updater(old.messages || []) } : old,
+    )
+  }
+
+  function refreshConsult() {
+    queryClient.invalidateQueries({ queryKey: queryKeys.consult(id) })
+    if (practiceId) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(practiceId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.sequences(practiceId) })
+    }
+  }
 
   // AI-version baseline per message, keyed by message id. Captured the first time
   // a message is seen on this page mount; since the messages table has no
@@ -579,45 +601,15 @@ export default function ConsultDetail() {
       practiceTimezone: practice?.timezone,
       timingPreset: consult.sequence_timing_preset,
     })
-    await load(true)
+    refreshConsult()
     setApprovingFollowup(false)
   }
 
-  // Reusable loader. `silent` skips the spinner + audit (used by background polling).
-  const load = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true)
-    const { data: c } = await supabase.from('consults').select('*').eq('id', id).maybeSingle()
-    if (!c) {
-      setNotFound(true)
-      setLoading(false)
-      return null
-    }
-    setConsult(c)
-    if (!silent) {
-      // HIPAA audit trail: consult view + patient-record access when present.
-      auditConsultViewed(c.id)
-      if (c.patient_name || c.patient_phone || c.patient_email) auditPatientAccessed(c.id)
-    }
-    const [{ data: msgs }, { data: convs }, { data: appt }] = await Promise.all([
-      supabase
-        .from('messages')
-        .select('*')
-        .eq('consult_id', id)
-        .order('scheduled_for', { ascending: true, nullsFirst: true })
-        .order('sent_at', { ascending: true, nullsFirst: true })
-        .order('created_at', { ascending: true }),
-      supabase.from('conversations').select('id, patient_first, unread_count').eq('consult_id', id),
-      supabase
-        .from('pms_appointments')
-        .select('patient_first, patient_last, patient_phone, patient_email, provider, appointment_time, appointment_type')
-        .eq('consult_id', id)
-        .maybeSingle(),
-    ])
-    // Capture the AI-version baseline the first time each message is seen
-    // (additively - never overwrite an already-captured baseline).
+  useEffect(() => {
+    if (!messages.length) return
     setAiBaselines((prev) => {
       let next = prev
-      for (const msg of msgs || []) {
+      for (const msg of messages) {
         if (!(msg.id in next)) {
           if (next === prev) next = { ...prev }
           next[msg.id] = { body: msg.body || '', subject: msg.subject || '' }
@@ -625,32 +617,8 @@ export default function ConsultDetail() {
       }
       return next
     })
-    setMessages(msgs || [])
-    setConversation(convs?.[0] || null)
-    setAppointment(appt || null)
-    if (!silent) setLoading(false)
-    return c
-  }, [id])
+  }, [messages])
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load() }, [load])
-
-  // Attribution status + human-readable "how CaseLift helped" explanation.
-  useEffect(() => {
-    if (!consult?.id) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setAttribution(null)
-      return
-    }
-    let active = true
-    fetchConsultAttribution(consult, messages)
-      .then((a) => active && setAttribution(a))
-      .catch(() => {})
-    return () => { active = false }
-  }, [consult, messages])
-
-  // Background AI analysis: when the consult is only "transcribed", trigger the
-  // analysis once and poll every 5s until it flips to "analyzed".
   const analysisPending = consult?.status === 'transcribed'
   useEffect(() => {
     if (!analysisPending || !consult?.id) return
@@ -658,9 +626,7 @@ export default function ConsultDetail() {
       triggeredRef.current = true
       requestAnalysis(consult.id).catch((e) => console.warn('[analyze] trigger failed:', e?.message || e))
     }
-    const t = setInterval(() => load(true), 5000)
-    return () => clearInterval(t)
-  }, [analysisPending, consult?.id, load])
+  }, [analysisPending, consult?.id])
 
   const transcriptionError = consult?.status === 'transcription_error'
   const [retryingTranscription, setRetryingTranscription] = useState(false)
@@ -682,15 +648,15 @@ export default function ConsultDetail() {
             email: consult.patient_email,
           },
         })
-        await load(true)
+        refreshConsult()
       } else {
         const { error } = await supabase.from('consults').update({ status: 'analyzing', transcript_error: null }).eq('id', consult.id)
-        if (!error) setConsult((prev) => ({ ...prev, status: 'analyzing', transcript_error: null }))
+        if (!error) patchConsult({ status: 'analyzing', transcript_error: null })
       }
     } catch (e) {
       console.warn('[retry] transcription failed:', e?.message || e)
       const { error } = await supabase.from('consults').update({ status: 'transcription_error', transcript_error: e?.message || 'Transcription failed' }).eq('id', consult.id)
-      if (!error) setConsult((prev) => ({ ...prev, status: 'transcription_error', transcript_error: e?.message || 'Transcription failed' }))
+      if (!error) patchConsult({ status: 'transcription_error', transcript_error: e?.message || 'Transcription failed' })
     }
     setRetryingTranscription(false)
   }
@@ -698,14 +664,13 @@ export default function ConsultDetail() {
   async function savePatientInfo(fields) {
     const { error } = await supabase.from('consults').update(fields).eq('id', consult.id)
     if (!error) {
-      setConsult((prev) => ({ ...prev, ...fields }))
+      patchConsult(fields)
       setShowPatientEdit(false)
     }
   }
 
-  // Persist a per-message edit (body/subject/scheduled_for) into local state.
   function handleMessageChange(messageId, patch) {
-    setMessages((prev) => prev.map((x) => (x.id === messageId ? { ...x, ...patch } : x)))
+    patchMessages((prev) => prev.map((x) => (x.id === messageId ? { ...x, ...patch } : x)))
   }
 
   // Save the manually-entered treatment-plan value. An empty input clears it
@@ -717,7 +682,7 @@ export default function ConsultDetail() {
     if (!value || value === consult.treatment_type) return
     setSavingTreatment(true)
     const { error } = await supabase.from('consults').update({ treatment_type: value }).eq('id', consult.id)
-    if (!error) setConsult((prev) => ({ ...prev, treatment_type: value }))
+    if (!error) patchConsult({ treatment_type: value })
     setSavingTreatment(false)
   }
 
@@ -731,7 +696,7 @@ export default function ConsultDetail() {
       : { tx_plan_value: null, tx_plan_value_source: null }
     const { error } = await supabase.from('consults').update(patch).eq('id', consult.id)
     if (!error) {
-      setConsult((prev) => ({ ...prev, ...patch }))
+      patchConsult(patch)
       setEditingTx(false)
     }
     setSavingTx(false)
@@ -962,7 +927,7 @@ export default function ConsultDetail() {
               consult={consult}
               holdHours={holdHours}
               scheduledCount={messages.filter((m) => ['draft', 'scheduled', 'pending'].includes(m.status)).length}
-              onUpdated={(patch) => setConsult((prev) => ({ ...prev, ...patch }))}
+              onUpdated={(patch) => patchConsult(patch)}
             />
           </div>
         </Card>

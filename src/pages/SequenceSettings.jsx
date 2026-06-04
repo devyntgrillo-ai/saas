@@ -41,7 +41,8 @@ export default function SequenceSettings() {
   const [rules, setRules] = useState({ ...DEFAULT_RULES })
   const [saving, setSaving] = useState(false)
   const [flash, setFlash] = useState('')
-  const [activeCount, setActiveCount] = useState(0)
+  const { data: activeCount = 0 } = useSequenceActiveCount(practice?.id)
+  const updatePractice = useUpdatePractice()
 
   useEffect(() => {
     if (!practice) return
@@ -51,25 +52,22 @@ export default function SequenceSettings() {
     setRules(cfg.rules)
   }, [practice])
 
-  useEffect(() => {
-    if (!practice?.id) return
-    let on = true
-    supabase.from('consults').select('id', { count: 'exact', head: true })
-      .eq('practice_id', practice.id).eq('status', 'active')
-      .then(({ count }) => { if (on) setActiveCount(count || 0) })
-    return () => { on = false }
-  }, [practice?.id])
-
   const setRule = (k, v) => setRules((r) => ({ ...r, [k]: v }))
 
   async function save() {
     if (!practice?.id) return
     setSaving(true)
-    const { error } = await supabase.from('practices')
-      .update({ sequence_config: serializeSequenceConfig(touchpoints, rules) })
-      .eq('id', practice.id)
-    setSaving(false)
-    if (!error) { setFlash('Settings saved'); setTimeout(() => setFlash(''), 2500); await refreshProfile() }
+    try {
+      await updatePractice.mutateAsync({
+        practiceId: practice.id,
+        patch: { sequence_config: serializeSequenceConfig(touchpoints, rules) },
+      })
+      setFlash('Settings saved')
+      setTimeout(() => setFlash(''), 2500)
+      await refreshProfile()
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (

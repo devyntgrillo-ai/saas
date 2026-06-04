@@ -3,16 +3,19 @@ import { useNavigate } from 'react-router-dom'
 import { ShieldCheck, Loader2, FileText } from 'lucide-react'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
+import { takeBaaReturnPath } from '../lib/baaReturn'
 import { ensurePracticeLinked } from '../lib/linkPractice'
 import { supabase } from '../lib/supabase'
 
 export default function BAA() {
-  const { user, practice, baaAccepted, refreshProfile, signOut } = useAuth()
+  const { user, practice, refreshProfile, signOut } = useAuth()
   const navigate = useNavigate()
   const [agreed, setAgreed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [linking, setLinking] = useState(false)
+
+  const returnPath = () => takeBaaReturnPath() || '/'
 
   // Recover from signup race: if the auth user has practice_name metadata but
   // no linked practice yet, finish provisioning before showing the BAA form.
@@ -41,12 +44,6 @@ export default function BAA() {
     }
   }, [practice?.id, user, refreshProfile])
 
-  // Already accepted (e.g. landed here directly) - send them in.
-  if (baaAccepted) {
-    navigate('/', { replace: true })
-    return null
-  }
-
   const handleAccept = async () => {
     if (!agreed || !practice?.id) return
     setSaving(true)
@@ -62,7 +59,7 @@ export default function BAA() {
       return
     }
     await refreshProfile()
-    navigate('/', { replace: true })
+    navigate(returnPath(), { replace: true })
   }
 
   const handleSignOut = async () => {

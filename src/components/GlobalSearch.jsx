@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, PhoneCall, MessagesSquare, Loader2, CornerDownLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { globalSearch } from '../lib/search'
+import { useGlobalSearch } from '../lib/queries'
 
 // Cmd/Ctrl+K command palette searching consults + conversations.
 export default function GlobalSearch() {
@@ -10,8 +10,12 @@ export default function GlobalSearch() {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [term, setTerm] = useState('')
-  const [results, setResults] = useState({ consults: [], conversations: [] })
-  const [loading, setLoading] = useState(false)
+  const [debouncedTerm, setDebouncedTerm] = useState('')
+  const { data: results = { consults: [], conversations: [] }, isFetching: loading } = useGlobalSearch(
+    practiceId,
+    debouncedTerm,
+    open,
+  )
   const [activeIdx, setActiveIdx] = useState(0)
   const inputRef = useRef(null)
 
@@ -37,34 +41,19 @@ export default function GlobalSearch() {
     } else {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setTerm('')
-      setResults({ consults: [], conversations: [] })
+      setDebouncedTerm('')
       setActiveIdx(0)
     }
   }, [open])
 
-  // Debounced search.
   useEffect(() => {
     if (!open) return
-    const q = term.trim()
-    if (!q) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setResults({ consults: [], conversations: [] })
-      return
-    }
-    setLoading(true)
-    const t = setTimeout(async () => {
-      try {
-        const r = await globalSearch(practiceId, q)
-        setResults(r)
-        setActiveIdx(0)
-      } catch {
-        setResults({ consults: [], conversations: [] })
-      } finally {
-        setLoading(false)
-      }
+    const t = setTimeout(() => {
+      setDebouncedTerm(term.trim())
+      setActiveIdx(0)
     }, 220)
     return () => clearTimeout(t)
-  }, [term, open, practiceId])
+  }, [term, open])
 
   function go(item) {
     setOpen(false)

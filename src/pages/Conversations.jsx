@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, Fragment } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams, Link } from 'react-router-dom'
 import {
   MessagesSquare,
@@ -36,10 +37,24 @@ import {
   Play,
   Pause,
   Megaphone,
+  Eye,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useRecorder } from '../context/RecorderContext'
 import { supabase } from '../lib/supabase'
+import {
+  useConversationsList,
+  useConversationThread,
+  useConversationContext,
+  useMarkConversationRead,
+  useToggleConversationRead,
+  useUpdateConsultFlags,
+  useUpdateConversationPatient,
+  patchConversationContextConsult,
+  insertConvMessage,
+  useConversationsRealtime,
+  queryKeys,
+} from '../lib/queries'
 import { stripEmDashes } from '../lib/sanitize'
 import { timeAgo, formatDate, formatDuration } from '../lib/consults'
 import { auditConversationViewed, auditPatientAccessed, auditMessageSent } from '../lib/audit'
@@ -48,6 +63,7 @@ import EmptyState from '../components/EmptyState'
 import { formatMoney } from '../lib/analytics'
 import { formatCallTime, useTwilioVoiceDevice } from '../lib/voice'
 import CallMessageBubble from '../components/CallMessageBubble'
+import EmailComposer from '../components/EmailComposer'
 
 function initials(first, last) {
   return `${(first || '?')[0]}${(last || '')[0] || ''}`.toUpperCase()
@@ -208,7 +224,7 @@ function ReadMore({ text }) {
 }
 
 // Right-hand panel: everything the TC needs to reply without leaving the thread.
-function PatientContextPanel({ consult, conv, msgs, loading, paused, onCollapse, onStartRecording, onConsultChange, onConvChange, onAddThreadMessage }) {
+function PatientContextPanel({ consult, conv, msgs, loading, paused, onCollapse, onStartRecording, onConsultChange, onSavePatient, onPatientSaveError, onAddThreadMessage }) {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({})
   const [busy, setBusy] = useState('')
@@ -218,13 +234,22 @@ function PatientContextPanel({ consult, conv, msgs, loading, paused, onCollapse,
   const [note, setNote] = useState('')
 
   useEffect(() => {
+    let first = conv?.patient_first || consult?.patient_first || ''
+    let last = conv?.patient_last || consult?.patient_last || ''
+    if (!first && !last && consult?.patient_name) {
+      const parts = String(consult.patient_name).trim().split(/\s+/)
+      first = parts[0] || ''
+      last = parts.slice(1).join(' ') || ''
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm({
-      patient_first: conv?.patient_first || '', patient_last: conv?.patient_last || '',
-      patient_phone: conv?.patient_phone || '', patient_email: conv?.patient_email || '',
+      patient_first: first,
+      patient_last: last,
+      patient_phone: conv?.patient_phone || consult?.patient_phone || '',
+      patient_email: conv?.patient_email || consult?.patient_email || '',
     })
     setEditing(false)
-  }, [conv?.id])
+  }, [conv?.id, consult?.id])
 
   const analyzing =
     consult &&
@@ -242,15 +267,46 @@ function PatientContextPanel({ consult, conv, msgs, loading, paused, onCollapse,
   const seqPaused = seqStatus === 'paused'
   const converted = consult && (consult.outcome === 'accepted' || ['closed_won', 'recovered'].includes(consult.status))
 
-  const fullName = [conv?.patient_first, conv?.patient_last].filter(Boolean).join(' ') || 'Patient'
+  const fullName =
+    [conv?.patient_first, conv?.patient_last].filter(Boolean).join(' ')
+    || consult?.patient_name
+    || [consult?.patient_first, consult?.patient_last].filter(Boolean).join(' ')
+    || 'Patient'
 
   async function savePatient() {
-    if (!conv?.id) return
+    if (!conv?.id || !onSavePatient) return
     setBusy('patient')
-    const patch = { patient_first: form.patient_first || null, patient_last: form.patient_last || null, patient_phone: form.patient_phone || null, patient_email: form.patient_email || null }
-    await supabase.from('conversations').update(patch).eq('id', conv.id)
-    onConvChange?.(patch)
-    setBusy(''); setEditing(false)
+    const patch = {
+      patient_first: form.patient_first.trim() || null,
+      patient_last: form.patient_last.trim() || null,
+      patient_phone: form.patient_phone.trim() || null,
+      patient_email: form.patient_email.trim() || null,
+    }
+    try {
+      await onSavePatient(patch, conv.consult_id || consult?.id || null)
+      setEditing(false)
+    } catch (e) {
+      onPatientSaveError?.(e?.message || 'Could not save patient details')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  function cancelPatientEdit() {
+    let first = conv?.patient_first || consult?.patient_first || ''
+    let last = conv?.patient_last || consult?.patient_last || ''
+    if (!first && !last && consult?.patient_name) {
+      const parts = String(consult.patient_name).trim().split(/\s+/)
+      first = parts[0] || ''
+      last = parts.slice(1).join(' ') || ''
+    }
+    setForm({
+      patient_first: first,
+      patient_last: last,
+      patient_phone: conv?.patient_phone || consult?.patient_phone || '',
+      patient_email: conv?.patient_email || consult?.patient_email || '',
+    })
+    setEditing(false)
   }
 
   async function toggleSequence() {
@@ -324,13 +380,13 @@ function PatientContextPanel({ consult, conv, msgs, loading, paused, onCollapse,
               {editing ? (
                 <div className="space-y-1.5">
                   <div className="flex gap-1.5">
-                    <input value={form.patient_first} onChange={(e) => setForm((f) => ({ ...f, patient_first: e.target.value }))} placeholder="First" className="w-full rounded border border-gray-200 px-2 py-1 text-sm" />
-                    <input value={form.patient_last} onChange={(e) => setForm((f) => ({ ...f, patient_last: e.target.value }))} placeholder="Last" className="w-full rounded border border-gray-200 px-2 py-1 text-sm" />
+                    <input value={form.patient_first} onChange={(e) => setForm((f) => ({ ...f, patient_first: e.target.value }))} placeholder="First" className="input py-1 text-sm" />
+                    <input value={form.patient_last} onChange={(e) => setForm((f) => ({ ...f, patient_last: e.target.value }))} placeholder="Last" className="input py-1 text-sm" />
                   </div>
-                  <input value={form.patient_phone} onChange={(e) => setForm((f) => ({ ...f, patient_phone: e.target.value }))} placeholder="Phone" className="w-full rounded border border-gray-200 px-2 py-1 text-sm" />
-                  <input value={form.patient_email} onChange={(e) => setForm((f) => ({ ...f, patient_email: e.target.value }))} placeholder="Email" className="w-full rounded border border-gray-200 px-2 py-1 text-sm" />
+                  <input value={form.patient_phone} onChange={(e) => setForm((f) => ({ ...f, patient_phone: e.target.value }))} placeholder="Phone" className="input py-1 text-sm" />
+                  <input value={form.patient_email} onChange={(e) => setForm((f) => ({ ...f, patient_email: e.target.value }))} placeholder="Email" className="input py-1 text-sm" />
                   <div className="flex justify-end gap-2 pt-1">
-                    <button onClick={() => setEditing(false)} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+                    <button type="button" onClick={cancelPatientEdit} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
                     <button onClick={savePatient} disabled={busy === 'patient'} className="text-xs font-semibold text-primary-600 hover:text-primary-700">Save</button>
                   </div>
                 </div>
@@ -505,12 +561,16 @@ export default function Conversations() {
   const { practiceId, practice, user, profile } = useAuth()
   const [searchParams] = useSearchParams()
   const deepLinkId = searchParams.get('c')
-  const [conversations, setConversations] = useState([])
+  const queryClient = useQueryClient()
   const [activeId, setActiveId] = useState(deepLinkId || null)
-  const [thread, setThread] = useState([])
-  const [callRecordings, setCallRecordings] = useState({}) // call_log_id -> { recording_url, ... }
-  const [loadingList, setLoadingList] = useState(true)
-  const [loadingThread, setLoadingThread] = useState(false)
+  const { data: conversations = [], isLoading: loadingList } = useConversationsList(practiceId)
+  const { data: threadData, isLoading: loadingThread } = useConversationThread(practiceId, activeId)
+  const thread = threadData?.messages ?? []
+  const callRecordings = threadData?.callRecordings ?? {}
+  const markReadMutation = useMarkConversationRead()
+  const toggleReadMutation = useToggleConversationRead()
+  const updateConsultFlags = useUpdateConsultFlags()
+  const updateConversationPatient = useUpdateConversationPatient()
   const [draft, setDraft] = useState('')
   const [aiSuggested, setAiSuggested] = useState(false)
   const [channel, setChannel] = useState('sms')
@@ -521,9 +581,10 @@ export default function Conversations() {
   const [suggesting, setSuggesting] = useState(false)
   // Patient-context panel state.
   const { openRecorder } = useRecorder()
-  const [consult, setConsult] = useState(null)
-  const [consultMsgs, setConsultMsgs] = useState([])
-  const [loadingContext, setLoadingContext] = useState(false)
+  const activeConv = conversations.find((c) => c.id === activeId) || null
+  const { data: contextData, isLoading: loadingContext } = useConversationContext(practiceId, activeConv)
+  const consult = contextData?.consult ?? null
+  const consultMsgs = contextData?.consultMsgs ?? []
   const [panelCollapsed, setPanelCollapsed] = useState(() => {
     try { return localStorage.getItem('conv:contextCollapsed') === '1' } catch { return false }
   })
@@ -545,6 +606,8 @@ export default function Conversations() {
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [logCallOpen, setLogCallOpen] = useState(false)
+  const [channelMenuOpen, setChannelMenuOpen] = useState(false)
+  const [emailComposerExpanded, setEmailComposerExpanded] = useState(false)
   const fileInputRef = useRef(null)
 
   // Display name for the practice-side sender, shown above outbound clusters.
@@ -564,126 +627,28 @@ export default function Conversations() {
     })
   }
 
+  useConversationsRealtime(practiceId, activeId)
+
   useEffect(() => {
-    if (!practiceId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setLoadingList(false)
-      return
-    }
-    let active = true
-    ;(async () => {
-      // Embed the linked consult's triage flags (starred/archived) so the list
-      // can sort/filter on them. Falls back to a plain select if those columns
-      // don't exist yet (migration not applied) so the list never breaks.
-      let { data, error } = await supabase
-        .from('conversations')
-        .select('*, consult:consults(id, starred, archived)')
-        .eq('practice_id', practiceId)
-        .order('last_message_at', { ascending: false, nullsFirst: false })
-      if (error) {
-        const res = await supabase
-          .from('conversations')
-          .select('*')
-          .eq('practice_id', practiceId)
-          .order('last_message_at', { ascending: false, nullsFirst: false })
-        data = res.data
-      }
-      if (!active) return
-      const rows = data || []
-      setConversations(rows)
-      setActiveId((cur) => (deepLinkId && rows.some((r) => r.id === deepLinkId) ? deepLinkId : cur || rows[0]?.id || null))
-      setLoadingList(false)
-    })()
-    return () => {
-      active = false
-    }
-  }, [practiceId])
+    if (!conversations.length) return
+    setActiveId((cur) =>
+      deepLinkId && conversations.some((r) => r.id === deepLinkId)
+        ? deepLinkId
+        : cur || conversations[0]?.id || null,
+    )
+  }, [conversations, deepLinkId])
 
   useEffect(() => {
     if (!activeId) return
-    let active = true
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoadingThread(true)
-    supabase
-      .from('conversation_messages')
-      .select('*')
-      .eq('conversation_id', activeId)
-      .order('created_at', { ascending: true })
-      .then(({ data }) => {
-        if (!active) return
-        setThread(data || [])
-        setLoadingThread(false)
-      })
-    // Recordings for this conversation's calls, so call entries can play inline.
-    supabase.from('call_logs').select('id, recording_url, duration_seconds, disposition').eq('conversation_id', activeId)
-      .then(({ data }) => {
-        if (!active) return
-        const map = {}
-        for (const r of data || []) map[r.id] = r
-        setCallRecordings(map)
-      })
     auditConversationViewed(activeId)
     auditPatientAccessed(activeId)
-    const conv = conversations.find((c) => c.id === activeId)
-    if (conv && conv.unread_count > 0) {
-      supabase.from('conversations').update({ unread_count: 0 }).eq('id', activeId).then(() => {
-        setConversations((prev) => prev.map((c) => (c.id === activeId ? { ...c, unread_count: 0 } : c)))
-      })
-    }
-    return () => {
-      active = false
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
 
-  // Live updates when inbound SMS arrives via twilio-inbound webhook.
   useEffect(() => {
-    if (!practiceId) return
-    const channel = supabase
-      .channel(`conversations:${practiceId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'conversation_messages' },
-        (payload) => {
-          const msg = payload.new
-          if (!msg?.conversation_id) return
-          if (msg.conversation_id === activeId) {
-            setThread((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
-          }
-        },
-      )
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'conversations', filter: `practice_id=eq.${practiceId}` },
-        (payload) => {
-          const row = payload.new
-          if (!row?.id) return
-          setConversations((prev) => {
-            if (prev.some((c) => c.id === row.id)) return prev
-            return [row, ...prev].sort(
-              (a, b) => new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0),
-            )
-          })
-        },
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'conversations', filter: `practice_id=eq.${practiceId}` },
-        (payload) => {
-          const row = payload.new
-          if (!row?.id) return
-          setConversations((prev) =>
-            [...prev.map((c) => (c.id === row.id ? { ...c, ...row } : c))].sort(
-              (a, b) => new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0),
-            ),
-          )
-        },
-      )
-      .subscribe()
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [practiceId, activeId])
+    if (!activeId || !activeConv || !(activeConv.unread_count > 0) || !practiceId) return
+    markReadMutation.mutate({ practiceId, conversationId: activeId })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, activeConv?.unread_count, practiceId])
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -698,61 +663,6 @@ export default function Conversations() {
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`
   }, [draft])
 
-  // Load the consult tied to the active conversation's patient (+ its sequence
-  // messages) for the right-hand context panel. Prefer the linked consult_id;
-  // fall back to matching the patient by phone/email within the practice.
-  useEffect(() => {
-    const conv = conversations.find((c) => c.id === activeId)
-    if (!conv || !practiceId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setConsult(null)
-      setConsultMsgs([])
-      setLoadingContext(false)
-      return
-    }
-    let active = true
-    setLoadingContext(true)
-    ;(async () => {
-      let row = null
-      if (conv.consult_id) {
-        const { data } = await supabase.from('consults').select('*').eq('id', conv.consult_id).maybeSingle()
-        row = data || null
-      }
-      if (!row) {
-        const ors = []
-        if (conv.patient_phone) ors.push(`patient_phone.eq.${conv.patient_phone}`)
-        if (conv.patient_email) ors.push(`patient_email.eq.${conv.patient_email}`)
-        if (ors.length) {
-          const { data } = await supabase
-            .from('consults')
-            .select('*')
-            .eq('practice_id', practiceId)
-            .or(ors.join(','))
-            .order('created_at', { ascending: false })
-            .limit(1)
-          row = data?.[0] || null
-        }
-      }
-      if (!active) return
-      setConsult(row)
-      if (row) {
-        const { data: msgs } = await supabase
-          .from('messages')
-          .select('status, channel, scheduled_for, sent_at, send_day')
-          .eq('consult_id', row.id)
-        if (!active) return
-        setConsultMsgs(msgs || [])
-      } else {
-        setConsultMsgs([])
-      }
-      setLoadingContext(false)
-    })()
-    return () => {
-      active = false
-    }
-  }, [activeId, conversations, practiceId])
-
-  const activeConv = conversations.find((c) => c.id === activeId) || null
 
   const voice = useTwilioVoiceDevice({ enabled: Boolean(practiceId && activeConv?.patient_phone) })
 
@@ -795,31 +705,38 @@ export default function Conversations() {
 
   const isNote = channel === 'note'
 
+  function refetchConv() {
+    queryClient.invalidateQueries({ queryKey: queryKeys.conversations(practiceId) })
+    if (activeId) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversationThread(practiceId, activeId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversationContext(practiceId, activeId) })
+    }
+  }
+
+  async function saveConversationPatient(patch, consultId) {
+    if (!practiceId || !activeId) return
+    await updateConversationPatient.mutateAsync({
+      practiceId,
+      conversationId: activeId,
+      consultId,
+      patch,
+    })
+    showToast('Patient details saved')
+  }
+
   async function resumeSequence() {
     if (!consult?.id) return
     const patch = { sequence_status: 'active', sequence_paused_reason: null, sequence_cancelled_at: null, sequence_cancelled_reason: null }
-    await supabase.from('consults').update(patch).eq('id', consult.id)
-    setConsult((prev) => (prev ? { ...prev, ...patch } : prev))
+    await updateConsultFlags.mutateAsync({ consultId: consult.id, patch, practiceId })
     showToast('Sequence resumed')
   }
 
-  // ── Header / row actions ────────────────────────────────────────────────
-  // Insert a conversation_message, retrying without `meta` if that column isn't
-  // present yet (migration not applied) so call/attachment logging never breaks.
-  async function insertConvMessage(row) {
-    let res = await supabase.from('conversation_messages').insert(row).select().single()
-    if (res.error && row.meta && /meta|column/i.test(res.error.message || '')) {
-      const { meta, ...rest } = row // eslint-disable-line no-unused-vars
-      res = await supabase.from('conversation_messages').insert(rest).select().single()
-    }
-    return res
-  }
-
   function bumpConversation(iso, preview) {
-    supabase.from('conversations').update({ last_message_at: iso, ...(preview ? { last_message_preview: preview } : {}) }).eq('id', activeId).then(() => {})
-    setConversations((prev) =>
-      [...prev].map((c) => (c.id === activeId ? { ...c, last_message_at: iso, ...(preview ? { last_message_preview: preview } : {}) } : c))
-        .sort((a, b) => new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0)))
+    supabase
+      .from('conversations')
+      .update({ last_message_at: iso, ...(preview ? { last_message_preview: preview } : {}) })
+      .eq('id', activeId)
+      .then(() => refetchConv())
   }
 
   async function logOutboundVoiceCall({ callSid, seconds: dur }) {
@@ -834,12 +751,9 @@ export default function Conversations() {
         conversation_id: activeId,
         duration_seconds: dur || null,
       }).eq('twilio_call_sid', callSid)
-      if (callLogId && cl?.recording_url) {
-        setCallRecordings((prev) => ({ ...prev, [callLogId]: { id: callLogId, recording_url: cl.recording_url, duration_seconds: dur } }))
-      }
     }
     const body = `📞 Called ${dateLabel}${durLabel}`
-    const { data } = await insertConvMessage({
+    await insertConvMessage({
       conversation_id: activeId,
       direction: 'outbound',
       channel: 'call',
@@ -848,10 +762,8 @@ export default function Conversations() {
       call_log_id: callLogId,
       meta: { kind: 'call', direction: 'outbound', actor: tcName, duration_sec: dur || null },
     })
-    if (data) {
-      setThread((prev) => [...prev, data])
-      bumpConversation(nowIso, body)
-    }
+    bumpConversation(nowIso, body)
+    refetchConv()
   }
 
   // In-app Twilio Voice when configured; otherwise device dialer (tel:).
@@ -887,11 +799,10 @@ export default function Conversations() {
 
   // Mail icon → Mark as read / unread (reuses conversations.unread_count).
   async function toggleRead() {
-    if (!activeConv) return
+    if (!activeConv || !practiceId) return
     const makeUnread = !(activeConv.unread_count > 0)
     const next = makeUnread ? Math.max(1, activeConv.unread_count || 0) : 0
-    setConversations((prev) => prev.map((c) => (c.id === activeId ? { ...c, unread_count: next } : c)))
-    await supabase.from('conversations').update({ unread_count: next }).eq('id', activeId)
+    await toggleReadMutation.mutateAsync({ practiceId, conversationId: activeId, unreadCount: next })
     showToast(makeUnread ? 'Marked as unread' : 'Marked as read')
   }
 
@@ -907,12 +818,12 @@ export default function Conversations() {
       if (up.error) throw up.error
       const { data: pub } = supabase.storage.from('conversation-attachments').getPublicUrl(path)
       const nowIso = new Date().toISOString()
-      const { data, error } = await insertConvMessage({
+      const data = await insertConvMessage({
         conversation_id: activeId, direction: 'outbound', channel, body: file.name, sent_at: nowIso,
         meta: { attachment: { url: pub.publicUrl, name: file.name, type: file.type || ext } },
       })
-      if (error) throw error
-      if (data) { setThread((prev) => [...prev, data]); bumpConversation(nowIso, `📎 ${file.name}`) }
+      bumpConversation(nowIso, `📎 ${file.name}`)
+      refetchConv()
       if (!isNote && channel === 'sms') {
         const target = activeConv?.patient_phone
         if (target) supabase.functions.invoke('twilio-send', { body: { practice_id: practiceId, to: target, body: file.name, media_url: pub.publicUrl, conversation_message_id: data?.id } }).catch(() => {})
@@ -929,11 +840,12 @@ export default function Conversations() {
     if (!activeId) return
     const nowIso = new Date().toISOString()
     const summary = [direction === 'inbound' ? 'Inbound call' : 'Outbound call', outcome, durationMin ? `${durationMin} min` : null].filter(Boolean).join(' · ')
-    const { data } = await insertConvMessage({
+    await insertConvMessage({
       conversation_id: activeId, direction, channel: 'call', body: notes?.trim() || summary, sent_at: nowIso,
       meta: { kind: 'call', direction, actor: direction === 'inbound' ? (activeConv?.patient_first || 'Patient') : tcName, outcome: outcome || null, duration_min: durationMin || null, note: notes?.trim() || null },
     })
-    if (data) { setThread((prev) => [...prev, data]); bumpConversation(nowIso, summary) }
+    bumpConversation(nowIso, summary)
+    refetchConv()
     setLogCallOpen(false)
     showToast('Call logged')
   }
@@ -942,19 +854,14 @@ export default function Conversations() {
   // the active-consult state and the conversation list (for sort-to-top).
   async function toggleStar(consultId, current) {
     if (!consultId) return showToast('No consult linked to star')
-    const next = !current
-    setConsult((prev) => (prev && prev.id === consultId ? { ...prev, starred: next } : prev))
-    setConversations((prev) => prev.map((c) => (c.consult?.id === consultId ? { ...c, consult: { ...c.consult, starred: next } } : c)))
-    await supabase.from('consults').update({ starred: next }).eq('id', consultId)
+    await updateConsultFlags.mutateAsync({ consultId, patch: { starred: !current }, practiceId })
   }
 
   async function archiveActive() {
     const cid = consult?.id
     if (!cid) { setConfirmArchive(false); return showToast('No consult linked') }
     const nextConv = visible.find((c) => c.id !== activeId)
-    await supabase.from('consults').update({ archived: true }).eq('id', cid)
-    setConversations((prev) => prev.map((c) => (c.consult?.id === cid ? { ...c, consult: { ...c.consult, archived: true } } : c)))
-    setConsult((prev) => (prev ? { ...prev, archived: true } : prev))
+    await updateConsultFlags.mutateAsync({ consultId: cid, patch: { archived: true }, practiceId })
     setActiveId(nextConv ? nextConv.id : null)
     setConfirmArchive(false)
     showToast('Conversation archived')
@@ -974,6 +881,21 @@ export default function Conversations() {
     setSnippetsOpen(false)
     setAiSuggested(false)
     taRef.current?.focus()
+  }
+
+  function discardComposerDraft() {
+    setDraft('')
+    setEmailSubject('')
+    setAiSuggested(false)
+    setEmojiOpen(false)
+    setSnippetsOpen(false)
+  }
+
+  function switchComposeChannel(next) {
+    setChannel(next)
+    setChannelMenuOpen(false)
+    setEmojiOpen(false)
+    setSnippetsOpen(false)
   }
 
   async function handleSend(e) {
@@ -1004,14 +926,11 @@ export default function Conversations() {
       .select()
       .single()
     if (!error && data) {
-      setThread((prev) => [...prev, { ...data, status: 'sent' }])
       setDraft('')
       setEmailSubject('')
       setAiSuggested(false)
       auditMessageSent(activeId)
-      // Internal notes are practice-only: never dispatched to the patient.
       if (!isNote) {
-        // Fire the real sender (no-op/queued if Twilio/Mailgun unconfigured).
         const fn = isEmail ? 'mailgun-send' : 'twilio-send'
         const target = isEmail ? activeConv?.patient_email : activeConv?.patient_phone
         if (target) {
@@ -1027,10 +946,8 @@ export default function Conversations() {
           }).catch(() => showToast('Could not send — check messaging settings.'))
         }
       }
-      await supabase.from('conversations').update({ last_message_at: nowIso }).eq('id', activeId)
-      setConversations((prev) =>
-        [...prev].map((c) => (c.id === activeId ? { ...c, last_message_at: nowIso } : c)).sort((a, b) => new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0))
-      )
+      bumpConversation(nowIso)
+      refetchConv()
     }
     setSending(false)
   }
@@ -1053,7 +970,7 @@ export default function Conversations() {
   if (!loadingList && conversations.length === 0) {
     return (
       <div className="h-full space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900">Conversations</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-100">Conversations</h1>
         <EmptyState
           icon={MessagesSquare}
           title="No conversations yet"
@@ -1064,7 +981,7 @@ export default function Conversations() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 overflow-hidden">
+    <div className="flex min-h-0 flex-1 overflow-hidden bg-surface">
       {/* List */}
       <aside className={`${activeId ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-gray-200 bg-white md:w-[300px]`}>
         <div className="shrink-0 border-b border-gray-200 p-3">
@@ -1075,7 +992,7 @@ export default function Conversations() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search"
-                className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="input py-2 pl-9 pr-3 text-sm focus:border-primary focus:ring-primary/20"
               />
             </div>
             <Link
@@ -1472,124 +1389,156 @@ export default function Conversations() {
               )}
             </div>
 
-            <form onSubmit={handleSend} className="shrink-0 border-t border-gray-200 bg-white p-3">
-              {aiSuggested && draft.trim() && (
-                <div className="mb-1.5 flex items-center gap-1.5 px-1 text-[11px] font-medium text-blue-600">
-                  <Sparkles className="h-3 w-3" /> CaseLift recommended
-                </div>
-              )}
-              {channel === 'email' && !activeConv?.patient_email && (
-                <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  This conversation has no patient email — add one on the consult or contact panel before sending.
-                </p>
-              )}
-              <div className="flex flex-col gap-2">
-                {channel === 'email' && (
-                  <input
-                    type="text"
-                    value={emailSubject}
-                    onChange={(e) => setEmailSubject(e.target.value)}
-                    placeholder="Email subject"
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
-                )}
-              <div className="flex items-start gap-2">
-                {/* Channel selector: SMS / Email / Note */}
-                <select
-                  value={channel}
-                  onChange={(e) => setChannel(e.target.value)}
-                  aria-label="Message channel"
-                  className="mt-px shrink-0 rounded-lg border border-gray-200 bg-white px-2 py-2.5 text-xs font-medium text-gray-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                >
-                  <option value="sms">SMS</option>
-                  <option value="email">Email</option>
-                  <option value="note">Note</option>
-                </select>
+            <form onSubmit={handleSend} className="shrink-0 border-t border-gray-200 bg-gray-50/80 p-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,.pdf,.doc,.docx"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAttachment(f); e.target.value = '' }}
+              />
 
-                <textarea
-                  ref={taRef}
-                  value={draft}
-                  onChange={(e) => updateDraft(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e) } }}
-                  rows={2}
-                  placeholder={isNote ? 'Add an internal note (not sent to the patient)' : 'Message'}
-                  className={`min-h-[56px] max-h-32 flex-1 resize-none overflow-y-auto rounded-2xl border px-4 py-2.5 text-[15px] text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 ${isNote ? 'border-amber-300 bg-amber-50/40 focus:border-amber-400 focus:ring-amber-500/20' : 'border-gray-200 bg-white focus:border-blue-400 focus:ring-blue-500/20'}`}
+              {channel === 'email' ? (
+                <EmailComposer
+                  draft={draft}
+                  onDraftChange={updateDraft}
+                  emailSubject={emailSubject}
+                  onEmailSubjectChange={setEmailSubject}
+                  textareaRef={taRef}
+                  onSubmit={handleSend}
+                  sending={sending}
+                  suggesting={suggesting}
+                  aiSuggested={aiSuggested}
+                  onSuggestReply={suggestReply}
+                  onDiscard={discardComposerDraft}
+                  onSwitchChannel={switchComposeChannel}
+                  expanded={emailComposerExpanded}
+                  onToggleExpanded={() => setEmailComposerExpanded((v) => !v)}
+                  channelMenuOpen={channelMenuOpen}
+                  onChannelMenuOpenChange={setChannelMenuOpen}
+                  emojiOpen={emojiOpen}
+                  onEmojiOpenChange={setEmojiOpen}
+                  snippetsOpen={snippetsOpen}
+                  onSnippetsOpenChange={setSnippetsOpen}
+                  quickEmojis={QUICK_EMOJIS}
+                  snippets={SNIPPETS}
+                  onInsertEmoji={insertEmoji}
+                  onFillSnippet={fillSnippet}
+                  onAttachClick={() => fileInputRef.current?.click()}
+                  uploading={uploading}
+                  missingPatientEmail={!activeConv?.patient_email}
+                  patientFirst={activeConv?.patient_first}
+                  practiceDoctor={practice?.doctor_last || practice?.doctor_first}
                 />
-              </div>
-              </div>
+              ) : (
+                <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                  <div className="flex items-center gap-0.5 border-b border-gray-200 px-2 py-1.5">
+                    <button
+                      type="button"
+                      onClick={() => switchComposeChannel('email')}
+                      className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-100"
+                    >
+                      <Mail className="h-4 w-4 shrink-0" />
+                      Email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => switchComposeChannel('sms')}
+                      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition ${channel === 'sms' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                    >
+                      SMS
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => switchComposeChannel('note')}
+                      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition ${isNote ? 'bg-amber-50 text-amber-800' : 'text-gray-600 hover:bg-gray-100'}`}
+                    >
+                      <Eye className="h-4 w-4 shrink-0" />
+                      Internal Comment
+                    </button>
+                  </div>
 
-              {/* Toolbar: placeholders on the left, AI Suggest + Send on the right */}
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <div className="relative flex items-center gap-0.5 text-gray-400">
-                  <button type="button" onClick={() => { setEmojiOpen((v) => !v); setSnippetsOpen(false) }} title="Emoji" aria-label="Emoji" className={`rounded-md p-1.5 transition hover:bg-gray-100 hover:text-gray-600 ${emojiOpen ? 'bg-gray-100 text-gray-600' : ''}`}>
-                    <Smile className="h-4 w-4" />
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*,.pdf,.doc,.docx"
-                    className="hidden"
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAttachment(f); e.target.value = '' }}
-                  />
-                  <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} title="Attach file" aria-label="Attach file" className="rounded-md p-1.5 transition hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50">
-                    {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
-                  </button>
-                  <button type="button" onClick={() => { setSnippetsOpen((v) => !v); setEmojiOpen(false) }} title="Snippets" aria-label="Snippets" className={`inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs transition hover:bg-gray-100 hover:text-gray-600 ${snippetsOpen ? 'bg-gray-100 text-gray-600' : ''}`}>
-                    <ScrollText className="h-4 w-4" /> Snippets
-                  </button>
-
-                  {/* Emoji picker */}
-                  {emojiOpen && (
-                    <div className="absolute bottom-full left-0 z-20 mb-2 grid grid-cols-4 gap-1 rounded-xl border border-gray-200 bg-white p-2 shadow-lg">
-                      {QUICK_EMOJIS.map((e) => (
-                        <button key={e} type="button" onClick={() => insertEmoji(e)} className="flex h-9 w-9 items-center justify-center rounded-lg text-xl transition hover:bg-gray-100">
-                          {e}
-                        </button>
-                      ))}
+                  {aiSuggested && draft.trim() && (
+                    <div className="flex items-center gap-1.5 border-b border-gray-100 bg-blue-50/50 px-4 py-1.5 text-[11px] font-medium text-blue-600">
+                      <Sparkles className="h-3 w-3" /> CaseLift recommended
                     </div>
                   )}
 
-                  {/* Snippets / templates */}
-                  {snippetsOpen && (
-                    <div className="absolute bottom-full left-0 z-20 mb-2 w-72 rounded-xl border border-gray-200 bg-white p-2 shadow-lg">
-                      <div className="flex items-center justify-between px-1 pb-1">
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Templates</span>
-                        <button type="button" onClick={() => setSnippetsOpen(false)} aria-label="Close templates" className="rounded p-0.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600">
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      {SNIPPETS.map((s, i) => (
-                        <button key={i} type="button" onClick={() => fillSnippet(s)} className="block w-full rounded-lg px-2 py-2 text-left text-xs leading-snug text-gray-600 transition hover:bg-gray-50">
-                          {s.replace(/\[name\]/g, activeConv?.patient_first || 'name').replace(/\[doctor\]/g, practice?.doctor_last || 'doctor')}
-                        </button>
-                      ))}
+                  <div className="flex items-start gap-2 p-3">
+                    <textarea
+                      ref={taRef}
+                      value={draft}
+                      onChange={(e) => updateDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (!isNote && e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          handleSend(e)
+                        }
+                      }}
+                      rows={isNote ? 4 : 2}
+                      placeholder={isNote ? 'Add an internal comment (not sent to the patient)' : 'Type a message'}
+                      className={`min-h-[56px] max-h-40 flex-1 resize-none overflow-y-auto rounded-lg border px-4 py-2.5 text-[15px] text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 ${isNote ? 'border-amber-300 bg-amber-50/40 focus:border-amber-400 focus:ring-amber-500/20' : 'border-gray-200 bg-white focus:border-blue-400 focus:ring-blue-500/20'}`}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-2 py-1.5">
+                    <div className="relative flex items-center gap-0.5 text-gray-500">
+                      <button type="button" onClick={() => { setEmojiOpen((v) => !v); setSnippetsOpen(false) }} title="Emoji" aria-label="Emoji" className={`rounded-md p-1.5 transition hover:bg-gray-200/80 hover:text-gray-700 ${emojiOpen ? 'bg-gray-200/80 text-gray-700' : ''}`}>
+                        <Smile className="h-4 w-4" />
+                      </button>
+                      <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || isNote} title="Attach file" aria-label="Attach file" className="rounded-md p-1.5 transition hover:bg-gray-200/80 hover:text-gray-700 disabled:opacity-40">
+                        {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                      </button>
+                      <button type="button" onClick={() => { setSnippetsOpen((v) => !v); setEmojiOpen(false) }} title="Snippets" aria-label="Snippets" className={`rounded-md p-1.5 transition hover:bg-gray-200/80 hover:text-gray-700 ${snippetsOpen ? 'bg-gray-200/80' : ''}`}>
+                        <ScrollText className="h-4 w-4" />
+                      </button>
+                      {emojiOpen && (
+                        <div className="absolute bottom-full left-0 z-20 mb-2 grid grid-cols-4 gap-1 rounded-xl border border-gray-200 bg-white p-2 shadow-lg">
+                          {QUICK_EMOJIS.map((e) => (
+                            <button key={e} type="button" onClick={() => insertEmoji(e)} className="flex h-9 w-9 items-center justify-center rounded-lg text-xl transition hover:bg-gray-100">
+                              {e}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {snippetsOpen && (
+                        <div className="absolute bottom-full left-0 z-20 mb-2 w-72 rounded-xl border border-gray-200 bg-white p-2 shadow-lg">
+                          <div className="flex items-center justify-between px-1 pb-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Templates</span>
+                            <button type="button" onClick={() => setSnippetsOpen(false)} aria-label="Close templates" className="rounded p-0.5 text-gray-400 hover:bg-gray-100">
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          {SNIPPETS.map((s, i) => (
+                            <button key={i} type="button" onClick={() => fillSnippet(s)} className="block w-full rounded-lg px-2 py-2 text-left text-xs leading-snug text-gray-600 hover:bg-gray-50">
+                              {s.replace(/\[name\]/g, activeConv?.patient_first || 'name').replace(/\[doctor\]/g, practice?.doctor_last || 'doctor')}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={suggestReply}
+                        disabled={suggesting || isNote}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {suggesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                        <span className="hidden md:inline">{suggesting ? 'Suggesting…' : 'Ask CaseLift'}</span>
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={!draft.trim() || sending}
+                        className={`inline-flex shrink-0 items-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold !text-white transition disabled:opacity-50 ${isNote ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+                      >
+                        {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        <span className="hidden sm:inline">{isNote ? 'Add Comment' : 'Send'}</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  {/* AI Suggest Reply, outlined */}
-                  <button
-                    type="button"
-                    onClick={suggestReply}
-                    disabled={suggesting}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    {suggesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    <span className="hidden md:inline">{suggesting ? 'CaseLift is suggesting a reply…' : 'Ask CaseLift to reply'}</span>
-                  </button>
-
-                  {/* Send / Add Note */}
-                  <button
-                    type="submit"
-                    disabled={!draft.trim() || sending}
-                    className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold !text-white transition disabled:opacity-50 ${isNote ? 'bg-amber-500 hover:bg-amber-600' : 'bg-primary hover:bg-primary-700'}`}
-                  >
-                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    <span className="hidden sm:inline">{isNote ? 'Add Note' : 'Send'}</span>
-                  </button>
-                </div>
-              </div>
+              )}
 
               {/* Log a call note (manual call event) */}
               {logCallOpen ? (
@@ -1623,9 +1572,15 @@ export default function Conversations() {
           paused={paused}
           onCollapse={togglePanel}
           onStartRecording={() => openRecorder()}
-          onConsultChange={(patch) => setConsult((prev) => (prev ? { ...prev, ...patch } : prev))}
-          onConvChange={(patch) => setConversations((prev) => prev.map((c) => (c.id === activeId ? { ...c, ...patch } : c)))}
-          onAddThreadMessage={(m) => setThread((prev) => [...prev, m])}
+          onConsultChange={(patch) => {
+            if (practiceId && activeId && patch) {
+              patchConversationContextConsult(queryClient, practiceId, activeId, patch)
+            }
+            refetchConv()
+          }}
+          onSavePatient={saveConversationPatient}
+          onPatientSaveError={(msg) => showToast(msg)}
+          onAddThreadMessage={() => refetchConv()}
         />
       )}
 

@@ -4,6 +4,7 @@ import Modal from './Modal'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { recordCloseAttribution } from '../lib/attribution'
+import { useUpdateConsult } from '../lib/queries'
 
 // Cancel all not-yet-sent messages for a consult.
 async function cancelPendingMessages(consultId) {
@@ -25,6 +26,7 @@ function fmtRemaining(ms) {
 // follow-up messages, shown once the activation hold elapses and the sequence is live.
 export default function OutcomeControls({ consult, holdHours = 24, scheduledCount = 0, onUpdated }) {
   const { user } = useAuth()
+  const updateConsult = useUpdateConsult()
   const [busy, setBusy] = useState(false)
   const [showNote, setShowNote] = useState(false)
   const [note, setNote] = useState('')
@@ -64,15 +66,21 @@ export default function OutcomeControls({ consult, holdHours = 24, scheduledCoun
       patch.sequence_status = 'cancelled'
       await cancelPendingMessages(consult.id)
     }
-    const { error } = await supabase.from('consults').update(patch).eq('id', consult.id)
-    // A treatment acceptance triggers attribution: compute caselift_assisted /
-    // caselift_recovered / practice_direct, persist it, and log the event.
-    let extra = {}
-    if (!error && ['accepted', 'closed_won'].includes(value)) {
-      extra = await recordCloseAttribution({ ...consult, ...patch }, { source: 'manual' })
+    try {
+      await updateConsult.mutateAsync({
+        consultId: consult.id,
+        patch,
+        practiceId: consult.practice_id,
+      })
+      let extra = {}
+      if (['accepted', 'closed_won'].includes(value)) {
+        extra = await recordCloseAttribution({ ...consult, ...patch }, { source: 'manual' })
+      }
+      onUpdated?.({ ...patch, ...extra })
+    } catch {
+      /* mutation surfaces via parent refresh */
     }
     setBusy(false)
-    if (!error) onUpdated?.({ ...patch, ...extra })
   }
 
   async function stopSequence() {
@@ -80,9 +88,15 @@ export default function OutcomeControls({ consult, holdHours = 24, scheduledCoun
     setBusy(true)
     // Pause (don't cancel): pending messages stay pending and resume when restarted.
     const patch = { sequence_status: 'paused', sequence_paused_reason: 'manual' }
-    const { error } = await supabase.from('consults').update(patch).eq('id', consult.id)
+    try {
+      await updateConsult.mutateAsync({
+        consultId: consult.id,
+        patch,
+        practiceId: consult.practice_id,
+      })
+      onUpdated?.(patch)
+    } catch { /* noop */ }
     setBusy(false)
-    if (!error) onUpdated?.(patch)
   }
 
   // ── Resolved-state slim banners ───────────────────────────────────────────

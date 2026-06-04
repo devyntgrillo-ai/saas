@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   ResponsiveContainer,
   LineChart, Line,
@@ -8,8 +8,8 @@ import {
 } from 'recharts'
 import { DollarSign, TrendingUp, Target, Award } from 'lucide-react'
 import StatCard from './StatCard'
-import { supabase } from '../lib/supabase'
 import { computeAnalytics, RANGES, OBJECTION_COLORS, formatMoney } from '../lib/analytics'
+import { useAnalytics } from '../lib/queries'
 
 // Resolve the active (white-label) primary color into an rgb() string for charts.
 function usePrimaryColor() {
@@ -47,37 +47,11 @@ const tooltipStyle = {
 
 export default function AnalyticsSection({ practiceId }) {
   const [range, setRange] = useState('6m')
-  const [consults, setConsults] = useState([])
-  const [messages, setMessages] = useState([])
-  const [messageOutcomes, setMessageOutcomes] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data, isLoading: loading } = useAnalytics(practiceId)
+  const consults = data?.consults ?? []
+  const messages = data?.messages ?? []
+  const messageOutcomes = data?.messageOutcomes ?? []
   const primary = usePrimaryColor()
-
-  useEffect(() => {
-    if (!practiceId) return
-    let active = true
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true)
-    Promise.all([
-      supabase.from('consults')
-        .select('id, recording_date, status, outcome, objection_type, case_value')
-        .eq('practice_id', practiceId),
-      supabase.from('messages')
-        .select('consult_id, channel, status, created_at, scheduled_for')
-        .eq('practice_id', practiceId),
-      supabase
-        .from('message_outcomes')
-        .select('message_position, message_channel, replied, closed_after')
-        .eq('practice_id', practiceId),
-    ]).then(([c, m, o]) => {
-      if (!active) return
-      setConsults(c.data || [])
-      setMessages(m.data || [])
-      setMessageOutcomes(o.data || [])
-      setLoading(false)
-    })
-    return () => { active = false }
-  }, [practiceId])
 
   const a = useMemo(
     () => computeAnalytics(consults, messages, range, messageOutcomes),

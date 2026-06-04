@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Building2, Plus, Search, Eye, Loader2, Ban, RotateCcw, Pencil, Send } from 'lucide-react'
 import Modal from '../../components/Modal'
 import { useAdmin } from '../../context/AdminContext'
 import { agencyStatusMeta, PRICING } from '../../lib/admin'
 import { supabase } from '../../lib/supabase'
+import { useAdminAgenciesSaas } from '../../lib/queries'
 import { StatCard, Table, Badge, Avatar, money, stop } from '../../components/admin/ui'
 import { WHOLESALE_PRICE, isActiveSubaccount } from '../../lib/resellerSaas'
 
@@ -30,21 +31,16 @@ export default function Agencies() {
   const [editing, setEditing] = useState(null) // agency being wholesale-rate-edited
   const [busyId, setBusyId] = useState(null)
 
-  // The reseller-SaaS fields (pricing) + active subaccount counts aren't on the
-  // AdminContext roster, so load them directly and merge by id.
-  const [saas, setSaas] = useState({ agencies: [], practices: [], loading: true })
-  const loadSaas = useCallback(async () => {
-    const [agRes, prRes] = await Promise.all([
-      supabase.from('agency_accounts').select('id, active, reseller_client_price, reseller_wholesale_price'),
-      supabase.from('practices').select('id, agency_id, subscription_status').not('agency_id', 'is', null),
-    ])
-    setSaas({ agencies: agRes.data || [], practices: prRes.data || [], loading: false })
-  }, [])
-  useEffect(() => { loadSaas() }, [loadSaas])
+  const { data: saasData, isLoading: saasLoading, refetch: refetchSaas } = useAdminAgenciesSaas()
+  const saas = {
+    agencies: saasData?.agencies || [],
+    practices: saasData?.practices || [],
+    loading: saasLoading,
+  }
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([refresh(), loadSaas()])
-  }, [refresh, loadSaas])
+    await Promise.all([refresh(), refetchSaas()])
+  }, [refresh, refetchSaas])
 
   // Enrich every roster agency with its SaaS economics (full set, unfiltered -
   // totals are computed off this so they don't shift as you search/filter).

@@ -37,6 +37,7 @@ import ReferralsPanel from './Referrals'
 import CancellationFlow from '../components/CancellationFlow'
 import InviteModal from '../components/InviteModal'
 import { usePermissions, ACCESS_LABELS } from '../lib/permissions'
+import { usePracticeTeam, useRemoveTeamMember, useRevokeInvitation } from '../lib/queries'
 import { TREATMENT_TYPES } from '../lib/treatments'
 import {
   PLAN_NAME,
@@ -724,36 +725,18 @@ function BillingPanel({ practice, showSuccess, checkoutLoading, checkoutError, o
 function PracticeTeamPanel({ practice }) {
   const { user } = useAuth()
   const perms = usePermissions()
-  const [members, setMembers] = useState([])
-  const [pending, setPending] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data, isLoading: loading, refetch } = usePracticeTeam(practice?.id)
+  const removeMemberMutation = useRemoveTeamMember()
+  const revokeInviteMutation = useRevokeInvitation()
+  const members = data?.members ?? []
+  const pending = data?.pending ?? []
   const [invite, setInvite] = useState(false)
 
-  async function load() {
-    if (!practice?.id) return
-    setLoading(true)
-    const [m, p] = await Promise.all([
-      supabase.from('users').select('id, email, role').eq('practice_id', practice.id),
-      supabase.from('invitations').select('*').eq('practice_id', practice.id).is('accepted_at', null).order('created_at', { ascending: false }),
-    ])
-    setMembers(m.data || [])
-    setPending(p.data || [])
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [practice?.id])
-
   async function removeMember(id) {
-    setMembers((prev) => prev.filter((m) => m.id !== id))
-    await supabase.from('users').update({ practice_id: null }).eq('id', id)
+    await removeMemberMutation.mutateAsync({ userId: id, practiceId: practice.id })
   }
   async function cancelInvite(id) {
-    setPending((prev) => prev.filter((i) => i.id !== id))
-    await supabase.from('invitations').delete().eq('id', id)
+    await revokeInviteMutation.mutateAsync({ invitationId: id, practiceId: practice.id })
   }
 
   return (
@@ -812,7 +795,7 @@ function PracticeTeamPanel({ practice }) {
       )}
 
       {invite && practice && (
-        <InviteModal scope="practice" practiceId={practice.id} onClose={() => setInvite(false)} onSent={load} />
+        <InviteModal scope="practice" practiceId={practice.id} onClose={() => setInvite(false)} onSent={() => refetch()} />
       )}
     </div>
   )

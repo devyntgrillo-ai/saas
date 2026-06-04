@@ -13,7 +13,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { usePracticeReferrals, useEnsureReferralCode } from '../lib/queries'
 import { formatMoney } from '../lib/analytics'
 import { formatDate } from '../lib/consults'
 import {
@@ -44,9 +44,10 @@ export default function ReferralsPanel({ practice }) {
   const [code, setCode] = useState(practice?.referral_code || '')
   const [ensuring, setEnsuring] = useState(!practice?.referral_code)
   const [copied, setCopied] = useState('')
-  const [referrals, setReferrals] = useState([])
-  const [payouts, setPayouts] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data: referralData, isLoading: loading } = usePracticeReferrals(practice?.id)
+  const referrals = referralData?.referrals || []
+  const payouts = referralData?.payouts || []
+  const ensureCode = useEnsureReferralCode()
 
   // Editable email template.
   const [subject, setSubject] = useState(EMAIL_SUBJECT)
@@ -54,7 +55,6 @@ export default function ReferralsPanel({ practice }) {
 
   const link = useMemo(() => referralLink(code), [code])
 
-  // Generate a referral code on first visit (no-op if one already exists).
   useEffect(() => {
     if (practice?.referral_code) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -63,47 +63,24 @@ export default function ReferralsPanel({ practice }) {
       return
     }
     if (!practice?.id) return
-    let active = true
-    ;(async () => {
-      setEnsuring(true)
-      const { data } = await supabase.rpc('ensure_referral_code')
-      if (!active) return
-      if (data) {
-        setCode(data)
-        refreshProfile()
-      }
-      setEnsuring(false)
-    })()
-    return () => {
-      active = false
-    }
-  }, [practice?.id, practice?.referral_code, refreshProfile])
+    setEnsuring(true)
+    ensureCode.mutate(practice.id, {
+      onSuccess: ({ code }) => {
+        if (code) {
+          setCode(code)
+          refreshProfile()
+        }
+        setEnsuring(false)
+      },
+      onError: () => setEnsuring(false),
+    })
+  }, [practice?.id, practice?.referral_code]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Seed the editable email body once we have a link.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (link) setBody(emailBody(link))
   }, [link])
-
-  // Load this practice's referrals + payout ledger.
-  useEffect(() => {
-    if (!practice?.id) return
-    let active = true
-    ;(async () => {
-      setLoading(true)
-      const [r, p] = await Promise.all([
-        supabase.rpc('my_referrals'),
-        supabase.from('referral_payouts').select('amount, status'),
-      ])
-      if (!active) return
-      setReferrals(r.data || [])
-      setPayouts(p.data || [])
-      setLoading(false)
-    })()
-    return () => {
-      active = false
-    }
-  }, [practice?.id])
 
   const stats = useMemo(() => {
     const activeCount = referrals.filter((x) => x.subscription_status === 'active').length

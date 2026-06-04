@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
   GitBranch,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { useSequences, useToggleSequenceStatus, useUpdateSequenceMessage, queryKeys } from '../lib/queries'
 import { stripEmDashes } from '../lib/sanitize'
 import {
   parseSequenceConfig,
@@ -624,12 +626,13 @@ function SequenceDrawer({ row, practice, onClose, onChanged, onReload }) {
 
 export default function Sequences() {
   const { practiceId, practice } = useAuth()
+  const queryClient = useQueryClient()
+  const { data: rows = [], isLoading: loading, refetch } = useSequences(practiceId)
+  const toggleSeqMutation = useToggleSequenceStatus()
+  const updateMsgMutation = useUpdateSequenceMessage()
   const [drawerRow, setDrawerRow] = useState(null)
-  const [building, setBuilding] = useState(false) // reactivation campaign builder
-  const [tab, setTab] = useState('active') // 'active' | 'settings'
-
-  const [rows, setRows] = useState([]) // raw consults with embedded messages
-  const [loading, setLoading] = useState(true)
+  const [building, setBuilding] = useState(false)
+  const [tab, setTab] = useState('active')
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useState('')
   const [filter, setFilter] = useState('all')
@@ -655,26 +658,10 @@ export default function Sequences() {
     return () => clearTimeout(t)
   }, [search])
 
-  const load = useCallback(async () => {
-    if (!practiceId) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    const { data } = await supabase
-      .from('consults')
-      .select(
-        'id, patient_name, patient_phone, patient_email, outcome, status, created_at, recording_date, duration, treatment_type, objection_type, primary_objection, exit_intent, exit_intent_level, sequence_timing_preset, what_happened, coaching_insight, tc_action, personal_detail, sequence_activated_at, sequence_cancelled_at, sequence_cancelled_reason, sequence_status, sequence_paused_reason, messages(id, status, channel, type, subject, body, scheduled_for, send_day, sent_at, created_at)'
-      )
-      .eq('practice_id', practiceId)
-      .order('created_at', { ascending: false })
-    // One row per consult that has at least one message record.
-    setRows((data || []).filter((c) => (c.messages || []).length > 0))
-    setLoading(false)
-  }, [practiceId])
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load() }, [load])
+  const reload = () => {
+    refetch()
+    queryClient.invalidateQueries({ queryKey: queryKeys.sequences(practiceId) })
+  }
 
   // Reset the visible window whenever the result set changes.
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -728,8 +715,7 @@ export default function Sequences() {
       // Clear the legacy cancellation too so the sender treats it as live again.
       ? { sequence_status: 'active', sequence_paused_reason: null, sequence_cancelled_at: null, sequence_cancelled_reason: null }
       : { sequence_status: 'paused', sequence_paused_reason: 'manual' }
-    await supabase.from('consults').update(patch).eq('id', r.id)
-    setRows((prev) => prev.map((c) => (c.id === r.id ? { ...c, ...patch } : c)))
+    await toggleSeqMutation.mutateAsync({ consultId: r.id, patch, practiceId })
     setBusyId(null)
     setFlash({ id: r.id, text: goActive ? 'Sequence resumed' : 'Sequence paused' })
     setTimeout(() => setFlash((f) => (f && f.id === r.id ? null : f)), 2000)
@@ -924,7 +910,7 @@ export default function Sequences() {
       )}
 
       {drawerRow && (
-        <SequenceDrawer row={drawerRow} practice={practice} onClose={() => setDrawerRow(null)} onChanged={() => { setDrawerRow(null); load() }} onReload={load} />
+        <SequenceDrawer row={drawerRow} practice={practice} onClose={() => setDrawerRow(null)} onChanged={() => { setDrawerRow(null); reload() }} onReload={reload} />
       )}
     </div>
   )

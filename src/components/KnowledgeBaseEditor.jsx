@@ -13,8 +13,8 @@ import {
   DollarSign,
   CalendarClock,
 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import { parseKB, serializeKB, newStoryId, EMPTY_KB } from '../lib/knowledgeBase'
+import { useKnowledgeBase, useSaveKnowledgeBase } from '../lib/queries'
 import { formatDateTime } from '../lib/consults'
 
 function SectionCard({ icon: Icon, title, subtitle, children }) {
@@ -75,41 +75,30 @@ function EditableList({ items, onChange, placeholder, addLabel }) {
 }
 
 export default function KnowledgeBaseEditor({ practiceId }) {
+  const { data, isLoading: loading } = useKnowledgeBase(practiceId)
+  const saveKb = useSaveKnowledgeBase()
   const [kb, setKb] = useState(EMPTY_KB)
-  const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
-  const [saveState, setSaveState] = useState('idle') // idle | saving | saved
+  const [saveState, setSaveState] = useState('idle')
   const lastSavedRef = useRef('')
   const timerRef = useRef(null)
+  const hydratedRef = useRef(false)
 
-  // Load whenever the target practice changes.
   useEffect(() => {
-    let active = true
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true)
-    supabase
-      .from('practices')
-      .select('knowledge_base, knowledge_base_updated_at')
-      .eq('id', practiceId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!active) return
-        const parsed = parseKB(data?.knowledge_base)
-        setKb(parsed)
-        lastSavedRef.current = serializeKB(parsed)
-        setLastUpdated(data?.knowledge_base_updated_at || parsed.updatedAt || null)
-        setSaveState('idle')
-        setLoading(false)
-      })
-    return () => {
-      active = false
-      if (timerRef.current) clearTimeout(timerRef.current)
-    }
+    if (!data || hydratedRef.current) return
+    const parsed = parseKB(data.kb)
+    setKb(parsed)
+    lastSavedRef.current = serializeKB(parsed)
+    setLastUpdated(data.lastUpdated || parsed.updatedAt || null)
+    hydratedRef.current = true
+  }, [data])
+
+  useEffect(() => {
+    hydratedRef.current = false
   }, [practiceId])
 
-  // Debounced auto-save on any change.
   useEffect(() => {
-    if (loading) return
+    if (loading || !hydratedRef.current) return
     const serialized = serializeKB(kb)
     if (serialized === lastSavedRef.current) return
 
@@ -118,24 +107,17 @@ export default function KnowledgeBaseEditor({ practiceId }) {
     timerRef.current = setTimeout(async () => {
       const nowIso = new Date().toISOString()
       const payload = { ...kb, updatedAt: nowIso }
-      const { error } = await supabase
-        .from('practices')
-        .update({
-          knowledge_base: JSON.stringify(payload),
-          knowledge_base_updated_at: nowIso,
-        })
-        .eq('id', practiceId)
-      if (!error) {
+      try {
+        await saveKb.mutateAsync({ practiceId, kb: JSON.stringify(payload) })
         lastSavedRef.current = serialized
         setLastUpdated(nowIso)
         setSaveState('saved')
-      } else {
+      } catch {
         setSaveState('idle')
       }
     }, 900)
     return () => timerRef.current && clearTimeout(timerRef.current)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kb])
+  }, [kb, loading, practiceId, saveKb])
 
   const set = (key, value) => setKb((prev) => ({ ...prev, [key]: value }))
 

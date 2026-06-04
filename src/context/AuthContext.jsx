@@ -6,6 +6,13 @@ import { resetPrimaryColor } from '../lib/whitelabel'
 const AuthContext = createContext({})
 const VIEW_KEY = 'ciq_view_practice'
 
+/** PostgREST may return a many-to-one join as an object or a one-element array. */
+export function normalizePractice(row) {
+  if (row == null) return null
+  if (Array.isArray(row)) return row[0] ?? null
+  return row
+}
+
 // The platform super-admin is granted by email, independent of any DB column,
 // so an unset/incorrect users.access_level can never lock this account out of
 // the admin view (which is how the BAA-gate lockout happened previously).
@@ -17,6 +24,9 @@ export function AuthProvider({ children }) {
 
   const [profile, setProfile] = useState(null) // users row (+ practice + practice.agency)
   const [profileLoading, setProfileLoading] = useState(true)
+  // User id we last finished loadProfile for — prevents a one-frame BAA redirect
+  // between getSession() returning and loadProfile() completing.
+  const [profileResolvedUserId, setProfileResolvedUserId] = useState(null)
 
   const [agency, setAgency] = useState(null) // agency_accounts row the user belongs to
   const [agencyRole, setAgencyRole] = useState(null)
@@ -72,9 +82,28 @@ export function AuthProvider({ children }) {
       .select('*, practice:practices(*, agency:agency_accounts(*))')
       .eq('id', userId)
       .maybeSingle()
-    setProfile(data)
+
+    let row = data
+    if (row?.practice_id) {
+      let practice = normalizePractice(row.practice)
+      // Embedded join can be null (RLS/timing) while practice_id is set — fetch directly.
+      if (!practice) {
+        const { data: practiceRow } = await supabase
+          .from('practices')
+          .select('*, agency:agency_accounts(*)')
+          .eq('id', row.practice_id)
+          .maybeSingle()
+        practice = practiceRow ?? null
+      }
+      row = { ...row, practice }
+    } else if (row?.practice) {
+      row = { ...row, practice: normalizePractice(row.practice) }
+    }
+
+    setProfile(row)
+    setProfileResolvedUserId(userId)
     if (!silent) setProfileLoading(false)
-    return data
+    return row
   }, [])
 
   // --- agency membership ---
@@ -99,13 +128,17 @@ export function AuthProvider({ children }) {
       setProfile(null)
       setAgency(null)
       setAgencyRole(null)
-      setProfileLoading(false)
-      setAgencyLoading(false)
+      setProfileResolvedUserId(null)
+      if (!loading) {
+        setProfileLoading(false)
+        setAgencyLoading(false)
+      }
       return
     }
+    setProfileResolvedUserId(null)
     loadProfile(session.user.id)
     loadAgency(session.user.id)
-  }, [session, loadProfile, loadAgency])
+  }, [session, loading, loadProfile, loadAgency])
 
   // Email-confirmed signups often land with practice_name metadata but no practice_id yet.
   useEffect(() => {
@@ -225,19 +258,19 @@ export function AuthProvider({ children }) {
   }, [session, profile, agency, profileLoading, agencyLoading, accessLevel])
 
   // --- effective practice context (own practice vs. impersonated client) ---
-  const practice = canImpersonate ? activePractice : profile?.practice ?? null
-  const practiceId = canImpersonate ? viewingPracticeId : profile?.practice_id ?? null
+  const profilePractice = normalizePractice(profile?.practice)
   const isImpersonating = canImpersonate && Boolean(viewingPracticeId)
+  const practice = isImpersonating ? activePractice : profilePractice
+  const practiceId = isImpersonating ? viewingPracticeId : profile?.practice_id ?? null
 
-  // On a hard refresh, viewingPracticeId is restored from localStorage
-  // synchronously (so practiceId is truthy at once), but the practice record it
-  // points to is fetched async and is NOT part of profile/agency loading. Until
-  // that fetch resolves, practice is null and onboardingCompleted/baaAccepted
-  // read false — which made route guards bounce impersonating super-admins to
-  // /onboarding (then on to the dashboard), losing the current route on refresh.
-  // Treat the context as still loading until activePractice matches the target.
-  const impersonationPending =
-    canImpersonate && Boolean(viewingPracticeId) && activePracticeFor !== viewingPracticeId
+  // Keep route guards in a loading state until the practice row that drives
+  // baaAccepted / onboardingCompleted is available (profile join or impersonation fetch).
+  const practiceContextPending = isImpersonating
+    ? activePracticeFor !== viewingPracticeId
+    : Boolean(profile?.practice_id) && !profilePractice
+
+  const profileResolved =
+    !session?.user?.id || profileResolvedUserId === session.user.id
 
   const viewPractice = useCallback((id) => {
     localStorage.setItem(VIEW_KEY, id)
@@ -269,6 +302,7 @@ export function AuthProvider({ children }) {
     // profile / practice context
     profile,
     profileLoading,
+    profileResolved,
     practice,
     practiceId,
     baaAccepted: Boolean(practice?.baa_accepted_at),
@@ -279,7 +313,12 @@ export function AuthProvider({ children }) {
     agencyRole,
     isAgencyUser,
     agencyLoading,
-    contextLoading: profileLoading || agencyLoading || impersonationPending,
+    contextLoading:
+      loading ||
+      !profileResolved ||
+      profileLoading ||
+      agencyLoading ||
+      practiceContextPending,
 
     // access
     accessLevel,

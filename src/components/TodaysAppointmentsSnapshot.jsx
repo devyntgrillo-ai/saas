@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { CalendarDays, ArrowRight, Mic, CheckCircle2 } from 'lucide-react'
-import { fetchTodaysAppointments } from '../lib/pms'
+import { useTodaysAppointments } from '../lib/queries'
 import { treatmentLabel, normalizeTreatment } from '../lib/treatments'
 
 // Resolve a friendly treatment label for an appointment row, falling back to a
@@ -19,19 +19,8 @@ function fmtTime(ts) {
 // Compact snapshot of today's consult appointments and whether each has
 // been recorded yet. Fuller controls live on the Schedule / Consults views.
 export default function TodaysAppointmentsSnapshot({ practiceId }) {
-  const [appts, setAppts] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (!practiceId) return
-    let active = true
-    fetchTodaysAppointments(practiceId)
-      .then((rows) => active && setAppts((rows || []).filter((a) => a.is_implant_consult)))
-      .finally(() => active && setLoading(false))
-    return () => {
-      active = false
-    }
-  }, [practiceId])
+  const { data: rows = [], isLoading: loading } = useTodaysAppointments(practiceId)
+  const appts = useMemo(() => rows.filter((a) => a.is_implant_consult), [rows])
 
   return (
     <div className="card">

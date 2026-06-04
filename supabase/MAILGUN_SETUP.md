@@ -1,14 +1,24 @@
 # Mailgun email (production)
 
-All outbound email uses **Mailgun** via edge functions. Set secrets on the hosted project:
+Mailgun is split into **platform** and **patient** mail:
+
+| Audience | Domain | Functions |
+|----------|--------|-----------|
+| Platform (invites, billing, staff digests) | `MAILGUN_DOMAIN` e.g. `mg.heyhope.ai` | `invite-*`, `send-weekly-digest`, etc. |
+| Patient (Conversations, sequences) | Per-practice `office@{sub}.mail.heyhope.ai` | `mailgun-send`, `mailgun-inbound` |
+
+Patient mail setup: **`MAILGUN_PRACTICE_MAIL.md`**.
 
 **Dashboard → Project Settings → Edge Functions → Secrets**
 
 | Secret | Required | Example |
 |--------|----------|---------|
-| `MAILGUN_DOMAIN` | yes | `mg.heyhope.ai` |
+| `MAILGUN_DOMAIN` | yes | `mg.heyhope.ai` (platform only) |
 | `MAILGUN_API_KEY` | yes | `key-...` |
-| `MAILGUN_FROM` | optional | `Hope AI <noreply@mg.heyhope.ai>` |
+| `MAILGUN_FROM` | optional | `CaseLift <noreply@mg.heyhope.ai>` |
+| `MAILGUN_PATIENT_MAIL_ROOT` | yes | `mail.heyhope.ai` |
+| `MAILGUN_PATIENT_MAIL_DOMAIN` | yes | `mail.heyhope.ai` (wildcard domain in Mailgun) |
+| `MAILGUN_WEBHOOK_SIGNING_KEY` | recommended | inbound webhook verify |
 
 Deploy after code changes:
 

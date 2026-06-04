@@ -18,7 +18,7 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 import ResellerSignup from './pages/ResellerSignup'
 import ReferralRedirect from './components/ReferralRedirect'
-import BAA from './pages/BAA'
+import BAAEntry from './components/BAAEntry'
 import Onboarding from './pages/Onboarding'
 import AcceptInvite from './pages/AcceptInvite'
 import AcceptInvitation from './pages/AcceptInvitation'
@@ -99,7 +99,7 @@ export default function App() {
                   </ProtectedRoute>
                 }
               >
-                <Route path="/baa" element={<BAA />} />
+                <Route path="/baa" element={<BAAEntry />} />
                 <Route
                   element={
                     <RequireBAA>

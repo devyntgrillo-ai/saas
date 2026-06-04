@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Megaphone, X, Check, Loader2, ChevronRight, ChevronLeft, Pause, Play, Search, Rocket } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { formatMoney } from '../lib/analytics'
 import { TREATMENT_TYPES, treatmentLabel } from '../lib/treatments'
 import { buildCampaignAngles } from '../lib/reactivation'
+import { useReactivationCampaigns, useReactivationAudience, queryKeys } from '../lib/queries'
 
 const DATE_RANGES = [
   { key: '2w-1m', label: '2 weeks - 1 month', minDays: 14, maxDays: 30 },
@@ -45,19 +47,14 @@ export function ReactivationLaunchButton({ onClick }) {
 // button can live in the header. Reloads the list after a launch.
 export default function ReactivationCampaigns({ building = false, onCloseBuilder, showList = true }) {
   const { practiceId } = useAuth()
-  const [campaigns, setCampaigns] = useState([])
-
-  const loadCampaigns = () => {
-    if (!practiceId) return
-    supabase.from('reactivation_campaigns').select('*').eq('practice_id', practiceId).order('created_at', { ascending: false })
-      .then(({ data }) => setCampaigns(data || []))
-  }
-  useEffect(loadCampaigns, [practiceId])
+  const queryClient = useQueryClient()
+  const { data: campaigns = [], refetch: refetchCampaigns } = useReactivationCampaigns(practiceId)
 
   async function toggle(c) {
     const next = c.status === 'paused' ? 'active' : 'paused'
     await supabase.from('reactivation_campaigns').update({ status: next }).eq('id', c.id)
-    loadCampaigns()
+    refetchCampaigns()
+    queryClient.invalidateQueries({ queryKey: queryKeys.reactivation(practiceId) })
   }
 
   return (
@@ -82,7 +79,7 @@ export default function ReactivationCampaigns({ building = false, onCloseBuilder
         </div>
       )}
 
-      {building && <CampaignBuilder practiceId={practiceId} onClose={onCloseBuilder} onLaunched={() => { onCloseBuilder?.(); loadCampaigns() }} />}
+      {building && <CampaignBuilder practiceId={practiceId} onClose={onCloseBuilder} onLaunched={() => { onCloseBuilder?.(); refetchCampaigns() }} />}
     </>
   )
 }
@@ -92,8 +89,6 @@ function CampaignBuilder({ practiceId, onClose, onLaunched }) {
   const [range, setRange] = useState('6-12m')
   const [objection, setObjection] = useState('all')
   const [treatment, setTreatment] = useState('all')
-  const [matches, setMatches] = useState([])
-  const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState(() => new Set())
   const [search, setSearch] = useState('')
   const [angle, setAngle] = useState('price_lock')
@@ -102,30 +97,18 @@ function CampaignBuilder({ practiceId, onClose, onLaunched }) {
   const [start, setStart] = useState(tomorrow())
   const [busy, setBusy] = useState(false)
 
-  const rangeMeta = DATE_RANGES.find((r) => r.key === range)
+  const rangeMeta = DATE_RANGES.find((r) => r.key === range) || DATE_RANGES[3]
+  const audienceFilters = useMemo(
+    () => ({ minDays: rangeMeta.minDays, maxDays: rangeMeta.maxDays, objection, treatment }),
+    [rangeMeta.minDays, rangeMeta.maxDays, objection, treatment],
+  )
+  const { data: matches = [], isLoading: loading } = useReactivationAudience(practiceId, audienceFilters)
 
-  // Fetch matching consults whenever the filter changes (steps 1-2).
   useEffect(() => {
-    if (!practiceId) return
-    let on = true
+    if (loading) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true)
-    const max = new Date(Date.now() - rangeMeta.maxDays * 86400000).toISOString()
-    const min = new Date(Date.now() - rangeMeta.minDays * 86400000).toISOString()
-    let q = supabase.from('consults')
-      .select('id, patient_name, patient_phone, patient_email, objection_type, treatment_type, case_value, created_at, recording_date, outcome, sequence_activated_at, sequence_cancelled_at')
-      .eq('practice_id', practiceId).gte('created_at', max).lte('created_at', min)
-    if (objection !== 'all') q = q.eq('objection_type', objection)
-    if (treatment !== 'all') q = q.eq('treatment_type', treatment)
-    q.then(({ data }) => {
-      if (!on) return
-      const rows = (data || []).map((c) => ({ ...c, inActive: Boolean(c.sequence_activated_at) && !c.sequence_cancelled_at && c.outcome === 'pending' }))
-      setMatches(rows)
-      setSelected(new Set(rows.filter((r) => !r.inActive).map((r) => r.id)))
-      setLoading(false)
-    })
-    return () => { on = false }
-  }, [practiceId, range, objection, treatment, rangeMeta.maxDays, rangeMeta.minDays])
+    setSelected(new Set(matches.filter((r) => !r.inActive).map((r) => r.id)))
+  }, [matches, loading, audienceFilters])
 
   const eligible = matches.filter((m) => !m.inActive)
   const visibleMatches = useMemo(() => {

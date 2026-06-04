@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, UserCog, Ban, Loader2, Check, MessageSquare, Plug, Search, RefreshCw, Link2 } from 'lucide-react'
 import Modal from '../../components/Modal'
@@ -7,6 +8,7 @@ import { smsStatusMeta } from '../../lib/admin'
 import { statusMeta as subStatusMeta } from '../../lib/billing'
 import { timeAgo } from '../../lib/consults'
 import { supabase } from '../../lib/supabase'
+import { useAdminPracticeConsults, useAdminPracticePms, queryKeys } from '../../lib/queries'
 import {
   searchSikkaPractice, saveSikkaConfig, testSyncForPractice, fetchUnlinkedRegistrations, linkRegistration,
 } from '../../lib/pms'
@@ -16,25 +18,24 @@ const ADMIN_PMS_TYPES = ['dentrix', 'eaglesoft', 'curve', 'open_dental', 'carest
 
 // Admin-only Sikka linking for a practice (practices never see this).
 function PmsConfigSection({ practiceId }) {
+  const queryClient = useQueryClient()
+  const { data, refetch } = useAdminPracticePms(practiceId)
   const [row, setRow] = useState(null)
   const [results, setResults] = useState(null)
   const [searching, setSearching] = useState(false)
   const [testing, setTesting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [flash, setFlash] = useState('')
-  const [regs, setRegs] = useState([])
+  const regs = data?.regs || []
 
-  const reload = async () => {
-    const { data } = await supabase
-      .from('practices')
-      .select('id, sikka_practice_id, pms_type, sikka_connected, pms_last_synced_at')
-      .eq('id', practiceId)
-      .maybeSingle()
-    setRow(data || {})
-    setRegs(await fetchUnlinkedRegistrations())
-  }
-  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(() => { reload() }, [practiceId])
+  useEffect(() => {
+    if (data?.row) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRow(data.row)
+    }
+  }, [data])
+
+  const reload = () => queryClient.invalidateQueries({ queryKey: queryKeys.admin.practicePms(practiceId) })
 
   function note(m) { setFlash(m); setTimeout(() => setFlash(''), 4000) }
   const set = (k, v) => setRow((r) => ({ ...r, [k]: v }))
@@ -57,13 +58,13 @@ function PmsConfigSection({ practiceId }) {
   }
   async function testSync() {
     setTesting(true)
-    try { const r = await testSyncForPractice(practiceId); note(`Sync ran - ${r.synced ?? 0} appointment(s) returned.`); await reload() }
+    try { const r = await testSyncForPractice(practiceId); note(`Sync ran - ${r.synced ?? 0} appointment(s) returned.`); reload() }
     catch (e) { note(e.message || 'Sync failed.') } finally { setTesting(false) }
   }
   async function link(reg) {
     await linkRegistration(reg.id, practiceId, reg.sikka_practice_id)
     note(`Linked ${reg.practice_name || reg.sikka_practice_id} to this practice.`)
-    await reload()
+    reload()
   }
 
   if (!row) return null
@@ -152,27 +153,10 @@ export default function PracticeDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { data, refresh, impersonatePractice } = useAdmin()
-  const [consults, setConsults] = useState(null)
   const [confirmCancel, setConfirmCancel] = useState(false)
 
   const practice = data.practices.find((p) => String(p.id) === String(id))
-
-  useEffect(() => {
-    if (!practice || String(practice.id).startsWith('demo-')) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setConsults([])
-      return
-    }
-    let on = true
-    supabase
-      .from('consults')
-      .select('id, status, recording_date, created_at, primary_objection')
-      .eq('practice_id', practice.id)
-      .order('created_at', { ascending: false })
-      .limit(10)
-      .then(({ data: d }) => on && setConsults(d || []))
-    return () => { on = false }
-  }, [practice])
+  const { data: consults, isLoading: consultsLoading } = useAdminPracticeConsults(practice?.id)
 
   if (!practice) {
     return (
@@ -241,12 +225,12 @@ export default function PracticeDetail() {
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-white">Recent consults</h2>
-        {consults === null ? (
+        {consultsLoading ? (
           <div className="card flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-slate-500" /></div>
         ) : (
           <Table
             head={['Date', 'Status', 'Primary objection']}
-            rows={(consults.length ? consults : demoConsults(practice)).map((c) => [
+            rows={((consults || []).length ? consults : demoConsults(practice)).map((c) => [
               c.recording_date || (c.created_at ? new Date(c.created_at).toLocaleDateString() : '-'),
               <Badge>{c.status || 'analyzed'}</Badge>,
               c.primary_objection || '-',

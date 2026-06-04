@@ -1,14 +1,19 @@
 // ============================================================================
-// mailgun-send - outbound patient / transactional email via Mailgun.
-// Called from Conversations (user JWT), send-due-messages, reactivation drip
-// (service role). Respects practice email_enabled, from name, and reply-to.
+// mailgun-send - outbound PATIENT email via per-practice Mailgun subdomain.
+// Conversations, send-due-messages, reactivation drip. Platform mail (invites,
+// digests) uses sendMailgunMessage with audience platform in other functions.
 //
-// Secrets: MAILGUN_DOMAIN, MAILGUN_API_KEY; optional MAILGUN_FROM.
+// Secrets: MAILGUN_API_KEY, MAILGUN_PATIENT_MAIL_DOMAIN, MAILGUN_PATIENT_MAIL_ROOT
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { resolveBrand } from "../_shared/brand.ts";
-import { conversationReplyAddress, sendMailgunMessage } from "../_shared/mailgun.ts";
+import { isPatientMailConfigured, sendMailgunMessage } from "../_shared/mailgun.ts";
+import {
+  conversationReplyOnPracticeHost,
+  ensurePracticeMailSubdomain,
+  resolveConversationForEmail,
+} from "../_shared/mailgun-practice.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -38,6 +43,13 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   try {
+    if (!isPatientMailConfigured()) {
+      return json({
+        error: "Patient email is not configured. Set MAILGUN_API_KEY and MAILGUN_PATIENT_MAIL_DOMAIN.",
+        code: "mailgun_not_configured",
+      }, 503);
+    }
+
     const payload = (await req.json()) as Body;
     const to = String(payload.to || "").trim();
     const body = String(payload.body || "").trim();
@@ -58,7 +70,6 @@ Deno.serve(async (req: Request) => {
     const authHeader = req.headers.get("Authorization") || "";
     const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    // Match env secret exactly, or a valid service_role JWT (legacy vs sb_secret templates).
     const isServiceRole = Boolean(bearer && (bearer === serviceKey || jwtRole(bearer) === "service_role"));
     if (!isServiceRole && authHeader) {
       const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
@@ -72,7 +83,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: pr } = await admin
       .from("practices")
-      .select("*, agency:agency_accounts(*)")
+      .select("id, name, email_enabled, email_from_name, email_reply_to, mail_subdomain, mail_from_local_part, agency:agency_accounts(*)")
       .eq("id", practiceId)
       .maybeSingle();
     if (!pr) return json({ error: "Practice not found." }, 404);
@@ -80,11 +91,10 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Email is disabled for this practice.", code: "email_disabled" }, 403);
     }
 
+    const mail = await ensurePracticeMailSubdomain(admin, pr);
     const brand = await resolveBrand(admin, pr);
     const fromName = pr.email_from_name || brand.companyName || pr.name || "Hope AI";
-    let replyTo = pr.email_reply_to || brand.supportEmail || null;
 
-    // Route patient replies back into Conversations via mailgun-inbound.
     let conversationId: string | null = null;
     if (payload.conversation_message_id) {
       const { data: cm } = await admin
@@ -93,14 +103,29 @@ Deno.serve(async (req: Request) => {
         .eq("id", payload.conversation_message_id)
         .maybeSingle();
       conversationId = cm?.conversation_id || null;
+    } else if (payload.consult_id) {
+      conversationId = await resolveConversationForEmail(admin, practiceId, payload.consult_id, to);
     }
-    const inboundReply = conversationId ? conversationReplyAddress(conversationId) : null;
-    if (inboundReply) replyTo = inboundReply;
+
+    const inboundReply = conversationId
+      ? conversationReplyOnPracticeHost(conversationId, mail.hostname)
+      : null;
+    const replyTo = inboundReply || pr.email_reply_to || brand.supportEmail || null;
 
     const text = body;
     const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.6;color:#111827;white-space:pre-wrap">${escapeHtml(body)}</div>`;
 
-    const result = await sendMailgunMessage({ to, subject, text, html, fromName, replyTo });
+    const result = await sendMailgunMessage({
+      to,
+      subject,
+      text,
+      html,
+      fromName,
+      replyTo,
+      fromAddress: mail.fromAddress,
+      audience: "patient",
+      mailgunDomain: mail.apiDomain,
+    });
     if (!result.sent) {
       return json({ error: result.reason, detail: result.detail }, result.reason === "mailgun_not_configured" ? 503 : 502);
     }
@@ -120,6 +145,8 @@ Deno.serve(async (req: Request) => {
           delivery_status: "sent",
           subject: subject || null,
           reply_to: inboundReply || replyTo,
+          from_address: mail.fromAddress,
+          mail_subdomain: mail.subdomain,
         },
       }).eq("id", payload.conversation_message_id);
 
@@ -131,7 +158,12 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    return json({ ok: true, mailgun_id: result.id });
+    return json({
+      ok: true,
+      mailgun_id: result.id,
+      from_address: mail.fromAddress,
+      mail_subdomain: mail.subdomain,
+    });
   } catch (e) {
     console.error("mailgun-send error:", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);

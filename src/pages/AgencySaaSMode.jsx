@@ -17,6 +17,7 @@ import StatCard from '../components/StatCard'
 import { Skeleton } from '../components/Skeleton'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { useAgencySaasClients } from '../lib/queries'
 import {
   WHOLESALE_PRICE,
   MIN_CLIENT_PRICE,
@@ -70,27 +71,7 @@ export default function AgencySaaSMode() {
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [agency, seeded])
 
-  // --- Client subaccounts ------------------------------------------------------
-  const [clients, setClients] = useState([])
-  const [clientsLoading, setClientsLoading] = useState(true)
-
-  useEffect(() => {
-    if (!agency?.id) return
-    let active = true
-    ;(async () => {
-      const { data } = await supabase
-        .from('practices')
-        .select('id, name, created_at, subscription_status, trial_ends_at')
-        .eq('agency_id', agency.id)
-        .order('created_at', { ascending: false })
-      if (!active) return
-      setClients(data || [])
-      setClientsLoading(false)
-    })()
-    return () => {
-      active = false
-    }
-  }, [agency?.id])
+  const { data: clients = [], isLoading: clientsLoading } = useAgencySaasClients(agency?.id)
 
   // --- Derived -----------------------------------------------------------------
   const priceNum = Number(price) || 0

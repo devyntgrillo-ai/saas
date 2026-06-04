@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, Navigate, useSearchParams } from 'react-router-dom'
 import {
   Building2,
@@ -24,43 +24,8 @@ import { useBranding } from '../context/BrandingContext'
 import { applyPrimaryColor, resetPrimaryColor } from '../lib/whitelabel'
 import { supabase } from '../lib/supabase'
 import { timeAgo } from '../lib/consults'
-import { fetchRecordingRate, rateColor } from '../lib/pms'
-
-function startOfMonthISODate() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
-}
-
-async function loadMetrics(practiceId) {
-  const monthStart = startOfMonthISODate()
-  const [consults, followUps, active, lastConsult, lastMessage] = await Promise.all([
-    supabase.from('consults').select('id', { count: 'exact', head: true })
-      .eq('practice_id', practiceId).gte('recording_date', monthStart),
-    supabase.from('messages').select('id', { count: 'exact', head: true })
-      .eq('practice_id', practiceId).in('status', ['sent', 'opened', 'replied']),
-    supabase.from('consults').select('id', { count: 'exact', head: true })
-      .eq('practice_id', practiceId).eq('status', 'active'),
-    supabase.from('consults').select('created_at').eq('practice_id', practiceId)
-      .order('created_at', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('messages').select('created_at').eq('practice_id', practiceId)
-      .order('created_at', { ascending: false }).limit(1).maybeSingle(),
-  ])
-  const times = [lastConsult.data?.created_at, lastMessage.data?.created_at].filter(Boolean)
-  const lastActivity = times.length ? times.sort().at(-1) : null
-  let recordingRate = null
-  try {
-    recordingRate = (await fetchRecordingRate(practiceId, 4)).current
-  } catch {
-    /* non-critical */
-  }
-  return {
-    consults: consults.count || 0,
-    followUps: followUps.count || 0,
-    active: active.count || 0,
-    lastActivity,
-    recordingRate,
-  }
-}
+import { rateColor } from '../lib/pms'
+import { useAgencyOverview } from '../lib/queries'
 
 function AddPracticeModal({ agencyId, onClose, onAdded }) {
   const [form, setForm] = useState({ practice_name: '', doctor_first: '', doctor_last: '', email: '' })
@@ -296,9 +261,9 @@ export default function Agency() {
   // from any agency route and deep-links work.
   const [searchParams] = useSearchParams()
   const tab = searchParams.get('tab') || 'overview'
-  const [practices, setPractices] = useState([])
-  const [metrics, setMetrics] = useState({})
-  const [loading, setLoading] = useState(true)
+  const { data: overview, isLoading: loading, refetch: refetchOverview } = useAgencyOverview(agency?.id)
+  const practices = overview?.practices || []
+  const metrics = overview?.metrics || {}
   const [showAdd, setShowAdd] = useState(false)
 
   // Agency settings form
@@ -331,29 +296,6 @@ export default function Agency() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agency?.id])
-
-  const loadPractices = useCallback(async () => {
-    if (!agency?.id) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    const { data } = await supabase
-      .from('practices')
-      .select('id, name, doctor_first, doctor_last, baa_accepted_at')
-      .eq('agency_id', agency.id)
-      .order('created_at', { ascending: true })
-    const rows = data || []
-    setPractices(rows)
-    const entries = await Promise.all(rows.map(async (p) => [p.id, await loadMetrics(p.id)]))
-    setMetrics(Object.fromEntries(entries))
-    setLoading(false)
-  }, [agency?.id])
-
-  // Load the practice list and per-practice metrics on mount / agency change.
-  useEffect(() => {
-    loadPractices() // eslint-disable-line react-hooks/set-state-in-effect
-  }, [loadPractices])
 
   function impersonate(p) {
     viewPractice(p.id)
@@ -684,7 +626,7 @@ export default function Agency() {
         <AddPracticeModal
           agencyId={agency?.id}
           onClose={() => setShowAdd(false)}
-          onAdded={loadPractices}
+          onAdded={refetchOverview}
         />
       )}
     </div>

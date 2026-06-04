@@ -1,49 +1,31 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { Plus, Trash2, Loader2, Mail, Clock } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions, ACCESS_LABELS } from '../lib/permissions'
 import { supabase } from '../lib/supabase'
+import { useAgencyTeam } from '../lib/queries'
 import InviteModal from '../components/InviteModal'
 import { formatDateTime } from '../lib/consults'
 
 export default function AgencyTeam() {
   const { agency, isAgencyUser, contextLoading } = useAuth()
   const perms = usePermissions()
-  const [members, setMembers] = useState([])
-  const [pending, setPending] = useState([])
-  const [practices, setPractices] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data, isLoading: loading, refetch } = useAgencyTeam(agency?.id)
+  const members = data?.members ?? []
+  const pending = data?.pending ?? []
+  const practices = data?.practices ?? []
   const [invite, setInvite] = useState(false)
-
-  const load = useCallback(async () => {
-    if (!agency?.id) return
-    setLoading(true)
-    const [m, p, pr] = await Promise.all([
-      supabase.from('agency_members').select('id, role, accessible_practice_ids, user_id, user:users(email)').eq('agency_id', agency.id),
-      supabase.from('invitations').select('*').eq('agency_id', agency.id).is('accepted_at', null).order('created_at', { ascending: false }),
-      supabase.from('practices').select('id, name').eq('agency_id', agency.id).order('name'),
-    ])
-    setMembers(m.data || [])
-    setPending(p.data || [])
-    setPractices(pr.data || [])
-    setLoading(false)
-  }, [agency?.id])
-
-  // Initial load + refetch whenever the agency changes.
-  useEffect(() => {
-    load() // eslint-disable-line react-hooks/set-state-in-effect
-  }, [load])
 
   if (!contextLoading && !isAgencyUser) return <Navigate to="/" replace />
 
   async function removeMember(id) {
-    setMembers((prev) => prev.filter((m) => m.id !== id))
     await supabase.from('agency_members').delete().eq('id', id)
+    refetch()
   }
   async function cancelInvite(id) {
-    setPending((prev) => prev.filter((i) => i.id !== id))
     await supabase.from('invitations').delete().eq('id', id)
+    refetch()
   }
 
   return (
@@ -116,7 +98,7 @@ export default function AgencyTeam() {
       )}
 
       {invite && (
-        <InviteModal scope="agency" agencyId={agency.id} practices={practices} onClose={() => setInvite(false)} onSent={load} />
+        <InviteModal scope="agency" agencyId={agency.id} practices={practices} onClose={() => setInvite(false)} onSent={() => refetch()} />
       )}
     </div>
   )

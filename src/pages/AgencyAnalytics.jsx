@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import {
   DollarSign,
@@ -19,7 +19,7 @@ import {
   Tooltip,
 } from 'recharts'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { useAgencyAnalytics } from '../lib/queries'
 import { formatMoney } from '../lib/analytics'
 import { isWonStatus } from '../lib/consults'
 import StatCard from '../components/StatCard'
@@ -42,47 +42,11 @@ const isWon = (c) => isWonStatus(c.status)
 
 export default function AgencyAnalytics() {
   const { agency, isAgencyUser, agencyLoading } = useAuth()
-  const [practices, setPractices] = useState([])
-  const [consults, setConsults] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const { data: agencyData, isLoading: loading, error, refetch } = useAgencyAnalytics(agency?.id)
+  const practices = agencyData?.practices ?? []
+  const consults = agencyData?.consults ?? []
 
-  const load = useCallback(async () => {
-    if (!agency?.id) return
-    setLoading(true)
-    setError(null)
-    try {
-      const { data: ps, error: pe } = await supabase
-        .from('practices')
-        .select('id, name')
-        .eq('agency_id', agency.id)
-      if (pe) throw pe
-      const ids = (ps || []).map((p) => p.id)
-      setPractices(ps || [])
-      if (ids.length === 0) {
-        setConsults([])
-        setLoading(false)
-        return
-      }
-      const { data: cs, error: ce } = await supabase
-        .from('consults')
-        .select('id, practice_id, recording_date, status, case_value')
-        .in('practice_id', ids)
-      if (ce) throw ce
-      setConsults(cs || [])
-    } catch (e) {
-      setError(e)
-    } finally {
-      setLoading(false)
-    }
-  }, [agency?.id])
-
-  // Load analytics on mount / agency change.
-  useEffect(() => {
-    load() // eslint-disable-line react-hooks/set-state-in-effect
-  }, [load])
-
-  const data = useMemo(() => {
+  const metrics = useMemo(() => {
     const now = new Date()
     const thisKey = monthKey(now)
     const byPractice = new Map(practices.map((p) => [p.id, { ...p, consults: 0, won: 0, recoveredMonth: 0, lastDate: null }]))
@@ -171,7 +135,7 @@ export default function AgencyAnalytics() {
           <Skeleton className="h-72" />
         </>
       ) : error ? (
-        <ErrorState message={friendlyError(error)} onRetry={load} />
+        <ErrorState message={friendlyError(error)} onRetry={() => refetch()} />
       ) : practices.length === 0 ? (
         <EmptyState
           icon={Building2}
@@ -183,10 +147,10 @@ export default function AgencyAnalytics() {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="Recovered this month" value={formatMoney(data.totalRecoveredMonth)} icon={DollarSign} accent="green" />
-            <StatCard label="Total consults" value={data.totalConsults} icon={PhoneCall} accent="primary" />
-            <StatCard label="Avg close rate" value={`${data.avgCloseRate}%`} icon={Target} accent="violet" />
-            <StatCard label="Top practice" value={data.top?.name || '-'} icon={Trophy} accent="amber" />
+            <StatCard label="Recovered this month" value={formatMoney(metrics.totalRecoveredMonth)} icon={DollarSign} accent="green" />
+            <StatCard label="Total consults" value={metrics.totalConsults} icon={PhoneCall} accent="primary" />
+            <StatCard label="Avg close rate" value={`${metrics.avgCloseRate}%`} icon={Target} accent="violet" />
+            <StatCard label="Top practice" value={metrics.top?.name || '-'} icon={Trophy} accent="amber" />
           </div>
 
           {/* Revenue recovered trend */}
@@ -196,7 +160,7 @@ export default function AgencyAnalytics() {
             </h2>
             <div className="mt-4 h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data.trend} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                <AreaChart data={metrics.trend} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
                   <defs>
                     <linearGradient id="agRev" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
@@ -218,13 +182,13 @@ export default function AgencyAnalytics() {
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-300">
               <AlertTriangle className="h-4 w-4 text-amber-400" /> Practices that need attention
             </h2>
-            {data.needsAttention.length === 0 ? (
+            {metrics.needsAttention.length === 0 ? (
               <div className="card px-5 py-8 text-center text-sm text-slate-500">
                 All practices are active. Nothing needs attention right now.
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {data.needsAttention.map((p) => (
+                {metrics.needsAttention.map((p) => (
                   <div key={p.id} className="card border-amber-500/20 p-4">
                     <div className="flex items-center justify-between">
                       <p className="truncate font-semibold text-slate-100">{p.name}</p>

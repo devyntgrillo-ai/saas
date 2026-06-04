@@ -65,9 +65,13 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
         if (zipMatch) setAreaCode(zipMatch[1].slice(0, 3))
         if (data.twilio_phone_number && data.a2p_brand_status === 'approved') {
           setStep(5)
-        } else if (data.twilio_phone_number && (data.a2p_brand_status === 'pending' || data.a2p_campaign_status === 'pending')) {
+        } else if (
+          data.twilio_phone_number &&
+          (data.a2p_brand_status === 'pending' || data.a2p_campaign_status === 'pending')
+        ) {
           setStep(4)
         } else if (data.twilio_phone_number) {
+          // number_only, failed, or partial — business info + resubmit
           setStep(3)
         }
         const stateMatch = addr.match(/\b([A-Z]{2})\s+\d{5}\b/)

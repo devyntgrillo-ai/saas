@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 import {
   Clock,
   Award,
@@ -12,21 +12,17 @@ import { Link, Navigate } from 'react-router-dom'
 import AILearningFeed from '../components/AILearningFeed'
 import TodaysAppointmentsSnapshot from '../components/TodaysAppointmentsSnapshot'
 import { SkeletonStatGrid } from '../components/Skeleton'
-// recharts-backed cards: lazy so the Dashboard shell paints immediately and the
-// charts (vendor-charts chunk) stream in without blocking initial load.
 const RecordingRateCard = lazy(() => import('../components/RecordingRateCard'))
 const PerformanceInsights = lazy(() => import('../components/PerformanceInsights'))
 import ErrorState, { friendlyError } from '../components/ErrorState'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
-import { fetchNetworkComparison } from '../lib/insights'
 import { formatMoney } from '../lib/analytics'
 import {
   computeAttributedProduction,
   countSentMessages,
   closeRateForRows,
-  fetchDashboardExtras,
 } from '../lib/dashboard'
+import { useDashboard, useNetworkComparison } from '../lib/queries'
 
 function parseDate(d) {
   if (!d) return null
@@ -38,7 +34,7 @@ const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
 function startOfWeek() {
   const d = new Date()
   d.setHours(0, 0, 0, 0)
-  const day = (d.getDay() + 6) % 7 // 0 = Monday
+  const day = (d.getDay() + 6) % 7
   d.setDate(d.getDate() - day)
   return d
 }
@@ -66,7 +62,6 @@ function CompareRow({ label, you, network, suffix = '' }) {
   )
 }
 
-// Compact KPI card used across the 3 dashboard rows. Optional `to` makes it a link.
 function KpiCard({ icon: Icon, label, value, sub, accent = 'primary', to }) {
   const accents = {
     primary: 'bg-primary/10 text-primary-400',
@@ -93,90 +88,20 @@ function KpiCard({ icon: Icon, label, value, sub, accent = 'primary', to }) {
     : <div className="card p-5">{body}</div>
 }
 
-const EMPTY_EXTRAS = {
-  sentConsultIds: new Set(),
-  repliedConsultIds: new Set(),
-  inboundRepliesWeek: 0,
-  messageOutcomes: [],
-}
-
 export default function Dashboard() {
   const { practiceId, practice, user, isAgencyUser } = useAuth()
-  const [consults, setConsults] = useState([])
-  const [messages, setMessages] = useState([])
-  const [dashExtras, setDashExtras] = useState(EMPTY_EXTRAS)
-  const [comparison, setComparison] = useState(null)
-  const [, setUnreadConvos] = useState(0)
-  const [implantApptsWeek, setImplantApptsWeek] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const { data, isLoading: loading, error, refetch } = useDashboard(practiceId)
+  const { data: comparison } = useNetworkComparison(practiceId)
 
-  const load = useMemo(
-    () => async () => {
-      if (!practiceId) {
-        setLoading(false)
-        return
-      }
-      setLoading(true)
-      setError(null)
-      const weekStart = startOfWeek()
-      const weekStartIso = weekStart.toISOString()
-      try {
-        const [{ data: c, error: ce }, { data: m, error: me }, convosRes, apptRes, extras] = await Promise.all([
-          supabase
-            .from('consults')
-            .select('id, recording_date, status, outcome, objection_type, case_value, created_at, attribution_status, treatment_type, tx_plan_value, tx_plan_value_source')
-            .eq('practice_id', practiceId),
-          supabase
-            .from('messages')
-            .select('consult_id, channel, status, scheduled_for, sent_at, created_at')
-            .eq('practice_id', practiceId),
-          supabase
-            .from('conversations')
-            .select('unread_count')
-            .eq('practice_id', practiceId),
-          supabase
-            .from('pms_appointments')
-            .select('id', { count: 'exact', head: true })
-            .eq('practice_id', practiceId)
-            .eq('is_implant_consult', true)
-            .gte('appointment_time', weekStartIso),
-          fetchDashboardExtras(practiceId, weekStartIso),
-        ])
-        if (ce || me) throw ce || me
-        setConsults(c || [])
-        setMessages(m || [])
-        setDashExtras(extras)
-        setUnreadConvos((convosRes.data || []).filter((x) => (x.unread_count || 0) > 0).length)
-        setImplantApptsWeek(apptRes.count || 0)
-      } catch (e) {
-        setError(e)
-      } finally {
-        setLoading(false)
-      }
-    },
-    [practiceId]
-  )
-
-  useEffect(() => {
-    let active = true
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    load().catch(() => active && setError(true))
-    return () => {
-      active = false
-    }
-  }, [load])
-
-  useEffect(() => {
-    if (!practiceId) return
-    let active = true
-    fetchNetworkComparison(practiceId)
-      .then((c) => active && setComparison(c))
-      .catch(() => {})
-    return () => {
-      active = false
-    }
-  }, [practiceId])
+  const consults = data?.consults ?? []
+  const messages = data?.messages ?? []
+  const dashExtras = data?.dashExtras ?? {
+    sentConsultIds: new Set(),
+    repliedConsultIds: new Set(),
+    inboundRepliesWeek: 0,
+    messageOutcomes: [],
+  }
+  const implantApptsWeek = data?.implantApptsWeek ?? 0
 
   const prodMetrics = useMemo(
     () =>
@@ -196,7 +121,6 @@ export default function Dashboard() {
     return closeRateForRows(rows)
   }, [consults])
 
-  // Activity summary (second row).
   const activity = useMemo(() => {
     const weekStart = startOfWeek()
     const monthStart = startOfMonth()
@@ -242,7 +166,6 @@ export default function Dashboard() {
     }
   }, [consults, messages, activity, practice, implantApptsWeek, dashExtras.inboundRepliesWeek, prodMetrics.roi, closeRateThisMonth])
 
-  // Agency users with no client selected belong in the agency portal.
   if (isAgencyUser && !practiceId) {
     return <Navigate to="/agency" replace />
   }
@@ -280,10 +203,9 @@ export default function Dashboard() {
       )}
 
       {error ? (
-        <ErrorState message={friendlyError(error)} onRetry={load} />
+        <ErrorState message={friendlyError(error)} onRetry={() => refetch()} />
       ) : (
         <>
-          {/* ROW 1 - Revenue impact */}
           {loading ? (
             <SkeletonStatGrid count={4} />
           ) : (
@@ -315,14 +237,12 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Recording rate + network comparison - side by side on large screens */}
           {practiceId && (
             <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-2">
               <Suspense fallback={<div className="card h-32 animate-pulse" />}>
                 <RecordingRateCard practiceId={practiceId} />
               </Suspense>
 
-              {/* You vs the network */}
               {comparison && comparison.practice && (
                 <div className="card p-5">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -375,13 +295,10 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Today's appointments snapshot - only when a PMS is connected */}
           {practiceId && pmsConnected && <TodaysAppointmentsSnapshot practiceId={practiceId} />}
 
-          {/* AI Learning Feed - passive, read-only */}
           {practiceId && <AILearningFeed practiceId={practiceId} />}
 
-          {/* Performance Insights - charts + network comparison + coaching tip */}
           {practiceId && !loading && (
             <Suspense fallback={<div className="card h-64 animate-pulse" />}>
               <PerformanceInsights

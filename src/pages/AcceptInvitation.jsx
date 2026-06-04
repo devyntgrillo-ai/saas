@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Loader2, UserPlus, ShieldCheck, AlertTriangle } from 'lucide-react'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { useInvitation } from '../lib/queries'
 import { ACCESS_LABELS } from '../lib/permissions'
 
 export default function AcceptInvitation() {
@@ -11,26 +12,11 @@ export default function AcceptInvitation() {
   const navigate = useNavigate()
   const { user, signUp, signIn, refreshProfile, refreshAgency } = useAuth()
 
-  const [invite, setInvite] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const { data: invite, isLoading: loading } = useInvitation(token)
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-
-  useEffect(() => {
-    let active = true
-    supabase
-      .rpc('get_invitation', { p_token: token })
-      .then(({ data }) => {
-        if (!active) return
-        setInvite(data || null)
-        setLoading(false)
-      })
-    return () => {
-      active = false
-    }
-  }, [token])
 
   const scopeName = invite?.agency_name || invite?.practice_name || 'CaseLift'
   const expired = invite && (invite.accepted_at || new Date(invite.expires_at) < new Date())

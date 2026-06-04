@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Bell,
@@ -15,14 +15,16 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import {
-  fetchNotifications,
-  markAllRead,
-  markRead,
   notificationMeta,
-  subscribeNotifications,
   TONE_BORDER,
 } from '../lib/notifications'
 import { timeAgo } from '../lib/consults'
+import {
+  useNotifications,
+  useMarkNotificationRead,
+  useMarkAllNotificationsRead,
+  useNotificationsRealtime,
+} from '../lib/queries'
 
 const ICONS = { PhoneCall, MessageSquare, Send, PauseCircle, Bell, CheckCircle2, Clock, Sparkles }
 
@@ -36,160 +38,101 @@ export default function NotificationBell() {
   const { practiceId } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
   const ref = useRef(null)
+
+  const { data: items = [], isLoading: loading } = useNotifications(practiceId)
+  useNotificationsRealtime(practiceId)
+  const markReadMutation = useMarkNotificationRead()
+  const markAllMutation = useMarkAllNotificationsRead()
 
   const unread = items.filter((n) => !n.read).length
 
-  // Initial load + realtime subscription.
-  useEffect(() => {
-    if (!practiceId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setItems([])
-      setLoading(false)
-      return
-    }
-    let active = true
-    setLoading(true)
-    fetchNotifications(practiceId)
-      .then((rows) => active && setItems(rows))
-      .catch(() => active && setItems([]))
-      .finally(() => active && setLoading(false))
-
-    const unsub = subscribeNotifications(practiceId, (payload) => {
-      setItems((prev) => {
-        if (payload.eventType === 'INSERT') {
-          if (prev.some((n) => n.id === payload.new.id)) return prev
-          return [payload.new, ...prev].slice(0, 30)
-        }
-        if (payload.eventType === 'UPDATE') {
-          return prev.map((n) => (n.id === payload.new.id ? payload.new : n))
-        }
-        if (payload.eventType === 'DELETE') {
-          return prev.filter((n) => n.id !== payload.old.id)
-        }
-        return prev
-      })
-    })
-    return () => {
-      active = false
-      unsub()
-    }
-  }, [practiceId])
-
-  // Close on outside click.
-  useEffect(() => {
-    if (!open) return
-    const onClick = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [open])
-
-  async function handleClick(n) {
-    if (!n.read) {
-      setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)))
-      markRead(n.id)
-    }
-    setOpen(false)
-    if (n.link) navigate(n.link)
+  async function handleMarkRead(id) {
+    await markReadMutation.mutateAsync({ id, practiceId })
   }
 
   async function handleMarkAll() {
-    setItems((prev) => prev.map((x) => ({ ...x, read: true })))
-    if (practiceId) markAllRead(practiceId)
+    await markAllMutation.mutateAsync(practiceId)
+  }
+
+  function go(n) {
+    setOpen(false)
+    if (n.link) navigate(n.link)
   }
 
   return (
     <div className="relative" ref={ref}>
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative rounded-lg p-2 text-slate-400 transition hover:bg-surface-800 hover:text-slate-100"
+        className="relative rounded-lg p-2 text-slate-400 transition hover:bg-surface-800 hover:text-slate-200"
         aria-label="Notifications"
       >
-        <Bell className="h-[18px] w-[18px]" />
+        <Bell className="h-5 w-5" />
         {unread > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold !text-white ring-2 ring-surface-900">
+          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
             {unread > 9 ? '9+' : unread}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-[400px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-surface-700 bg-surface-900 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-surface-700 px-4 py-3">
-            <p className="text-sm font-semibold text-white">Notifications</p>
-            {unread > 0 && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
+          <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl border border-surface-700 bg-surface-900 shadow-xl">
+            <div className="flex items-center justify-between border-b border-surface-700 px-4 py-3">
+              <h3 className="text-sm font-semibold text-white">Notifications</h3>
+              {unread > 0 && (
+                <button type="button" onClick={handleMarkAll} className="text-xs font-medium text-primary-400 hover:text-primary-300">
+                  Mark all read
+                </button>
+              )}
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
+                </div>
+              ) : items.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-slate-500">No notifications yet.</p>
+              ) : (
+                items.map((n) => {
+                  const meta = notificationMeta(n.type)
+                  const Icon = ICONS[meta.icon] || Bell
+                  return (
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => { handleMarkRead(n.id); go(n) }}
+                      className={`flex w-full gap-3 border-l-4 px-4 py-3 text-left transition hover:bg-surface-800/60 ${TONE_BORDER[meta.tone] || ''} ${n.read ? 'opacity-60' : ''}`}
+                    >
+                      <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${meta.classes}`}>
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-slate-200">{n.title}</p>
+                        {n.message && <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{n.message}</p>}
+                        <p className="mt-1 text-[11px] text-slate-600">
+                          {isToday(n.created_at) ? timeAgo(n.created_at) : new Date(n.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      {!n.read && <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                    </button>
+                  )
+                })
+              )}
+            </div>
+            <div className="border-t border-surface-700 px-4 py-2">
               <button
-                onClick={handleMarkAll}
-                className="inline-flex items-center gap-1 text-xs font-medium text-primary-400 hover:text-primary-300"
+                type="button"
+                onClick={() => { setOpen(false); navigate('/settings/notifications') }}
+                className="flex w-full items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200"
               >
-                <CheckCheck className="h-3.5 w-3.5" /> Mark all read
+                <Settings className="h-3.5 w-3.5" /> Notification settings
               </button>
-            )}
+            </div>
           </div>
-
-          <div className="max-h-[500px] overflow-y-auto">
-            {loading ? (
-              <div className="flex items-center justify-center py-10 text-slate-500">
-                <Loader2 className="h-5 w-5 animate-spin" />
-              </div>
-            ) : items.length === 0 ? (
-              <div className="px-4 py-12 text-center">
-                <Bell className="mx-auto h-8 w-8 text-slate-600" />
-                <p className="mt-3 text-sm text-slate-400">You’re all caught up ✓</p>
-              </div>
-            ) : (
-              ['today', 'earlier'].map((bucket) => {
-                const rows = items.filter((n) => (bucket === 'today' ? isToday(n.created_at) : !isToday(n.created_at)))
-                if (!rows.length) return null
-                return (
-                  <div key={bucket}>
-                    <p className="bg-surface-800/40 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                      {bucket === 'today' ? 'Today' : 'Earlier'}
-                    </p>
-                    <ul className="divide-y divide-surface-700">
-                      {rows.map((n) => {
-                        const meta = notificationMeta(n.type)
-                        const Icon = ICONS[meta.icon] || Bell
-                        const border = TONE_BORDER[meta.tone] || 'border-l-sky-500'
-                        return (
-                          <li key={n.id}>
-                            <button
-                              onClick={() => handleClick(n)}
-                              className={`flex w-full gap-3 border-l-[3px] px-4 py-3 text-left transition hover:bg-surface-800/60 ${border} ${n.read ? 'border-l-transparent' : 'bg-primary/[0.04]'}`}
-                            >
-                              <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${meta.classes}`}>
-                                <Icon className="h-4 w-4" />
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="flex items-center justify-between gap-2">
-                                  <span className={`truncate text-sm ${n.read ? 'font-medium text-slate-300' : 'font-semibold text-white'}`}>{n.title}</span>
-                                  <span className="shrink-0 text-[11px] text-slate-500">{timeAgo(n.created_at)}</span>
-                                </span>
-                                {n.message && <span className="mt-0.5 block truncate text-xs text-slate-500">{n.message}</span>}
-                              </span>
-                              {!n.read && <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-primary" />}
-                            </button>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </div>
-                )
-              })
-            )}
-          </div>
-
-          <button
-            onClick={() => { setOpen(false); navigate('/settings/notifications') }}
-            className="flex w-full items-center justify-center gap-1.5 border-t border-surface-700 px-4 py-2.5 text-xs font-medium text-slate-400 transition hover:bg-surface-800/60 hover:text-slate-200"
-          >
-            <Settings className="h-3.5 w-3.5" /> Notification settings →
-          </button>
-        </div>
+        </>
       )}
     </div>
   )

@@ -16,6 +16,7 @@ import {
   type TrustHubStored,
   ensureA2pTrustHubBundles,
   preconfiguredA2pBundles,
+  trustHubForResubmit,
 } from "../_shared/twilio-trusthub.ts";
 
 const cors = {
@@ -266,16 +267,27 @@ Deno.serve(async (req: Request) => {
           practice.address,
       };
 
-      const trustHubExisting = trustHubFromConfig(practice.a2p_config);
+      const hadFailure = practice.a2p_brand_status === "failed" ||
+        practice.a2p_campaign_status === "failed";
+      const trustHubExisting = trustHubForResubmit(
+        trustHubFromConfig(practice.a2p_config),
+        practice.a2p_brand_status,
+        practice.a2p_campaign_status,
+      );
       const nowIso = new Date().toISOString();
 
-      await admin.from("practices").update({
+      const regPatch: Record<string, unknown> = {
         a2p_submitted_at: nowIso,
         a2p_brand_status: "pending",
         a2p_campaign_status: "pending",
         a2p_failure_reason: null,
         sms_enabled: false,
-      }).eq("id", practiceId);
+      };
+      if (hadFailure) {
+        regPatch.twilio_brand_sid = null;
+        regPatch.twilio_campaign_sid = null;
+      }
+      await admin.from("practices").update(regPatch).eq("id", practiceId);
 
       const mgSid = await ensureMessagingService(
         cfg,

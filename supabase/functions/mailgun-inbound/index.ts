@@ -1,20 +1,20 @@
 // ============================================================================
-// mailgun-inbound — Mailgun inbound route webhook for patient email replies.
+// mailgun-inbound — patient email replies (per-practice *.mail.heyhope.ai).
 //
-// Configure a Mailgun route: forward all (or reply+*) to this URL.
-// Outbound conversation email sets Reply-To: reply+{conversation_id}@MAILGUN_DOMAIN
-// so replies land here and become inbound conversation_messages.
-//
-// Deploy with verify_jwt=false. Secrets: SUPABASE_*, optional MAILGUN_WEBHOOK_SIGNING_KEY.
+// Outbound sets Reply-To: reply+{conversation_id}@{practice.mail_subdomain}.mail.root
+// Legacy platform-domain replies (reply+*@MAILGUN_DOMAIN) still supported.
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import {
   emailsMatch,
   extractEmailAddress,
+  isPatientMailRecipient,
+  mailgunPlatformDomain,
   parseConversationIdFromRecipient,
   verifyMailgunWebhook,
 } from "../_shared/mailgun.ts";
+import { practiceIdFromMailRecipient } from "../_shared/mailgun-practice.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -37,6 +37,12 @@ function preview(text: string, max = 80): string {
 function isAutoSender(email: string): boolean {
   const e = email.toLowerCase();
   return e.includes("mailer-daemon") || e.includes("postmaster") || e.includes("noreply@");
+}
+
+function isLegacyPlatformRecipient(recipient: string): boolean {
+  const platform = (mailgunPlatformDomain() || "").toLowerCase();
+  if (!platform) return false;
+  return recipient.toLowerCase().includes(`@${platform}`);
 }
 
 Deno.serve(async (req: Request) => {
@@ -78,10 +84,17 @@ Deno.serve(async (req: Request) => {
     const fromEmail = extractEmailAddress(sender);
     if (isAutoSender(fromEmail)) return ok();
 
+    // Ignore platform-only recipients (staff invites, digests) unless legacy reply+ thread.
+    const hasReplyToken = Boolean(parseConversationIdFromRecipient(recipient));
+    if (!hasReplyToken && !isPatientMailRecipient(recipient) && !isLegacyPlatformRecipient(recipient)) {
+      return ok();
+    }
+
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
+    const scopedPracticeId = await practiceIdFromMailRecipient(admin, recipient);
     const nowIso = new Date().toISOString();
     let conversationId = parseConversationIdFromRecipient(recipient);
 
@@ -104,26 +117,41 @@ Deno.serve(async (req: Request) => {
         .select("id, practice_id, unread_count, consult_id, patient_first, patient_last, patient_phone, patient_email")
         .eq("id", conversationId)
         .maybeSingle();
-      conversation = data;
+      if (data) {
+        if (scopedPracticeId && data.practice_id !== scopedPracticeId) {
+          console.warn("mailgun-inbound: conversation practice mismatch");
+          return ok();
+        }
+        conversation = data;
+      }
     }
 
-    // Fallback: match sender email to an existing thread (patient hit Reply on From, etc.).
     if (!conversation) {
-      const { data: convRows } = await admin
+      let convQuery = admin
         .from("conversations")
         .select("id, practice_id, unread_count, consult_id, patient_first, patient_last, patient_phone, patient_email, last_message_at")
         .order("last_message_at", { ascending: false })
-        .limit(500);
+        .limit(200);
 
+      if (scopedPracticeId) {
+        convQuery = convQuery.eq("practice_id", scopedPracticeId);
+      }
+
+      const { data: convRows } = await convQuery;
       conversation = (convRows || []).find((c) => emailsMatch(c.patient_email || "", fromEmail)) || null;
 
       if (!conversation) {
-        const { data: consults } = await admin
+        let consultQuery = admin
           .from("consults")
           .select("id, practice_id, patient_first, patient_last, patient_phone, patient_email")
           .order("created_at", { ascending: false })
-          .limit(300);
+          .limit(200);
 
+        if (scopedPracticeId) {
+          consultQuery = consultQuery.eq("practice_id", scopedPracticeId);
+        }
+
+        const { data: consults } = await consultQuery;
         const consult = (consults || []).find((c) => emailsMatch(c.patient_email || "", fromEmail)) || null;
         if (consult) {
           const linked = (convRows || []).find((c) => c.consult_id === consult.id);
@@ -181,6 +209,7 @@ Deno.serve(async (req: Request) => {
         from_email: fromEmail,
         to: recipient,
         subject: subject || null,
+        practice_id: conversation.practice_id,
       },
     });
 

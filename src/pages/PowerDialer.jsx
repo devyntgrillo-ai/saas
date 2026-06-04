@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
   Phone, SkipForward, X, ArrowLeft, Loader2, PhoneCall, Check, Voicemail, PhoneOff, Ban, Mic, MicOff, Circle, Play,
@@ -7,7 +8,8 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import EmptyState from '../components/EmptyState'
 import { timeAgo } from '../lib/consults'
-import { fetchVoiceToken, formatCallTime, fetchRecentCalls, loadRecordingUrl } from '../lib/voice'
+import { fetchVoiceToken, formatCallTime, loadRecordingUrl } from '../lib/voice'
+import { usePowerDialerQueue, useRecentCalls, queryKeys } from '../lib/queries'
 
 const EXIT_PILL = {
   hot: 'bg-red-100 text-red-700', warm: 'bg-amber-100 text-amber-700', long_term: 'bg-sky-100 text-sky-700',
@@ -42,17 +44,10 @@ const DISPO_PILL = {
 
 // Recent calls with inline recording playback (auth-proxied audio).
 function RecentCalls({ practiceId }) {
-  const [calls, setCalls] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data: calls = [], isLoading: loading } = useRecentCalls(practiceId)
   const [playing, setPlaying] = useState(null) // { id, url }
   const [loadingId, setLoadingId] = useState(null)
   const [err, setErr] = useState('')
-
-  useEffect(() => {
-    let on = true
-    fetchRecentCalls(practiceId).then((rows) => { if (on) { setCalls(rows); setLoading(false) } })
-    return () => { on = false }
-  }, [practiceId])
 
   // Revoke the object URL when switching recordings / unmounting.
   useEffect(() => () => { if (playing?.url) URL.revokeObjectURL(playing.url) }, [playing])
@@ -119,8 +114,8 @@ function RecentCalls({ practiceId }) {
 
 export default function PowerDialer() {
   const { practiceId, practice } = useAuth()
-  const [queue, setQueue] = useState([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const { data: queue = [], isLoading: loading, refetch } = usePowerDialerQueue(practiceId)
   const [active, setActive] = useState(false)
   const [idx, setIdx] = useState(0)
   const [notes, setNotes] = useState('')
@@ -135,25 +130,10 @@ export default function PowerDialer() {
   const [muted, setMuted] = useState(false)
   const [seconds, setSeconds] = useState(0)
 
-  const load = useCallback(async () => {
-    if (!practiceId) { setLoading(false); return }
-    setLoading(true)
-    const endToday = new Date(); endToday.setHours(23, 59, 59, 999)
-    const { data } = await supabase
-      .from('messages')
-      .select('id, consult_id, send_day, scheduled_for, status, channel, type, consults(id, patient_name, patient_phone, patient_email, objection_type, exit_intent_level, personal_detail, tc_action, recording_date, created_at)')
-      .eq('practice_id', practiceId)
-      .or('channel.eq.call,type.eq.call')
-      .in('status', ['scheduled', 'pending', 'draft'])
-      .lte('scheduled_for', endToday.toISOString())
-      .order('scheduled_for', { ascending: true })
-    const rows = (data || []).filter((m) => m.consults && m.consults.patient_phone)
-    setQueue(rows)
-    setLoading(false)
-  }, [practiceId])
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load() }, [load])
+  const reload = () => {
+    refetch()
+    queryClient.invalidateQueries({ queryKey: queryKeys.powerDialer.queue(practiceId) })
+  }
 
   const current = queue[idx]
   const c = current?.consults
@@ -301,7 +281,7 @@ export default function PowerDialer() {
 
     setBusy(false); setNotes(''); setSeconds(0)
     // Advance.
-    if (idx + 1 >= queue.length) { setActive(false); setIdx(0); load() }
+    if (idx + 1 >= queue.length) { setActive(false); setIdx(0); reload() }
     else setIdx((i) => i + 1)
   }
 

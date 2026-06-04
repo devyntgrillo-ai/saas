@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   GraduationCap,
   Play,
@@ -10,10 +11,10 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
 import { stripEmDashes } from '../lib/sanitize'
 import { formatDuration } from '../lib/consults'
 import { fetchTrainingRecommendation } from '../lib/insights'
+import { useTrainingCatalog, useMarkTrainingComplete, queryKeys } from '../lib/queries'
 
 const REC_TTL = 24 * 60 * 60 * 1000 // re-generate the AI recommendation at most once a day
 
@@ -22,39 +23,20 @@ export default function Training() {
   const [rec, setRec] = useState(null) // { recommendation, focus_area, based_on }
   const [recLoading, setRecLoading] = useState(true)
   const [recError, setRecError] = useState(false)
-  const [modules, setModules] = useState([])
-  const [groups, setGroups] = useState([]) // editable module tabs (training_module_groups)
-  const [progress, setProgress] = useState({}) // module_id -> { progress, completed_at }
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const { data: catalog, isLoading: loading } = useTrainingCatalog(user?.id)
+  const modules = catalog?.modules ?? []
+  const groups = catalog?.groups ?? []
+  const progress = catalog?.progress ?? {}
+  const markCompleteMutation = useMarkTrainingComplete()
   const [activeGroup, setActiveGroup] = useState(null) // active module tab (group key)
   const [playing, setPlaying] = useState(null) // module being watched
   const [saving, setSaving] = useState(false)
   const videoRef = useRef(null)
 
   useEffect(() => {
-    let active = true
-    async function load() {
-      const [{ data: mods }, { data: prog }, { data: grps }] = await Promise.all([
-        supabase.from('training_modules').select('*').order('order_index', { ascending: true }),
-        user
-          ? supabase.from('training_progress').select('module_id, progress, completed_at').eq('user_id', user.id)
-          : Promise.resolve({ data: [] }),
-        supabase.from('training_module_groups').select('*').order('order_index', { ascending: true }),
-      ])
-      if (!active) return
-      setModules(mods || [])
-      setGroups(grps || [])
-      setActiveGroup((cur) => cur || grps?.[0]?.key || null)
-      const map = {}
-      for (const p of prog || []) map[p.module_id] = p
-      setProgress(map)
-      setLoading(false)
-    }
-    load()
-    return () => {
-      active = false
-    }
-  }, [user])
+    if (groups.length && !activeGroup) setActiveGroup(groups[0]?.key || null)
+  }, [groups, activeGroup])
 
   // Fetch the AI recommendation, cached per-practice in localStorage so we don't
   // re-call Claude on every visit. Pure: returns a result, never sets state, so
@@ -125,19 +107,12 @@ export default function Training() {
   async function markComplete(moduleId) {
     if (!user) return
     setSaving(true)
-    const row = {
-      user_id: user.id,
-      module_id: moduleId,
-      progress: 100,
-      completed_at: new Date().toISOString(),
+    try {
+      await markCompleteMutation.mutateAsync({ userId: user.id, moduleId })
+      queryClient.invalidateQueries({ queryKey: queryKeys.training.modules() })
+    } finally {
+      setSaving(false)
     }
-    const { error } = await supabase
-      .from('training_progress')
-      .upsert(row, { onConflict: 'user_id,module_id' })
-    if (!error) {
-      setProgress((prev) => ({ ...prev, [moduleId]: row }))
-    }
-    setSaving(false)
   }
 
   const groupCounts = useMemo(() => {

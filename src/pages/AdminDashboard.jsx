@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { Building2, Stethoscope, DollarSign, Eye, Loader2, Plus, Check, Sparkles } from 'lucide-react'
 import PortalShell, { PortalTab } from '../components/PortalShell'
@@ -8,127 +8,20 @@ import { usePermissions } from '../lib/permissions'
 import { supabase } from '../lib/supabase'
 import { formatMoney } from '../lib/analytics'
 import { statusMeta as subStatusMeta } from '../lib/billing'
+import { useAdminDashboard, useToggleAdminAgency } from '../lib/queries'
 
 const money = (n) => formatMoney(Number(n) || 0)
-
-// ---- Direct-table fallbacks (used when the admin_* RPCs aren't installed) ---
-
-// Map a raw agency_accounts row to the shape the table expects, tolerating
-// either column naming (active|status, owner_user_id|owner_email, etc.).
-function shapeAgency(r, practiceCount, emailById) {
-  return {
-    id: r.id,
-    name: r.name,
-    owner_email: r.owner_email || emailById[r.owner_user_id] || null,
-    practices: practiceCount,
-    mrr: Number(r.monthly_fee) || 0,
-    white_labeled: r.white_label_enabled ?? r.white_labeled ?? r.is_white_labeled ?? false,
-    active: r.active ?? (r.status ? r.status === 'active' : true),
-    created_at: r.created_at,
-  }
-}
-
-async function loadAgenciesDirect() {
-  const { data: rows, error } = await supabase
-    .from('agency_accounts')
-    .select('*')
-    .order('created_at', { ascending: true })
-  if (error || !rows?.length) return []
-
-  const { data: pr } = await supabase.from('practices').select('id, agency_id')
-  const counts = {}
-  ;(pr || []).forEach((x) => { if (x.agency_id) counts[x.agency_id] = (counts[x.agency_id] || 0) + 1 })
-
-  const ownerIds = [...new Set(rows.map((r) => r.owner_user_id).filter(Boolean))]
-  const emailById = {}
-  if (ownerIds.length) {
-    const { data: us } = await supabase.from('users').select('id, email').in('id', ownerIds)
-    ;(us || []).forEach((u) => { emailById[u.id] = u.email })
-  }
-  return rows.map((r) => shapeAgency(r, counts[r.id] || 0, emailById))
-}
-
-async function loadPracticesDirect() {
-  const since = new Date(); since.setDate(since.getDate() - 30)
-  // select('*') so a column that only exists in some environments (doctor_name,
-  // subscription_status, agency_id) never errors the whole query.
-  const { data: rows, error } = await supabase
-    .from('practices')
-    .select('*, agency:agency_accounts(name)')
-    .order('name')
-  if (error || !rows?.length) return []
-
-  const { data: consults } = await supabase
-    .from('consults')
-    .select('practice_id, created_at')
-    .gte('created_at', since.toISOString())
-  const byPractice = {}
-  ;(consults || []).forEach((c) => { byPractice[c.practice_id] = (byPractice[c.practice_id] || 0) + 1 })
-
-  return rows.map((p) => ({
-    id: p.id,
-    name: p.name,
-    agency_name: p.agency?.name || null,
-    doctor:
-      p.doctor_name ||
-      [p.doctor_first, p.doctor_last].filter(Boolean).join(' ') ||
-      null,
-    consults_month: byPractice[p.id] || 0,
-    subscription_status: p.subscription_status,
-  }))
-}
-
-function deriveRevenue(agencies) {
-  const total = agencies.reduce((s, a) => s + (Number(a.mrr) || 0), 0)
-  return {
-    total_mrr: total,
-    new_signups_month: 0,
-    churn_month: 0,
-    by_agency: agencies.map((a) => ({ name: a.name, mrr: Number(a.mrr) || 0 })),
-  }
-}
 
 export default function AdminDashboard() {
   const perms = usePermissions()
   const { viewPractice, contextLoading } = useAuth()
   const navigate = useNavigate()
   const [tab, setTab] = useState('agencies')
-  const [data, setData] = useState({ agencies: [], practices: [], revenue: null })
-  const [loading, setLoading] = useState(true)
   const [addAgency, setAddAgency] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const [a, p, rev] = await Promise.all([
-      supabase.rpc('admin_agencies'),
-      supabase.rpc('admin_practices'),
-      supabase.rpc('admin_revenue'),
-    ])
-
-    // The admin_* RPCs may not exist yet (or return empty). Fall back to
-    // reading the base tables directly and deriving the display fields so the
-    // page works regardless of whether the RPCs are installed.
-    let agencies = a.error ? [] : a.data || []
-    let practices = p.error ? [] : p.data || []
-    let revenue = rev.error ? null : rev.data
-    if (a.error || agencies.length === 0) agencies = await loadAgenciesDirect()
-    if (p.error || practices.length === 0) practices = await loadPracticesDirect()
-    if (!revenue) revenue = deriveRevenue(agencies)
-
-    setData({ agencies, practices, revenue: revenue || {} })
-    setLoading(false)
-  }, [])
-
-  useEffect(() => {
-    if (!perms.canViewAdmin) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    load()
-  }, [perms.canViewAdmin, load])
-
-  async function toggleAgency(id, active) {
-    await supabase.from('agency_accounts').update({ active: !active }).eq('id', id)
-    load()
-  }
+  const { data: dashboard, isLoading: loading, refetch } = useAdminDashboard(perms.canViewAdmin)
+  const toggleAgency = useToggleAdminAgency()
+  const data = dashboard || { agencies: [], practices: [], revenue: {} }
 
   if (!contextLoading && !perms.canViewAdmin) {
     return <Navigate to="/" replace />
@@ -167,7 +60,7 @@ export default function AdminDashboard() {
               a.white_labeled ? <span className="inline-flex items-center gap-1 text-emerald-300"><Check className="h-3.5 w-3.5" /> On</span> : <span className="text-slate-500">-</span>,
               <span className={a.active ? 'text-emerald-300' : 'text-rose-300'}>{a.active ? 'Active' : 'Suspended'}</span>,
               a.created_at ? new Date(a.created_at).toLocaleDateString() : '-',
-              <button onClick={() => toggleAgency(a.id, a.active)} className="rounded-lg border border-surface-700 bg-surface-800 px-2.5 py-1 text-xs font-medium text-slate-300 transition hover:bg-surface-700">
+              <button onClick={() => toggleAgency.mutate({ id: a.id, active: a.active })} disabled={toggleAgency.isPending} className="rounded-lg border border-surface-700 bg-surface-800 px-2.5 py-1 text-xs font-medium text-slate-300 transition hover:bg-surface-700">
                 {a.active ? 'Suspend' : 'Activate'}
               </button>,
             ])}
@@ -197,7 +90,7 @@ export default function AdminDashboard() {
         <SettingsTab />
       )}
 
-      {addAgency && <AddAgencyModal onClose={() => setAddAgency(false)} onSaved={() => { setAddAgency(false); load() }} />}
+      {addAgency && <AddAgencyModal onClose={() => setAddAgency(false)} onSaved={() => { setAddAgency(false); refetch() }} />}
     </PortalShell>
   )
 }

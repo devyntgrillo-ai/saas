@@ -1,18 +1,16 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import AuthLoadingScreen from './AuthLoadingScreen'
 
 // Gates the app behind onboarding completion for practice (non-agency) users.
 // Runs inside the BAA gate, so a session + accepted BAA are already guaranteed.
 export default function RequireOnboarding({ children }) {
-  const { contextLoading, isAgencyUser, practiceId, onboardingCompleted } = useAuth()
+  const { contextLoading, profileResolved, isAgencyUser, practiceId, onboardingCompleted } =
+    useAuth()
   const location = useLocation()
 
-  if (contextLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-surface">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-surface-700 border-t-primary" />
-      </div>
-    )
+  if (contextLoading || !profileResolved) {
+    return <AuthLoadingScreen />
   }
 
   // Agency users (and impersonation) skip the onboarding wizard entirely.

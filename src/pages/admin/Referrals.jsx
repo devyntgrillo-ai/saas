@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Users, DollarSign, Clock, CheckCircle2, Download, Check, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAdminReferrals, queryKeys } from '../../lib/queries'
 import { StatCard, Table, Badge, money, stop } from '../../components/admin/ui'
 
 const PAYOUT_STATUS = {
@@ -21,27 +23,12 @@ function csvCell(v) {
 }
 
 export default function AdminReferrals() {
-  const [relationships, setRelationships] = useState([])
-  const [payouts, setPayouts] = useState([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const { data, isLoading: loading, refetch } = useAdminReferrals()
+  const relationships = data?.relationships ?? []
+  const payouts = data?.payouts ?? []
   const [busyId, setBusyId] = useState(null)
   const [filter, setFilter] = useState('pending')
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    const [rel, pay] = await Promise.all([
-      supabase.rpc('admin_referrals'),
-      supabase.rpc('admin_referral_payouts'),
-    ])
-    setRelationships(rel.data || [])
-    setPayouts(pay.data || [])
-    setLoading(false)
-  }, [])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    load()
-  }, [load])
 
   // First of the current month, for the "pending this month" stat.
   const monthKey = useMemo(() => {
@@ -66,7 +53,10 @@ export default function AdminReferrals() {
   async function markPaid(id) {
     setBusyId(id)
     const { error } = await supabase.rpc('admin_mark_payout_paid', { p_payout_id: id })
-    if (!error) await load()
+    if (!error) {
+      refetch()
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.referrals() })
+    }
     setBusyId(null)
   }
 

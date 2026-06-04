@@ -2,35 +2,21 @@ import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { BookOpen } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { useAgencyKbPractices } from '../lib/queries'
 import KnowledgeBaseEditor from '../components/KnowledgeBaseEditor'
 
 // Agency view: pick any client practice and edit its knowledge base.
 export default function AgencyKnowledgeBase() {
   const { agency, agencyLoading, isAgencyUser } = useAuth()
-  const [practices, setPractices] = useState([])
+  const { data: practices = [], isLoading: loading } = useAgencyKbPractices(agency?.id)
   const [selected, setSelected] = useState('')
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!agency?.id) return
-    let active = true
-    supabase
-      .from('practices')
-      .select('id, name')
-      .eq('agency_id', agency.id)
-      .order('name', { ascending: true })
-      .then(({ data }) => {
-        if (!active) return
-        const rows = data || []
-        setPractices(rows)
-        setSelected((cur) => cur || rows[0]?.id || '')
-        setLoading(false)
-      })
-    return () => {
-      active = false
+    if (practices.length && !selected) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelected(practices[0]?.id || '')
     }
-  }, [agency?.id])
+  }, [practices, selected])
 
   if (!agencyLoading && !isAgencyUser) return <Navigate to="/settings/knowledge-base" replace />
 

@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { DollarSign, CheckCircle2, AlertCircle, Clock, ExternalLink, Link2, Ban, CalendarPlus, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAdminBilling, queryKeys } from '../../lib/queries'
 import { statusMeta as subStatusMeta, cancelSubscription, createPortalSession } from '../../lib/billing'
 import { StatCard, Table, Badge, money, stop } from '../../components/admin/ui'
 
@@ -25,23 +27,15 @@ function planAmountClass(amount) {
 const contactName = (r) => [r.doctor_first, r.doctor_last].filter(Boolean).join(' ').trim()
 
 export default function AdminBilling() {
-  const [rows, setRows] = useState([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const { data: rows = [], isLoading: loading, refetch } = useAdminBilling()
   const [busyId, setBusyId] = useState(null)
   const [flash, setFlash] = useState('')
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const { data } = await supabase
-      .from('practices')
-      .select('id, name, doctor_first, doctor_last, email, phone, pms_type, plan_amount, subscription_status, next_billing_date, trial_ends_at, created_at, chargebee_customer_id, agency:agency_accounts(name)')
-      .order('created_at', { ascending: false })
-    setRows(data || [])
-    setLoading(false)
-  }, [])
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load() }, [load])
+  const reload = () => {
+    refetch()
+    queryClient.invalidateQueries({ queryKey: queryKeys.admin.billing() })
+  }
 
   const summary = useMemo(() => {
     let active = 0, pastDue = 0, trial = 0, mrr = 0
@@ -80,7 +74,7 @@ export default function AdminBilling() {
     try {
       await cancelSubscription(r.id)
       note(`Subscription cancelled for ${r.name}.`)
-      await load()
+      await reload()
     } catch (e) {
       note(e?.message || 'Cancel failed.')
     } finally {
@@ -94,7 +88,7 @@ export default function AdminBilling() {
     base.setDate(base.getDate() + days)
     const { error } = await supabase.from('practices').update({ trial_ends_at: base.toISOString() }).eq('id', r.id)
     if (error) note(error.message)
-    else { note(`Extended ${r.name}'s trial by ${days} days.`); await load() }
+    else { note(`Extended ${r.name}'s trial by ${days} days.`); await reload() }
     setBusyId(null)
   }
 

@@ -318,6 +318,112 @@
 :root:not(.dark) .border-surface-700 {
   border-color: var(--border);
 }
+
+/* ---------------------------------------------------------------------------
+   Dark-mode overrides for hardcoded gray/white utilities (Conversations and
+   other pages that still use Tailwind gray-* / bg-white). Mirrors the
+   :root:not(.dark) block above so those surfaces follow --s-* / --text-*.
+   --------------------------------------------------------------------------- */
+:root.dark .bg-white {
+  background-color: rgb(var(--s-surface));
+}
+:root.dark .bg-gray-50 {
+  background-color: rgb(var(--s-elevated));
+}
+:root.dark .bg-gray-50\/80 {
+  background-color: rgb(var(--s-elevated) / 0.8);
+}
+:root.dark .bg-gray-100 {
+  background-color: rgb(var(--s-elevated));
+}
+:root.dark .bg-gray-200,
+:root.dark .bg-gray-200\/80 {
+  background-color: rgb(var(--s-subtle));
+}
+:root.dark .border-gray-100,
+:root.dark .border-gray-200 {
+  border-color: var(--border);
+}
+:root.dark .border-gray-300 {
+  border-color: var(--border-strong);
+}
+:root.dark .text-gray-900,
+:root.dark .text-gray-800 {
+  color: var(--text-primary);
+}
+:root.dark .text-gray-700,
+:root.dark .text-gray-600 {
+  color: var(--text-secondary);
+}
+:root.dark .text-gray-500,
+:root.dark .text-gray-400 {
+  color: var(--text-secondary);
+}
+:root.dark .text-gray-300 {
+  color: var(--text-muted);
+}
+:root.dark .hover\:bg-gray-50:hover,
+:root.dark .hover\:bg-gray-100:hover,
+:root.dark .hover\:bg-gray-200:hover,
+:root.dark .hover\:bg-gray-200\/80:hover {
+  background-color: rgb(var(--s-elevated));
+}
+:root.dark .hover\:text-gray-600:hover,
+:root.dark .hover\:text-gray-700:hover,
+:root.dark .hover\:text-gray-900:hover {
+  color: var(--text-primary);
+}
+:root.dark .focus\:bg-white:focus {
+  background-color: rgb(var(--s-surface));
+}
+:root.dark .placeholder-gray-400::placeholder,
+:root.dark .placeholder\:text-gray-400::placeholder {
+  color: var(--text-muted);
+}
+:root.dark .bg-blue-50,
+:root.dark .bg-blue-50\/50 {
+  background-color: var(--accent-subtle);
+}
+:root.dark .text-blue-600,
+:root.dark .text-blue-700 {
+  color: var(--accent-dark);
+}
+:root.dark .border-blue-500 {
+  border-color: rgb(var(--primary-500));
+}
+:root.dark .bg-emerald-50 {
+  background-color: var(--success-subtle);
+}
+:root.dark .border-emerald-200,
+:root.dark .border-emerald-300 {
+  border-color: rgba(16, 185, 129, 0.28);
+}
+:root.dark .text-emerald-600,
+:root.dark .text-emerald-700,
+:root.dark .text-emerald-800,
+:root.dark .text-emerald-900 {
+  color: #34d399;
+}
+:root.dark .hover\:bg-emerald-50:hover {
+  background-color: var(--success-subtle);
+}
+:root.dark .bg-amber-50\/40,
+:root.dark .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.12);
+}
+:root.dark .border-amber-200,
+:root.dark .border-amber-300 {
+  border-color: rgba(245, 158, 11, 0.28);
+}
+:root.dark .text-amber-900,
+:root.dark .text-amber-800,
+:root.dark .text-amber-700 {
+  color: #fbbf24;
+}
+:root.dark .hover\:bg-amber-100:hover {
+  background-color: rgba(245, 158, 11, 0.18);
+}
+
 /* Smooth the swap on the most common chrome surfaces. */
 .card,
 .btn-primary,

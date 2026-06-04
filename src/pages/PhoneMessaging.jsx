@@ -17,13 +17,14 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import {
-  fetchOptOutCount,
   pollA2PStatus,
   sendTestEmail,
   sendTestSms,
   smsProvisioningStatus,
   a2pMeta,
 } from '../lib/messaging'
+import { practiceFromAddress, PATIENT_MAIL_ROOT } from '../lib/practiceMail'
+import { useMessagingOptOuts } from '../lib/queries'
 import PhoneSetupWizard from '../components/PhoneSetupWizard'
 
 // Format a stored phone number for display: +1 (509) 555-0100.
@@ -111,7 +112,7 @@ export default function PhoneMessaging() {
   const [emailEnabled, setEmailEnabled] = useState(true)
   const [emailFromName, setEmailFromName] = useState('')
   const [emailReplyTo, setEmailReplyTo] = useState('')
-  const [optOuts, setOptOuts] = useState(null)
+  const { data: optOuts } = useMessagingOptOuts(practiceId)
   const [testSmsTo, setTestSmsTo] = useState('')
   const [testSmsState, setTestSmsState] = useState('idle')
   const [testSmsError, setTestSmsError] = useState('')
@@ -132,10 +133,6 @@ export default function PhoneMessaging() {
     )
     setEmailReplyTo(practice.email_reply_to || practice.email || '')
   }, [practice])
-
-  useEffect(() => {
-    if (practiceId) fetchOptOutCount(practiceId).then(setOptOuts)
-  }, [practiceId])
 
   const provStatus = smsProvisioningStatus(practice)
   const phoneNumber = practice?.twilio_phone_number || practice?.phone_number || ''
@@ -170,6 +167,7 @@ export default function PhoneMessaging() {
 
   // SMS sender shown to patients - fall back to a sensible default in the preview.
   const previewSender = (smsSender || practice?.name || 'Your Practice').slice(0, 11)
+  const patientFrom = practiceFromAddress(practice)
 
   return (
     <div className="space-y-6">
@@ -371,9 +369,18 @@ export default function PhoneMessaging() {
           </Field>
         </div>
 
-        <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-surface-700 bg-surface-800/50 px-4 py-3 text-sm text-slate-400">
-          <Mail className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
-          Emails are sent via CaseLift's delivery system - no setup required.
+        <div className="mt-4 rounded-lg border border-surface-700 bg-surface-800/50 px-4 py-3 text-sm text-slate-400">
+          <p className="font-medium text-slate-300">Patient email address</p>
+          {patientFrom ? (
+            <p className="mt-1 font-mono text-xs text-emerald-300/90">{patientFrom}</p>
+          ) : (
+            <p className="mt-1 text-xs text-slate-500">
+              Assigned on first send (e.g. office@your-practice.{PATIENT_MAIL_ROOT}).
+            </p>
+          )}
+          <p className="mt-2 text-xs text-slate-500">
+            Patient replies are threaded in Conversations. Staff invites and digests use platform mail separately.
+          </p>
         </div>
 
         <div className="mt-5 rounded-lg border border-surface-700 bg-surface-800/40 p-4">
@@ -396,6 +403,7 @@ export default function PhoneMessaging() {
                 setTestEmailError('')
                 try {
                   await sendTestEmail(practiceId, testEmail.trim())
+                  await refreshProfile()
                   setTestEmailState('ok')
                 } catch (e) {
                   setTestEmailState('err')

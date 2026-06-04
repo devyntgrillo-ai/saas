@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { DollarSign, Building2, Stethoscope, TrendingUp, Calendar } from 'lucide-react'
 import { useAdmin } from '../../context/AdminContext'
 import { computeOverview, estimateCosts, mrrSeries12, MRR_MILESTONES, PRICING, reasonLabel } from '../../lib/admin'
 import { StackedMRRChart } from '../../components/admin/charts'
 import { StatCard, Table, Badge, money } from '../../components/admin/ui'
-import { fetchAttributionByPractice } from '../../lib/attribution'
+import { useAdminAttribution } from '../../lib/queries'
 
 export default function Revenue() {
   const { data } = useAdmin()
@@ -13,14 +13,7 @@ export default function Revenue() {
   const series = useMemo(() => mrrSeries12(data.mrrHistory), [data.mrrHistory])
 
   // CaseLift attribution per practice (production we can defensibly claim).
-  const [attribution, setAttribution] = useState({})
-  useEffect(() => {
-    let active = true
-    fetchAttributionByPractice()
-      .then((a) => active && setAttribution(a || {}))
-      .catch(() => {})
-    return () => { active = false }
-  }, [])
+  const { data: attribution = {} } = useAdminAttribution()
 
   const attributionRows = useMemo(() => {
     const nameFor = (pid) => data.practices.find((p) => String(p.id) === String(pid))?.name || 'Unknown practice'

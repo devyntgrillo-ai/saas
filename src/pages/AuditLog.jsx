@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ShieldCheck, Filter, ScrollText, Lock } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
-import { supabase } from '../lib/supabase'
 import { formatDateTime } from '../lib/consults'
+import { useAuditLog } from '../lib/queries'
 import { SkeletonTable } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
 import ErrorState, { friendlyError } from '../components/ErrorState'
@@ -40,59 +40,11 @@ export default function AuditLog() {
   const { isLight } = useTheme()
   const isAdmin = ['owner', 'admin'].includes(profile?.role)
 
-  const [rows, setRows] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [actionFilter, setActionFilter] = useState('all')
   const [range, setRange] = useState('30d')
 
-  const load = useCallback(async () => {
-    if (!isAdmin) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    setError(null)
-    // Select '*' so a column-name mismatch can't 400 the request, then
-    // normalize across the two historical column conventions
-    // (user_email/resource_* and actor/target_*).
-    let query = supabase
-      .from('audit_logs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(500)
-
-    const r = RANGES.find((x) => x.key === range)
-    if (r?.days) {
-      const cutoff = new Date()
-      cutoff.setDate(cutoff.getDate() - r.days)
-      query = query.gte('created_at', cutoff.toISOString())
-    }
-
-    const { data, error: e } = await query
-    if (e) {
-      // Missing table or no access → degrade to an empty log rather than a hard error.
-      console.warn('[audit] could not load audit_logs:', e.message)
-      setRows([])
-    } else {
-      setRows(
-        (data || []).map((row) => ({
-          id: row.id,
-          created_at: row.created_at,
-          user_email: row.user_email ?? row.actor_email ?? row.actor?.email ?? null,
-          action: row.action ?? null,
-          resource_type: row.resource_type ?? row.target_type ?? null,
-          resource_id: row.resource_id ?? row.target_id ?? null,
-        })),
-      )
-    }
-    setLoading(false)
-  }, [isAdmin, range])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    load()
-  }, [load])
+  const { data: rows = [], isLoading: loading, error: queryError } = useAuditLog(range, isAdmin)
+  const error = queryError ? friendlyError(queryError) : null
 
   const visible = useMemo(
     () => rows.filter((r) => actionFilter === 'all' || r.action === actionFilter),

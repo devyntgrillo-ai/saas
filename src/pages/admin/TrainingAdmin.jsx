@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Trash2, Pencil, ArrowUp, ArrowDown, Loader2, Send,
   ExternalLink, GraduationCap, AlertTriangle,
@@ -7,6 +8,7 @@ import Modal from '../../components/Modal'
 import { Badge } from '../../components/admin/ui'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { useAdminTrainingPage, queryKeys } from '../../lib/queries'
 
 // Lessons live in the single shared training_modules table. status drives the
 // publish model: 'draft' (never live), 'published' ('Live'), 'updated' (edited
@@ -25,44 +27,36 @@ const fmtDate = (d) => (d ? new Date(d).toLocaleString() : null)
 
 export default function TrainingAdmin() {
   const { user } = useAuth()
+  const queryClient = useQueryClient()
+  const { data, isLoading: loading, error: queryError, refetch } = useAdminTrainingPage()
   const [lessons, setLessons] = useState([])
   const [lastPush, setLastPush] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [groups, setGroups] = useState([])
+  const [error, setError] = useState(queryError?.message || '')
 
   const [fGroup, setFGroup] = useState('all')
   const [fCategory, setFCategory] = useState('all')
 
-  const [groups, setGroups] = useState([]) // training_module_groups (editable tabs)
   const [showModules, setShowModules] = useState(false)
   const [editing, setEditing] = useState(null) // lesson object, or {} for new
   const [confirmPush, setConfirmPush] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [busyId, setBusyId] = useState(null)
 
-  const load = useCallback(async () => {
-    const [lr, pr, gr] = await Promise.all([
-      supabase.from('training_modules').select('*').order('order_index', { ascending: true }),
-      supabase.from('training_push_log').select('*').order('pushed_at', { ascending: false }).limit(1),
-      supabase.from('training_module_groups').select('*').order('order_index', { ascending: true }),
-    ])
-    if (lr.error) setError(lr.error.message)
-    setLessons(lr.data || [])
-    setLastPush(pr.data?.[0] || null)
-    setGroups(gr.data || [])
-    setLoading(false)
-  }, [])
+  useEffect(() => {
+    if (!data) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLessons(data.lessons)
+    setLastPush(data.lastPush)
+    setGroups(data.groups)
+  }, [data])
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: [...queryKeys.admin.training(), 'page'] })
 
   const groupName = useCallback(
     (key) => groups.find((g) => g.key === key)?.name || key || '—',
     [groups],
   )
-
-  useEffect(() => {
-    let active = true
-    ;(async () => { if (active) await load() })()
-    return () => { active = false }
-  }, [load])
 
   const rows = useMemo(() => {
     let list = [...lessons]
@@ -146,7 +140,7 @@ export default function TrainingAdmin() {
     })
     setPushing(false)
     setConfirmPush(false)
-    await load()
+    invalidate()
   }
 
   async function saveLesson(form) {

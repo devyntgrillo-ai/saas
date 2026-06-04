@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { usePlaudLastSync } from '../lib/queries'
 import { plaudAutoflowEmail, AUDIO_QUALITY, MIC_PREF_KEY, listMicrophones } from '../lib/recording'
 import { timeAgo } from '../lib/consults'
 
@@ -66,16 +67,10 @@ function PlaudCard({ practice, save, saving }) {
   const [token, setToken] = useState(practice?.plaud_api_key || '')
   const [copied, setCopied] = useState(false)
   const [syncFlash, setSyncFlash] = useState('')
-  const [lastSync, setLastSync] = useState(null)
+  const { data: lastSync } = usePlaudLastSync(practice?.id)
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setToken(practice?.plaud_api_key || '') }, [practice?.plaud_api_key])
-  useEffect(() => {
-    if (!practice?.id) return
-    supabase.from('consults').select('created_at').eq('practice_id', practice.id)
-      .ilike('recording_source', 'plaud%').order('created_at', { ascending: false }).limit(1)
-      .then(({ data }) => setLastSync(data?.[0]?.created_at || null))
-  }, [practice?.id])
 
   const connected = Boolean(practice?.plaud_webhook_url)
   const autoflow = practice?.id ? plaudAutoflowEmail(practice.id) : ''

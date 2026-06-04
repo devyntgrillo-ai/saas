@@ -1,13 +1,55 @@
 /** Mailgun REST helper for transactional / sequence email. */
 
-/** Reply address for two-way conversation email (Mailgun inbound route). */
-export function conversationReplyAddress(conversationId: string, domain?: string): string | null {
-  const d = domain || Deno.env.get("MAILGUN_DOMAIN");
-  if (!d || !conversationId) return null;
-  return `reply+${conversationId}@${d}`;
+export type MailgunAudience = "platform" | "patient";
+
+/** Platform domain (invites, billing, staff digests). */
+export function mailgunPlatformDomain(): string | null {
+  return Deno.env.get("MAILGUN_DOMAIN") || null;
 }
 
-/** Parse conversation id from Mailgun recipient, e.g. reply+{uuid}@mg.example.com */
+/** DNS root for per-practice patient hosts: {subdomain}.mail.heyhope.ai */
+export function mailgunPatientMailRoot(): string {
+  return Deno.env.get("MAILGUN_PATIENT_MAIL_ROOT") || "mail.heyhope.ai";
+}
+
+/** Mailgun API domain for patient sends (wildcard domain in Mailgun, e.g. mail.heyhope.ai). */
+export function mailgunPatientApiDomain(): string {
+  return Deno.env.get("MAILGUN_PATIENT_MAIL_DOMAIN") || mailgunPatientMailRoot();
+}
+
+export function practiceMailHostname(subdomain: string): string {
+  return `${subdomain}.${mailgunPatientMailRoot()}`;
+}
+
+export function practiceFromAddress(subdomain: string, localPart = "office"): string {
+  return `${localPart}@${practiceMailHostname(subdomain)}`;
+}
+
+/** Parse practice mail_subdomain from recipient (reply+uuid@smith.mail.heyhope.ai). */
+export function parseMailSubdomainFromRecipient(recipient: string, mailRoot?: string): string | null {
+  const root = (mailRoot || mailgunPatientMailRoot()).toLowerCase();
+  const raw = String(recipient || "").trim().toLowerCase();
+  const email = raw.includes("@") ? (raw.match(/<([^>]+)>/)?.[1] || raw.split("@").pop() || "") : raw;
+  const suffix = `.${root}`;
+  if (!email.endsWith(suffix) || email === root) return null;
+  const sub = email.slice(0, -suffix.length);
+  if (!sub || sub.includes(".")) return null;
+  return sub;
+}
+
+export function isPatientMailRecipient(recipient: string): boolean {
+  return parseMailSubdomainFromRecipient(recipient) != null ||
+    String(recipient).toLowerCase().includes(`@${mailgunPatientMailRoot().toLowerCase()}`);
+}
+
+/** Reply address for two-way conversation email (host = practice subdomain host or legacy domain). */
+export function conversationReplyAddress(conversationId: string, mailHost?: string): string | null {
+  const host = mailHost || mailgunPlatformDomain();
+  if (!host || !conversationId) return null;
+  return `reply+${conversationId}@${host}`;
+}
+
+/** Parse conversation id from Mailgun recipient, e.g. reply+{uuid}@smith.mail.heyhope.ai */
 export function parseConversationIdFromRecipient(recipient: string): string | null {
   const raw = String(recipient || "");
   const m = raw.match(/reply\+([0-9a-fA-F-]{36})/i) || raw.match(/conv\+([0-9a-fA-F-]{36})/i);
@@ -54,9 +96,9 @@ export type MailgunSendResult =
 
 export type MailgunFromKind = "noreply" | "digest";
 
-/** Resolved sender address (local part @ MAILGUN_DOMAIN). */
+/** Resolved sender address on the platform domain. */
 export function mailgunFromAddress(kind: MailgunFromKind = "noreply"): string | null {
-  const domain = Deno.env.get("MAILGUN_DOMAIN");
+  const domain = mailgunPlatformDomain();
   if (!domain) return null;
   const envFrom = Deno.env.get("MAILGUN_FROM");
   const parsed = envFrom?.match(/<([^>]+)>/)?.[1];
@@ -65,38 +107,19 @@ export function mailgunFromAddress(kind: MailgunFromKind = "noreply"): string | 
 }
 
 export function isMailgunConfigured(): boolean {
-  return Boolean(Deno.env.get("MAILGUN_DOMAIN") && Deno.env.get("MAILGUN_API_KEY"));
+  return Boolean(mailgunPlatformDomain() && Deno.env.get("MAILGUN_API_KEY"));
 }
 
-export async function sendMailgunMessage(opts: {
-  to: string;
-  subject: string;
-  text: string;
-  html?: string;
-  fromName?: string;
-  replyTo?: string | null;
-  fromAddress?: string;
-  fromKind?: MailgunFromKind;
-}): Promise<MailgunSendResult> {
-  const domain = Deno.env.get("MAILGUN_DOMAIN");
-  const key = Deno.env.get("MAILGUN_API_KEY");
-  if (!domain || !key) {
-    return { sent: false, reason: "mailgun_not_configured" };
-  }
+export function isPatientMailConfigured(): boolean {
+  return Boolean(mailgunPatientApiDomain() && Deno.env.get("MAILGUN_API_KEY"));
+}
 
-  const address = opts.fromAddress || mailgunFromAddress(opts.fromKind ?? "noreply");
-  if (!address) return { sent: false, reason: "mailgun_not_configured" };
-
-  const fromName = opts.fromName || "Hope AI";
-  const form = new FormData();
-  form.append("from", `${fromName} <${address}>`);
-  form.append("to", opts.to);
-  form.append("subject", opts.subject);
-  form.append("text", opts.text);
-  if (opts.html) form.append("html", opts.html);
-  if (opts.replyTo) form.append("h:Reply-To", opts.replyTo);
-
-  const res = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
+async function postMailgun(
+  apiDomain: string,
+  key: string,
+  form: FormData,
+): Promise<MailgunSendResult> {
+  const res = await fetch(`https://api.mailgun.net/v3/${apiDomain}/messages`, {
     method: "POST",
     headers: { Authorization: `Basic ${btoa(`api:${key}`)}` },
     body: form,
@@ -104,7 +127,7 @@ export async function sendMailgunMessage(opts: {
 
   if (!res.ok) {
     const detail = await res.text();
-    console.error(`Mailgun send failed ${res.status}:`, detail);
+    console.error(`Mailgun send failed ${res.status} (${apiDomain}):`, detail);
     return { sent: false, reason: `mailgun_${res.status}`, detail };
   }
 
@@ -116,7 +139,46 @@ export async function sendMailgunMessage(opts: {
   }
 }
 
-/** Multiple recipients in one Mailgun request (deduped). */
+/** Platform email: invites, billing, staff digests (MAILGUN_DOMAIN). */
+export async function sendMailgunMessage(opts: {
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+  fromName?: string;
+  replyTo?: string | null;
+  fromAddress?: string;
+  fromKind?: MailgunFromKind;
+  audience?: MailgunAudience;
+  mailgunDomain?: string;
+}): Promise<MailgunSendResult> {
+  const audience = opts.audience ?? "platform";
+  const key = Deno.env.get("MAILGUN_API_KEY");
+  if (!key) return { sent: false, reason: "mailgun_not_configured" };
+
+  const domain = audience === "patient"
+    ? (opts.mailgunDomain || mailgunPatientApiDomain())
+    : (opts.mailgunDomain || mailgunPlatformDomain());
+
+  if (!domain) return { sent: false, reason: "mailgun_not_configured" };
+
+  const address = opts.fromAddress ||
+    (audience === "platform" ? mailgunFromAddress(opts.fromKind ?? "noreply") : null);
+  if (!address) return { sent: false, reason: "missing_from_address" };
+
+  const fromName = opts.fromName || "Hope AI";
+  const form = new FormData();
+  form.append("from", `${fromName} <${address}>`);
+  form.append("to", opts.to);
+  form.append("subject", opts.subject);
+  form.append("text", opts.text);
+  if (opts.html) form.append("html", opts.html);
+  if (opts.replyTo) form.append("h:Reply-To", opts.replyTo);
+
+  return postMailgun(domain, key, form);
+}
+
+/** Multiple recipients — platform mail only. */
 export async function sendMailgunToMany(opts: {
   to: string[];
   subject: string;
@@ -129,7 +191,7 @@ export async function sendMailgunToMany(opts: {
   const recipients = [...new Set(opts.to.map((e) => e.trim()).filter((e) => /@/.test(e)))];
   if (!recipients.length) return { sent: false, reason: "no_recipient" };
 
-  const domain = Deno.env.get("MAILGUN_DOMAIN");
+  const domain = mailgunPlatformDomain();
   const key = Deno.env.get("MAILGUN_API_KEY");
   if (!domain || !key) return { sent: false, reason: "mailgun_not_configured" };
 
@@ -145,22 +207,5 @@ export async function sendMailgunToMany(opts: {
   form.append("html", opts.html);
   if (opts.replyTo) form.append("h:Reply-To", opts.replyTo);
 
-  const res = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
-    method: "POST",
-    headers: { Authorization: `Basic ${btoa(`api:${key}`)}` },
-    body: form,
-  });
-
-  if (!res.ok) {
-    const detail = await res.text();
-    console.error(`Mailgun send failed ${res.status}:`, detail);
-    return { sent: false, reason: `mailgun_${res.status}`, detail };
-  }
-
-  try {
-    const data = await res.json();
-    return { sent: true, id: data?.id };
-  } catch {
-    return { sent: true };
-  }
+  return postMailgun(domain, key, form);
 }

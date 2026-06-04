@@ -1,34 +1,21 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { loadAdminData, logImpersonation } from '../lib/admin'
+import { logImpersonation } from '../lib/admin'
+import { useAdminData } from '../lib/queries'
 import { useAuth } from './AuthContext'
 
 const AdminContext = createContext(null)
 
-// Loads the admin dataset once and shares it across all admin pages, with a
-// refresh hook and impersonation helpers that reuse the app's practice-view
-// context.
 export function AdminProvider({ children }) {
   const { user, viewPractice } = useAuth()
   const navigate = useNavigate()
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const { data = null, isLoading: loading, refetch } = useAdminData()
 
   const refresh = useCallback(async () => {
-    setLoading(true)
-    const d = await loadAdminData()
-    setData(d)
-    setLoading(false)
-    return d
-  }, [])
+    const r = await refetch()
+    return r.data
+  }, [refetch])
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    refresh()
-  }, [refresh])
-
-  // Impersonate a specific practice: switch the main app's practice context and
-  // jump to its dashboard. Real (non-demo) practices only.
   const impersonatePractice = useCallback(
     (practice) => {
       if (!practice?.id || String(practice.id).startsWith('demo-')) {
@@ -42,8 +29,6 @@ export function AdminProvider({ children }) {
     [user, viewPractice, navigate],
   )
 
-  // Impersonate an agency: view its first practice (the app has no standalone
-  // agency-impersonation context, so we land inside one of its practices).
   const impersonateAgency = useCallback(
     (agency) => {
       const first = data?.practices.find((p) => p.agency_id === agency?.id && !String(p.id).startsWith('demo-'))

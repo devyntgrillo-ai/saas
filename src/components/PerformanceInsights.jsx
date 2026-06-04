@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
 } from 'recharts'
 import { Sparkles, Network, GraduationCap } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import { closeRateForRows, replyRatesByPosition } from '../lib/dashboard'
+import { useAITip } from '../lib/queries'
 
 const OBJ_COLORS = { price: '#f59e0b', fear: '#ef4444', spouse: '#a855f7', timing: '#3b82f6', other: '#94a3b8' }
 const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -25,19 +25,7 @@ function Panel({ title, children }) {
 }
 
 export default function PerformanceInsights({ consults = [], messageOutcomes = [], comparison, practiceId }) {
-  const [tip, setTip] = useState(null)
-
-  useEffect(() => {
-    if (!practiceId) return
-    let on = true
-    supabase.from('ai_learning_events')
-      .select('title, description, created_at')
-      .eq('practice_id', practiceId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .then(({ data }) => { if (on) setTip(data?.[0] || null) })
-    return () => { on = false }
-  }, [practiceId])
+  const { data: tip } = useAITip(practiceId)
 
   // Recording trend - consults recorded per week, last 4 weeks.
   const recordingTrend = useMemo(() => {

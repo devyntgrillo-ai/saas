@@ -16,14 +16,14 @@ sequenceDiagram
   TC->>App: Send email
   App->>DB: Insert outbound conversation_message
   App->>FN: mailgun-send
-  FN->>MG: Send with Reply-To reply+{conversation_id}@mg.domain
+  FN->>MG: Send with Reply-To reply+{conversation_id}@{practice}.mail.heyhope.ai
   Note over Patient: Patient hits Reply
   MG->>IN: Inbound route webhook
   IN->>DB: Insert inbound conversation_message
   App->>DB: Realtime shows reply in thread
 ```
 
-1. **Outbound:** `mailgun-send` sets `Reply-To` to `reply+{conversation_id}@MAILGUN_DOMAIN` (not the practice front-desk email).
+1. **Outbound:** `mailgun-send` sets **From** `office@{mail_subdomain}.mail.heyhope.ai` and **Reply-To** `reply+{conversation_id}@` the same host (see **`MAILGUN_PRACTICE_MAIL.md`**).
 2. **Inbound:** Mailgun receives the reply and POSTs to `mailgun-inbound`.
 3. **Thread:** The function inserts an **inbound** `conversation_message` with `channel: email` (same triggers as SMS: auto-pause sequence, attribution, realtime).
 
@@ -39,7 +39,7 @@ npx supabase functions deploy mailgun-inbound --no-verify-jwt --project-ref eymg
 
 | Secret | Required | Purpose |
 |--------|----------|---------|
-| `MAILGUN_DOMAIN` | yes | Same as outbound (e.g. `mg.heyhope.ai`) |
+| `MAILGUN_PATIENT_MAIL_ROOT` | yes | e.g. `mail.heyhope.ai` |
 | `MAILGUN_API_KEY` | yes | Outbound send |
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | recommended | Verify inbound webhook signature |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | auto | DB writes |
@@ -52,7 +52,7 @@ In [Mailgun](https://app.mailgun.com/) → **Sending** → **Domains** → your 
 
 | Field | Value |
 |-------|--------|
-| Expression | `match_recipient("reply+.*@mg.heyhope.ai")` (use your `MAILGUN_DOMAIN`) |
+| Expression | `match_recipient("reply+.*@.*\.mail\.heyhope.ai")` (see `MAILGUN_PATIENT_MAIL_ROOT`) |
 | Action | `forward("https://eymgqjeudrmeofytnwgs.supabase.co/functions/v1/mailgun-inbound")` |
 | Priority | `0` (or high priority) |
 
