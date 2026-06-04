@@ -48,9 +48,18 @@ Deno.serve(async (req: Request) => {
     const recordingDuration = Number(form.get("RecordingDuration") || 0) || null;
 
     if (callSid && recordingUrl) {
-      const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+      const supabaseUrl = (Deno.env.get("SUPABASE_URL") || "").replace(/\/$/, "");
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const admin = createClient(supabaseUrl, serviceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
       });
+
+      const { data: existing } = await admin
+        .from("call_logs")
+        .select("id, practice_id")
+        .eq("twilio_call_sid", callSid)
+        .maybeSingle();
+
       // .mp3 is directly playable; the raw RecordingUrl needs Twilio auth either way.
       await admin.from("call_logs").update({
         recording_url: `${recordingUrl}.mp3`,
@@ -58,7 +67,20 @@ Deno.serve(async (req: Request) => {
         recording_duration: recordingDuration,
         status: "completed",
         ended_at: new Date().toISOString(),
+        transcript_status: "pending",
       }).eq("twilio_call_sid", callSid);
+
+      // Fire-and-forget Whisper transcription (reuses shared pipeline via transcribe-call-log).
+      if (existing?.id && existing.practice_id) {
+        fetch(`${supabaseUrl}/functions/v1/transcribe-call-log`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${serviceKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ call_log_id: existing.id, practice_id: existing.practice_id }),
+        }).catch((e) => console.error("transcribe-call-log trigger failed:", e));
+      }
     }
     return new Response("", { status: 204 });
   } catch (e) {

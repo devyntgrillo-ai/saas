@@ -1,0 +1,2 @@
+[functions.transcribe-call-log]
+verify_jwt = false

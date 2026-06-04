@@ -8,7 +8,6 @@ import {
   Send,
   ArrowLeft,
   Phone,
-  PhoneCall,
   PhoneOff,
   Mic,
   MicOff,
@@ -37,7 +36,6 @@ import {
   Play,
   Pause,
   Megaphone,
-  Eye,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useRecorder } from '../context/RecorderContext'
@@ -528,35 +526,6 @@ const SNIPPETS = [
   'Hi [name], just a friendly reminder that your consultation offer is still available.',
 ]
 
-// Inline "log a call" form shown under the composer.
-const CALL_OUTCOMES = ['Answered', 'No answer', 'Left voicemail', 'Scheduled appointment']
-function LogCallForm({ onSave, onCancel }) {
-  const [direction, setDirection] = useState('outbound')
-  const [duration, setDuration] = useState('')
-  const [outcome, setOutcome] = useState(CALL_OUTCOMES[0])
-  const [notes, setNotes] = useState('')
-  const sel = 'rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 focus:border-blue-400 focus:outline-none'
-  return (
-    <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-2.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <select value={direction} onChange={(e) => setDirection(e.target.value)} className={sel}>
-          <option value="outbound">Outbound</option>
-          <option value="inbound">Inbound</option>
-        </select>
-        <input type="number" min="0" value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="Min" className={`${sel} w-20`} />
-        <select value={outcome} onChange={(e) => setOutcome(e.target.value)} className={sel}>
-          {CALL_OUTCOMES.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
-      </div>
-      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Call notes (optional)" className="mt-2 w-full resize-none rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm text-gray-900 focus:border-blue-400 focus:outline-none" />
-      <div className="mt-2 flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="text-xs font-medium text-gray-500 hover:text-gray-700">Cancel</button>
-        <button type="button" onClick={() => onSave({ direction, durationMin: Number(duration) || null, outcome, notes })} className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-gray-700">Log call</button>
-      </div>
-    </div>
-  )
-}
-
 export default function Conversations() {
   const { practiceId, practice, user, profile } = useAuth()
   const [searchParams] = useSearchParams()
@@ -605,7 +574,6 @@ export default function Conversations() {
   const [snippetsOpen, setSnippetsOpen] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [logCallOpen, setLogCallOpen] = useState(false)
   const [channelMenuOpen, setChannelMenuOpen] = useState(false)
   const [emailComposerExpanded, setEmailComposerExpanded] = useState(false)
   const fileInputRef = useRef(null)
@@ -702,8 +670,6 @@ export default function Conversations() {
     setDraft(value)
     setAiSuggested(false)
   }
-
-  const isNote = channel === 'note'
 
   function refetchConv() {
     queryClient.invalidateQueries({ queryKey: queryKeys.conversations(practiceId) })
@@ -824,7 +790,7 @@ export default function Conversations() {
       })
       bumpConversation(nowIso, `📎 ${file.name}`)
       refetchConv()
-      if (!isNote && channel === 'sms') {
+      if (channel === 'sms') {
         const target = activeConv?.patient_phone
         if (target) supabase.functions.invoke('twilio-send', { body: { practice_id: practiceId, to: target, body: file.name, media_url: pub.publicUrl, conversation_message_id: data?.id } }).catch(() => {})
       }
@@ -833,21 +799,6 @@ export default function Conversations() {
     } finally {
       setUploading(false)
     }
-  }
-
-  // "+ Log call note" inline form save.
-  async function logCallNote({ direction, durationMin, outcome, notes }) {
-    if (!activeId) return
-    const nowIso = new Date().toISOString()
-    const summary = [direction === 'inbound' ? 'Inbound call' : 'Outbound call', outcome, durationMin ? `${durationMin} min` : null].filter(Boolean).join(' · ')
-    await insertConvMessage({
-      conversation_id: activeId, direction, channel: 'call', body: notes?.trim() || summary, sent_at: nowIso,
-      meta: { kind: 'call', direction, actor: direction === 'inbound' ? (activeConv?.patient_first || 'Patient') : tcName, outcome: outcome || null, duration_min: durationMin || null, note: notes?.trim() || null },
-    })
-    bumpConversation(nowIso, summary)
-    refetchConv()
-    setLogCallOpen(false)
-    showToast('Call logged')
   }
 
   // Toggle the starred flag on the linked consult (optimistic). Reflects in both
@@ -892,6 +843,7 @@ export default function Conversations() {
   }
 
   function switchComposeChannel(next) {
+    if (next !== 'email' && next !== 'sms') return
     setChannel(next)
     setChannelMenuOpen(false)
     setEmojiOpen(false)
@@ -930,21 +882,19 @@ export default function Conversations() {
       setEmailSubject('')
       setAiSuggested(false)
       auditMessageSent(activeId)
-      if (!isNote) {
-        const fn = isEmail ? 'mailgun-send' : 'twilio-send'
-        const target = isEmail ? activeConv?.patient_email : activeConv?.patient_phone
-        if (target) {
-          supabase.functions.invoke(fn, {
-            body: {
-              practice_id: practiceId,
-              to: target,
-              body,
-              subject,
-              conversation_message_id: data.id,
-              consult_id: activeConv?.consult_id,
-            },
-          }).catch(() => showToast('Could not send — check messaging settings.'))
-        }
+      const fn = isEmail ? 'mailgun-send' : 'twilio-send'
+      const target = isEmail ? activeConv?.patient_email : activeConv?.patient_phone
+      if (target) {
+        supabase.functions.invoke(fn, {
+          body: {
+            practice_id: practiceId,
+            to: target,
+            body,
+            subject,
+            conversation_message_id: data.id,
+            consult_id: activeConv?.consult_id,
+          },
+        }).catch(() => showToast('Could not send — check messaging settings.'))
       }
       bumpConversation(nowIso)
       refetchConv()
@@ -1304,6 +1254,9 @@ export default function Conversations() {
                             callLogId={m.call_log_id}
                             hasRecording={hasRecording}
                             recordingDuration={recMeta?.duration_seconds}
+                            transcriptStatus={recMeta?.transcript_status}
+                            transcriptText={recMeta?.transcript_deidentified}
+                            transcriptError={recMeta?.transcript_error}
                             patientFirst={activeConv.patient_first}
                             patientLast={activeConv.patient_last}
                             avatarClass={avatarColor(seed)}
@@ -1448,14 +1401,6 @@ export default function Conversations() {
                     >
                       SMS
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => switchComposeChannel('note')}
-                      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition ${isNote ? 'bg-amber-50 text-amber-800' : 'text-gray-600 hover:bg-gray-100'}`}
-                    >
-                      <Eye className="h-4 w-4 shrink-0" />
-                      Internal Comment
-                    </button>
                   </div>
 
                   {aiSuggested && draft.trim() && (
@@ -1470,14 +1415,14 @@ export default function Conversations() {
                       value={draft}
                       onChange={(e) => updateDraft(e.target.value)}
                       onKeyDown={(e) => {
-                        if (!isNote && e.key === 'Enter' && !e.shiftKey) {
+                        if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault()
                           handleSend(e)
                         }
                       }}
-                      rows={isNote ? 4 : 2}
-                      placeholder={isNote ? 'Add an internal comment (not sent to the patient)' : 'Type a message'}
-                      className={`min-h-[56px] max-h-40 flex-1 resize-none overflow-y-auto rounded-lg border px-4 py-2.5 text-[15px] text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 ${isNote ? 'border-amber-300 bg-amber-50/40 focus:border-amber-400 focus:ring-amber-500/20' : 'border-gray-200 bg-white focus:border-blue-400 focus:ring-blue-500/20'}`}
+                      rows={2}
+                      placeholder="Type a message"
+                      className="min-h-[56px] max-h-40 flex-1 resize-none overflow-y-auto rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-[15px] text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                     />
                   </div>
 
@@ -1486,7 +1431,7 @@ export default function Conversations() {
                       <button type="button" onClick={() => { setEmojiOpen((v) => !v); setSnippetsOpen(false) }} title="Emoji" aria-label="Emoji" className={`rounded-md p-1.5 transition hover:bg-gray-200/80 hover:text-gray-700 ${emojiOpen ? 'bg-gray-200/80 text-gray-700' : ''}`}>
                         <Smile className="h-4 w-4" />
                       </button>
-                      <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || isNote} title="Attach file" aria-label="Attach file" className="rounded-md p-1.5 transition hover:bg-gray-200/80 hover:text-gray-700 disabled:opacity-40">
+                      <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} title="Attach file" aria-label="Attach file" className="rounded-md p-1.5 transition hover:bg-gray-200/80 hover:text-gray-700 disabled:opacity-40">
                         {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
                       </button>
                       <button type="button" onClick={() => { setSnippetsOpen((v) => !v); setEmojiOpen(false) }} title="Snippets" aria-label="Snippets" className={`rounded-md p-1.5 transition hover:bg-gray-200/80 hover:text-gray-700 ${snippetsOpen ? 'bg-gray-200/80' : ''}`}>
@@ -1521,7 +1466,7 @@ export default function Conversations() {
                       <button
                         type="button"
                         onClick={suggestReply}
-                        disabled={suggesting || isNote}
+                        disabled={suggesting}
                         className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
                       >
                         {suggesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
@@ -1530,23 +1475,14 @@ export default function Conversations() {
                       <button
                         type="submit"
                         disabled={!draft.trim() || sending}
-                        className={`inline-flex shrink-0 items-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold !text-white transition disabled:opacity-50 ${isNote ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+                        className="inline-flex shrink-0 items-center gap-2 rounded-md bg-blue-600 px-3.5 py-2 text-sm font-semibold !text-white transition hover:bg-blue-700 disabled:opacity-50"
                       >
                         {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                        <span className="hidden sm:inline">{isNote ? 'Add Comment' : 'Send'}</span>
+                        <span className="hidden sm:inline">Send</span>
                       </button>
                     </div>
                   </div>
                 </div>
-              )}
-
-              {/* Log a call note (manual call event) */}
-              {logCallOpen ? (
-                <LogCallForm onCancel={() => setLogCallOpen(false)} onSave={logCallNote} />
-              ) : (
-                <button type="button" onClick={() => setLogCallOpen(true)} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-gray-500 transition hover:text-gray-700">
-                  <PhoneCall className="h-3.5 w-3.5" /> + Log call note
-                </button>
               )}
             </form>
           </>
