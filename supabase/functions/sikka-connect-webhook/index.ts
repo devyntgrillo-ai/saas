@@ -244,6 +244,9 @@ async function closeConsultsForTreatmentPlans(admin: any, practiceId: string, re
       practice_id: practiceId, action: "consult.treatment_accepted",
       resource_type: "consult", resource_id: match.id,
     }).then(() => {}, () => {});
+    // Record an assisted win + Slack alert (no-op unless a sequence message was sent).
+    admin.functions.invoke("record-win", { body: { consult_id: match.id, practice_id: practiceId, source: "pms_webhook" } })
+      .then(() => {}, (e: unknown) => console.error("record-win invoke failed:", e));
     closed++;
   }
   return closed;
