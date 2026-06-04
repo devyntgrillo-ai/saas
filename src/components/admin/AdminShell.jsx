@@ -14,6 +14,7 @@ const TABS = [
   { to: '/admin/revenue', label: 'Revenue' },
   { to: '/admin/billing', label: 'Billing' },
   { to: '/admin/training', label: 'Training' },
+  { to: '/admin/wins', label: 'Wins' },
   { to: '/admin/referrals', label: 'Referrals' },
 ]
 

@@ -215,6 +215,10 @@ async function syncOnePractice(admin: any, practice: SikkaPracticeRow) {
           resource_type: "consult", resource_id: match.id,
         }).then(() => {}, () => {});
 
+        // Record an assisted win + Slack win alert (no-op unless a sequence message was sent).
+        admin.functions.invoke("record-win", { body: { consult_id: match.id, practice_id: practice.id, source: "pms_webhook" } })
+          .then(() => {}, (e: unknown) => console.error("record-win invoke failed:", e));
+
         // Slack: high-signal "we just closed a case" ping (only when attributed).
         if (status !== "practice_direct") {
           const name = [a.patient?.first_name, a.patient?.last_name].filter(Boolean).join(" ")

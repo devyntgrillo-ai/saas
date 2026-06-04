@@ -28,6 +28,7 @@ import {
   RefreshCcw,
   Pencil,
   Check,
+  Trophy,
   RotateCcw,
 } from 'lucide-react'
 import Modal from '../components/Modal'
@@ -544,6 +545,7 @@ export default function ConsultDetail() {
   const appointment = bundle?.appointment ?? null
   const { data: attribution = null } = useConsultAttribution(consult, messages)
   const [showPatientEdit, setShowPatientEdit] = useState(false)
+  const [wonOpen, setWonOpen] = useState(false)
 
   function patchConsult(patch) {
     queryClient.setQueryData(queryKeys.consult(id), (old) =>
@@ -794,6 +796,20 @@ export default function ConsultDetail() {
                 <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
                   <RefreshCcw className="h-3 w-3" /> Auto-synced
                 </span>
+              )}
+              {!analysisPending && (
+                consult.outcome === 'closed_won' || ['closed_won', 'recovered'].includes(consult.status) ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                    <Trophy className="h-3 w-3" /> Won ✓
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setWonOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-emerald-500"
+                  >
+                    <Trophy className="h-3 w-3" /> Mark as Won
+                  </button>
+                )
               )}
             </div>
           </div>
@@ -1130,7 +1146,82 @@ export default function ConsultDetail() {
         {showPatientEdit && (
           <PatientEditModal consult={consult} onClose={() => setShowPatientEdit(false)} onSave={savePatientInfo} />
         )}
+        {wonOpen && (
+          <WonModal
+            consult={consult}
+            onClose={() => setWonOpen(false)}
+            onWon={(patch) => { patchConsult(patch); setWonOpen(false) }}
+          />
+        )}
       </div>
     </div>
+  )
+}
+
+// "Mark as Won" modal: capture treatment + case value, attest CaseLift assisted,
+// then close the consult and record the (assisted) win server-side.
+function WonModal({ consult, onClose, onWon }) {
+  const [treatment, setTreatment] = useState(consult.treatment_type || 'dental_implants')
+  const [value, setValue] = useState(String(consult.tx_plan_value ?? consult.case_value ?? ''))
+  const [confirmed, setConfirmed] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit() {
+    if (!confirmed || busy) return
+    setBusy(true)
+    setError('')
+    const caseValue = Number(value) || 0
+    const patch = {
+      outcome: 'closed_won',
+      status: 'closed_won',
+      treatment_type: treatment,
+      case_value: caseValue,
+      tx_plan_value: caseValue,
+      tx_plan_value_source: 'manual',
+    }
+    const { error: e } = await supabase.from('consults').update(patch).eq('id', consult.id)
+    if (e) { setError(e.message || 'Could not mark as won.'); setBusy(false); return }
+    // Record the assisted win + Slack alert (server-side; no-op if no sequence
+    // messages were sent). Non-blocking — the consult is already marked won.
+    try {
+      await supabase.functions.invoke('record-win', {
+        body: { consult_id: consult.id, source: 'manual', case_value: caseValue, treatment_type: treatment },
+      })
+    } catch { /* win logging is best-effort */ }
+    setBusy(false)
+    onWon(patch)
+  }
+
+  return (
+    <Modal title="Mark as Won" onClose={onClose} maxWidth="max-w-md" footer={
+      <>
+        <button onClick={onClose} className="btn-ghost">Cancel</button>
+        <button onClick={submit} disabled={!confirmed || busy} className="btn-primary">
+          {busy && <Loader2 className="h-4 w-4 animate-spin" />} Mark as Won
+        </button>
+      </>
+    }>
+      <div className="space-y-4">
+        <div>
+          <label className="label">Treatment type</label>
+          <select className="input" value={treatment} onChange={(e) => setTreatment(e.target.value)}>
+            {TREATMENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">Case value</label>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+            <input type="number" min={0} step={100} className="input pl-7" value={value} onChange={(e) => setValue(e.target.value)} placeholder="0" />
+          </div>
+        </div>
+        <label className="flex items-start gap-2.5 text-sm text-slate-300">
+          <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-surface-600 bg-surface-800 text-primary focus:ring-primary/40" />
+          CaseLift follow-up assisted in closing this case
+        </label>
+        {error && <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
+      </div>
+    </Modal>
   )
 }
