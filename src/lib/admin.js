@@ -196,10 +196,10 @@ export async function loadAdminData() {
     monthStart.setDate(monthStart.getDate() - 30)
 
     const [agRes, prRes, coRes, cfRes, leRes] = await Promise.all([
-      supabase.from('agency_accounts').select('*'),
-      supabase.from('practices').select('*, agency:agency_accounts(name)'),
+      supabase.from('agency_accounts').select('*').limit(500),
+      supabase.from('practices').select('*, agency:agency_accounts(name)').limit(500),
       supabase.from('consults').select('id, practice_id, status, created_at').gte('created_at', monthStart.toISOString()).order('created_at', { ascending: false }),
-      supabase.from('cancellation_feedback').select('*').order('created_at', { ascending: false }),
+      supabase.from('cancellation_feedback').select('*').order('created_at', { ascending: false }).limit(500),
       // Best-effort; table/columns may not exist or be RLS-restricted → ignored.
       supabase.from('ai_learning_events').select('*').order('created_at', { ascending: false }).limit(15),
     ])
@@ -376,15 +376,16 @@ export function smsStatusMeta(s) {
 // Best-effort audit log of an impersonation event. Never throws.
 export async function logImpersonation({ actorId, targetType, targetId, targetName }) {
   try {
-    await supabase.from('audit_logs').insert({
+    const { error } = await supabase.from('audit_logs').insert({
       actor_id: actorId || null,
       action: 'impersonate',
       target_type: targetType,
       target_id: targetId,
       detail: targetName,
     })
-  } catch {
-    /* audit_logs may not exist yet - non-critical */
+    if (error) console.warn('[audit] logImpersonation failed:', error.message)
+  } catch (e) {
+    console.error('[audit] logImpersonation threw:', e)
   }
 }
 

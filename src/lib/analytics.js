@@ -1,6 +1,6 @@
 // Pure helpers that turn raw consults + messages into the analytics dashboard
 // series. Kept framework-free so it's easy to reason about and test.
-import { isWonStatus } from './consults'
+import { isClosedConsult, replyRatesByPosition } from './dashboard'
 
 export const RANGES = [
   { key: '30d', label: 'Last 30 days', days: 30 },
@@ -45,10 +45,10 @@ function weekLabel(d) {
   return `${MONTHS[d.getMonth()]} ${d.getDate()}`
 }
 
-const isWon = (c) => isWonStatus(c.status) // active / closed-won / recovered
+const isWon = isClosedConsult
 const money = (n) => Number(n) || 0
 
-export function computeAnalytics(consults, messages, rangeKey) {
+export function computeAnalytics(consults, messages, rangeKey, messageOutcomes = []) {
   const range = RANGES.find((r) => r.key === rangeKey) || RANGES[2]
   const cutoff = cutoffDate(range.days)
 
@@ -104,44 +104,14 @@ export function computeAnalytics(consults, messages, rangeKey) {
     .filter(([, v]) => v > 0)
     .map(([name, value]) => ({ name, value }))
 
-  // --- Follow-up performance: replies by sequence position ---
-  const inRangeIds = new Set(inRange.map((c) => c.id))
-  const byConsult = new Map()
-  for (const m of messages) {
-    if (!byConsult.has(m.consult_id)) byConsult.set(m.consult_id, [])
-    byConsult.get(m.consult_id).push(m)
-  }
-  const positions = {} // index -> { sent, replied, channels:{} }
-  for (const [consultId, msgs] of byConsult) {
-    // Only count sequences for consults in range when a range is set; else all.
-    if (cutoff && inRangeIds.size && !inRangeIds.has(consultId)) {
-      // keep if the consult isn't in our fetched in-range set; skip
-      if (!inRangeIds.has(consultId)) continue
-    }
-    const sorted = [...msgs].sort((a, b) => {
-      const ta = new Date(a.scheduled_for || a.created_at).getTime()
-      const tb = new Date(b.scheduled_for || b.created_at).getTime()
-      return ta - tb
-    })
-    sorted.forEach((m, i) => {
-      if (!positions[i]) positions[i] = { sent: 0, replied: 0, channels: {} }
-      positions[i].sent += 1
-      positions[i].channels[m.channel] = (positions[i].channels[m.channel] || 0) + 1
-      if (m.status === 'replied') positions[i].replied += 1
-    })
-  }
-  const followup = Object.entries(positions)
-    .sort((a, b) => Number(a[0]) - Number(b[0]))
-    .map(([i, v]) => {
-      const channel = Object.entries(v.channels).sort((a, b) => b[1] - a[1])[0]?.[0] || ''
-      return {
-        position: `Msg ${Number(i) + 1}`,
-        channel,
-        replies: v.replied,
-        sent: v.sent,
-        replyRate: v.sent ? Math.round((v.replied / v.sent) * 100) : 0,
-      }
-    })
+  // --- Follow-up performance: replies by sequence position (message_outcomes) ---
+  const followup = replyRatesByPosition(messageOutcomes, 8).map((r) => ({
+    position: `Msg ${r.position}`,
+    channel: '',
+    replies: r.replied,
+    sent: r.sent,
+    replyRate: r.rate,
+  }))
 
   // --- Stat cards ---
   const wonInRange = inRange.filter(isWon)

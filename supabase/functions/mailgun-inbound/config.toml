@@ -1,0 +1,3 @@
+# Mailgun inbound route posts here — no Supabase JWT.
+[functions.mailgun-inbound]
+verify_jwt = false

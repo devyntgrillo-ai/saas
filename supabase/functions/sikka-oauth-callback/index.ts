@@ -2,7 +2,8 @@
 // sikka-oauth-callback - the two ends of the Sikka OAuth 2.0 flow.
 //
 //   POST  (practice JWT)  → returns { url } the "Connect to Sikka" button sends
-//                           the browser to. State carries the practice_id.
+//                           the browser to. State carries a random nonce +
+//                           practice_id for CSRF protection (audit finding 6).
 //   GET   ?code&state     → Sikka's redirect after the practice clicks Allow.
 //                           Exchanges the code for request_key + refresh_token,
 //                           saves them on the practice, then 302s back to the
@@ -13,7 +14,7 @@
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
-import { appUrl, buildAuthorizeUrl, exchangeAuthCode, saveTokens } from "../_shared/sikka.ts";
+import { appUrl, exchangeAuthCode, getAppCreds, redirectUri, SIKKA_AUTHORIZE_URL, saveTokens } from "../_shared/sikka.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -53,10 +54,21 @@ Deno.serve(async (req: Request) => {
       const practiceId = prof?.practice_id;
       if (!practiceId) return json({ error: "No practice in context." }, 400);
 
-      // state = practice_id. (For stronger CSRF protection, persist a random
-      // nonce per practice and verify it on the GET; practice_id is sufficient
-      // for this flow since the callback only writes to that practice.)
-      return json({ url: buildAuthorizeUrl(String(practiceId)) });
+      // Generate a random nonce, persist it, and include it in the OAuth state
+      // parameter to prevent CSRF attacks on the callback (audit finding 6).
+      const admin = adminClient();
+      const nonce = crypto.randomUUID();
+      await admin.from("practices").update({ sikka_oauth_nonce: nonce }).eq("id", practiceId);
+
+      const { id } = getAppCreds();
+      const q = new URLSearchParams({
+        response_type: "code",
+        client_id: id,
+        redirect_uri: redirectUri(),
+        scope: "*",
+        state: `${nonce}:${practiceId}`,
+      });
+      return json({ url: `${SIKKA_AUTHORIZE_URL}?${q.toString()}` });
     } catch (e) {
       const msg = (e as Error)?.message || String(e);
       if (msg === "sikka_app_not_configured") {
@@ -70,15 +82,29 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") {
     const url = new URL(req.url);
     const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state"); // practice_id
+    const state = url.searchParams.get("state"); // nonce:practice_id
     const err = url.searchParams.get("error");
     if (err) return redirectToApp("error", err);
     if (!code || !state) return redirectToApp("error", "missing_code");
 
+    // Parse nonce:practice_id from state and verify the nonce (CSRF protection).
+    const colon = state.indexOf(":");
+    if (colon < 1) return redirectToApp("error", "invalid_state");
+    const gotNonce = state.slice(0, colon);
+    const practiceId = state.slice(colon + 1);
+    if (!gotNonce || !practiceId) return redirectToApp("error", "invalid_state");
+
     try {
       const admin = adminClient();
-      const { data: practice } = await admin.from("practices").select("id").eq("id", state).maybeSingle();
+      const { data: practice } = await admin.from("practices").select("id, sikka_oauth_nonce").eq("id", practiceId).maybeSingle();
       if (!practice) return redirectToApp("error", "unknown_practice");
+      if (!practice.sikka_oauth_nonce || practice.sikka_oauth_nonce !== gotNonce) {
+        console.warn("sikka-oauth-callback: CSRF nonce mismatch", { practiceId, expected: practice.sikka_oauth_nonce, got: gotNonce });
+        return redirectToApp("error", "csrf_mismatch");
+      }
+
+      // Clear the nonce immediately so it cannot be replayed.
+      await admin.from("practices").update({ sikka_oauth_nonce: null }).eq("id", practice.id);
 
       const tokens = await exchangeAuthCode(code);
       await saveTokens(admin, practice.id, tokens, { sikka_connected: true, pms_last_synced_at: null });

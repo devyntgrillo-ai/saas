@@ -520,7 +520,8 @@ function PhoneNumberCard({ phoneNumber, hasNumber, provStatus, practice, onSetup
               <p className={`mt-0.5 font-medium ${campaignMeta.text}`}>{campaignMeta.label}</p>
             </div>
           </div>
-          {provStatus !== 'active' && (
+          {/* Only when A2P hasn't been submitted yet — not while carriers are reviewing. */}
+          {provStatus === 'number_only' && (
             <button type="button" onClick={onSetup} className="btn-secondary">
               Continue setup
             </button>

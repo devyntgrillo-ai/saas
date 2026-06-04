@@ -1,0 +1,2 @@
+[functions.calculate-referral-payouts]
+verify_jwt = true

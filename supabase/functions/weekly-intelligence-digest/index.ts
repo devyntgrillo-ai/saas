@@ -3,6 +3,7 @@
 // Service-role; verify_jwt=false (internal job). No-ops cleanly if Mailgun is unset.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
+import { requireServiceRole } from "../_shared/auth.ts";
 import { resolveBrand } from "../_shared/brand.ts";
 import { isMailgunConfigured, sendMailgunMessage } from "../_shared/mailgun.ts";
 
@@ -88,6 +89,8 @@ async function digestFor(supabase: any, practice: { id: string }) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  const authErr = requireServiceRole(req);
+  if (authErr) return authErr;
   try {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
       auth: { autoRefreshToken: false, persistSession: false },

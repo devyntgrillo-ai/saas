@@ -1,8 +1,6 @@
 // Shared JWT auth for edge functions.
-// Instead of comparing raw tokens against SUPABASE_SERVICE_ROLE_KEY (which may
-// be overridden by custom secrets), we decode the JWT and check its role claim.
-// The function gateway has already verified the JWT signature, so we only need
-// to examine the payload claims.
+// Service-role calls are verified by comparing the raw token against
+// SUPABASE_SERVICE_ROLE_KEY. User JWT calls are validated against GoTrue.
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -15,20 +13,6 @@ export interface AuthContext {
   isServiceRole: boolean;
   /** Supabase client scoped to the caller. */
   client: ReturnType<typeof createClient>;
-}
-
-/**
- * Decode a JWT without verifying the signature (the gateway already did that).
- * Returns the parsed payload or null.
- */
-function decodeJwt(token: string): Record<string, unknown> | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    return JSON.parse(atob(parts[1]));
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -63,12 +47,10 @@ export async function resolveAuth(
     return { ctx: { practiceId: "", isServiceRole: true, client: admin } };
   }
 
-  // Decode the JWT to determine the role. The gateway has already verified the
-  // signature, so we trust the payload claims.
-  const payload = decodeJwt(token);
-
-  // Service-role JWTs have role === "service_role".
-  if (payload?.role === "service_role") {
+  // Service-role: verify the raw token against the actual service_role key,
+  // rather than trusting the decoded payload alone (audit finding 1).
+  const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (SERVICE_KEY && token === SERVICE_KEY) {
     const practiceId = (body.practice_id as string) ?? "";
     if (!practiceId && required) {
       return { error: new Response(JSON.stringify({ error: "practice_id required for service calls" }), {
@@ -120,4 +102,30 @@ export async function resolveAuth(
       status: 401, headers: { "Content-Type": "application/json" },
     })};
   }
+}
+
+/**
+ * Quick guard for internal cron jobs: verifies the request carries a valid
+ * service_role JWT by comparing the raw token against the actual
+ * SUPABASE_SERVICE_ROLE_KEY. This avoids trusting the gateway alone.
+ *
+ * Returns an error Response when unauthorized, or undefined to continue.
+ */
+export function requireServiceRole(req: Request): Response | undefined {
+  const authHeader = req.headers.get("Authorization") || "";
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  if (!token) {
+    return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!SERVICE_KEY || token !== SERVICE_KEY) {
+    return new Response(JSON.stringify({ error: "Forbidden: service_role required" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  return undefined;
 }

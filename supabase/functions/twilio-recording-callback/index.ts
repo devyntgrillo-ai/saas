@@ -7,11 +7,40 @@
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
+import {
+  formDataToRecord,
+  getTwilioConfig,
+  twilioWebhookUrl,
+  validateTwilioSignature,
+} from "../_shared/twilio.ts";
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return new Response("ok");
+
+  let form: FormData;
   try {
-    const form = await req.formData();
+    form = await req.formData();
+  } catch {
+    return new Response("", { status: 204 });
+  }
+
+  // Twilio signature verification — mirrors twilio-inbound guard.
+  const cfg = getTwilioConfig();
+  const publicBase = Deno.env.get("TWILIO_WEBHOOK_BASE_URL") || cfg?.webhookBase || null;
+  if (cfg?.authToken) {
+    const sig = req.headers.get("X-Twilio-Signature") || "";
+    if (sig) {
+      const url = twilioWebhookUrl(req, publicBase, "twilio-recording-callback");
+      const params = formDataToRecord(form);
+      const valid = await validateTwilioSignature(cfg.authToken, sig, url, params);
+      if (!valid) {
+        console.warn("twilio-recording-callback: invalid Twilio signature");
+        return new Response("Forbidden", { status: 403 });
+      }
+    }
+  }
+
+  try {
     const callSid = String(form.get("CallSid") || "").trim();
     const recordingUrl = String(form.get("RecordingUrl") || "").trim();
     const recordingSid = String(form.get("RecordingSid") || "").trim();

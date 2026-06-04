@@ -17,7 +17,7 @@
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
-import { type Brand, CONSULTIQ_BRAND, emailFooter, emailHeader, emailSignature, resolveBrand } from "../_shared/brand.ts";
+import { type Brand, CASELIFT_BRAND, emailFooter, emailHeader, emailSignature, resolveBrand } from "../_shared/brand.ts";
 import { sendMailgunToMany } from "../_shared/mailgun.ts";
 
 const SUPER_ADMIN_EMAIL = "devyntgrillo@gmail.com";
@@ -101,7 +101,7 @@ Deno.serve(async (req: Request) => {
     // Internal copies (reseller owner + super admin) stay CaseLift-branded.
     const internal = [...new Set([resellerEmail, SUPER_ADMIN_EMAIL].filter(Boolean))] as string[];
     if (internal.length) {
-      const { subject, text, htmlBody } = buildEmail(CONSULTIQ_BRAND);
+      const { subject, text, htmlBody } = buildEmail(CASELIFT_BRAND);
       results.internal = await sendMailgunToMany({
         to: internal,
         subject: `[Internal] ${subject}`,

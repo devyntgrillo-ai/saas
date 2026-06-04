@@ -1,0 +1,2 @@
+[functions.doxyme-webhook]
+verify_jwt = false

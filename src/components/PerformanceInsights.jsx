@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 import { Sparkles, Network, GraduationCap } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { closeRateForRows, replyRatesByPosition } from '../lib/dashboard'
 
 const OBJ_COLORS = { price: '#f59e0b', fear: '#ef4444', spouse: '#a855f7', timing: '#3b82f6', other: '#94a3b8' }
 const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -13,7 +14,6 @@ function parseDate(d) {
   const [y, m, day] = String(d).split('-').map(Number)
   return y ? new Date(y, m - 1, day) : new Date(d)
 }
-const WON = ['active', 'closed_won', 'recovered']
 
 function Panel({ title, children }) {
   return (
@@ -24,7 +24,7 @@ function Panel({ title, children }) {
   )
 }
 
-export default function PerformanceInsights({ consults = [], messages = [], comparison, practiceId }) {
+export default function PerformanceInsights({ consults = [], messageOutcomes = [], comparison, practiceId }) {
   const [tip, setTip] = useState(null)
 
   useEffect(() => {
@@ -53,28 +53,11 @@ export default function PerformanceInsights({ consults = [], messages = [], comp
     return weeks
   }, [consults])
 
-  // Best message - reply rate per sequence position.
-  const bestMessage = useMemo(() => {
-    const byConsult = new Map()
-    for (const m of messages) {
-      if (!byConsult.has(m.consult_id)) byConsult.set(m.consult_id, [])
-      byConsult.get(m.consult_id).push(m)
-    }
-    const pos = {}
-    for (const arr of byConsult.values()) {
-      const sorted = [...arr].sort((a, b) => new Date(a.scheduled_for || a.created_at) - new Date(b.scheduled_for || b.created_at))
-      sorted.forEach((m, i) => {
-        if (i > 5) return
-        if (!pos[i]) pos[i] = { sent: 0, replied: 0 }
-        pos[i].sent += 1
-        if (m.status === 'replied') pos[i].replied += 1
-      })
-    }
-    return Array.from({ length: 6 }, (_, i) => ({
-      label: `${i + 1}`,
-      rate: pos[i]?.sent ? Math.round((pos[i].replied / pos[i].sent) * 100) : 0,
-    }))
-  }, [messages])
+  // Best message - reply rate per sequence position (message_outcomes).
+  const bestMessage = useMemo(
+    () => replyRatesByPosition(messageOutcomes, 6).map((r) => ({ label: r.label, rate: r.rate })),
+    [messageOutcomes],
+  )
 
   // Objection breakdown - this month.
   const objection = useMemo(() => {
@@ -97,8 +80,7 @@ export default function PerformanceInsights({ consults = [], messages = [], comp
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
       const key = monthKey(d)
       const rows = consults.filter((c) => { const cd = parseDate(c.recording_date); return cd && monthKey(cd) === key })
-      const won = rows.filter((c) => WON.includes(c.status)).length
-      out.push({ label: d.toLocaleDateString(undefined, { month: 'short' }), rate: rows.length ? Math.round((won / rows.length) * 100) : 0 })
+      out.push({ label: d.toLocaleDateString(undefined, { month: 'short' }), rate: closeRateForRows(rows) })
     }
     return out
   }, [consults])

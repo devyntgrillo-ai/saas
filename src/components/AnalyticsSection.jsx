@@ -49,6 +49,7 @@ export default function AnalyticsSection({ practiceId }) {
   const [range, setRange] = useState('6m')
   const [consults, setConsults] = useState([])
   const [messages, setMessages] = useState([])
+  const [messageOutcomes, setMessageOutcomes] = useState([])
   const [loading, setLoading] = useState(true)
   const primary = usePrimaryColor()
 
@@ -59,21 +60,29 @@ export default function AnalyticsSection({ practiceId }) {
     setLoading(true)
     Promise.all([
       supabase.from('consults')
-        .select('id, recording_date, status, objection_type, case_value')
+        .select('id, recording_date, status, outcome, objection_type, case_value')
         .eq('practice_id', practiceId),
       supabase.from('messages')
         .select('consult_id, channel, status, created_at, scheduled_for')
         .eq('practice_id', practiceId),
-    ]).then(([c, m]) => {
+      supabase
+        .from('message_outcomes')
+        .select('message_position, message_channel, replied, closed_after')
+        .eq('practice_id', practiceId),
+    ]).then(([c, m, o]) => {
       if (!active) return
       setConsults(c.data || [])
       setMessages(m.data || [])
+      setMessageOutcomes(o.data || [])
       setLoading(false)
     })
     return () => { active = false }
   }, [practiceId])
 
-  const a = useMemo(() => computeAnalytics(consults, messages, range), [consults, messages, range])
+  const a = useMemo(
+    () => computeAnalytics(consults, messages, range, messageOutcomes),
+    [consults, messages, range, messageOutcomes],
+  )
 
   const cards = [
     { label: 'Production recovered', value: formatMoney(a.stats.totalRecovered), icon: DollarSign, accent: 'green' },

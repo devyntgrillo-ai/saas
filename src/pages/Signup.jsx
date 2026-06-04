@@ -69,8 +69,12 @@ export default function Signup() {
     if (!refCode) return
     let active = true
     ;(async () => {
-      const { data } = await supabase.rpc('resolve_referral_code', { p_code: refCode })
-      if (active && Array.isArray(data) && data[0]) setReferrer(data[0])
+      try {
+        const { data } = await supabase.rpc('resolve_referral_code', { p_code: refCode })
+        if (active && Array.isArray(data) && data[0]) setReferrer(data[0])
+      } catch {
+        // referral lookup is best-effort (requires auth; silent if pre-signup)
+      }
     })()
     return () => {
       active = false

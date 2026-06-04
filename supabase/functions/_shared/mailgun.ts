@@ -1,5 +1,53 @@
 /** Mailgun REST helper for transactional / sequence email. */
 
+/** Reply address for two-way conversation email (Mailgun inbound route). */
+export function conversationReplyAddress(conversationId: string, domain?: string): string | null {
+  const d = domain || Deno.env.get("MAILGUN_DOMAIN");
+  if (!d || !conversationId) return null;
+  return `reply+${conversationId}@${d}`;
+}
+
+/** Parse conversation id from Mailgun recipient, e.g. reply+{uuid}@mg.example.com */
+export function parseConversationIdFromRecipient(recipient: string): string | null {
+  const raw = String(recipient || "");
+  const m = raw.match(/reply\+([0-9a-fA-F-]{36})/i) || raw.match(/conv\+([0-9a-fA-F-]{36})/i);
+  return m?.[1] || null;
+}
+
+export function extractEmailAddress(raw: string): string {
+  const s = String(raw || "").trim();
+  const m = s.match(/<([^>]+)>/);
+  return (m?.[1] || s).trim().toLowerCase();
+}
+
+export function emailsMatch(a: string, b: string): boolean {
+  return extractEmailAddress(a) === extractEmailAddress(b);
+}
+
+/** Verify Mailgun inbound-route webhook (timestamp + token HMAC). */
+export async function verifyMailgunWebhook(
+  signingKey: string,
+  timestamp: string,
+  token: string,
+  signature: string,
+): Promise<boolean> {
+  if (!signingKey || !timestamp || !token || !signature) return false;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(signingKey),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(timestamp + token),
+  );
+  const hex = [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return hex === signature;
+}
+
 export type MailgunSendResult =
   | { sent: true; id?: string }
   | { sent: false; reason: string; detail?: string };

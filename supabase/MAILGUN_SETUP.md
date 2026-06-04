@@ -17,11 +17,16 @@ npx supabase login
 npm run deploy:managed:functions
 ```
 
+## Two-way email in Conversations
+
+Outbound uses `mailgun-send`. **Patient replies** require `mailgun-inbound` + a Mailgun inbound route. See **`MAILGUN_INBOUND_SETUP.md`**.
+
 ## Send paths (all use Mailgun)
 
 | Function | Trigger |
 |----------|---------|
 | `mailgun-send` | Conversations (email), `send-due-messages`, `process-reactivation-drip` |
+| `mailgun-inbound` | Mailgun inbound route (patient email replies) |
 | `invite-practice-user` | Agency → Add practice |
 | `invite-team-member` | Onboarding TC invite, InviteModal, practice team invites |
 | `send-client-invite` | Super-admin / reseller new practice (API) |
