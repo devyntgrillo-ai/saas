@@ -70,13 +70,17 @@ export default function AccountSwitcher() {
     )
   }, [accessiblePractices, search])
 
-  // Current context shown on the trigger.
-  const currentName = practice?.name || agency?.name || (isSuperAdmin ? 'Super Admin' : 'Select account')
+  // Current context shown on the trigger. When nothing is impersonated, fall back
+  // to the role label so the pill always reads sensibly.
+  const currentName = practice?.name
+    || (isSuperAdmin ? 'Super Admin' : isAgencyUser ? 'Reseller View' : agency?.name || 'Select account')
   const currentSub = practice
     ? practice.agency?.name || cityState(practice) || practice.address || 'Practice'
-    : agency
-      ? ACCESS_LABELS[accessLevel] || 'Reseller'
-      : ACCESS_LABELS[accessLevel] || ''
+    : isSuperAdmin
+      ? 'Platform admin'
+      : isAgencyUser
+        ? agency?.name || 'Reseller'
+        : ACCESS_LABELS[accessLevel] || ''
 
   function pick(id) {
     viewPractice(id)
@@ -98,19 +102,19 @@ export default function AccountSwitcher() {
 
   return (
     <div className="relative px-2 pb-2" ref={ref}>
-      {/* Trigger - borderless, subtle hover */}
+      {/* Trigger - light pill so it clearly reads as a clickable button (GHL style). */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-surface-800"
+        className="flex w-full items-center gap-2.5 rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-2.5 text-left transition hover:bg-slate-200"
       >
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-700 text-xs font-semibold text-slate-300">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-semibold text-white">
           {initials(currentName)}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-slate-100">{currentName}</span>
+          <span className="block truncate text-sm font-semibold text-slate-900">{currentName}</span>
           {currentSub && <span className="block truncate text-xs text-slate-500">{currentSub}</span>}
         </span>
-        <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-500" />
+        <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />
       </button>
 
       {/* Panel - white/light, floating over the dark sidebar */}
