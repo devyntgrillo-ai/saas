@@ -9,11 +9,10 @@ import { useAuth } from '../../context/AuthContext'
 import { AdminProvider, useAdmin } from '../../context/AdminContext'
 
 const TABS = [
-  { to: '/admin', label: 'Overview', end: true },
+  { to: '/admin', label: 'Dashboard', end: true },
   { to: '/admin/agencies', label: 'Resellers' },
   { to: '/admin/practices', label: 'Subaccounts' },
-  { to: '/admin/team', label: 'Team' },
-  { to: '/admin/revenue', label: 'Revenue' },
+  { to: '/admin/team', label: 'Users' },
   { to: '/admin/billing', label: 'Billing' },
   { to: '/admin/training', label: 'Training' },
   { to: '/admin/wins', label: 'Wins' },

@@ -1,10 +1,14 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { DollarSign, CheckCircle2, AlertCircle, Clock, ExternalLink, Link2, Ban, CalendarPlus, Loader2 } from 'lucide-react'
+import { DollarSign, CheckCircle2, AlertCircle, Clock, ExternalLink, Link2, Ban, CalendarPlus, Loader2, Eye, Building2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAdmin } from '../../context/AdminContext'
 import { useAdminBilling, queryKeys } from '../../lib/queries'
+import { agencyStatusMeta } from '../../lib/admin'
+import { timeAgo } from '../../lib/consults'
 import { statusMeta as subStatusMeta, cancelSubscription, createPortalSession } from '../../lib/billing'
-import { StatCard, Table, Badge, money, stop } from '../../components/admin/ui'
+import { StatCard, Table, Badge, Avatar, money, stop } from '../../components/admin/ui'
 
 // Deep-link to a customer in the Chargebee dashboard. Needs the site name
 // (VITE_CHARGEBEE_SITE); falls back to the Chargebee login if it isn't set.
@@ -28,6 +32,9 @@ const contactName = (r) => [r.doctor_first, r.doctor_last].filter(Boolean).join(
 
 export default function AdminBilling() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const { data: ctx, impersonateAgency } = useAdmin()
+  const agencies = ctx?.agencies || []
   const { data: rows = [], isLoading: loading, refetch } = useAdminBilling()
   const [busyId, setBusyId] = useState(null)
   const [flash, setFlash] = useState('')
@@ -154,6 +161,37 @@ export default function AdminBilling() {
       ) : (
         <Table head={head} rows={tableRows} empty="No practices yet." icon={DollarSign} />
       )}
+
+      {/* Reseller performance (from the old Overview tab) */}
+      <section className="space-y-3 pt-2">
+        <h2 className="text-sm font-semibold text-white">Reseller performance</h2>
+        <Table
+          head={['Reseller', 'Owner', 'Practices', 'MRR', 'Status', 'Joined', 'Last activity', '']}
+          rows={agencies.map((a) => [
+            <div className="flex items-center gap-2.5">
+              <Avatar name={a.name} color={a.white_label?.primary_color} />
+              <span className="font-medium text-slate-100">{a.name}</span>
+            </div>,
+            a.owner_email || '-',
+            a.practiceCount,
+            money(a.mrrToCaseLift),
+            <Badge className={agencyStatusMeta(a.status).classes}>{agencyStatusMeta(a.status).label}</Badge>,
+            new Date(a.created_at).toLocaleDateString(),
+            a.last_activity ? timeAgo(a.last_activity) : '-',
+            <div className="flex items-center gap-1.5" onClick={stop}>
+              <button onClick={() => navigate(`/admin/agencies/${a.id}`)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-slate-300 transition hover:bg-surface-700" title="View">
+                <Eye className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => impersonateAgency(a)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-primary-300 transition hover:bg-surface-700">
+                Impersonate
+              </button>
+            </div>,
+          ])}
+          empty="No resellers yet."
+          icon={Building2}
+          onRowClick={(i) => navigate(`/admin/agencies/${agencies[i].id}`)}
+        />
+      </section>
     </div>
   )
 }
