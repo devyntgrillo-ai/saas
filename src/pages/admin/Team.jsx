@@ -91,7 +91,7 @@ export default function AdminTeam() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white">Team</h1>
+          <h1 className="text-xl font-bold text-white">Users</h1>
           <p className="text-sm text-slate-500">{list.length} users across all subaccounts &amp; resellers</p>
         </div>
         <button onClick={() => setEditing('new')} className="btn-primary"><Plus className="h-4 w-4" /> Add user</button>
