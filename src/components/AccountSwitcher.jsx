@@ -34,6 +34,7 @@ export default function AccountSwitcher() {
     isAgencyUser,
     isSuperAdmin,
     isMultiPractice,
+    isImpersonating,
     accessLevel,
     viewPractice,
     exitPractice,
@@ -116,8 +117,9 @@ export default function AccountSwitcher() {
       {open && (
         <div className="animate-dropdown absolute left-2 z-50 mt-1 w-80 max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.18)]">
           <div className="p-2.5">
-            {/* Back to admin/reseller view — top of the panel, above search. */}
-            {(isSuperAdmin || isAgencyUser) && (
+            {/* Back to admin/reseller view — only while actively impersonating
+                a subaccount; hidden when already in the super-admin/reseller view. */}
+            {(isSuperAdmin || isAgencyUser) && isImpersonating && (
               <button
                 onClick={() => { exitPractice(); setOpen(false); navigate(isSuperAdmin ? '/admin' : '/agency') }}
                 className="mb-2 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-slate-50"

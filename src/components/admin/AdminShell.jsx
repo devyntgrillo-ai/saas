@@ -1,6 +1,6 @@
 import { Suspense, useState } from 'react'
 import { Link, NavLink, Outlet, Navigate, useLocation } from 'react-router-dom'
-import { ArrowLeft, LogOut, ChevronRight, Loader2, Menu, X } from 'lucide-react'
+import { LogOut, ChevronRight, Loader2, Menu, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Logo from '../Logo'
 import PageLoader from '../PageLoader'
@@ -91,13 +91,6 @@ function Chrome() {
       </nav>
 
       <div className="space-y-1 border-t border-white/[0.07] p-3">
-        <Link
-          to="/"
-          onClick={() => setMobileOpen(false)}
-          className="flex h-9 items-center gap-2.5 rounded-lg px-3 text-sm text-slate-400 transition hover:bg-surface-800 hover:text-slate-200"
-        >
-          <ArrowLeft className="h-4 w-4 shrink-0" /> Back to app
-        </Link>
         <button
           onClick={handleSignOut}
           className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-sm text-slate-400 transition hover:bg-surface-800 hover:text-slate-200"
