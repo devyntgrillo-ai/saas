@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Navigate } from 'react-router-dom'
 import {
   DollarSign,
@@ -41,7 +41,7 @@ const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
 const isWon = (c) => isWonStatus(c.status)
 
 export default function AgencyAnalytics() {
-  const { agency, isAgencyUser, agencyLoading } = useAuth()
+  const { effectiveAgency: agency, isAgencyView, contextLoading } = useAuth()
   const { data: agencyData, isLoading: loading, error, refetch } = useAgencyAnalytics(agency?.id)
   const practices = agencyData?.practices ?? []
   const consults = agencyData?.consults ?? []
@@ -109,7 +109,7 @@ export default function AgencyAnalytics() {
     }
   }, [consults, practices])
 
-  if (!agencyLoading && !isAgencyUser) return <Navigate to="/" replace />
+  if (!contextLoading && !isAgencyView) return <Navigate to="/" replace />
 
   return (
     <div className="space-y-6">

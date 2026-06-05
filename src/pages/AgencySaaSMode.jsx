@@ -43,7 +43,7 @@ const STATUS_BADGE = {
 const statusLabel = (s) => (s === 'trialing' ? 'Trial' : (s || 'active').replace(/_/g, ' '))
 
 export default function AgencySaaSMode() {
-  const { agency, isAgencyUser, agencyLoading, refreshAgency } = useAuth()
+  const { effectiveAgency: agency, isAgencyView, agencyLoading, contextLoading, refreshAgency } = useAuth()
 
   // --- Plan form, seeded from the reseller record ------------------------------
   const [price, setPrice] = useState('')
@@ -120,7 +120,7 @@ export default function AgencySaaSMode() {
     }
   }
 
-  if (!agencyLoading && !isAgencyUser) return <Navigate to="/" replace />
+  if (!contextLoading && !isAgencyView) return <Navigate to="/" replace />
 
   const companyName = agency?.company_name || agency?.brand_name || agency?.name || 'your company'
 

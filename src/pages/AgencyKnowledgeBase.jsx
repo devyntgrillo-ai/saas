@@ -7,7 +7,7 @@ import KnowledgeBaseEditor from '../components/KnowledgeBaseEditor'
 
 // Agency view: pick any client practice and edit its knowledge base.
 export default function AgencyKnowledgeBase() {
-  const { agency, agencyLoading, isAgencyUser } = useAuth()
+  const { effectiveAgency: agency, contextLoading, isAgencyView } = useAuth()
   const { data: practices = [], isLoading: loading } = useAgencyKbPractices(agency?.id)
   const [selected, setSelected] = useState('')
 
@@ -18,7 +18,7 @@ export default function AgencyKnowledgeBase() {
     }
   }, [practices, selected])
 
-  if (!agencyLoading && !isAgencyUser) return <Navigate to="/settings/knowledge-base" replace />
+  if (!contextLoading && !isAgencyView) return <Navigate to="/settings/knowledge-base" replace />
 
   return (
     <div className="space-y-6">

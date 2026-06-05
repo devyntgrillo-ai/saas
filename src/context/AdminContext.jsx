@@ -7,7 +7,7 @@ import { useAuth } from './AuthContext'
 const AdminContext = createContext(null)
 
 export function AdminProvider({ children }) {
-  const { user, viewPractice } = useAuth()
+  const { user, viewPractice, viewAgency } = useAuth()
   const navigate = useNavigate()
   const { data = null, isLoading: loading, refetch } = useAdminData()
 
@@ -29,18 +29,16 @@ export function AdminProvider({ children }) {
     [user, viewPractice, navigate],
   )
 
+  // Reseller-level impersonation: view the reseller's OWN dashboard (/agency)
+  // scoped + branded as them — not a jump into one of their practices.
   const impersonateAgency = useCallback(
     (agency) => {
-      const first = data?.practices.find((p) => p.agency_id === agency?.id && !String(p.id).startsWith('demo-'))
-      logImpersonation({ actorId: user?.id, targetType: 'agency', targetId: agency?.id, targetName: agency?.name })
-      if (first) {
-        viewPractice(first.id)
-        navigate('/')
-      } else {
-        navigate('/')
-      }
+      if (!agency?.id) return
+      logImpersonation({ actorId: user?.id, targetType: 'agency', targetId: agency.id, targetName: agency.name })
+      viewAgency(agency.id)
+      navigate('/agency')
     },
-    [data, user, viewPractice, navigate],
+    [user, viewAgency, navigate],
   )
 
   return (

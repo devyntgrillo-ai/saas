@@ -9,7 +9,7 @@ import InviteModal from '../components/InviteModal'
 import { formatDateTime } from '../lib/consults'
 
 export default function AgencyTeam() {
-  const { agency, isAgencyUser, contextLoading } = useAuth()
+  const { effectiveAgency: agency, isAgencyView, contextLoading } = useAuth()
   const perms = usePermissions()
   const { data, isLoading: loading, refetch } = useAgencyTeam(agency?.id)
   const members = data?.members ?? []
@@ -17,7 +17,7 @@ export default function AgencyTeam() {
   const practices = data?.practices ?? []
   const [invite, setInvite] = useState(false)
 
-  if (!contextLoading && !isAgencyUser) return <Navigate to="/" replace />
+  if (!contextLoading && !isAgencyView) return <Navigate to="/" replace />
 
   async function removeMember(id) {
     await supabase.from('agency_members').delete().eq('id', id)

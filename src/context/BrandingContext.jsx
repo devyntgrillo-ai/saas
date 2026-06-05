@@ -112,7 +112,7 @@ function applyFavicon(url) {
 })()
 
 export function BrandingProvider({ children }) {
-  const { agency, profile, practice, isSuperAdmin, isImpersonating } = useAuth()
+  const { agency, activeAgency, profile, practice, isSuperAdmin, isImpersonating } = useAuth()
 
   const [domainBrand, setDomainBrand] = useState(null)
 
@@ -136,11 +136,12 @@ export function BrandingProvider({ children }) {
     }
   }, [])
 
-  // The reseller for the current viewer: their own agency, the agency of the
-  // practice they belong to, or the practice they're impersonating.
+  // The reseller for the current viewer: their own agency, the agency a
+  // super-admin is impersonating directly, the agency of the practice they're
+  // impersonating, or their home practice's agency.
   const resellerAgency = useMemo(
-    () => agency || practice?.agency || profile?.practice?.agency || null,
-    [agency, practice, profile]
+    () => agency || activeAgency || practice?.agency || profile?.practice?.agency || null,
+    [agency, activeAgency, practice, profile]
   )
 
   // The effective brand, derived from auth context and any domain match. No

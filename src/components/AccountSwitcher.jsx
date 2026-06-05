@@ -35,9 +35,11 @@ export default function AccountSwitcher() {
     isSuperAdmin,
     isMultiPractice,
     isImpersonating,
+    impersonation,
     accessLevel,
     viewPractice,
     exitPractice,
+    exitAgency,
   } = useAuth()
   const { isWhiteLabeled } = useBranding()
   const navigate = useNavigate()
@@ -137,21 +139,30 @@ export default function AccountSwitcher() {
       {open && (
         <div className="animate-dropdown absolute left-2 z-50 mt-1 w-80 max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.18)]">
           <div className="p-2.5">
-            {/* Back to admin/reseller view — only while actively impersonating
-                a subaccount; hidden when already in the super-admin/reseller view. */}
-            {(isSuperAdmin || isAgencyUser) && isImpersonating && (
-              <button
-                onClick={() => { exitPractice(); setOpen(false); navigate(isSuperAdmin ? '/admin' : '/agency') }}
-                className="mb-2 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-slate-50"
-              >
-                {isSuperAdmin
-                  ? <Shield className="h-4 w-4 shrink-0 text-blue-600" />
-                  : <ArrowLeft className="h-4 w-4 shrink-0 text-blue-600" />}
-                <span className="text-sm font-medium text-blue-600">
-                  {isSuperAdmin ? 'Back to Super Admin View' : 'Back to Reseller View'}
-                </span>
-              </button>
-            )}
+            {/* Back action — only while inside a specific sub-account. Returns to
+                the reseller view if there's a reseller context behind the
+                impersonation, otherwise to the super-admin view. */}
+            {(isSuperAdmin || isAgencyUser) && isImpersonating && impersonation?.level === 'practice' && (() => {
+              const toReseller = Boolean(impersonation?.reseller) || isAgencyUser
+              const onBack = () => {
+                setOpen(false)
+                if (toReseller) { exitPractice(); navigate('/agency') }
+                else { exitAgency(); navigate('/admin') }
+              }
+              return (
+                <button
+                  onClick={onBack}
+                  className="mb-2 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-slate-50"
+                >
+                  {toReseller
+                    ? <ArrowLeft className="h-4 w-4 shrink-0 text-blue-600" />
+                    : <Shield className="h-4 w-4 shrink-0 text-blue-600" />}
+                  <span className="text-sm font-medium text-blue-600">
+                    {toReseller ? 'Back to Reseller View' : 'Back to Super Admin View'}
+                  </span>
+                </button>
+              )
+            })()}
 
             {/* Search */}
             <div className="relative">

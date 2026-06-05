@@ -256,7 +256,7 @@ function SidebarPreview({ color, logoUrl, companyName }) {
 }
 
 export default function Agency() {
-  const { user, agency, agencyRole, agencyLoading, isAgencyUser, viewPractice, refreshAgency } = useAuth()
+  const { user, effectiveAgency: agency, agencyRole, isAgencyView, contextLoading, viewPractice, refreshAgency } = useAuth()
   const { invalidateBrand } = useBranding()
   const navigate = useNavigate()
   // Sub-view is URL-driven (?tab=) so the sidebar agency nav can link to it
@@ -432,7 +432,7 @@ export default function Agency() {
   }
 
   // Only agency users belong here.
-  if (!agencyLoading && !isAgencyUser) return <Navigate to="/" replace />
+  if (!contextLoading && !isAgencyView) return <Navigate to="/" replace />
 
   return (
     <div className="space-y-6">
