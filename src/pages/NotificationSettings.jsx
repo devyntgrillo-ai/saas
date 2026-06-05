@@ -22,7 +22,9 @@ function InfoTip({ text }) {
   return (
     <span className="group relative inline-flex align-middle">
       <Info className="h-3.5 w-3.5 cursor-help text-slate-500" />
-      <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-56 -translate-x-1/2 rounded-lg bg-[#1e293b] px-3 py-2 text-[12px] font-normal normal-case leading-snug tracking-normal text-white shadow-lg group-hover:block">
+      <span
+        style={{ backgroundColor: '#1e293b', color: '#ffffff' }}
+        className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-56 -translate-x-1/2 rounded-lg px-3 py-2 text-[12px] font-normal normal-case leading-snug tracking-normal shadow-lg group-hover:block">
         {text}
       </span>
     </span>
