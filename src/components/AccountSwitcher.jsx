@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronsUpDown, Search, Shield, ArrowLeft } from 'lucide-react'
+import { ChevronsUpDown, Search, Shield, ArrowLeft, MousePointerClick } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useBranding } from '../context/BrandingContext'
 import { ACCESS_LABELS } from '../lib/permissions'
@@ -82,6 +82,11 @@ export default function AccountSwitcher() {
         ? agency?.name || 'Reseller View'
         : ACCESS_LABELS[accessLevel] || ''
 
+  // Super admin / reseller with no account in context: show a clear call to
+  // action instead of an account. While impersonating, `practice` is set and we
+  // render the normal name + address.
+  const idle = !practice && (isSuperAdmin || isAgencyUser)
+
   function pick(id) {
     viewPractice(id)
     setOpen(false)
@@ -107,14 +112,24 @@ export default function AccountSwitcher() {
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-2.5 rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-2.5 text-left transition hover:bg-slate-200"
       >
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-semibold text-white">
-          {initials(currentName)}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-slate-900">{currentName}</span>
-          {currentSub && <span className="block truncate text-xs text-slate-500">{currentSub}</span>}
-        </span>
-        <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />
+        {idle ? (
+          <>
+            <MousePointerClick className="h-4 w-4 shrink-0 text-slate-500" />
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">Click here to switch</span>
+            <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />
+          </>
+        ) : (
+          <>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-semibold text-white">
+              {initials(currentName)}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold text-slate-900">{currentName}</span>
+              {currentSub && <span className="block truncate text-xs text-slate-500">{currentSub}</span>}
+            </span>
+            <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />
+          </>
+        )}
       </button>
 
       {/* Panel - white/light, floating over the dark sidebar */}
