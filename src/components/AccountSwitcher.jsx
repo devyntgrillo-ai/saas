@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { ChevronsUpDown, Search, Shield, ArrowLeft, MousePointerClick } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useBranding } from '../context/BrandingContext'
@@ -43,6 +43,7 @@ export default function AccountSwitcher() {
   } = useAuth()
   const { isWhiteLabeled } = useBranding()
   const navigate = useNavigate()
+  const location = useLocation()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const ref = useRef(null)
@@ -89,11 +90,13 @@ export default function AccountSwitcher() {
           ? agency?.name || 'Reseller View'
           : ACCESS_LABELS[accessLevel] || ''
 
-  // "Click here to switch" is ONLY for a super-admin / reseller who is sitting in
-  // their own view with no subaccount active. The moment a practice is in context
-  // - whether a practice user's own practice or an admin/reseller impersonating
-  // one - show the practice name + reseller + initials instead.
-  const idle = (isSuperAdmin || isAgencyUser) && !isImpersonating && !practice?.name
+  // "Click here to switch" is ONLY for a super-admin / reseller in their own
+  // portal with nothing impersonated. On /admin routes (and when no practice is
+  // in context) the stored practice is ignored, so the super-admin's own home
+  // practice never leaks onto the trigger. Once impersonating - a practice (show
+  // its name) or a reseller (show the reseller name) - this is false.
+  const onAdminRoute = location.pathname.startsWith('/admin')
+  const idle = (isSuperAdmin || isAgencyUser) && !isImpersonating && (onAdminRoute || !practice?.name)
 
   function pick(id) {
     viewPractice(id)
