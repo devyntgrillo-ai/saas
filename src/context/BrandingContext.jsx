@@ -183,6 +183,16 @@ export function BrandingProvider({ children }) {
     }
   }, [])
 
+  // When the resolved reseller changes (e.g. switching impersonation target),
+  // drop the cached brand so a previously-impersonated reseller's name/color can
+  // never linger, and log the resolution for tracing.
+  useEffect(() => {
+    invalidateBrand()
+    // eslint-disable-next-line no-console
+    console.log('[CaseLift imp] branding resolved → agency:', resellerAgency?.id, '| brandName:', branding.brandName, '| whiteLabel:', branding.isWhiteLabeled)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resellerAgency?.id, branding.brandName, branding.isWhiteLabeled])
+
   const value = useMemo(
     () => ({ ...branding, invalidateBrand }),
     [branding, invalidateBrand]

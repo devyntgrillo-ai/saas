@@ -231,11 +231,13 @@ export function AuthProvider({ children }) {
       setActiveAgencyFor(null)
       return null
     }
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('agency_accounts')
       .select('*')
       .eq('id', id)
       .maybeSingle()
+    // eslint-disable-next-line no-console
+    console.log('[CaseLift imp] loadActiveAgency', { requested: id, loaded: data?.id, name: data?.name, rlsError: error?.message || null })
     setActiveAgency(data ?? null)
     setActiveAgencyFor(id)
     return data
