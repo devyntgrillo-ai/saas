@@ -4,6 +4,7 @@ import { LogOut, ChevronRight, Loader2, Menu, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Logo from '../Logo'
 import PageLoader from '../PageLoader'
+import AccountSwitcher from '../AccountSwitcher'
 import { useAuth } from '../../context/AuthContext'
 import { AdminProvider, useAdmin } from '../../context/AdminContext'
 
@@ -75,6 +76,10 @@ function Chrome() {
         <Logo showBeta={false} />
         <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-semibold text-rose-300">ADMIN</span>
       </div>
+
+      {/* Subaccount switcher - same spot as the main app sidebar. Picking an
+          account starts impersonation and navigates into that account. */}
+      <AccountSwitcher />
 
       <nav className="flex-1 space-y-0.5 px-3">
         {TABS.map((t) => (
