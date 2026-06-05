@@ -73,13 +73,13 @@ export default function AccountSwitcher() {
   // Current context shown on the trigger. When nothing is impersonated, fall back
   // to the role label so the pill always reads sensibly.
   const currentName = practice?.name
-    || (isSuperAdmin ? 'Super Admin' : isAgencyUser ? 'Reseller View' : agency?.name || 'Select account')
+    || (isSuperAdmin ? 'Select an account' : isAgencyUser ? 'Select an account' : agency?.name || 'Select account')
   const currentSub = practice
     ? practice.agency?.name || cityState(practice) || practice.address || 'Practice'
     : isSuperAdmin
-      ? 'Platform admin'
+      ? 'Super Admin'
       : isAgencyUser
-        ? agency?.name || 'Reseller'
+        ? agency?.name || 'Reseller View'
         : ACCESS_LABELS[accessLevel] || ''
 
   function pick(id) {
