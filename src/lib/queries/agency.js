@@ -57,16 +57,36 @@ export async function fetchAgencyOverview(agencyId) {
   // "archived" toggle + restore. Active vs. archived is split in the UI.
   const { data, error } = await supabase
     .from('practices')
-    .select('id, name, doctor_first, doctor_last, baa_accepted_at, archived_at')
+    .select('id, name, doctor_first, doctor_last, baa_accepted_at, archived_at, subscription_status')
     .eq('agency_id', agencyId)
     .order('created_at', { ascending: true })
   if (error) throw error
   const practices = data || []
-  // Metrics only for active practices - archived ones are shown without stats.
+  const live = practices.filter((p) => !p.archived_at)
+  // Metrics only for active (non-archived) practices.
   const entries = await Promise.all(
-    practices.filter((p) => !p.archived_at).map(async (p) => [p.id, await fetchAgencyPracticeMetrics(p.id)]),
+    live.map(async (p) => [p.id, await fetchAgencyPracticeMetrics(p.id)]),
   )
-  return { practices, metrics: Object.fromEntries(entries) }
+
+  // Roll-up KPIs the reseller cares about: how many active subaccounts, and the
+  // production their subaccounts have recovered (closed-won / recovered cases).
+  const ids = live.map((p) => p.id)
+  let recovered = 0
+  if (ids.length) {
+    const { data: cons } = await supabase
+      .from('consults')
+      .select('case_value, status')
+      .in('practice_id', ids)
+      .in('status', ['closed_won', 'recovered'])
+    recovered = (cons || []).reduce((s, c) => s + (Number(c.case_value) || 0), 0)
+  }
+  const rollup = {
+    totalCount: live.length,
+    activeCount: live.filter((p) => p.subscription_status === 'active').length,
+    recovered,
+  }
+
+  return { practices, metrics: Object.fromEntries(entries), rollup }
 }
 
 export function useAgencyOverview(agencyId) {
