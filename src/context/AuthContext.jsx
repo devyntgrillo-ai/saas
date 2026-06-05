@@ -511,7 +511,16 @@ export function AuthProvider({ children }) {
             isSuperAdmin && viewingAgencyId ? loadActiveAgency(viewingAgencyId) : null,
           ])
         : Promise.resolve(null),
-    refreshAgency: () => (session?.user ? loadAgency(session.user.id) : Promise.resolve(null)),
+    // Reload the user's own agency AND, when a super-admin is impersonating a
+    // reseller, that reseller's record — so editing white-label settings (name,
+    // logo, color) re-applies branding immediately instead of staying stale.
+    refreshAgency: () =>
+      session?.user
+        ? Promise.all([
+            loadAgency(session.user.id),
+            isSuperAdmin && viewingAgencyId ? loadActiveAgency(viewingAgencyId) : null,
+          ])
+        : Promise.resolve(null),
 
     signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
     signUp: (email, password, metadata) =>
