@@ -185,6 +185,7 @@ function shapeRealPractice(row, consultCount, agencyName) {
     recovered: DEMO_RECOVERED[(row.name || '').toLowerCase()] ?? 0,
     last_recording_days: null,
     sms_status: sms,
+    archived_at: row.archived_at || null,
   }
 }
 
@@ -197,7 +198,7 @@ export async function loadAdminData() {
 
     const [agRes, prRes, coRes, cfRes, leRes] = await Promise.all([
       supabase.from('agency_accounts').select('*').limit(500),
-      supabase.from('practices').select('*, agency:agency_accounts(name)').limit(500),
+      supabase.from('practices').select('*, agency:agency_accounts(name)').is('archived_at', null).limit(500),
       supabase.from('consults').select('id, practice_id, status, created_at').gte('created_at', monthStart.toISOString()).order('created_at', { ascending: false }),
       supabase.from('cancellation_feedback').select('*').order('created_at', { ascending: false }).limit(500),
       // Best-effort; table/columns may not exist or be RLS-restricted → ignored.

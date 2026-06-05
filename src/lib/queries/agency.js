@@ -9,6 +9,7 @@ export async function fetchAgencyPractices(agencyId) {
     .from('practices')
     .select('*')
     .eq('agency_id', agencyId)
+    .is('archived_at', null)
     .order('name')
   if (error) throw error
   return data || []
@@ -52,15 +53,18 @@ export async function fetchAgencyPracticeMetrics(practiceId) {
 
 export async function fetchAgencyOverview(agencyId) {
   if (!agencyId) return { practices: [], metrics: {} }
+  // Includes archived_at (not filtered here) so the overview can show an
+  // "archived" toggle + restore. Active vs. archived is split in the UI.
   const { data, error } = await supabase
     .from('practices')
-    .select('id, name, doctor_first, doctor_last, baa_accepted_at')
+    .select('id, name, doctor_first, doctor_last, baa_accepted_at, archived_at')
     .eq('agency_id', agencyId)
     .order('created_at', { ascending: true })
   if (error) throw error
   const practices = data || []
+  // Metrics only for active practices - archived ones are shown without stats.
   const entries = await Promise.all(
-    practices.map(async (p) => [p.id, await fetchAgencyPracticeMetrics(p.id)]),
+    practices.filter((p) => !p.archived_at).map(async (p) => [p.id, await fetchAgencyPracticeMetrics(p.id)]),
   )
   return { practices, metrics: Object.fromEntries(entries) }
 }
@@ -98,7 +102,7 @@ export async function fetchAgencyTeam(agencyId) {
       .eq('agency_id', agencyId)
       .is('accepted_at', null)
       .order('created_at', { ascending: false }),
-    supabase.from('practices').select('id, name').eq('agency_id', agencyId).order('name'),
+    supabase.from('practices').select('id, name').eq('agency_id', agencyId).is('archived_at', null).order('name'),
   ])
   return {
     members: members || [],
@@ -113,6 +117,7 @@ export async function fetchAgencySaasClients(agencyId) {
     .from('practices')
     .select('id, name, created_at, subscription_status, trial_ends_at')
     .eq('agency_id', agencyId)
+    .is('archived_at', null)
     .order('name')
   if (error) throw error
   return data || []
@@ -158,6 +163,7 @@ export function useAgencyKbPractices(agencyId) {
         .from('practices')
         .select('id, name')
         .eq('agency_id', agencyId)
+        .is('archived_at', null)
         .order('name')
       if (error) throw error
       return data || []

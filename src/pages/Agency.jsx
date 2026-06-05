@@ -16,6 +16,8 @@ import {
   Upload,
   Image as ImageIcon,
   RotateCcw,
+  Archive,
+  ChevronDown,
   Eye,
   Mic,
 } from 'lucide-react'
@@ -254,7 +256,7 @@ function SidebarPreview({ color, logoUrl, companyName }) {
 }
 
 export default function Agency() {
-  const { agency, agencyRole, agencyLoading, isAgencyUser, viewPractice, refreshAgency } = useAuth()
+  const { user, agency, agencyRole, agencyLoading, isAgencyUser, viewPractice, refreshAgency } = useAuth()
   const { invalidateBrand } = useBranding()
   const navigate = useNavigate()
   // Sub-view is URL-driven (?tab=) so the sidebar agency nav can link to it
@@ -262,9 +264,36 @@ export default function Agency() {
   const [searchParams] = useSearchParams()
   const tab = searchParams.get('tab') || 'overview'
   const { data: overview, isLoading: loading, refetch: refetchOverview } = useAgencyOverview(agency?.id)
-  const practices = overview?.practices || []
+  // The overview returns active + archived; split so lists show active only and
+  // archived subaccounts live behind a toggle (restorable).
+  const practices = (overview?.practices || []).filter((p) => !p.archived_at)
+  const archivedPractices = (overview?.practices || []).filter((p) => p.archived_at)
   const metrics = overview?.metrics || {}
   const [showAdd, setShowAdd] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
+  const [busyId, setBusyId] = useState(null)
+
+  async function archivePractice(e, p) {
+    e.stopPropagation()
+    if (!confirm(`Archive ${p.name}? It will be hidden from your subaccounts but can be restored later.`)) return
+    setBusyId(p.id)
+    const { error } = await supabase
+      .from('practices')
+      .update({ archived_at: new Date().toISOString(), archived_by: user?.id ?? null })
+      .eq('id', p.id)
+    setBusyId(null)
+    if (error) return alert(error.message)
+    refetchOverview()
+  }
+
+  async function restorePractice(e, p) {
+    e.stopPropagation()
+    setBusyId(p.id)
+    const { error } = await supabase.from('practices').update({ archived_at: null, archived_by: null }).eq('id', p.id)
+    setBusyId(null)
+    if (error) return alert(error.message)
+    refetchOverview()
+  }
 
   // Agency settings form
   const [settings, setSettings] = useState({})
@@ -447,15 +476,18 @@ export default function Agency() {
             </button>
           </div>
         ) : (
+          <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {practices.map((p) => {
               const m = metrics[p.id] || {}
               const doctor = [p.doctor_first, p.doctor_last].filter(Boolean).join(' ')
               return (
-                <button
+                <div
                   key={p.id}
                   onClick={() => impersonate(p)}
-                  className="card group p-5 text-left transition hover:border-surface-600 hover:bg-surface-800/40"
+                  role="button"
+                  tabIndex={0}
+                  className="card group cursor-pointer p-5 text-left transition hover:border-surface-600 hover:bg-surface-800/40"
                 >
                   <div className="flex items-start justify-between">
                     <div className="min-w-0">
@@ -464,7 +496,18 @@ export default function Agency() {
                         {doctor ? `Dr. ${doctor}` : 'Doctor not set'}
                       </p>
                     </div>
-                    <ChevronRight className="h-5 w-5 shrink-0 text-slate-600 transition group-hover:text-primary-400" />
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={(e) => archivePractice(e, p)}
+                        disabled={busyId === p.id}
+                        title="Archive subaccount"
+                        className="rounded-md p-1 text-slate-500 opacity-0 transition hover:bg-surface-700 hover:text-rose-300 group-hover:opacity-100 disabled:opacity-40"
+                      >
+                        {busyId === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+                      </button>
+                      <ChevronRight className="h-5 w-5 text-slate-600 transition group-hover:text-primary-400" />
+                    </div>
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs">
@@ -493,10 +536,50 @@ export default function Agency() {
                       )}
                     </span>
                   </div>
-                </button>
+                </div>
               )
             })}
           </div>
+
+          {/* Archived subaccounts - hidden from the list above; restorable. */}
+          {archivedPractices.length > 0 && (
+            <div className="mt-6">
+              <button
+                onClick={() => setShowArchived((v) => !v)}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-400 transition hover:text-slate-200"
+              >
+                {showArchived ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                <Archive className="h-4 w-4" /> Archived ({archivedPractices.length})
+              </button>
+              {showArchived && (
+                <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {archivedPractices.map((p) => {
+                    const doctor = [p.doctor_first, p.doctor_last].filter(Boolean).join(' ')
+                    return (
+                      <div key={p.id} className="card p-5 opacity-80">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-slate-300">{p.name}</p>
+                            <p className="truncate text-sm text-slate-500">{doctor ? `Dr. ${doctor}` : 'Doctor not set'}</p>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-surface-700 px-2 py-0.5 text-[11px] font-medium text-slate-400">Archived</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => restorePractice(e, p)}
+                          disabled={busyId === p.id}
+                          className="btn-ghost mt-4 w-full justify-center disabled:opacity-40"
+                        >
+                          {busyId === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Restore
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+          </>
         )
       ) : (
         <div className="card max-w-3xl p-6">
