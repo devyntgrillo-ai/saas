@@ -213,7 +213,7 @@ export default function Dashboard() {
               <div className="card p-5">
                 <div className="flex items-center justify-between">
                   <p className="flex items-center gap-1.5 text-sm text-slate-400">
-                    Production Lifted by CaseLift
+                    Production Recovered
                     <Info
                       className="h-3.5 w-3.5 cursor-help text-slate-500"
                       title="Confirmed = actual treatment plan values from your PMS or manual entry, attributed to CaseLift."
@@ -226,10 +226,7 @@ export default function Dashboard() {
                 <p className="mt-3 text-3xl font-bold tracking-tight text-emerald-300">
                   {formatMoney(prodMetrics.confirmed)}
                 </p>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  Confirmed recovered · {prodMetrics.attributedCount} CaseLift-attributed
-                  {prodMetrics.pipeline > 0 ? ` · ${formatMoney(prodMetrics.pipeline)} pipeline` : ''}
-                </p>
+                <p className="mt-0.5 text-xs text-slate-500">CaseLift-assisted</p>
               </div>
               <KpiCard icon={TrendingUp} accent="primary" label="Pipeline Value" value={formatMoney(kpis.pipelineValue)} sub={`${activity.active} patients nurtured`} />
               <KpiCard icon={Clock} accent="violet" label="Hours Saved" value={`${kpis.hoursSaved}h`} sub={`${kpis.messagesSent} auto follow-ups · ~${kpis.minPerFollowup} min each`} />
