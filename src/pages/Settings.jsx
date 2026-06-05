@@ -37,6 +37,7 @@ import NotificationSettings from './NotificationSettings'
 import ReferralsPanel from './Referrals'
 import CancellationFlow from '../components/CancellationFlow'
 import InviteModal from '../components/InviteModal'
+import Modal from '../components/Modal'
 import { usePermissions, ACCESS_LABELS } from '../lib/permissions'
 import { usePracticeTeam, useRemoveTeamMember, useRevokeInvitation, useResendInvitation } from '../lib/queries'
 import { TREATMENT_TYPES } from '../lib/treatments'
@@ -598,6 +599,7 @@ function BillingPanel({ practice, showSuccess, checkoutLoading, checkoutError, o
   )
 
   return (
+    <div className="space-y-6">
     <div className="card p-6">
       <h2 className="text-base font-semibold text-white">Billing</h2>
 
@@ -716,6 +718,95 @@ function BillingPanel({ practice, showSuccess, checkoutLoading, checkoutError, o
           <ActivateButton label="Activate subscription" loading={checkoutLoading} onClick={onActivate} />
         )}
       </div>
+    </div>
+
+    <AddLocationCard practiceId={practice?.id} />
+    </div>
+  )
+}
+
+// Volume pricing: more locations -> lower per-location monthly rate.
+function perLocationRate(n) {
+  if (n >= 10) return 497
+  if (n >= 5) return 597
+  if (n >= 2) return 697
+  return 797
+}
+
+// Settings -> Billing -> "Add Another Location". Picks a count, shows live volume
+// pricing, then hands off to the signup funnel pre-filled with the discounted
+// plan + parent practice so the new location links to this owner's account.
+function AddLocationCard({ practiceId }) {
+  const [count, setCount] = useState(1)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const rate = perLocationRate(count)
+  const total = rate * count
+
+  function proceed() {
+    const params = new URLSearchParams({ plan: String(rate), locations: String(count) })
+    if (practiceId) params.set('parent_practice', practiceId)
+    window.location.href = `/signup?${params.toString()}`
+  }
+
+  return (
+    <div className="card p-6">
+      <h2 className="text-base font-semibold text-white">Add Another Location</h2>
+      <p className="mt-0.5 text-sm text-slate-400">
+        Each additional location gets a discounted rate. Volume pricing applied automatically.
+      </p>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-slate-300">How many locations to add?</label>
+          <select
+            value={count}
+            onChange={(e) => setCount(Number(e.target.value))}
+            className="h-10 w-full rounded-lg border border-surface-700 bg-surface-800 px-3 text-sm text-white focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+          >
+            {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>{n} {n === 1 ? 'location' : 'locations'}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="rounded-xl border border-surface-700 bg-surface-800/50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Per location</p>
+          <p className="mt-1 text-2xl font-bold text-white">
+            ${rate}<span className="text-sm font-medium text-slate-400">/mo</span>
+          </p>
+          <p className="mt-1 text-sm text-slate-400">
+            {count} {count === 1 ? 'location' : 'locations'} × ${rate}/mo ={' '}
+            <span className="font-semibold text-emerald-300">${total.toLocaleString()}/mo</span> additional
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 flex justify-end">
+        <button onClick={() => setConfirmOpen(true)} className="btn-primary">
+          <Plus className="h-4 w-4" /> Add {count === 1 ? 'Location' : 'Locations'} — ${total.toLocaleString()}/mo
+        </button>
+      </div>
+
+      {confirmOpen && (
+        <Modal
+          title="Add another location"
+          onClose={() => setConfirmOpen(false)}
+          footer={
+            <>
+              <button onClick={() => setConfirmOpen(false)} className="btn-ghost">Cancel</button>
+              <button onClick={proceed} className="btn-primary">Continue — ${total.toLocaleString()}/mo</button>
+            </>
+          }
+        >
+          <p className="text-sm text-slate-300">
+            Add <span className="font-semibold text-white">{count}</span>{' '}
+            {count === 1 ? 'location' : 'locations'} at{' '}
+            <span className="font-semibold text-white">${rate}/mo</span> each
+            {' '}(<span className="text-emerald-300">${total.toLocaleString()}/mo</span> additional)?
+            You'll set up each location's account on the next screen, linked to this account.
+          </p>
+        </Modal>
+      )}
     </div>
   )
 }

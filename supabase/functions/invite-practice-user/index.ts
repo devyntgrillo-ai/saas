@@ -163,6 +163,13 @@ Deno.serve(async (req: Request) => {
           { id: invitedUserId, email, practice_id: practiceId, role: "member" },
           { onConflict: "id" },
         );
+      // Record the membership so the practice switcher (multi-location) lists it.
+      await admin
+        .from("practice_members")
+        .upsert(
+          { practice_id: practiceId, user_id: invitedUserId, role: "member" },
+          { onConflict: "practice_id,user_id", ignoreDuplicates: true },
+        );
     }
 
     return json({

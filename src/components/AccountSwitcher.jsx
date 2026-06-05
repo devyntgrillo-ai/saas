@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronsUpDown, Search, RotateCcw, Shield } from 'lucide-react'
+import { ChevronsUpDown, Search, Shield, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useBranding } from '../context/BrandingContext'
 import { ACCESS_LABELS } from '../lib/permissions'
@@ -19,17 +19,21 @@ function firstLetter(name) {
   return (name?.trim()?.[0] || '?').toUpperCase()
 }
 
-// Unified context switcher: Super Admin → Agency → Practices.
-// Clean, premium dropdown - borderless trigger, elevated panel, accent states.
+// City/State subtitle for a practice (no full street address).
+function cityState(p) {
+  return [p.city, p.state].filter(Boolean).join(', ')
+}
+
+// Context switcher. Admins/resellers get a "Back to … View" action + every
+// account they can access; multi-location practice users get "My Practices".
 export default function AccountSwitcher() {
   const {
     accessiblePractices,
-    accessibleResellers,
     practice,
     agency,
     isAgencyUser,
     isSuperAdmin,
-    isImpersonating,
+    isMultiPractice,
     accessLevel,
     viewPractice,
     exitPractice,
@@ -61,19 +65,14 @@ export default function AccountSwitcher() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return accessiblePractices.filter(
-      (p) => !q || p.name?.toLowerCase().includes(q) || p.address?.toLowerCase().includes(q)
+      (p) => !q || p.name?.toLowerCase().includes(q) || p.address?.toLowerCase().includes(q) || cityState(p).toLowerCase().includes(q)
     )
   }, [accessiblePractices, search])
-
-  const filteredResellers = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (accessibleResellers || []).filter((r) => !q || r.name?.toLowerCase().includes(q))
-  }, [accessibleResellers, search])
 
   // Current context shown on the trigger.
   const currentName = practice?.name || agency?.name || (isSuperAdmin ? 'Super Admin' : 'Select account')
   const currentSub = practice
-    ? practice.agency?.name || practice.address || 'Practice'
+    ? practice.agency?.name || cityState(practice) || practice.address || 'Practice'
     : agency
       ? ACCESS_LABELS[accessLevel] || 'Reseller'
       : ACCESS_LABELS[accessLevel] || ''
@@ -84,11 +83,17 @@ export default function AccountSwitcher() {
     navigate('/')
   }
 
-  // Practice users have nothing to switch between - hide the switcher entirely.
-  if (!isSuperAdmin && !isAgencyUser) return null
+  // Show the switcher for admins, resellers, and multi-location practice users.
+  if (!isSuperAdmin && !isAgencyUser && !isMultiPractice) return null
 
-  // Super-admins search across every account; resellers across their sub-accounts.
-  const searchPlaceholder = isSuperAdmin ? 'Search for an account' : 'Search for a sub-account'
+  // "My Practices" for a multi-location practice user; "All Accounts" for admins/resellers.
+  const ownPractices = isMultiPractice && !isSuperAdmin && !isAgencyUser
+  const listHeader = ownPractices ? 'My Practices' : 'All Accounts'
+  const searchPlaceholder = isSuperAdmin
+    ? 'Search for an account'
+    : isAgencyUser
+      ? 'Search for a sub-account'
+      : 'Search your practices'
 
   return (
     <div className="relative px-2 pb-2" ref={ref}>
@@ -109,10 +114,23 @@ export default function AccountSwitcher() {
 
       {/* Panel - white/light, floating over the dark sidebar */}
       {open && (
-        <div
-          className="animate-dropdown absolute left-2 z-50 mt-1 w-80 max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.18)]"
-        >
+        <div className="animate-dropdown absolute left-2 z-50 mt-1 w-80 max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.18)]">
           <div className="p-2.5">
+            {/* Back to admin/reseller view — top of the panel, above search. */}
+            {(isSuperAdmin || isAgencyUser) && (
+              <button
+                onClick={() => { exitPractice(); setOpen(false); navigate(isSuperAdmin ? '/admin' : '/agency') }}
+                className="mb-2 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-slate-50"
+              >
+                {isSuperAdmin
+                  ? <Shield className="h-4 w-4 shrink-0 text-blue-600" />
+                  : <ArrowLeft className="h-4 w-4 shrink-0 text-blue-600" />}
+                <span className="text-sm font-medium text-blue-600">
+                  {isSuperAdmin ? 'Back to Super Admin View' : 'Back to Reseller View'}
+                </span>
+              </button>
+            )}
+
             {/* Search */}
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -125,62 +143,22 @@ export default function AccountSwitcher() {
               />
             </div>
 
-            {/* Super-admin: current context (not clickable). Reseller: switch action. */}
-            {isSuperAdmin ? (
-              <div className="mt-2 flex items-center gap-2.5 rounded-lg bg-slate-50 px-2 py-2">
-                <Shield className="h-4 w-4 shrink-0 text-slate-500" />
-                <span className="text-sm font-medium text-slate-700">Super Admin View</span>
-                {!isImpersonating && (
-                  <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                    Current
-                  </span>
-                )}
-              </div>
-            ) : (
-              <button
-                onClick={() => { exitPractice(); setOpen(false); navigate('/agency') }}
-                className="mt-2 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-slate-50"
-              >
-                <RotateCcw className="h-4 w-4 shrink-0 text-blue-600" />
-                <span className="text-sm font-medium text-blue-600">Switch to Reseller View</span>
-              </button>
-            )}
-
-            {/* RESELLERS (super-admin only) - jump to a reseller's admin view. */}
-            {isSuperAdmin && filteredResellers.length > 0 && (
-              <>
-                <p className="px-1 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  Resellers
-                </p>
-                <div className="max-h-[150px] space-y-0.5 overflow-y-auto">
-                  {filteredResellers.map((r) => (
-                    <button
-                      key={r.id}
-                      onClick={() => { setOpen(false); navigate(`/admin/agencies/${r.id}`) }}
-                      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-slate-50"
-                    >
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-600">
-                        {firstLetter(r.name)}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-slate-900">{r.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {/* ALL ACCOUNTS */}
+            {/* Accounts / practices */}
             <p className="px-1 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              All Accounts
+              {listHeader}
             </p>
-
-            {/* Accounts list - compact rows with a little breathing room. */}
-            <div className="max-h-[300px] space-y-0.5 overflow-y-auto">
+            <div className="max-h-[320px] space-y-0.5 overflow-y-auto">
               {filtered.length === 0 ? (
                 <p className="px-2 py-6 text-center text-sm text-slate-400">No accounts found.</p>
               ) : (
                 filtered.map((p) => (
-                  <AccountRow key={p.id} p={p} active={practice?.id === p.id} onPick={pick} />
+                  <AccountRow
+                    key={p.id}
+                    p={p}
+                    active={practice?.id === p.id}
+                    sub={ownPractices ? cityState(p) : p.address}
+                    onPick={pick}
+                  />
                 ))
               )}
             </div>
@@ -197,7 +175,7 @@ export default function AccountSwitcher() {
   )
 }
 
-function AccountRow({ p, active, onPick }) {
+function AccountRow({ p, active, sub, onPick }) {
   return (
     <button
       onClick={() => onPick(p.id)}
@@ -210,7 +188,7 @@ function AccountRow({ p, active, onPick }) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-semibold leading-tight text-slate-900">{p.name}</span>
-        {p.address && <span className="block truncate text-[11px] leading-tight text-slate-500">{p.address}</span>}
+        {sub && <span className="block truncate text-[11px] leading-tight text-slate-500">{sub}</span>}
       </span>
     </button>
   )

@@ -180,6 +180,10 @@ export function AuthProvider({ children }) {
       : null)
   const isSuperAdmin = accessLevel === 'super_admin'
   const canImpersonate = isAgencyUser || isSuperAdmin
+  // A practice user who belongs to more than one practice (multi-location). They
+  // switch their active location the same way admins impersonate — but it's not
+  // impersonation, so no banner.
+  const isMultiPractice = !canImpersonate && accessiblePractices.length > 1
 
   // --- active (impersonated) practice record ---
   const loadActivePractice = useCallback(async (id) => {
@@ -201,16 +205,16 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (canImpersonate && viewingPracticeId) loadActivePractice(viewingPracticeId)
+    if ((canImpersonate || isMultiPractice) && viewingPracticeId) loadActivePractice(viewingPracticeId)
     else {
       setActivePractice(null)
       setActivePracticeFor(null)
     }
-  }, [canImpersonate, viewingPracticeId, loadActivePractice])
+  }, [canImpersonate, isMultiPractice, viewingPracticeId, loadActivePractice])
 
   // --- accessible-practice list for the account switcher ---
   const loadAccessiblePractices = useCallback(async (lvl, prof, ag) => {
-    const sel = 'id, name, address, agency_id'
+    const sel = 'id, name, address, agency_id, city, state'
     try {
       if (lvl === 'super_admin') {
         const { data } = await supabase.from('practices').select(sel).order('name').limit(50)
@@ -223,8 +227,13 @@ export function AuthProvider({ children }) {
         if (Array.isArray(accessible) && accessible.length) rows = rows.filter((p) => accessible.includes(p.id))
         return rows
       }
-      if (prof?.practice_id) {
-        const { data } = await supabase.from('practices').select(sel).eq('id', prof.practice_id)
+      // Practice user: every practice they belong to (multi-location) via
+      // practice_members, unioned with their home practice_id.
+      if (prof?.id) {
+        const { data: mem } = await supabase.from('practice_members').select('practice_id').eq('user_id', prof.id)
+        const ids = [...new Set([...(mem || []).map((m) => m.practice_id), prof.practice_id].filter(Boolean))]
+        if (!ids.length) return []
+        const { data } = await supabase.from('practices').select(sel).in('id', ids).order('name')
         return data || []
       }
     } catch {
@@ -259,13 +268,16 @@ export function AuthProvider({ children }) {
 
   // --- effective practice context (own practice vs. impersonated client) ---
   const profilePractice = normalizePractice(profile?.practice)
+  // Admin/reseller impersonation OR a multi-location user switching their own
+  // location both swap the active practice; only the former is "impersonation".
+  const switchingPractice = (canImpersonate || isMultiPractice) && Boolean(viewingPracticeId)
   const isImpersonating = canImpersonate && Boolean(viewingPracticeId)
-  const practice = isImpersonating ? activePractice : profilePractice
-  const practiceId = isImpersonating ? viewingPracticeId : profile?.practice_id ?? null
+  const practice = switchingPractice ? activePractice : profilePractice
+  const practiceId = switchingPractice ? viewingPracticeId : profile?.practice_id ?? null
 
   // Keep route guards in a loading state until the practice row that drives
-  // baaAccepted / onboardingCompleted is available (profile join or impersonation fetch).
-  const practiceContextPending = isImpersonating
+  // baaAccepted / onboardingCompleted is available (profile join or switch fetch).
+  const practiceContextPending = switchingPractice
     ? activePracticeFor !== viewingPracticeId
     : Boolean(profile?.practice_id) && !profilePractice
 
@@ -324,6 +336,7 @@ export function AuthProvider({ children }) {
     accessLevel,
     isSuperAdmin,
     canImpersonate,
+    isMultiPractice,
     accessiblePractices,
     accessibleResellers,
 

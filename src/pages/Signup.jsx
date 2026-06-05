@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Loader2, Gift, Check, CreditCard, ArrowLeft } from 'lucide-react'
+import { Loader2, Gift, Check, CreditCard, ArrowLeft, Building2 } from 'lucide-react'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -51,6 +51,15 @@ export default function Signup() {
   const [loading, setLoading] = useState(false)
   const [practiceId, setPracticeId] = useState(null) // set once the account+practice exist
   const planAmount = useMemo(() => parsePlanAmount(searchParams), [searchParams])
+
+  // "Add another location" funnel: ?parent_practice= links the new location to an
+  // existing owner's account so they can switch between locations. ?locations= is
+  // how many they intend to add (display only here).
+  const parentPracticeId = useMemo(() => (searchParams.get('parent_practice') || '').trim(), [searchParams])
+  const locationCount = useMemo(() => {
+    const n = Number(searchParams.get('locations'))
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : 1
+  }, [searchParams])
 
   // Referral: code comes from ?ref= or localStorage (set by /r/[code]). Resolve
   // it to the referrer so we can welcome them and stamp the new practice.
@@ -155,6 +164,19 @@ export default function Signup() {
       return
     }
 
+    // Multi-location: link this new location to the parent owner's account so it
+    // shows up in their practice switcher. Runs server-side (service role) — RLS
+    // blocks a user from self-inserting memberships. Non-fatal if it fails.
+    if (parentPracticeId) {
+      try {
+        await supabase.functions.invoke('link-location', {
+          body: { parent_practice_id: parentPracticeId, new_practice_id: practice.id },
+        })
+      } catch {
+        /* non-blocking: they can still be linked later from the parent account */
+      }
+    }
+
     await refreshProfile()
     setPracticeId(practice.id)
     setLoading(false)
@@ -225,6 +247,17 @@ export default function Signup() {
         </div>
 
         <div className="card p-8">
+          {parentPracticeId && step === 1 && (
+            <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+              <Building2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Adding a new location to your account at the discounted{' '}
+                <span className="font-semibold">${planAmount.toLocaleString()}/mo</span> rate
+                {locationCount > 1 ? ` — set up the first of ${locationCount} locations below.` : '.'}
+              </span>
+            </div>
+          )}
+
           {referrer && step === 1 && (
             <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary-200">
               <Gift className="mt-0.5 h-4 w-4 shrink-0" />
