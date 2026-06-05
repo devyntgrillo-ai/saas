@@ -447,7 +447,7 @@ export default function Agency() {
           )}
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-white">{agency?.name || 'Reseller'}</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-white">{agency?.company_name || agency?.brand_name || agency?.name || 'Reseller'}</h1>
               <span className="rounded-full bg-[var(--accent-subtle)] px-2.5 py-0.5 text-xs font-semibold text-[var(--accent)]">RESELLER</span>
             </div>
             <p className="text-sm text-slate-400 capitalize">{agencyRole} · {practices.length} client practices</p>
