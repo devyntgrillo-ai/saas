@@ -53,20 +53,27 @@ export default function AgencyAnalytics() {
   // Dashboard surfaces the reseller-facing numbers; the Subaccounts tab is just
   // the searchable client list.
   const { data: overview } = useAgencyOverview(agency?.id)
-  const ovMetrics = overview?.metrics || {}
-  const ovPractices = (overview?.practices || []).filter((p) => !p.archived_at)
   const rollup = overview?.rollup || { totalCount: 0, activeCount: 0, recovered: 0 }
   const clientPrice = Number(agency?.reseller_client_price) || 0
   const yourMrr = rollup.activeCount * clientPrice
-  const attentionReasons = (p) => {
-    const m = ovMetrics[p.id] || {}
-    const reasons = []
-    if (!p.baa_accepted_at) reasons.push('BAA pending')
-    if (!m.lastActivity || Date.now() - new Date(m.lastActivity).getTime() > 14 * 86400000) reasons.push('No recent activity')
-    if (m.recordingRate && m.recordingRate.total > 0 && m.recordingRate.rate < 50) reasons.push(`Low recording (${m.recordingRate.rate}%)`)
-    return reasons
-  }
-  const needsAttention = ovPractices.filter((p) => attentionReasons(p).length > 0)
+  // Clients to nudge: BAA unsigned, stale, or low recording rate. Memoized so the
+  // current-time check stays out of the render path. Each row carries its reasons.
+  const needsAttention = useMemo(() => {
+    const now = new Date().getTime()
+    const m = overview?.metrics || {}
+    const reasonsFor = (p) => {
+      const pm = m[p.id] || {}
+      const r = []
+      if (!p.baa_accepted_at) r.push('BAA pending')
+      if (!pm.lastActivity || now - new Date(pm.lastActivity).getTime() > 14 * 86400000) r.push('No recent activity')
+      if (pm.recordingRate && pm.recordingRate.total > 0 && pm.recordingRate.rate < 50) r.push(`Low recording (${pm.recordingRate.rate}%)`)
+      return r
+    }
+    return (overview?.practices || [])
+      .filter((p) => !p.archived_at)
+      .map((p) => ({ ...p, reasons: reasonsFor(p) }))
+      .filter((p) => p.reasons.length > 0)
+  }, [overview])
   const impersonate = (p) => { viewPractice(p.id); navigate('/') }
 
   const metrics = useMemo(() => {
@@ -146,7 +153,7 @@ export default function AgencyAnalytics() {
           </div>
         )}
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">{agency?.name || 'Reseller'} Analytics</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-white">{agency?.company_name || agency?.brand_name || agency?.name || 'Reseller'} Analytics</h1>
           <p className="text-sm text-slate-400">Performance across all client practices.</p>
         </div>
       </div>
@@ -256,7 +263,7 @@ export default function AgencyAnalytics() {
                       >
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-medium text-slate-200">{p.name}</span>
-                          <span className="block truncate text-xs text-amber-300/90">{attentionReasons(p).join(' · ')}</span>
+                          <span className="block truncate text-xs text-amber-300/90">{p.reasons.join(' · ')}</span>
                         </span>
                         <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" />
                       </button>
