@@ -26,6 +26,7 @@ import AcceptInvite from './pages/AcceptInvite'
 import AcceptInvitation from './pages/AcceptInvitation'
 import Dashboard from './pages/Dashboard'
 import Consults from './pages/Consults'
+import ProcessingScreen from './pages/ProcessingScreen'
 import ConsultDetail from './pages/ConsultDetail'
 import Conversations from './pages/Conversations'
 import PowerDialer from './pages/PowerDialer'
@@ -180,6 +181,7 @@ function AppContent() {
                   <Route element={<RequireActiveBilling />}>
                     <Route path="/knowledge-base" element={<Navigate to="/settings/knowledge-base" replace />} />
                     <Route path="/consults" element={<Consults />} />
+                    <Route path="/consults/:id/processing" element={<ProcessingScreen />} />
                     <Route path="/consults/:id" element={<ConsultDetail />} />
                     <Route path="/conversations" element={<Conversations />} />
                     <Route path="/conversations/dialer" element={<PowerDialer />} />

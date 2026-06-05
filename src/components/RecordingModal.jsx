@@ -304,15 +304,17 @@ export default function RecordingModal({ onClose, patient = null }) {
     }
     setTimeout(() => {
       onClose()
-      navigate(`/consults/${consultId}`)
+      // Hand off to the processing screen (polls transcription, then opens the
+      // consult) instead of dropping onto a blank detail page.
+      navigate(`/consults/${consultId}/processing`, { state: { outcome: option.value } })
     }, 1000)
   }
 
-  // "Skip for now" - outcome defaults to 'pending' (the DB default), just redirect.
+  // "Skip for now" - outcome defaults to 'pending' (the DB default).
   function skipOutcome() {
     if (!consultId) return
     onClose()
-    navigate(`/consults/${consultId}`)
+    navigate(`/consults/${consultId}/processing`, { state: { outcome: 'pending' } })
   }
 
   function requestCancel() {
