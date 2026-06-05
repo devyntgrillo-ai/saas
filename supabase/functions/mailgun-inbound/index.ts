@@ -214,6 +214,20 @@ Deno.serve(async (req: Request) => {
       },
     });
 
+    // Notify staff of the patient email reply (best-effort).
+    try {
+      const patientName = [conversation.patient_first, conversation.patient_last].filter(Boolean).join(" ") || fromEmail;
+      await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-staff`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({
+          practice_id: conversation.practice_id,
+          event_name: "patient_replied",
+          payload: { patient_name: patientName, message_preview: String(body || subject || "").slice(0, 100) },
+        }),
+      });
+    } catch { /* non-blocking */ }
+
     return ok();
   } catch (e) {
     await reportEdgeError("mailgun-inbound", e);

@@ -111,6 +111,26 @@ Deno.serve(async (req: Request) => {
       if (!body.practice_id && (p.subscription_status === "cancelled" || p.subscription_status === "canceled")) continue;
       const to = [p.email, p.email_reply_to].filter((e: string) => e && /@/.test(e));
       const d = await digestForPractice(admin, p);
+      // Low recording rate alert: fewer than 3 consults recorded this week.
+      // Checked before the activity-suppression below so a zero-consult week
+      // (the most important case) still gets the nudge.
+      if (d.recorded < 3) {
+        const since14 = new Date(Date.now() - 14 * 86400000).toISOString();
+        const { count: prevCount } = await admin.from("consults")
+          .select("id", { count: "exact", head: true })
+          .eq("practice_id", p.id).gte("created_at", since14).lt("created_at", weekAgoISO());
+        try {
+          await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-staff`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+            body: JSON.stringify({
+              practice_id: p.id,
+              event_name: "low_recording_rate",
+              payload: { consults_this_week: d.recorded, previous_week_average: prevCount || 0 },
+            }),
+          });
+        } catch { /* non-blocking */ }
+      }
       // Don't send a flat/empty week (no activity). A manual single-practice run
       // (body.practice_id) always sends so it can be tested.
       const hasActivity = d.recorded > 0 || d.sent > 0 || d.replies > 0 || d.conversions > 0 || (d.recoveredValue || 0) > 0;

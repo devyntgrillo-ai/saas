@@ -207,6 +207,25 @@ Deno.serve(async (req: Request) => {
       },
     });
 
+    // Notify staff of the patient reply (best-effort; never alert on opt-outs).
+    if (!optOut) {
+      // deno-lint-ignore no-explicit-any
+      const cv = conversation as any;
+      const patientName = [cv?.patient_first, cv?.patient_last].filter(Boolean).join(" ") ||
+        [consult?.patient_first, consult?.patient_last].filter(Boolean).join(" ") || from;
+      try {
+        await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-staff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+          body: JSON.stringify({
+            practice_id: practiceId,
+            event_name: "patient_replied",
+            payload: { patient_name: patientName, message_preview: (body || "").slice(0, 100) },
+          }),
+        });
+      } catch { /* non-blocking */ }
+    }
+
     return twiml();
   } catch (e) {
     await reportEdgeError("twilio-inbound", e);

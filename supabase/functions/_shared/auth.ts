@@ -49,7 +49,6 @@ export async function resolveAuth(
 
   // Service-role: verify the raw token against the actual service_role key,
   // rather than trusting the decoded payload alone (audit finding 1).
-  const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (SERVICE_KEY && token === SERVICE_KEY) {
     const practiceId = (body.practice_id as string) ?? "";
     if (!practiceId && required) {

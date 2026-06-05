@@ -1,18 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Loader2, Check, Bell, Mail, MessageSquare, Hash, Send } from 'lucide-react'
+import { Loader2, Check, Mail, MessageSquare, Hash, Send, Info } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 
 const EVENTS = [
-  { key: 'patient_replied', label: 'Patient replied', def: { push: true, email: true, sms: true, slack: true } },
-  { key: 'case_converted', label: 'Case converted', def: { push: true, email: true, sms: true, slack: true } },
-  { key: 'consult_analyzed', label: 'New consult ready', def: { push: true, email: false, sms: false, slack: true } },
-  { key: 'call_due', label: 'Call due today', def: { push: true, email: false, sms: true, slack: false } },
-  { key: 'low_recording_rate', label: 'Low recording rate', def: { push: true, email: true, sms: false, slack: true } },
-  { key: 'ai_update', label: 'AI sequence update', def: { push: false, email: false, sms: false, slack: true } },
+  { key: 'patient_replied', label: 'Patient Replied', tip: 'Get notified when a patient responds to a CaseLift follow-up sequence', def: { email: true, sms: true, slack: true } },
+  { key: 'case_converted', label: 'Case Converted', tip: 'Get notified when a treatment plan is marked as won or accepted', def: { email: true, sms: true, slack: true } },
+  { key: 'daily_calls_due', label: 'Daily Calls Due', tip: 'Get a daily list of patients scheduled for a manual follow-up call today', def: { email: true, sms: true, slack: false } },
+  { key: 'low_recording_rate', label: 'Low Recording Rate', tip: 'Get alerted when your team records fewer consults than your weekly average', def: { email: true, sms: false, slack: true } },
 ]
-const CHANNELS = ['push', 'email', 'sms', 'slack']
+const CHANNELS = ['email', 'sms', 'slack']
 
 function defaultPrefs() {
   const out = {}
@@ -20,10 +17,24 @@ function defaultPrefs() {
   return out
 }
 
-function Section({ title, children }) {
+// Lightweight CSS tooltip (no new package): dark bubble above the ⓘ on hover.
+function InfoTip({ text }) {
+  return (
+    <span className="group relative inline-flex align-middle">
+      <Info className="h-3.5 w-3.5 cursor-help text-slate-500" />
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-56 -translate-x-1/2 rounded-lg bg-[#1e293b] px-3 py-2 text-[12px] font-normal normal-case leading-snug tracking-normal text-white shadow-lg group-hover:block">
+        {text}
+      </span>
+    </span>
+  )
+}
+
+function Section({ title, tip, children }) {
   return (
     <div className="card p-6">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
+      <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {title}{tip && <InfoTip text={tip} />}
+      </h2>
       <div className="mt-4">{children}</div>
     </div>
   )
@@ -62,6 +73,7 @@ export default function NotificationSettings() {
       weekly_digest_time: practice.weekly_digest_time || '9am',
       digest_owner_email: practice.digest_owner_email || practice.email || '',
       digest_tc_email: practice.digest_tc_email || '',
+      slack_webhook_url: practice.slack_webhook_url || '',
     })
   }, [practice])
 
@@ -105,11 +117,7 @@ export default function NotificationSettings() {
       {/* CHANNELS */}
       <Section title="Channels">
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-sm text-slate-200"><Bell className="h-4 w-4 text-slate-400" /> Push (browser)</div>
-            <Switch checked={Boolean(form.push_enabled)} onChange={(v) => setF('notify_push', v)} />
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-surface-700 pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-sm text-slate-200"><Mail className="h-4 w-4 text-slate-400" /> Email</div>
             <input value={form.notify_email_address || ''} onChange={(e) => setForm((f) => ({ ...f, notify_email_address: e.target.value }))}
               onBlur={(e) => save({ notify_email_address: e.target.value || null })} placeholder="alerts@practice.com" className="input max-w-[260px]" />
@@ -119,11 +127,14 @@ export default function NotificationSettings() {
             <input value={form.notify_sms_number || ''} onChange={(e) => setForm((f) => ({ ...f, notify_sms_number: e.target.value }))}
               onBlur={(e) => save({ notify_sms_number: e.target.value || null })} placeholder="(512) 555-0142" className="input max-w-[260px]" />
           </div>
-          <div className="flex items-center justify-between gap-3 border-t border-surface-700 pt-3">
-            <div className="flex items-center gap-2 text-sm text-slate-200"><Hash className="h-4 w-4 text-slate-400" /> Slack</div>
-            {slackConnected
-              ? <span className="text-xs font-medium text-emerald-300">Connected{practice?.slack_channel ? ` · ${practice.slack_channel}` : ''}</span>
-              : <Link to="/settings/integrations" className="btn-secondary text-xs">Connect Slack</Link>}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-surface-700 pt-3">
+            <div className="flex items-center gap-2 text-sm text-slate-200">
+              <Hash className="h-4 w-4 text-slate-400" /> Slack
+              {slackConnected && <span className="ml-1 text-xs font-medium text-emerald-300">Connected</span>}
+            </div>
+            <input value={form.slack_webhook_url || ''} onChange={(e) => setForm((f) => ({ ...f, slack_webhook_url: e.target.value }))}
+              onBlur={(e) => save({ slack_webhook_url: e.target.value.trim() || null }, e.target.value.trim() ? 'Slack connected' : 'Slack disconnected')}
+              placeholder="Paste your Slack incoming webhook URL" className="input max-w-[300px]" />
           </div>
         </div>
       </Section>
@@ -141,7 +152,9 @@ export default function NotificationSettings() {
             <tbody className="divide-y divide-surface-700">
               {EVENTS.map((e) => (
                 <tr key={e.key}>
-                  <td className="py-2.5 text-slate-200">{e.label}</td>
+                  <td className="py-2.5 text-slate-200">
+                    <span className="inline-flex items-center gap-1.5">{e.label}<InfoTip text={e.tip} /></span>
+                  </td>
                   {CHANNELS.map((c) => (
                     <td key={c} className="py-2.5 text-center">
                       <span className="inline-flex"><Switch checked={Boolean(prefs[e.key]?.[c])} onChange={() => toggleCell(e.key, c)} /></span>
@@ -155,7 +168,7 @@ export default function NotificationSettings() {
       </Section>
 
       {/* RECORDING REMINDERS */}
-      <Section title="Recording reminders">
+      <Section title="Pre-Consult Recording Reminder" tip="Sends a reminder before a scheduled consult appointment to make sure your TC records it">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-slate-200">Remind me to record before consults</p>
