@@ -367,16 +367,18 @@ export default function Agency() {
     setSettings((s) => ({ ...s, ...patch })) // optimistic
     setSavingSettings(true)
     setSaveError('')
-    const { error } = await supabase.from('agency_accounts').update(patch).eq('id', agency.id).select().maybeSingle()
-    if (error) {
-      // A "column ... does not exist" / schema-cache error means the brand
-      // migration hasn't been applied yet - surface it instead of failing silently.
-      const schemaIssue = /column|schema cache|PGRST/i.test(`${error.message} ${error.code || ''}`)
-      setSaveError(
-        schemaIssue
-          ? 'Save failed: the brand columns are missing. Apply migration 20260530040000_reseller_white_label_branding.sql to your Supabase project.'
-          : `Save failed: ${error.message}`,
-      )
+    // Persist via the service-role edge function so a super-admin editing brand
+    // while impersonating (or an agency owner/admin) always saves, regardless of
+    // agency_accounts RLS.
+    const { data: res, error } = await supabase.functions.invoke('save-reseller-brand', {
+      body: { agency_id: agency.id, patch },
+    })
+    if (error || res?.error) {
+      let msg = res?.error
+      if (!msg) {
+        try { msg = (await error?.context?.json?.())?.error } catch { /* not json */ }
+      }
+      setSaveError(`Save failed: ${msg || error?.message || 'unknown error'}`)
       setSavingSettings(false)
       return false
     }
