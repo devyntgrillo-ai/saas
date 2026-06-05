@@ -34,7 +34,7 @@ const analysisSystemPrompt = (treatmentType: string) => `You are CaseLift, an AI
 
 Treatment type being analyzed: ${treatmentType}
 
-Analyze the transcript and return ONLY valid JSON. No markdown, no backticks, no explanation. Just the JSON object. Never use em dashes (—) under any circumstances. Use commas, periods, or short sentences instead.
+Analyze the transcript and call the emit_analysis tool with your structured analysis. Never use em dashes (—) under any circumstances. Use commas, periods, or short sentences instead.
 
 Adapt your analysis based on treatment type:
 
@@ -68,7 +68,7 @@ For full_mouth_rehab / other:
 - Key personal details: functional issues, confidence, life events
 - Follow-up tone: phased approach, life-changing framing, financing
 
-Return exactly this JSON structure:
+Populate exactly these fields (this is the emit_analysis tool's schema):
 {
   "what_happened": "2-3 sentence narrative of what happened in the consult",
   "primary_objection": "one of the objection types listed above for this treatment",
@@ -129,29 +129,37 @@ const ANALYSIS_SCHEMA = {
   ],
 };
 
-// Tolerant JSON parse: prefer a clean parse, else extract the outermost braces.
-function parseJsonLoose(text: string): Record<string, unknown> {
-  try { return JSON.parse(text); } catch { /* fall through */ }
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start >= 0 && end > start) {
-    return JSON.parse(text.slice(start, end + 1));
-  }
-  throw new Error("Claude did not return parseable JSON.");
-}
+// Force Claude to emit the analysis through this tool. With tool_choice pinned
+// to it, the SDK hands us `input` already parsed as an object - so a stray prose
+// preface, a markdown fence, or a truncated trailing brace can no longer break
+// the response the way free-text JSON parsing did ("did not return parseable JSON").
+const ANALYSIS_TOOL = {
+  name: "emit_analysis",
+  description: "Return the structured consult analysis and the six follow-up messages.",
+  input_schema: ANALYSIS_SCHEMA,
+};
 
 async function analyze(anthropic: Anthropic, deidentified: string, treatmentType: string, note = "") {
   // On a regenerate the TC can steer the rewrite (e.g. "focus on financing").
   const guidance = note ? `\n\nAdditional guidance from the treatment coordinator for the follow-up messages: ${note}` : "";
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 4096,
+    max_tokens: 8192,
     system: analysisSystemPrompt(treatmentType),
+    tools: [ANALYSIS_TOOL],
+    tool_choice: { type: "tool", name: "emit_analysis" },
     messages: [{ role: "user", content: `Analyze this de-identified consult transcript:${guidance}\n\n${deidentified}` }],
   });
-  const tb = response.content.find((b) => b.type === "text");
-  if (!tb || tb.type !== "text") throw new Error("Claude returned no text block.");
-  return parseJsonLoose(tb.text ?? "");
+  // A cut-off response can leave the tool input partial - surface it clearly
+  // rather than persisting half an analysis.
+  if (response.stop_reason === "max_tokens") {
+    throw new Error("Analysis was cut off before completing. Please try again.");
+  }
+  const tu = response.content.find((b) => b.type === "tool_use");
+  if (!tu || tu.type !== "tool_use" || typeof tu.input !== "object" || tu.input === null) {
+    throw new Error("Claude did not return a structured analysis.");
+  }
+  return tu.input as Record<string, unknown>;
 }
 
 // Map Claude's "none"/empty sentinels to null for clean DB storage, and strip
