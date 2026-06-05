@@ -336,7 +336,11 @@ export function AuthProvider({ children }) {
   // Effective agency = own agency (reseller user) → impersonated agency
   // (reseller-level) → the impersonated practice's agency (practice-level). This
   // is what the /agency dashboard + its query hooks should scope to.
-  const effectiveAgency = agency || activeAgency || practice?.agency || null
+  // Impersonation wins: when a super-admin is "viewing as" a reseller,
+  // activeAgency is that reseller and must take precedence over the super-admin's
+  // OWN agency membership (if any) — otherwise the dashboard scopes to the wrong
+  // reseller. activeAgency is only ever set during reseller impersonation.
+  const effectiveAgency = activeAgency || agency || practice?.agency || null
   const effectiveAgencyId = effectiveAgency?.id ?? null
   const isAgencyView = isAgencyUser || Boolean(activeAgency)
 

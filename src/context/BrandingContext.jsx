@@ -139,8 +139,11 @@ export function BrandingProvider({ children }) {
   // The reseller for the current viewer: their own agency, the agency a
   // super-admin is impersonating directly, the agency of the practice they're
   // impersonating, or their home practice's agency.
+  // activeAgency (the reseller a super-admin is impersonating) takes precedence
+  // over the super-admin's own agency membership, so branding follows the
+  // impersonated reseller rather than the viewer's own agency.
   const resellerAgency = useMemo(
-    () => agency || activeAgency || practice?.agency || profile?.practice?.agency || null,
+    () => activeAgency || agency || practice?.agency || profile?.practice?.agency || null,
     [agency, activeAgency, practice, profile]
   )
 

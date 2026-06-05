@@ -74,15 +74,20 @@ export default function AccountSwitcher() {
 
   // Current context shown on the trigger. When nothing is impersonated, fall back
   // to the role label so the pill always reads sensibly.
+  // While impersonating a reseller (no sub-account), show that reseller's name.
+  const resellerImp = impersonation?.level === 'reseller' ? impersonation.target : null
   const currentName = practice?.name
+    || resellerImp?.name
     || (isSuperAdmin ? 'Select an account' : isAgencyUser ? 'Select an account' : agency?.name || 'Select account')
   const currentSub = practice
     ? practice.agency?.name || cityState(practice) || practice.address || 'Practice'
-    : isSuperAdmin
-      ? 'Super Admin'
-      : isAgencyUser
-        ? agency?.name || 'Reseller View'
-        : ACCESS_LABELS[accessLevel] || ''
+    : resellerImp
+      ? 'Reseller'
+      : isSuperAdmin
+        ? 'Super Admin'
+        : isAgencyUser
+          ? agency?.name || 'Reseller View'
+          : ACCESS_LABELS[accessLevel] || ''
 
   // "Click here to switch" is ONLY for a super-admin / reseller who is sitting in
   // their own view with no subaccount active. The moment a practice is in context
