@@ -17,6 +17,7 @@ import LoadingScreen from './components/LoadingScreen'
 //    fetch. Their charts/heavy panels are split out separately (see below). ──
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import Suspended from './pages/Suspended'
 import ResellerSignup from './pages/ResellerSignup'
 import ReferralRedirect from './components/ReferralRedirect'
 import BAAEntry from './components/BAAEntry'
@@ -125,6 +126,8 @@ function AppContent() {
                 }
               >
                 <Route path="/baa" element={<BAAEntry />} />
+                {/* Lockout screen for archived practices (ProtectedRoute redirects here). */}
+                <Route path="/suspended" element={<Suspended />} />
                 <Route
                   element={
                     <RequireBAA>

@@ -216,12 +216,15 @@ export function AuthProvider({ children }) {
   const loadAccessiblePractices = useCallback(async (lvl, prof, ag) => {
     const sel = 'id, name, address, agency_id, city, state'
     try {
+      // Archived practices never appear in the account switcher (any role). The
+      // admin panel uses its own queries (src/lib/queries/admin.js) and keeps
+      // archived accounts visible there.
       if (lvl === 'super_admin') {
-        const { data } = await supabase.from('practices').select(sel).order('name').limit(50)
+        const { data } = await supabase.from('practices').select(sel).is('archived_at', null).order('name').limit(50)
         return data || []
       }
       if (ag) {
-        const { data } = await supabase.from('practices').select(sel).eq('agency_id', ag.id).order('name').limit(500)
+        const { data } = await supabase.from('practices').select(sel).eq('agency_id', ag.id).is('archived_at', null).order('name').limit(500)
         let rows = data || []
         const accessible = prof?.accessible_practice_ids
         if (Array.isArray(accessible) && accessible.length) rows = rows.filter((p) => accessible.includes(p.id))
@@ -233,7 +236,7 @@ export function AuthProvider({ children }) {
         const { data: mem } = await supabase.from('practice_members').select('practice_id').eq('user_id', prof.id)
         const ids = [...new Set([...(mem || []).map((m) => m.practice_id), prof.practice_id].filter(Boolean))]
         if (!ids.length) return []
-        const { data } = await supabase.from('practices').select(sel).in('id', ids).order('name')
+        const { data } = await supabase.from('practices').select(sel).in('id', ids).is('archived_at', null).order('name')
         return data || []
       }
     } catch {
@@ -274,6 +277,11 @@ export function AuthProvider({ children }) {
   const isImpersonating = canImpersonate && Boolean(viewingPracticeId)
   const practice = switchingPractice ? activePractice : profilePractice
   const practiceId = switchingPractice ? viewingPracticeId : profile?.practice_id ?? null
+
+  // An ordinary user whose practice is archived is locked out (-> /suspended).
+  // Super admins and resellers can still open archived accounts (they impersonate,
+  // so canImpersonate is true) — see the red banner in ImpersonationBanner.
+  const isSuspended = !canImpersonate && Boolean(practice?.archived_at)
 
   // Keep route guards in a loading state until the practice row that drives
   // baaAccepted / onboardingCompleted is available (profile join or switch fetch).
@@ -317,6 +325,7 @@ export function AuthProvider({ children }) {
     profileResolved,
     practice,
     practiceId,
+    isSuspended,
     baaAccepted: Boolean(practice?.baa_accepted_at),
     onboardingCompleted: Boolean(practice?.onboarding_completed),
 
