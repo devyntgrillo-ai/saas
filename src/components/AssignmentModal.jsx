@@ -161,22 +161,25 @@ export default function AssignmentModal({ presetAppointment = null, onCancel, on
         </div>
 
         <div className="max-h-[70vh] overflow-y-auto p-5">
-          {/* Consent reminder — shown before any recording selection. */}
-          <div
-            style={{
-              backgroundColor: '#FEF3C7',
-              color: '#92400E',
-              fontSize: '13px',
-              lineHeight: 1.5,
-              padding: '12px 16px',
-              borderRadius: '8px',
-              marginBottom: '16px',
-            }}
-          >
-            ⚠️ Consent Required: Before recording, inform the patient that this consultation will be
-            recorded for training and quality improvement purposes. Wait for verbal confirmation
-            before proceeding.
-          </div>
+          {/* Consent reminder — shown only on the confirm panel, right before
+              recording starts (not on the patient-selection panel). */}
+          {mode === 'confirm' && (
+            <div
+              style={{
+                backgroundColor: '#FEF3C7',
+                color: '#92400E',
+                fontSize: '13px',
+                lineHeight: 1.5,
+                padding: '12px 16px',
+                borderRadius: '8px',
+                marginBottom: '16px',
+              }}
+            >
+              ⚠️ Consent Required: Before recording, inform the patient that this consultation will be
+              recorded for training and quality improvement purposes. Wait for verbal confirmation
+              before proceeding.
+            </div>
+          )}
 
           {mode === 'choose' && (
             <>
