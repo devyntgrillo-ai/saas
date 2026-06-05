@@ -143,9 +143,14 @@ export default function AccountSwitcher() {
         )}
       </button>
 
-      {/* Panel - white/light, floating over the dark sidebar */}
+      {/* Panel - theme-aware surface, floating over the sidebar. --sw-soft is the
+          brand accent at low opacity, used for the active/selected row (so it
+          follows a white-label brand color instead of a hardcoded blue). */}
       {open && (
-        <div className="animate-dropdown absolute left-2 z-50 mt-1 w-80 max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.18)]">
+        <div
+          style={{ '--sw-soft': 'color-mix(in srgb, var(--accent) 15%, transparent)' }}
+          className="animate-dropdown absolute left-2 z-50 mt-1 w-80 max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-surface-700 bg-surface-900 shadow-[0_12px_32px_rgba(0,0,0,0.45)]"
+        >
           <div className="p-2.5">
             {/* Back action — only while inside a specific sub-account. Returns to
                 the reseller view if there's a reseller context behind the
@@ -160,12 +165,13 @@ export default function AccountSwitcher() {
               return (
                 <button
                   onClick={onBack}
-                  className="mb-2 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-slate-50"
+                  style={{ color: 'var(--accent)' }}
+                  className="mb-2 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-surface-800"
                 >
                   {toReseller
-                    ? <ArrowLeft className="h-4 w-4 shrink-0 text-blue-600" />
-                    : <Shield className="h-4 w-4 shrink-0 text-blue-600" />}
-                  <span className="text-sm font-medium text-blue-600">
+                    ? <ArrowLeft className="h-4 w-4 shrink-0" />
+                    : <Shield className="h-4 w-4 shrink-0" />}
+                  <span className="text-sm font-medium">
                     {toReseller ? 'Back to Reseller View' : 'Back to Super Admin View'}
                   </span>
                 </button>
@@ -174,23 +180,24 @@ export default function AccountSwitcher() {
 
             {/* Search */}
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
               <input
                 autoFocus
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={searchPlaceholder}
-                className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                style={{ color: 'var(--text-primary)' }}
+                className="h-9 w-full rounded-lg border border-surface-700 bg-surface-800 pl-9 pr-3 text-sm placeholder-slate-500 transition focus:border-[var(--accent)] focus:outline-none"
               />
             </div>
 
             {/* Accounts / practices */}
-            <p className="px-1 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <p className="px-1 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
               {listHeader}
             </p>
             <div className="max-h-[320px] space-y-0.5 overflow-y-auto">
               {filtered.length === 0 ? (
-                <p className="px-2 py-6 text-center text-sm text-slate-400">No accounts found.</p>
+                <p className="px-2 py-6 text-center text-sm text-slate-500">No accounts found.</p>
               ) : (
                 filtered.map((p) => (
                   <AccountRow
@@ -205,7 +212,7 @@ export default function AccountSwitcher() {
             </div>
 
             {isWhiteLabeled && (
-              <p className="mt-2 border-t border-slate-100 px-2 pt-2 text-center text-[10px] text-slate-400">
+              <p className="mt-2 border-t border-surface-700 px-2 pt-2 text-center text-[10px] text-slate-500">
                 Powered by CaseLift
               </p>
             )}
@@ -220,16 +227,19 @@ function AccountRow({ p, active, sub, onPick }) {
   return (
     <button
       onClick={() => onPick(p.id)}
+      // Active row uses the brand accent at low opacity (--sw-soft, set on the
+      // panel); inactive rows get a theme-aware hover.
+      style={active ? { backgroundColor: 'var(--sw-soft)' } : undefined}
       className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition ${
-        active ? 'bg-blue-50' : 'hover:bg-slate-50'
+        active ? '' : 'hover:bg-surface-800'
       }`}
     >
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-700 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
         {firstLetter(p.name)}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-semibold leading-tight text-slate-900">{p.name}</span>
-        {sub && <span className="block truncate text-[11px] leading-tight text-slate-500">{sub}</span>}
+        <span className="block truncate text-[13px] font-semibold leading-tight" style={{ color: active ? 'var(--accent)' : 'var(--text-primary)' }}>{p.name}</span>
+        {sub && <span className="block truncate text-[11px] leading-tight text-slate-400">{sub}</span>}
       </span>
     </button>
   )

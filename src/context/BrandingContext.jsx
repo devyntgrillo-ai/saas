@@ -16,6 +16,7 @@ const DEFAULT_BRANDING = {
   companyName: 'CaseLift',
   logoUrl: null,
   logoDarkUrl: null,
+  logoLightUrl: null,
   faviconUrl: null,
   primaryColor: null, // null → the default indigo palette from index.css
   secondaryColor: null,
@@ -46,7 +47,9 @@ function brandFromAgency(a) {
     brandName: name,
     companyName: name,
     logoUrl: a.logo_url || null,
-    logoDarkUrl: a.logo_dark_url || null,
+    // Theme-specific logos fall back to the universal logo_url when unset.
+    logoDarkUrl: a.logo_url_dark || a.logo_dark_url || a.logo_url || null,
+    logoLightUrl: a.logo_url_light || a.logo_url || null,
     faviconUrl: a.favicon_url || null,
     primaryColor: a.primary_color || null,
     secondaryColor: a.secondary_color || null,
@@ -66,7 +69,8 @@ function brandFromRpc(data, fallbackSlug) {
     brandName: name,
     companyName: name,
     logoUrl: data.logo_url || null,
-    logoDarkUrl: data.logo_dark_url || null,
+    logoDarkUrl: data.logo_url_dark || data.logo_dark_url || data.logo_url || null,
+    logoLightUrl: data.logo_url_light || data.logo_url || null,
     faviconUrl: data.favicon_url || null,
     primaryColor: data.primary_color || null,
     secondaryColor: data.secondary_color || null,

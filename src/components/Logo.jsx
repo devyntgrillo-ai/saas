@@ -1,14 +1,19 @@
 import { useBranding } from '../context/BrandingContext'
+import { useTheme } from '../context/ThemeContext'
 
 export default function Logo({ collapsed = false, size = 'md', showBeta = true }) {
-  const { brandName, logoUrl, isWhiteLabeled } = useBranding()
+  const { brandName, logoUrl, logoDarkUrl, logoLightUrl, isWhiteLabeled } = useBranding()
+  const { theme } = useTheme()
 
   const lg = size === 'lg'
   const markClass = lg ? 'h-10 w-10' : 'h-7 w-7'
   const textClass = lg ? 'text-2xl' : 'text-lg'
 
-  if (isWhiteLabeled && logoUrl) {
-    return <img src={logoUrl} alt={brandName} className={`${lg ? 'h-11' : 'h-8'} max-w-[190px] object-contain`} />
+  // Use the theme-specific logo, falling back to the universal one.
+  const themedLogo = (theme === 'dark' ? logoDarkUrl : logoLightUrl) || logoUrl
+
+  if (isWhiteLabeled && themedLogo) {
+    return <img src={themedLogo} alt={brandName} className={`${lg ? 'h-11' : 'h-8'} max-w-[190px] object-contain`} />
   }
 
   // Mark (matches the favicon): sky-gradient rounded square with an upward

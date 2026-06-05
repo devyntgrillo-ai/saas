@@ -630,6 +630,17 @@ export default function ConsultDetail() {
     }
   }, [analysisPending, consult?.id])
 
+  // While the consult is still being transcribed ('analyzing') or analyzed
+  // ('transcribed'), refetch every 10s so the transcript, summary, and coaching
+  // sections fill in live without a manual reload.
+  const stillProcessing = consult?.status === 'analyzing' || consult?.status === 'transcribed'
+  useEffect(() => {
+    if (!stillProcessing || !consult?.id) return
+    const t = setInterval(() => refreshConsult(), 10000)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stillProcessing, consult?.id])
+
   const transcriptionError = consult?.status === 'transcription_error'
   const [retryingTranscription, setRetryingTranscription] = useState(false)
 
@@ -955,7 +966,7 @@ export default function ConsultDetail() {
             {/* What happened - white card with a brand-red left accent */}
             <div className="rounded-xl border border-gray-200 border-l-[3px] border-l-red-600 bg-white p-5 shadow-sm">
               <SectionLabel>What Happened</SectionLabel>
-              {analysisPending ? (
+              {stillProcessing ? (
                 <SkeletonLines className="mt-3" />
               ) : consult.what_happened ? (
                 <p className="mt-2 text-sm leading-relaxed text-gray-900">{stripEmDashes(consult.what_happened)}</p>
@@ -967,7 +978,7 @@ export default function ConsultDetail() {
             {/* CaseLift analysis */}
             <Card>
               <SectionLabel icon={Sparkles}>CaseLift Analysis</SectionLabel>
-              {analysisPending ? (
+              {stillProcessing ? (
                 <SkeletonLines lines={5} className="mt-4" />
               ) : (
                 <div className="mt-4 space-y-5">
@@ -1136,12 +1147,22 @@ export default function ConsultDetail() {
           </div>
         </div>
 
-        {/* Transcript - de-identified, speaker-labeled, key moments highlighted. */}
-        <TranscriptViewer
-          transcript={consult.transcript_deidentified}
-          duration={consult.duration}
-          source={consult.recording_source}
-        />
+        {/* Transcript - de-identified, speaker-labeled, key moments highlighted.
+            While transcription runs, show a live placeholder instead of an empty
+            viewer (the page auto-refreshes every 10s via stillProcessing above). */}
+        {!consult.transcript_deidentified && stillProcessing ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-6 text-center shadow-sm">
+            <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-400" />
+            <p className="mt-3 text-sm font-medium text-gray-700">Transcript is being generated…</p>
+            <p className="mt-1 text-xs text-gray-500">This updates automatically — you can leave and come back.</p>
+          </div>
+        ) : (
+          <TranscriptViewer
+            transcript={consult.transcript_deidentified}
+            duration={consult.duration}
+            source={consult.recording_source}
+          />
+        )}
 
         {showPatientEdit && (
           <PatientEditModal consult={consult} onClose={() => setShowPatientEdit(false)} onSave={savePatientInfo} />
