@@ -74,8 +74,18 @@ export function parseSequenceConfig(config) {
   return defaults()
 }
 
+export function buildSequenceConfig(touchpoints, rules) {
+  return { version: 2, touchpoints, rules }
+}
+
+/** JSON string form (legacy callers / exports). Prefer buildSequenceConfig for DB writes. */
 export function serializeSequenceConfig(touchpoints, rules) {
-  return JSON.stringify({ version: 2, touchpoints, rules })
+  return JSON.stringify(buildSequenceConfig(touchpoints, rules))
+}
+
+/** Whether the practice has "stop sequence on patient reply" enabled (default true). */
+export function stopOnReplyEnabled(config) {
+  return parseSequenceConfig(config).rules.stopOnReply !== false
 }
 
 export function rulesFromConfig(config, practiceTimezone) {

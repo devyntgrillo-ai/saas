@@ -58,6 +58,36 @@ export function useConversationsRealtime(practiceId, activeConversationId) {
   }, [practiceId, activeConversationId, queryClient])
 }
 
+/** Invalidate the sequences list when consult run-state changes (e.g. stop-on-reply). */
+export function useSequencesRealtime(practiceId) {
+  const queryClient = useQueryClient()
+
+  useEffect(() => {
+    if (!practiceId) return
+
+    const channel = supabase
+      .channel(`sequences:${practiceId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'consults',
+          filter: `practice_id=eq.${practiceId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.sequences(practiceId) })
+          queryClient.invalidateQueries({ queryKey: queryKeys.sequenceActiveCount(practiceId) })
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [practiceId, queryClient])
+}
+
 /** Invalidate notifications when the bell's table changes. */
 export function useNotificationsRealtime(practiceId) {
   const queryClient = useQueryClient()

@@ -1,6 +1,6 @@
 export { queryClient } from '../queryClient'
 export { queryKeys, practiceQueryFilter } from './keys'
-export { useConversationsRealtime, useNotificationsRealtime } from './realtime'
+export { useConversationsRealtime, useNotificationsRealtime, useSequencesRealtime } from './realtime'
 
 export * from './dashboard'
 export * from './consults'

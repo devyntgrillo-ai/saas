@@ -4,9 +4,9 @@ import {
   Check, Loader2, Info, Sparkles, ArrowRight,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { useSequenceActiveCount, useUpdatePractice } from '../lib/queries'
 import {
-  DEFAULT_TOUCHPOINTS, DEFAULT_RULES, parseSequenceConfig, serializeSequenceConfig,
+  DEFAULT_TOUCHPOINTS, DEFAULT_RULES, parseSequenceConfig, buildSequenceConfig,
 } from '../lib/sequence'
 
 function Toggle({ checked, onChange, disabled }) {
@@ -60,7 +60,7 @@ export default function SequenceSettings() {
     try {
       await updatePractice.mutateAsync({
         practiceId: practice.id,
-        patch: { sequence_config: serializeSequenceConfig(touchpoints, rules) },
+        patch: { sequence_config: buildSequenceConfig(touchpoints, rules) },
       })
       setFlash('Settings saved')
       setTimeout(() => setFlash(''), 2500)
@@ -174,7 +174,9 @@ export default function SequenceSettings() {
           </button>
         </div>
       </div>
-      <p className="text-center text-xs text-slate-600">Changes apply to new consults only.</p>
+      <p className="text-center text-xs text-slate-600">
+        Timing and delivery rules apply to new consults. Stop-on-reply takes effect immediately for all active sequences.
+      </p>
     </div>
   )
 }
