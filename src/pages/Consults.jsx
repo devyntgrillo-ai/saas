@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  Mic, Calendar, Search, CheckCircle2, Clock, Check, Circle,
+  Mic, Calendar, Search, CheckCircle2, Clock, Check, Circle, Loader2,
   Plug, ArrowRight,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useRecorder } from '../context/RecorderContext'
 import { useConsultsDay, useUnlinkedConsults } from '../lib/queries'
+import { supabase } from '../lib/supabase'
 
 const todayStr = () => new Date().toLocaleDateString('en-CA')
 
@@ -49,6 +50,29 @@ export default function Consults() {
 
   const appts = dayData?.appts ?? []
   const allNote = dayData?.allNote ?? false
+
+  // Processing/Ready badges: appointments don't carry the consult's transcription
+  // status, so fetch it for the recorded ones and refresh every 15s so a
+  // "Processing" badge flips to "Ready" on its own.
+  const recordedIds = useMemo(() => appts.filter((a) => a.consult_id).map((a) => a.consult_id), [appts])
+  const recordedKey = recordedIds.join(',')
+  const [consultStatus, setConsultStatus] = useState({})
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!recordedIds.length) { setConsultStatus({}); return }
+    let active = true
+    const load = () =>
+      supabase.from('consults').select('id, status').in('id', recordedIds).then(({ data }) => {
+        if (!active) return
+        const m = {}
+        ;(data || []).forEach((c) => { m[c.id] = c.status })
+        setConsultStatus(m)
+      })
+    load()
+    const t = setInterval(load, 15000)
+    return () => { active = false; clearInterval(t) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordedKey])
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -126,9 +150,9 @@ export default function Consults() {
       ) : rows.length === 0 ? (
         <EmptyCard icon={Calendar} title="No appointments match your filters" />
       ) : counts.recorded === counts.all ? (
-        <RecordedTable rows={rows} navigate={navigate} openRecorder={openRecorder} caughtUp />
+        <RecordedTable rows={rows} navigate={navigate} openRecorder={openRecorder} consultStatus={consultStatus} caughtUp />
       ) : (
-        <RecordedTable rows={rows} navigate={navigate} openRecorder={openRecorder} />
+        <RecordedTable rows={rows} navigate={navigate} openRecorder={openRecorder} consultStatus={consultStatus} />
       )}
 
       {unlinked.length > 0 && (
@@ -154,7 +178,7 @@ export default function Consults() {
   )
 }
 
-function RecordedTable({ rows, navigate, openRecorder, caughtUp }) {
+function RecordedTable({ rows, navigate, openRecorder, caughtUp, consultStatus = {} }) {
   return (
     <div className="card overflow-hidden">
       {caughtUp && (
@@ -175,6 +199,20 @@ function RecordedTable({ rows, navigate, openRecorder, caughtUp }) {
           const s = statusOf(a)
           const cfg = STATUS[s]
           const recorded = s === 'recorded'
+          // For recorded rows, refine the badge by the consult's transcription
+          // status: Processing (amber spinner) → Ready (green). Falls back to the
+          // generic config until the status loads / for non-recorded rows.
+          const cStatus = recorded ? consultStatus[a.consult_id] : undefined
+          let bLabel = cfg.label, bText = cfg.text, bDot = cfg.dot, BIcon = cfg.Icon, bSpin = false, bFill = recorded
+          if (recorded && cStatus !== undefined) {
+            if (cStatus === 'analyzing' || cStatus === 'transcribed') {
+              bLabel = 'Processing'; bText = 'text-amber-300'; bDot = 'text-amber-400'; BIcon = Loader2; bSpin = true; bFill = false
+            } else if (cStatus === 'transcription_error') {
+              bLabel = 'Needs attention'; bText = 'text-rose-300'; bDot = 'text-rose-400'; BIcon = Circle; bFill = false
+            } else {
+              bLabel = 'Ready'; bText = 'text-emerald-300'; bDot = 'text-emerald-400'; BIcon = Check; bFill = true
+            }
+          }
           const goDetail = () => navigate(`/consults/${a.consult_id}`)
           const onRow = recorded ? goDetail : () => openRecorder(a)
           return (
@@ -201,15 +239,15 @@ function RecordedTable({ rows, navigate, openRecorder, caughtUp }) {
                   {a.appointment_type || 'Consult'}{a.provider ? ` · ${a.provider}` : ''}
                   <span className="sm:hidden"> · {fmtTime(a.appointment_time)}</span>
                 </p>
-                <span className={`mt-1.5 inline-flex items-center gap-1 text-xs font-medium sm:hidden ${cfg.text}`}>
-                  <cfg.Icon className={`h-3 w-3 ${cfg.dot} ${s === 'recorded' ? 'fill-current' : ''}`} />
-                  {cfg.label}
+                <span className={`mt-1.5 inline-flex items-center gap-1 text-xs font-medium sm:hidden ${bText}`}>
+                  <BIcon className={`h-3 w-3 ${bDot} ${bSpin ? 'animate-spin' : ''} ${bFill ? 'fill-current' : ''}`} />
+                  {bLabel}
                 </span>
               </div>
 
-              <span className={`hidden w-[140px] shrink-0 items-center gap-1.5 text-sm font-medium sm:flex ${cfg.text}`}>
-                <cfg.Icon className={`h-3.5 w-3.5 ${cfg.dot} ${s === 'recorded' ? 'fill-current' : ''}`} />
-                {cfg.label}
+              <span className={`hidden w-[140px] shrink-0 items-center gap-1.5 text-sm font-medium sm:flex ${bText}`}>
+                <BIcon className={`h-3.5 w-3.5 ${bDot} ${bSpin ? 'animate-spin' : ''} ${bFill ? 'fill-current' : ''}`} />
+                {bLabel}
               </span>
 
               <div className="flex shrink-0 items-center justify-end sm:w-[150px]" onClick={(e) => e.stopPropagation()}>
