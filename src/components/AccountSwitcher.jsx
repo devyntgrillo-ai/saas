@@ -84,11 +84,11 @@ export default function AccountSwitcher() {
         ? agency?.name || 'Reseller View'
         : ACCESS_LABELS[accessLevel] || ''
 
-  // Super admin / reseller who isn't impersonating: show a clear call to action
-  // instead of an account. (Keyed on impersonation, not `practice`, because the
-  // super-admin account may itself have a home practice.) While impersonating,
-  // render the normal practice name + address.
-  const idle = (isSuperAdmin || isAgencyUser) && !isImpersonating
+  // "Click here to switch" is ONLY for a super-admin / reseller who is sitting in
+  // their own view with no subaccount active. The moment a practice is in context
+  // - whether a practice user's own practice or an admin/reseller impersonating
+  // one - show the practice name + reseller + initials instead.
+  const idle = (isSuperAdmin || isAgencyUser) && !isImpersonating && !practice?.name
 
   function pick(id) {
     viewPractice(id)
