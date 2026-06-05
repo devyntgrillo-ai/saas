@@ -319,8 +319,19 @@ export function AuthProvider({ children }) {
   // Reseller-level impersonation: super-admin "viewing as" an agency.
   const impersonatingReseller = isSuperAdmin && Boolean(viewingAgencyId)
   const isImpersonating = canImpersonate && (Boolean(viewingPracticeId) || Boolean(viewingAgencyId))
-  const practice = switchingPractice ? activePractice : profilePractice
-  const practiceId = switchingPractice ? viewingPracticeId : profile?.practice_id ?? null
+  // While viewing AS a reseller (no sub-account drilled in), there is no current
+  // practice — null it so the shell renders the reseller portal (sidebar nav,
+  // no Record Consult / practice Settings) rather than the super-admin's own.
+  const practice = switchingPractice
+    ? activePractice
+    : impersonatingReseller
+      ? null
+      : profilePractice
+  const practiceId = switchingPractice
+    ? viewingPracticeId
+    : impersonatingReseller
+      ? null
+      : profile?.practice_id ?? null
 
   // Effective agency = own agency (reseller user) → impersonated agency
   // (reseller-level) → the impersonated practice's agency (practice-level). This
