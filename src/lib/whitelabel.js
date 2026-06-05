@@ -46,6 +46,36 @@ function mix([r, g, b], amount) {
   return [r * t, g * t, b * t]
 }
 
+// Darken a hex color by a percentage (toward black).
+export function darkenColor(hex, percent) {
+  const num = parseInt(String(hex).replace('#', ''), 16)
+  const d = Math.round((255 * percent) / 100)
+  const r = Math.max(0, (num >> 16) - d)
+  const g = Math.max(0, ((num >> 8) & 0xff) - d)
+  const b = Math.max(0, (num & 0xff) - d)
+  return '#' + [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('')
+}
+
+// hex → rgba() string at the given alpha (0–1).
+function hexToRgba(hex, alpha) {
+  const rgb = hexToRgb(hex)
+  if (!rgb) return hex
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`
+}
+
+// CSS variables that hold a literal color (hex/rgba) rather than the Tailwind
+// "R G B" triple. --accent drives the Logo wordmark accent + various pills;
+// the --color-primary* aliases cover any element styled directly off them.
+const LITERAL_VARS = [
+  '--accent',
+  '--color-primary',
+  '--color-primary-100',
+  '--color-primary-300',
+  '--color-primary-400',
+  '--color-primary-500',
+  '--color-primary-600',
+]
+
 /** Apply a white-label brand color. Returns true if applied. */
 export function applyPrimaryColor(hex) {
   const base = hexToRgb(hex)
@@ -54,10 +84,19 @@ export function applyPrimaryColor(hex) {
     return false
   }
   const root = document.documentElement
+  // Tailwind `primary` scale (drives bg-primary, text-primary-300, border-primary/30, …).
   for (const key of SHADE_KEYS) {
     const [r, g, b] = mix(base, MIX[key])
     root.style.setProperty(`--primary-${key}`, `${clamp(r)} ${clamp(g)} ${clamp(b)}`)
   }
+  // Literal-color vars: the brand accent + spec aliases, with derived shades.
+  root.style.setProperty('--accent', hex)
+  root.style.setProperty('--color-primary', hex)
+  root.style.setProperty('--color-primary-400', hex)
+  root.style.setProperty('--color-primary-500', hex)
+  root.style.setProperty('--color-primary-100', hexToRgba(hex, 0.1))
+  root.style.setProperty('--color-primary-300', hexToRgba(hex, 0.6))
+  root.style.setProperty('--color-primary-600', darkenColor(hex, 15))
   return true
 }
 
@@ -66,5 +105,8 @@ export function resetPrimaryColor() {
   const root = document.documentElement
   for (const key of SHADE_KEYS) {
     root.style.removeProperty(`--primary-${key}`)
+  }
+  for (const v of LITERAL_VARS) {
+    root.style.removeProperty(v)
   }
 }
