@@ -12,6 +12,26 @@ export function useAdminData() {
   })
 }
 
+// All users across every subaccount + reseller (super-admin master view). Uses
+// the super-admin SELECT RLS on users; agency memberships are merged in by id.
+export async function fetchAdminUsers() {
+  const [{ data: users, error: ue }, { data: members }] = await Promise.all([
+    supabase
+      .from('users')
+      .select('id, email, role, access_level, created_at, practice:practices(id, name, agency_id)')
+      .order('created_at', { ascending: false }),
+    supabase.from('agency_members').select('user_id, role, agency:agency_accounts(id, name)'),
+  ])
+  if (ue) throw ue
+  const byUser = {}
+  for (const m of members || []) (byUser[m.user_id] ||= []).push(m)
+  return (users || []).map((u) => ({ ...u, agencies: byUser[u.id] || [] }))
+}
+
+export function useAdminUsers() {
+  return useQuery({ queryKey: ['admin-users'], queryFn: fetchAdminUsers })
+}
+
 export async function fetchAdminBilling() {
   const { data, error } = await supabase
     .from('practices')

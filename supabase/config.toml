@@ -394,6 +394,9 @@ verify_jwt = false
 # Chargebee billing webhook — authenticated via CHARGEBEE_WEBHOOK_SECRET, not a JWT.
 [functions.chargebee-webhook]
 verify_jwt = false
+# Super-admin user management — requires a signed-in caller (gated to super-admins inside).
+[functions.admin-users]
+verify_jwt = true
 # Public white-labeled client signup (/signup/<reseller-slug>) — no caller JWT.
 [functions.reseller-signup]
 verify_jwt = false
