@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import {
   DollarSign,
   PhoneCall,
@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   Building2,
   ChevronRight,
+  Wallet,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -19,7 +20,7 @@ import {
   Tooltip,
 } from 'recharts'
 import { useAuth } from '../context/AuthContext'
-import { useAgencyAnalytics } from '../lib/queries'
+import { useAgencyAnalytics, useAgencyOverview } from '../lib/queries'
 import { formatMoney } from '../lib/analytics'
 import { isWonStatus } from '../lib/consults'
 import StatCard from '../components/StatCard'
@@ -41,10 +42,32 @@ const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
 const isWon = (c) => isWonStatus(c.status)
 
 export default function AgencyAnalytics() {
-  const { effectiveAgency: agency, isAgencyView, contextLoading } = useAuth()
+  const { effectiveAgency: agency, isAgencyView, contextLoading, viewPractice } = useAuth()
+  const navigate = useNavigate()
   const { data: agencyData, isLoading: loading, error, refetch } = useAgencyAnalytics(agency?.id)
   const practices = agencyData?.practices ?? []
   const consults = agencyData?.consults ?? []
+
+  // Reseller business KPIs (stacked MRR, active/total subaccounts, recovered
+  // production) + clients to nudge. Sourced from the overview rollup so the
+  // Dashboard surfaces the reseller-facing numbers; the Subaccounts tab is just
+  // the searchable client list.
+  const { data: overview } = useAgencyOverview(agency?.id)
+  const ovMetrics = overview?.metrics || {}
+  const ovPractices = (overview?.practices || []).filter((p) => !p.archived_at)
+  const rollup = overview?.rollup || { totalCount: 0, activeCount: 0, recovered: 0 }
+  const clientPrice = Number(agency?.reseller_client_price) || 0
+  const yourMrr = rollup.activeCount * clientPrice
+  const attentionReasons = (p) => {
+    const m = ovMetrics[p.id] || {}
+    const reasons = []
+    if (!p.baa_accepted_at) reasons.push('BAA pending')
+    if (!m.lastActivity || Date.now() - new Date(m.lastActivity).getTime() > 14 * 86400000) reasons.push('No recent activity')
+    if (m.recordingRate && m.recordingRate.total > 0 && m.recordingRate.rate < 50) reasons.push(`Low recording (${m.recordingRate.rate}%)`)
+    return reasons
+  }
+  const needsAttention = ovPractices.filter((p) => attentionReasons(p).length > 0)
+  const impersonate = (p) => { viewPractice(p.id); navigate('/') }
 
   const metrics = useMemo(() => {
     const now = new Date()
@@ -146,6 +169,42 @@ export default function AgencyAnalytics() {
         />
       ) : (
         <>
+          {/* Reseller business KPIs */}
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <div className="card p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-slate-400">Your MRR</p>
+                <Wallet className="h-4 w-4 text-slate-500" />
+              </div>
+              <p className="mt-1 text-2xl font-bold text-emerald-300">{formatMoney(yourMrr)}</p>
+              <p className="mt-0.5 text-xs text-slate-500">{rollup.activeCount} active × {formatMoney(clientPrice)}/mo</p>
+            </div>
+            <div className="card p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-slate-400">Active subaccounts</p>
+                <Building2 className="h-4 w-4 text-slate-500" />
+              </div>
+              <p className="mt-1 text-2xl font-bold text-white">{rollup.activeCount}</p>
+              <p className="mt-0.5 text-xs text-slate-500">of {rollup.totalCount} total</p>
+            </div>
+            <div className="card p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-slate-400">Recovered for clients</p>
+                <DollarSign className="h-4 w-4 text-slate-500" />
+              </div>
+              <p className="mt-1 text-2xl font-bold text-white">{formatMoney(rollup.recovered)}</p>
+              <p className="mt-0.5 text-xs text-slate-500">production your clients recovered</p>
+            </div>
+            <div className="card p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-slate-400">Need attention</p>
+                <AlertTriangle className={`h-4 w-4 ${needsAttention.length ? 'text-amber-400' : 'text-slate-500'}`} />
+              </div>
+              <p className={`mt-1 text-2xl font-bold ${needsAttention.length ? 'text-amber-300' : 'text-white'}`}>{needsAttention.length}</p>
+              <p className="mt-0.5 text-xs text-slate-500">clients to nudge</p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard label="Recovered this month" value={formatMoney(metrics.totalRecoveredMonth)} icon={DollarSign} accent="green" />
             <StatCard label="Total consults" value={metrics.totalConsults} icon={PhoneCall} accent="primary" />
@@ -177,32 +236,33 @@ export default function AgencyAnalytics() {
             </div>
           </div>
 
-          {/* Needs attention */}
+          {/* Practices that need attention */}
           <div>
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-300">
               <AlertTriangle className="h-4 w-4 text-amber-400" /> Practices that need attention
             </h2>
-            {metrics.needsAttention.length === 0 ? (
+            {needsAttention.length === 0 ? (
               <div className="card px-5 py-8 text-center text-sm text-slate-500">
                 All practices are active. Nothing needs attention right now.
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {metrics.needsAttention.map((p) => (
-                  <div key={p.id} className="card border-amber-500/20 p-4">
-                    <div className="flex items-center justify-between">
-                      <p className="truncate font-semibold text-slate-100">{p.name}</p>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" />
-                    </div>
-                    <ul className="mt-2 space-y-1">
-                      {p.reasons.map((r) => (
-                        <li key={r} className="flex items-center gap-1.5 text-xs text-amber-300">
-                          <AlertTriangle className="h-3 w-3" /> {r}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+              <div className="card overflow-hidden">
+                <ul className="divide-y divide-surface-700">
+                  {needsAttention.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        onClick={() => impersonate(p)}
+                        className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left transition hover:bg-surface-800/40"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-slate-200">{p.name}</span>
+                          <span className="block truncate text-xs text-amber-300/90">{attentionReasons(p).join(' · ')}</span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
           </div>

@@ -34,8 +34,6 @@ export function AdminProvider({ children }) {
   const impersonateAgency = useCallback(
     (agency) => {
       if (!agency?.id) return
-      // eslint-disable-next-line no-console
-      console.log('[CaseLift imp] Impersonate clicked →', agency.id, agency.name)
       logImpersonation({ actorId: user?.id, targetType: 'agency', targetId: agency.id, targetName: agency.name })
       viewAgency(agency.id)
       navigate('/agency')

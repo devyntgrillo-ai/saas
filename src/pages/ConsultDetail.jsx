@@ -132,10 +132,6 @@ function StatusPill({ status }) {
   )
 }
 
-function dayLabelForIndex(i) {
-  return `Message ${i + 1}`
-}
-
 function dayLabelForMessage(m, i) {
   const day = m.send_day
   if (day != null) return `Day ${day}`
@@ -609,6 +605,7 @@ export default function ConsultDetail() {
 
   useEffect(() => {
     if (!messages.length) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAiBaselines((prev) => {
       let next = prev
       for (const msg of messages) {

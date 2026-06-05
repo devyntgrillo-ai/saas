@@ -20,15 +20,12 @@ import {
   ChevronDown,
   Eye,
   Mic,
-  AlertTriangle,
-  DollarSign,
-  Wallet,
+  Search,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useBranding } from '../context/BrandingContext'
 import { applyPrimaryColor, resetPrimaryColor } from '../lib/whitelabel'
 import { supabase } from '../lib/supabase'
-import { formatMoney } from '../lib/analytics'
 import { timeAgo } from '../lib/consults'
 import { rateColor } from '../lib/pms'
 import { useAgencyOverview } from '../lib/queries'
@@ -279,21 +276,16 @@ export default function Agency() {
   const practices = (overview?.practices || []).filter((p) => !p.archived_at)
   const archivedPractices = (overview?.practices || []).filter((p) => p.archived_at)
   const metrics = overview?.metrics || {}
-  // Reseller KPIs: their stacked MRR (active subaccounts × the price they charge
-  // clients), active vs total subaccounts, and production their clients recovered.
-  const rollup = overview?.rollup || { totalCount: 0, activeCount: 0, recovered: 0 }
-  const clientPrice = Number(agency?.reseller_client_price) || 0
-  const yourMrr = rollup.activeCount * clientPrice
-  // Clients to nudge: BAA not signed, no recent activity, or low recording rate.
-  const attentionReasons = (p) => {
-    const m = metrics[p.id] || {}
-    const reasons = []
-    if (!p.baa_accepted_at) reasons.push('BAA pending')
-    if (!m.lastActivity || Date.now() - new Date(m.lastActivity).getTime() > 14 * 86400000) reasons.push('No recent activity')
-    if (m.recordingRate && m.recordingRate.total > 0 && m.recordingRate.rate < 50) reasons.push(`Low recording (${m.recordingRate.rate}%)`)
-    return reasons
-  }
-  const needsAttention = practices.filter((p) => attentionReasons(p).length > 0)
+  // Searchable subaccount list (filter by practice name or doctor).
+  const [searchQ, setSearchQ] = useState('')
+  const q = searchQ.trim().toLowerCase()
+  const filteredPractices = q
+    ? practices.filter(
+        (p) =>
+          p.name?.toLowerCase().includes(q) ||
+          [p.doctor_first, p.doctor_last].filter(Boolean).join(' ').toLowerCase().includes(q),
+      )
+    : practices
   const [showAdd, setShowAdd] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [busyId, setBusyId] = useState(null)
@@ -510,70 +502,22 @@ export default function Agency() {
           </div>
         ) : (
           <>
-          {/* Reseller KPIs */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <div className="card p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-slate-400">Your MRR</p>
-                <Wallet className="h-4 w-4 text-slate-500" />
-              </div>
-              <p className="mt-1 text-2xl font-bold text-emerald-300">{formatMoney(yourMrr)}</p>
-              <p className="mt-0.5 text-xs text-slate-500">{rollup.activeCount} active × {formatMoney(clientPrice)}/mo</p>
-            </div>
-            <div className="card p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-slate-400">Active subaccounts</p>
-                <Building2 className="h-4 w-4 text-slate-500" />
-              </div>
-              <p className="mt-1 text-2xl font-bold text-white">{rollup.activeCount}</p>
-              <p className="mt-0.5 text-xs text-slate-500">of {rollup.totalCount} total</p>
-            </div>
-            <div className="card p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-slate-400">Recovered for clients</p>
-                <DollarSign className="h-4 w-4 text-slate-500" />
-              </div>
-              <p className="mt-1 text-2xl font-bold text-white">{formatMoney(rollup.recovered)}</p>
-              <p className="mt-0.5 text-xs text-slate-500">production your clients recovered</p>
-            </div>
-            <div className="card p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-slate-400">Need attention</p>
-                <AlertTriangle className={`h-4 w-4 ${needsAttention.length ? 'text-amber-400' : 'text-slate-500'}`} />
-              </div>
-              <p className={`mt-1 text-2xl font-bold ${needsAttention.length ? 'text-amber-300' : 'text-white'}`}>{needsAttention.length}</p>
-              <p className="mt-0.5 text-xs text-slate-500">clients to nudge</p>
-            </div>
+          {/* Search across all subaccounts. */}
+          <div className="relative max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <input
+              value={searchQ}
+              onChange={(e) => setSearchQ(e.target.value)}
+              placeholder="Search subaccounts…"
+              className="input pl-9"
+            />
           </div>
 
-          {/* Practices that need attention */}
-          {needsAttention.length > 0 && (
-            <div className="card overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-surface-700 px-5 py-3">
-                <AlertTriangle className="h-4 w-4 text-amber-400" />
-                <h2 className="text-sm font-semibold text-white">Practices that need attention</h2>
-              </div>
-              <ul className="divide-y divide-surface-700">
-                {needsAttention.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      onClick={() => impersonate(p)}
-                      className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left transition hover:bg-surface-800/40"
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium text-slate-200">{p.name}</span>
-                        <span className="block truncate text-xs text-amber-300/90">{attentionReasons(p).join(' · ')}</span>
-                      </span>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
+          {filteredPractices.length === 0 ? (
+            <p className="py-12 text-center text-sm text-slate-500">No subaccounts match “{searchQ}”.</p>
+          ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {practices.map((p) => {
+            {filteredPractices.map((p) => {
               const m = metrics[p.id] || {}
               const doctor = [p.doctor_first, p.doctor_last].filter(Boolean).join(' ')
               return (
@@ -635,6 +579,7 @@ export default function Agency() {
               )
             })}
           </div>
+          )}
 
           {/* Archived subaccounts - hidden from the list above; restorable. */}
           {archivedPractices.length > 0 && (

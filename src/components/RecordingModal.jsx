@@ -98,6 +98,45 @@ export default function RecordingModal({ onClose, patient = null }) {
   // visualize. Computed once; native status never changes within a session.
   const native = isNative()
 
+  // ---- Visualizer ----------------------------------------------------------
+  // Declared before initStream (which calls it) so it isn't referenced before
+  // its definition.
+  function setupVisualizer(stream) {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext
+      const ctx = new AudioCtx()
+      audioCtxRef.current = ctx
+      const source = ctx.createMediaStreamSource(stream)
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 256
+      source.connect(analyser)
+      const data = new Uint8Array(analyser.frequencyBinCount)
+
+      const draw = () => {
+        rafRef.current = requestAnimationFrame(draw)
+        const canvas = canvasRef.current
+        if (!canvas) return
+        const c = canvas.getContext('2d')
+        const w = canvas.width
+        const h = canvas.height
+        analyser.getByteFrequencyData(data)
+        c.clearRect(0, 0, w, h)
+        const bars = 40
+        const step = Math.floor(data.length / bars)
+        const bw = w / bars
+        for (let i = 0; i < bars; i++) {
+          const v = data[i * step] / 255
+          const bh = Math.max(2, v * h)
+          c.fillStyle = `rgba(239,68,68,${0.35 + v * 0.65})`
+          c.fillRect(i * bw + 1, (h - bh) / 2, bw - 2, bh)
+        }
+      }
+      draw()
+    } catch {
+      /* visualizer is non-critical */
+    }
+  }
+
   // Request microphone access on mount (and when the chosen mic changes).
   const initStream = useCallback(async (deviceId) => {
     setError('')
@@ -134,42 +173,6 @@ export default function RecordingModal({ onClose, patient = null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ---- Visualizer ----------------------------------------------------------
-  function setupVisualizer(stream) {
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext
-      const ctx = new AudioCtx()
-      audioCtxRef.current = ctx
-      const source = ctx.createMediaStreamSource(stream)
-      const analyser = ctx.createAnalyser()
-      analyser.fftSize = 256
-      source.connect(analyser)
-      const data = new Uint8Array(analyser.frequencyBinCount)
-
-      const draw = () => {
-        rafRef.current = requestAnimationFrame(draw)
-        const canvas = canvasRef.current
-        if (!canvas) return
-        const c = canvas.getContext('2d')
-        const w = canvas.width
-        const h = canvas.height
-        analyser.getByteFrequencyData(data)
-        c.clearRect(0, 0, w, h)
-        const bars = 40
-        const step = Math.floor(data.length / bars)
-        const bw = w / bars
-        for (let i = 0; i < bars; i++) {
-          const v = data[i * step] / 255
-          const bh = Math.max(2, v * h)
-          c.fillStyle = `rgba(239,68,68,${0.35 + v * 0.65})`
-          c.fillRect(i * bw + 1, (h - bh) / 2, bw - 2, bh)
-        }
-      }
-      draw()
-    } catch {
-      /* visualizer is non-critical */
-    }
-  }
 
   // ---- Recording controls --------------------------------------------------
   function startTimer() {
