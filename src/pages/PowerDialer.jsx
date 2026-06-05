@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
-  Phone, SkipForward, X, ArrowLeft, Loader2, PhoneCall, Check, Voicemail, PhoneOff, Ban, Mic, MicOff, Circle, Play,
+  Phone, X, ArrowLeft, Loader2, PhoneCall, Check, Voicemail, PhoneOff, Ban, Mic, MicOff, Circle, Play, Pause,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import EmptyState from '../components/EmptyState'
 import { timeAgo } from '../lib/consults'
-import { fetchVoiceToken, formatCallTime, loadRecordingUrl } from '../lib/voice'
+import { formatCallTime, loadRecordingUrl } from '../lib/voice'
+import { useVoice } from '../context/VoiceContext'
 import { usePowerDialerQueue, useRecentCalls, queryKeys } from '../lib/queries'
+
+const COUNTDOWN_SEC = 3
 
 const EXIT_PILL = {
   hot: 'bg-red-100 text-red-700', warm: 'bg-amber-100 text-amber-700', long_term: 'bg-sky-100 text-sky-700',
@@ -27,11 +30,81 @@ const DISPOSITIONS = [
   { key: 'voicemail', label: 'Left voicemail', icon: Voicemail, tone: 'bg-slate-600 hover:bg-slate-500', log: 'Left voicemail' },
   { key: 'dnc', label: 'Do not contact', icon: Ban, tone: 'bg-rose-600 hover:bg-rose-500', log: 'Do not contact' },
 ]
+const DISPO_BY_KEY = Object.fromEntries(DISPOSITIONS.map((d) => [d.key, d]))
 
 function daysSince(d) {
   if (!d) return 'a few days'
   const n = Math.round((Date.now() - new Date(d).getTime()) / 86400000)
   return `${Math.max(0, n)} day${n === 1 ? '' : 's'}`
+}
+
+function buildTalkingPoints(c, practice) {
+  if (!c) return null
+  const first = (c.patient_name || 'there').split(' ')[0]
+  const tc = practice?.tc_name || 'Sara'
+  const last = practice?.doctor_last || 'Smith'
+  return {
+    opening: `Hi ${first}, this is ${tc} from Dr. ${last}'s office...`,
+    context: `You came in ${daysSince(c.recording_date || c.created_at)} ago about your treatment.`,
+    reference: c.personal_detail || null,
+    goal: c.tc_action || 'Re-engage and find a path forward.',
+    objection: OBJ_RESPONSE[c.objection_type] || 'Happy to answer any questions and find an approach that fits.',
+    cta: "I'd love to get you in for a quick 20-minute visit. What does your week look like?",
+  }
+}
+
+function UpNextPreview({ lead, practice, countdown, paused, compact = false }) {
+  const consult = lead?.consults
+  const talking = buildTalkingPoints(consult, practice)
+  if (!consult) return null
+
+  if (compact) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Up next</span>
+        <span className="font-medium text-slate-200">{consult.patient_name || 'Unknown patient'}</span>
+        <span className="text-slate-500">{consult.patient_phone}</span>
+        {lead.send_day != null && <span className="text-slate-500">Day {lead.send_day}</span>}
+        {consult.exit_intent_level && (
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${EXIT_PILL[consult.exit_intent_level] || 'bg-gray-100 text-gray-600'}`}>
+            {consult.exit_intent_level}
+          </span>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-w-0 flex-1">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-primary-400">Up next</p>
+      <p className="mt-1 truncate text-lg font-bold text-white">{consult.patient_name || 'Unknown patient'}</p>
+      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+        <span>{consult.patient_phone}</span>
+        {lead.send_day != null && <span>· Day {lead.send_day}</span>}
+        {consult.exit_intent_level && (
+          <span className={`rounded-full px-2 py-0.5 font-medium ${EXIT_PILL[consult.exit_intent_level] || 'bg-gray-100 text-gray-600'}`}>
+            {consult.exit_intent_level}
+          </span>
+        )}
+      </div>
+      {consult.objection_type && (
+        <p className="mt-2 text-xs text-slate-500"><span className="text-slate-600">Objection:</span> {consult.objection_type}</p>
+      )}
+      {talking?.opening && (
+        <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-slate-300">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Opening · </span>
+          {talking.opening}
+        </p>
+      )}
+      <p className="mt-3 text-xs text-slate-500">
+        {paused
+          ? 'Paused — resume when ready'
+          : countdown != null
+            ? `Dialing in ${countdown}s · review talking points below`
+            : 'Review talking points below'}
+      </p>
+    </div>
+  )
 }
 
 const DISPO_PILL = {
@@ -49,7 +122,6 @@ function RecentCalls({ practiceId }) {
   const [loadingId, setLoadingId] = useState(null)
   const [err, setErr] = useState('')
 
-  // Revoke the object URL when switching recordings / unmounting.
   useEffect(() => () => { if (playing?.url) URL.revokeObjectURL(playing.url) }, [playing])
 
   async function play(call) {
@@ -116,173 +188,183 @@ export default function PowerDialer() {
   const { practiceId, practice } = useAuth()
   const queryClient = useQueryClient()
   const { data: queue = [], isLoading: loading, refetch } = usePowerDialerQueue(practiceId)
+
   const [active, setActive] = useState(false)
+  const [sessionQueue, setSessionQueue] = useState([])
   const [idx, setIdx] = useState(0)
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
+  const [paused, setPaused] = useState(false)
+  const [countdown, setCountdown] = useState(null) // null | 3..1
 
-  // ── Twilio Voice device state ─────────────────────────────────────────────
-  const deviceRef = useRef(null)
-  const callRef = useRef(null)
-  const callSidRef = useRef(null)
-  const [voiceState, setVoiceState] = useState('init') // init | ready | unavailable
-  const [callState, setCallState] = useState('idle')   // idle | connecting | ringing | in_call
-  const [muted, setMuted] = useState(false)
-  const [seconds, setSeconds] = useState(0)
+  const completingRef = useRef(false)
+  const endingSessionRef = useRef(false)
+  const pendingDispoRef = useRef(null)
+  const sessionQueueRef = useRef([])
+  const idxRef = useRef(0)
+  const notesRef = useRef('')
 
-  const reload = () => {
+  const {
+    voiceState, callState, seconds, muted, placeCall, hangup, toggleMute,
+  } = useVoice()
+
+  sessionQueueRef.current = sessionQueue
+  idxRef.current = idx
+  notesRef.current = notes
+
+  const reload = useCallback(() => {
     refetch()
     queryClient.invalidateQueries({ queryKey: queryKeys.powerDialer.queue(practiceId) })
-  }
+    queryClient.invalidateQueries({ queryKey: queryKeys.powerDialer.recentCalls(practiceId) })
+  }, [refetch, queryClient, practiceId])
 
-  const current = queue[idx]
+  const current = sessionQueue[idx]
   const c = current?.consults
 
-  // Initialise the Twilio Device when a dialing session starts; tear down after.
-  useEffect(() => {
-    if (!active) return
-    let cancelled = false
-    ;(async () => {
-      try {
-        const { token } = await fetchVoiceToken()
-        if (cancelled) return
-        const { Device } = await import('@twilio/voice-sdk')
-        const device = new Device(token, { codecPreferences: ['opus', 'pcmu'], logLevel: 'error' })
-        device.on('tokenWillExpire', async () => {
-          try { const { token: t } = await fetchVoiceToken(); device.updateToken(t) } catch { /* keep going */ }
-        })
-        device.on('error', (e) => console.error('Twilio device error:', e?.message || e))
-        await device.register()
-        if (cancelled) { device.destroy(); return }
-        deviceRef.current = device
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setVoiceState('ready')
-      } catch {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        if (!cancelled) setVoiceState('unavailable')
-      }
-    })()
-    return () => {
-      cancelled = true
-      try { callRef.current?.disconnect() } catch { /* noop */ }
-      try { deviceRef.current?.destroy() } catch { /* noop */ }
-      deviceRef.current = null
-      callRef.current = null
+  const talking = useMemo(() => buildTalkingPoints(c, practice), [c, practice])
+
+  const nextLead = sessionQueue[idx + 1] ?? null
+
+  const endSession = useCallback(() => {
+    endingSessionRef.current = true
+    pendingDispoRef.current = null
+    hangup()
+    setActive(false)
+    setSessionQueue([])
+    setIdx(0)
+    setPaused(false)
+    setCountdown(null)
+    pendingDispoRef.current = null
+    completingRef.current = false
+    reload()
+  }, [hangup, reload])
+
+  const advanceAfterComplete = useCallback((nextIdx, total) => {
+    setNotes('')
+    if (nextIdx >= total) {
+      endSession()
+    } else {
+      setIdx(nextIdx)
+      setCountdown(COUNTDOWN_SEC)
     }
-  }, [active])
+  }, [endSession])
 
-  // Hang up + reset call UI whenever we move to a different patient.
-  useEffect(() => {
-    try { callRef.current?.disconnect() } catch { /* noop */ }
-    callRef.current = null
-    callSidRef.current = null
-    setCallState('idle'); setMuted(false); setSeconds(0)
-  }, [idx])
+  const completeLead = useCallback(async (dispoKey, { callSid = null, durationSec = 0 } = {}) => {
+    if (completingRef.current) return
+    const lead = sessionQueueRef.current[idxRef.current]
+    const consult = lead?.consults
+    if (!lead || !consult) return
 
-  // In-call timer.
-  useEffect(() => {
-    if (callState !== 'in_call') return
-    const t = setInterval(() => setSeconds((s) => s + 1), 1000)
-    return () => clearInterval(t)
-  }, [callState])
-
-  const talking = useMemo(() => {
-    if (!c) return null
-    const first = (c.patient_name || 'there').split(' ')[0]
-    const tc = practice?.tc_name || 'Sara'
-    const last = practice?.doctor_last || 'Smith'
-    return {
-      opening: `Hi ${first}, this is ${tc} from Dr. ${last}'s office...`,
-      context: `You came in ${daysSince(c.recording_date || c.created_at)} ago about your treatment.`,
-      reference: c.personal_detail || null,
-      goal: c.tc_action || 'Re-engage and find a path forward.',
-      objection: OBJ_RESPONSE[c.objection_type] || 'Happy to answer any questions and find an approach that fits.',
-      cta: "I'd love to get you in for a quick 20-minute visit. What does your week look like?",
-    }
-  }, [c, practice])
-
-  async function placeCall() {
-    const device = deviceRef.current
-    if (!device || !c?.patient_phone || callState !== 'idle') return
-    setSeconds(0); setMuted(false); setCallState('connecting')
-    try {
-      const call = await device.connect({ params: { To: c.patient_phone, practice_id: practiceId, consult_id: c.id } })
-      callRef.current = call
-      call.on('ringing', () => setCallState('ringing'))
-      call.on('accept', () => { callSidRef.current = call.parameters?.CallSid || null; setCallState('in_call') })
-      const reset = () => { callRef.current = null; setCallState('idle'); setMuted(false) }
-      call.on('disconnect', reset)
-      call.on('cancel', reset)
-      call.on('reject', reset)
-      call.on('error', (e) => { console.error('Twilio call error:', e?.message || e); reset() })
-    } catch (e) {
-      console.error('placeCall failed:', e)
-      setCallState('idle')
-    }
-  }
-
-  function hangup() {
-    try { callRef.current?.disconnect() } catch { /* noop */ }
-    callRef.current = null
-    setCallState('idle')
-  }
-
-  function toggleMute() {
-    const call = callRef.current
-    if (!call) return
-    const next = !muted
-    try { call.mute(next); setMuted(next) } catch { /* noop */ }
-  }
-
-  async function disposition(d) {
-    if (!current || !c) return
+    completingRef.current = true
     setBusy(true)
-    // End any live call before logging.
-    if (callRef.current) hangup()
-    // Ensure a conversation exists for this patient, then log the call.
+
+    const d = DISPO_BY_KEY[dispoKey] || DISPO_BY_KEY.no_answer
+    const noteText = notesRef.current.trim()
+
     let convId = null
-    const { data: existing } = await supabase.from('conversations').select('id').eq('practice_id', practiceId).eq('consult_id', c.id).maybeSingle()
+    const { data: existing } = await supabase.from('conversations').select('id').eq('practice_id', practiceId).eq('consult_id', consult.id).maybeSingle()
     if (existing) convId = existing.id
     else {
-      const [first, ...rest] = (c.patient_name || 'Patient').split(' ')
+      const [first, ...rest] = (consult.patient_name || 'Patient').split(' ')
       const { data: created } = await supabase.from('conversations')
-        .insert({ practice_id: practiceId, consult_id: c.id, patient_first: first, patient_last: rest.join(' '), patient_phone: c.patient_phone, patient_email: c.patient_email, last_message_at: new Date().toISOString() })
+        .insert({
+          practice_id: practiceId, consult_id: consult.id, patient_first: first, patient_last: rest.join(' '),
+          patient_phone: consult.patient_phone, patient_email: consult.patient_email, last_message_at: new Date().toISOString(),
+        })
         .select('id').single()
       convId = created?.id
     }
+
     const nowIso = new Date().toISOString()
     const dateLabel = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    const durLabel = callSidRef.current && seconds > 0 ? ` · ${formatCallTime(seconds)}` : ''
-    const body = `📞 Called ${dateLabel} · ${d.log}${durLabel}${notes.trim() ? ` · ${notes.trim()}` : ''}`
+    const durLabel = callSid && durationSec > 0 ? ` · ${formatCallTime(durationSec)}` : ''
+    const body = `📞 Called ${dateLabel} · ${d.log}${durLabel}${noteText ? ` · ${noteText}` : ''}`
 
-    // Resolve the recorded call log (created by the TwiML webhook, keyed by sid)
-    // so the inline call entry can link to its recording.
     let callLogId = null
-    if (callSidRef.current) {
-      const { data: cl } = await supabase.from('call_logs').select('id').eq('twilio_call_sid', callSidRef.current).maybeSingle()
+    if (callSid) {
+      const { data: cl } = await supabase.from('call_logs').select('id').eq('twilio_call_sid', callSid).maybeSingle()
       callLogId = cl?.id || null
     }
-    const meta = { outcome: d.log, duration_sec: callSidRef.current ? (seconds || 0) : null, note: notes.trim() || null, actor: practice?.tc_name || 'You' }
+    const meta = { outcome: d.log, duration_sec: callSid ? (durationSec || 0) : null, note: noteText || null, actor: practice?.tc_name || 'You' }
 
     if (convId) {
       await supabase.from('conversation_messages').insert({ conversation_id: convId, direction: 'outbound', channel: 'call', body, sent_at: nowIso, meta, call_log_id: callLogId })
       await supabase.from('conversations').update({ last_message_at: nowIso, last_message_preview: body }).eq('id', convId)
     }
-    // Attach disposition/notes/duration to the recorded call log (if a real call was placed).
-    if (callSidRef.current) {
+    if (callSid) {
       await supabase.from('call_logs').update({
-        disposition: d.key, notes: notes.trim() || null, duration_seconds: seconds || null, conversation_id: convId,
-      }).eq('twilio_call_sid', callSidRef.current)
-      callSidRef.current = null
+        disposition: d.key, notes: noteText || null, duration_seconds: durationSec || null, conversation_id: convId,
+      }).eq('twilio_call_sid', callSid)
     }
-    // Mark the call touchpoint handled.
-    await supabase.from('messages').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', current.id)
-    if (d.key === 'dnc') await supabase.from('consults').update({ outcome: 'not_converting' }).eq('id', c.id)
 
-    setBusy(false); setNotes(''); setSeconds(0)
-    // Advance.
-    if (idx + 1 >= queue.length) { setActive(false); setIdx(0); reload() }
-    else setIdx((i) => i + 1)
+    // Remove from dialer queue until the sequence schedules another call touchpoint.
+    await supabase.from('messages').update({ status: 'sent', sent_at: nowIso }).eq('id', lead.id)
+    if (d.key === 'dnc') await supabase.from('consults').update({ outcome: 'not_converting' }).eq('id', consult.id)
+
+    setBusy(false)
+    completingRef.current = false
+    pendingDispoRef.current = null
+    advanceAfterComplete(idxRef.current + 1, sessionQueueRef.current.length)
+  }, [practiceId, practice?.tc_name, advanceAfterComplete])
+
+  const handleCallEnded = useCallback(({ callSid, seconds: durationSec }) => {
+    if (endingSessionRef.current) {
+      endingSessionRef.current = false
+      return
+    }
+    const dispoKey = pendingDispoRef.current?.key || 'no_answer'
+    completeLead(dispoKey, { callSid, durationSec })
+  }, [completeLead])
+
+  const dialCurrentLead = useCallback(async () => {
+    const lead = sessionQueueRef.current[idxRef.current]
+    const consult = lead?.consults
+    if (!consult?.patient_phone || callState !== 'idle' || paused || countdown != null) return
+    await placeCall({
+      to: consult.patient_phone,
+      practiceId,
+      consultId: consult.id,
+      onEnded: handleCallEnded,
+    })
+  }, [callState, paused, countdown, placeCall, practiceId, handleCallEnded])
+
+  // Auto-dial when ready: first lead dials immediately; subsequent leads wait for countdown.
+  useEffect(() => {
+    if (!active || paused || voiceState !== 'ready' || callState !== 'idle' || countdown != null || busy) return
+    dialCurrentLead()
+  }, [active, paused, voiceState, callState, countdown, busy, idx, dialCurrentLead])
+
+  // Countdown between calls.
+  useEffect(() => {
+    if (countdown == null || paused) return
+    if (countdown <= 0) {
+      setCountdown(null)
+      return
+    }
+    const t = setTimeout(() => setCountdown((n) => (n == null ? null : n - 1)), 1000)
+    return () => clearTimeout(t)
+  }, [countdown, paused])
+
+  function startSession() {
+    if (queue.length === 0) return
+    setSessionQueue([...queue])
+    setIdx(0)
+    setPaused(false)
+    setCountdown(null)
+    setNotes('')
+    pendingDispoRef.current = null
+    completingRef.current = false
+    setActive(true)
+  }
+
+  function disposition(d) {
+    if (!current || !c || busy) return
+    pendingDispoRef.current = d
+    if (callState !== 'idle') {
+      hangup()
+    } else {
+      completeLead(d.key)
+    }
   }
 
   if (loading) {
@@ -297,7 +379,7 @@ export default function PowerDialer() {
           <Link to="/conversations" className="rounded-md p-1.5 text-slate-400 transition hover:bg-surface-800 hover:text-white"><ArrowLeft className="h-5 w-5" /></Link>
           <div>
             <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-white"><PhoneCall className="h-6 w-6 text-primary-400" /> Power Dialer</h1>
-            <p className="mt-0.5 text-sm text-slate-400">{queue.length} call action{queue.length === 1 ? '' : 's'} due today · calls placed &amp; recorded in-app</p>
+            <p className="mt-0.5 text-sm text-slate-400">{queue.length} call action{queue.length === 1 ? '' : 's'} due today · one click dials through the list</p>
           </div>
         </div>
 
@@ -318,7 +400,10 @@ export default function PowerDialer() {
                 </div>
               ))}
             </div>
-            <button onClick={() => { setActive(true); setIdx(0) }} className="btn-primary bg-primary hover:bg-primary-700"><PhoneCall className="h-4 w-4" /> Start dialing session</button>
+            <button onClick={startSession} className="btn-primary bg-primary hover:bg-primary-700">
+              <PhoneCall className="h-4 w-4" /> Start power dialer
+            </button>
+            <p className="text-xs text-slate-500">Calls each lead automatically with a {COUNTDOWN_SEC}-second pause between calls. Tap pause anytime to stop the next dial.</p>
           </>
         )}
 
@@ -329,12 +414,47 @@ export default function PowerDialer() {
 
   // ── Active dialer ─────────────────────────────────────────────────────────
   const onCall = callState !== 'idle'
+  const waitingForNext = countdown != null && !onCall
+  const statusLabel = paused
+    ? 'Paused'
+    : onCall
+      ? (callState === 'in_call' ? `On call · ${formatCallTime(seconds)}` : callState === 'ringing' ? 'Ringing…' : 'Connecting…')
+      : waitingForNext
+        ? `Next call in ${countdown}s`
+        : voiceState === 'ready'
+          ? 'Dialing…'
+          : 'Starting dialer…'
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-400">Calling {idx + 1} of {queue.length}</p>
-        <button onClick={() => { setActive(false); setIdx(0) }} className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-slate-200"><X className="h-4 w-4" /> End session</button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm text-slate-400">Lead {idx + 1} of {sessionQueue.length}</p>
+          <p className="text-xs font-medium text-slate-300">{statusLabel}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setPaused((p) => !p)}
+            disabled={voiceState === 'unavailable'}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-surface-700 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-surface-800 disabled:opacity-40"
+          >
+            {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+            {paused ? 'Resume' : 'Pause'}
+          </button>
+          <button onClick={endSession} className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-slate-200">
+            <X className="h-4 w-4" /> End session
+          </button>
+        </div>
       </div>
+
+      {waitingForNext && (
+        <div className="card flex items-start gap-4 p-5 sm:items-center sm:p-6">
+          <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-3xl font-bold ${paused ? 'bg-surface-700 text-slate-400' : 'bg-primary/15 text-primary-300'}`}>
+            {paused ? <Pause className="h-7 w-7" /> : countdown}
+          </div>
+          <UpNextPreview lead={current} practice={practice} countdown={countdown} paused={paused} />
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-5">
         {/* Talking points */}
@@ -357,11 +477,7 @@ export default function PowerDialer() {
         <div className="card p-5 lg:col-span-2">
           {voiceState === 'ready' ? (
             <div className="rounded-xl border border-surface-700 bg-surface-800/50 p-4">
-              {!onCall ? (
-                <button onClick={placeCall} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-4 text-lg font-bold !text-white transition hover:bg-emerald-500">
-                  <Phone className="h-5 w-5" /> Call {c?.patient_phone}
-                </button>
-              ) : (
+              {onCall ? (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="inline-flex items-center gap-2 text-sm font-medium text-slate-200">
@@ -380,17 +496,29 @@ export default function PowerDialer() {
                     </button>
                   </div>
                 </div>
+              ) : waitingForNext ? (
+                <div className="flex items-center justify-center gap-2 py-6 text-sm text-slate-400">
+                  <Phone className="h-4 w-4" /> {c?.patient_phone}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-2 py-6 text-sm text-slate-300">
+                  <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                  {paused ? 'Paused — resume to continue' : 'Placing call…'}
+                </div>
               )}
               <p className="mt-2 text-center text-[11px] text-slate-500">Calls are placed and recorded in-app via Twilio.</p>
             </div>
+          ) : voiceState === 'init' ? (
+            <div className="flex items-center justify-center gap-2 rounded-xl bg-surface-800/50 px-4 py-8 text-sm text-slate-400">
+              <Loader2 className="h-4 w-4 animate-spin" /> Connecting dialer…
+            </div>
           ) : (
-            // Fallback: Twilio voice not configured (or still initialising) → device link.
-            <a href={`tel:${c?.patient_phone}`} className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-4 text-lg font-bold !text-white transition hover:bg-primary-700">
-              <Phone className="h-5 w-5" /> {c?.patient_phone}
-            </a>
-          )}
-          {voiceState === 'unavailable' && (
-            <p className="mt-2 text-center text-[11px] text-amber-300/80">In-app calling isn’t set up yet - using your device dialer. Configure Twilio Voice to call &amp; record here.</p>
+            <>
+              <a href={`tel:${c?.patient_phone}`} className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-4 text-lg font-bold !text-white transition hover:bg-primary-700">
+                <Phone className="h-5 w-5" /> {c?.patient_phone}
+              </a>
+              <p className="mt-2 text-center text-[11px] text-amber-300/80">In-app auto-dial isn’t available — use your device dialer, then log the outcome below.</p>
+            </>
           )}
 
           <div className="mt-4 space-y-1 text-sm text-slate-300">
@@ -401,9 +529,15 @@ export default function PowerDialer() {
         </div>
       </div>
 
-      {/* Controls + disposition */}
+      {onCall && nextLead && (
+        <div className="card border-dashed border-surface-600 bg-surface-800/30 px-4 py-3">
+          <UpNextPreview lead={nextLead} practice={practice} compact />
+        </div>
+      )}
+
+      {/* Outcome logging (optional — auto-advances when the call ends) */}
       <div className="card p-5">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Log outcome (required to continue)</p>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Log outcome (optional — advances automatically when the call ends)</p>
         <div className="flex flex-wrap gap-2">
           {DISPOSITIONS.map((d) => (
             <button key={d.key} onClick={() => disposition(d)} disabled={busy}
@@ -411,8 +545,6 @@ export default function PowerDialer() {
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <d.icon className="h-4 w-4" />} {d.label}
             </button>
           ))}
-          <button onClick={() => (idx + 1 >= queue.length ? (setActive(false), setIdx(0)) : setIdx((i) => i + 1))} disabled={busy}
-            className="btn-secondary"><SkipForward className="h-4 w-4" /> Skip</button>
         </div>
       </div>
     </div>

@@ -73,11 +73,15 @@ export function useTwilioVoiceDevice({ enabled = true } = {}) {
   const deviceRef = useRef(null)
   const callRef = useRef(null)
   const callSidRef = useRef(null)
+  const callDirectionRef = useRef(null)
   const onEndedRef = useRef(null)
   const secondsRef = useRef(0)
 
   const [voiceState, setVoiceState] = useState('init') // init | ready | unavailable
-  const [callState, setCallState] = useState('idle') // idle | connecting | ringing | in_call
+  const [callState, setCallState] = useState('idle') // idle | incoming | connecting | ringing | in_call
+  const [callDirection, setCallDirection] = useState(null) // inbound | outbound | null
+  const [incomingFrom, setIncomingFrom] = useState('')
+  const [incomingMeta, setIncomingMeta] = useState(null) // { conversationId, callLogId }
   const [muted, setMuted] = useState(false)
   const [seconds, setSeconds] = useState(0)
 
@@ -95,7 +99,11 @@ export function useTwilioVoiceDevice({ enabled = true } = {}) {
     callRef.current = null
     deviceRef.current = null
     callSidRef.current = null
+    callDirectionRef.current = null
     setCallState('idle')
+    setCallDirection(null)
+    setIncomingFrom('')
+    setIncomingMeta(null)
     setMuted(false)
     setSeconds(0)
     secondsRef.current = 0
@@ -126,6 +134,33 @@ export function useTwilioVoiceDevice({ enabled = true } = {}) {
         }
       })
       device.on('error', (e) => console.error('Twilio device error:', e?.message || e))
+      device.on('incoming', (call) => {
+        if (callRef.current) {
+          try {
+            call.reject()
+          } catch {
+            /* noop */
+          }
+          return
+        }
+        callRef.current = call
+        callDirectionRef.current = 'inbound'
+        setCallDirection('inbound')
+        setIncomingFrom(call.parameters?.From || call.customParameters?.get?.('from') || 'Unknown')
+        setIncomingMeta({
+          conversationId: call.customParameters?.get?.('conversation_id') || null,
+          callLogId: call.customParameters?.get?.('call_log_id') || null,
+        })
+        setCallState('incoming')
+        const end = () => resetCallUi()
+        call.on('cancel', end)
+        call.on('disconnect', end)
+        call.on('reject', end)
+        call.on('error', (e) => {
+          console.error('Twilio inbound call error:', e?.message || e)
+          end()
+        })
+      })
       await device.register()
       deviceRef.current = device
       setVoiceState('ready')
@@ -173,14 +208,19 @@ export function useTwilioVoiceDevice({ enabled = true } = {}) {
     callRef.current = null
     const sid = callSidRef.current
     const dur = secondsRef.current
+    const direction = callDirectionRef.current
     callSidRef.current = null
+    callDirectionRef.current = null
     setCallState('idle')
+    setCallDirection(null)
+    setIncomingFrom('')
+    setIncomingMeta(null)
     setMuted(false)
     setSeconds(0)
     secondsRef.current = 0
     const cb = onEndedRef.current
     onEndedRef.current = null
-    if (cb) cb({ callSid: sid || null, seconds: dur })
+    if (cb) cb({ callSid: sid || null, seconds: dur, direction })
   }, [])
 
   const placeCall = useCallback(
@@ -191,6 +231,8 @@ export function useTwilioVoiceDevice({ enabled = true } = {}) {
       setSeconds(0)
       secondsRef.current = 0
       setMuted(false)
+      callDirectionRef.current = 'outbound'
+      setCallDirection('outbound')
       setCallState('connecting')
       try {
         const params = { To: to, practice_id: practiceId || '' }
@@ -222,6 +264,34 @@ export function useTwilioVoiceDevice({ enabled = true } = {}) {
     [callState, resetCallUi],
   )
 
+  const acceptIncoming = useCallback(() => {
+    const call = callRef.current
+    if (!call || callState !== 'incoming') return false
+    try {
+      call.accept()
+      call.on('accept', () => {
+        callSidRef.current = call.parameters?.CallSid || null
+        setCallState('in_call')
+      })
+      return true
+    } catch (e) {
+      console.error('acceptIncoming failed:', e)
+      resetCallUi()
+      return false
+    }
+  }, [callState, resetCallUi])
+
+  const rejectIncoming = useCallback(() => {
+    const call = callRef.current
+    if (!call || callState !== 'incoming') return
+    try {
+      call.reject()
+    } catch {
+      /* noop */
+    }
+    resetCallUi()
+  }, [callState, resetCallUi])
+
   const hangup = useCallback(() => {
     try {
       callRef.current?.disconnect()
@@ -245,10 +315,15 @@ export function useTwilioVoiceDevice({ enabled = true } = {}) {
   return {
     voiceState,
     callState,
+    callDirection,
+    incomingFrom,
+    incomingMeta,
     seconds,
     muted,
     ensureReady,
     placeCall,
+    acceptIncoming,
+    rejectIncoming,
     hangup,
     toggleMute,
     destroyDevice,

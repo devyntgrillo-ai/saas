@@ -1,21 +1,25 @@
-# Power Dialer - in-app Twilio Voice calling + recording
+# Power Dialer + two-way calling (Twilio Voice)
 
-The Power Dialer places and records calls in the browser via the Twilio Voice
-JS SDK. Architecture:
+In-app Twilio Voice for outbound calls, plus **inbound call-back** when a patient
+dials the practice number.
 
-- **`twilio-voice-token`** (verify_jwt on) - mints a Twilio AccessToken for the
-  signed-in user's practice. The browser `Device` uses it to place calls.
-- **`twilio-voice-twiml`** (`--no-verify-jwt`) - the TwiML App Voice webhook.
-  Returns `<Dial callerId record="record-from-answer-dual">` and inserts a
-  `call_logs` row keyed by the Twilio CallSid.
-- **`twilio-recording-callback`** (`--no-verify-jwt`) - attaches the finished
-  recording (URL/sid/duration) to that `call_logs` row, then triggers
-  **`transcribe-call-log`** (Whisper + PHI strip → `call_logs.transcript_deidentified`).
-- Frontend: `src/lib/voice.js` (`useTwilioVoiceDevice` hook) powers:
-  - **Conversations** header call button (in-browser call + thread log + recording)
-  - **Power Dialer** (`src/pages/PowerDialer.jsx`)
-  Falls back to `tel:` when Voice secrets are missing.
-- DB: `call_logs` (migration `20260601000000_call_logs.sql`) + `practices.twilio_phone_number`.
+## Architecture
+
+### Outbound (practice → patient)
+- **`twilio-voice-token`** (verify_jwt on) - mints AccessToken; browser `Device` places calls.
+- **`twilio-voice-twiml`** (`--no-verify-jwt`) - TwiML App webhook; dials patient with recording.
+- Frontend: `VoiceContext` + `voice.js` → Conversations, Power Dialer, global `VoiceCallBar`.
+
+### Inbound (patient → practice number)
+- **`twilio-voice-inbound`** (`--no-verify-jwt`) - Voice webhook on each practice number:
+  finds/creates conversation, logs inbound call in thread, rings browser + optional forward phone.
+- Settings: **Settings → Messaging → Inbound calls** (`inbound_call_ring_browser`, `inbound_call_forward_phone`).
+- Migration: `20260605120000_inbound_call_settings.sql`.
+
+### Shared
+- **`twilio-recording-callback`** - attaches recording; triggers **`transcribe-call-log`**.
+- **`twilio-recording-audio`** (verify_jwt on) - authenticated playback proxy.
+- DB: `call_logs` + `practices.twilio_phone_number`.
 
 ## One-time Twilio setup
 
@@ -25,9 +29,9 @@ JS SDK. Architecture:
    - Voice **Request URL** (HTTP POST):
      `https://eymgqjeudrmeofytnwgs.supabase.co/functions/v1/twilio-voice-twiml`
    - Save; note the **App SID**.
-3. **Voice-capable number** - buy/assign one. Use it as the platform fallback
-   caller ID, or set it per-practice in `practices.twilio_phone_number`
-   (the TwiML uses the practice's number when present, else `TWILIO_CALLER_ID`).
+3. **Voice-capable number** - buy/assign per practice (Phone setup wizard). Provision sets:
+   - SMS webhook → `twilio-inbound?practice_id=…`
+   - Voice webhook → `twilio-voice-inbound?practice_id=…`
 4. **Secrets** (Supabase → Edge Functions → Secrets):
    ```bash
    supabase secrets set TWILIO_ACCOUNT_SID=ACxxxx
@@ -40,14 +44,20 @@ JS SDK. Architecture:
 Until these are set, `twilio-voice-token` returns 503 and the dialer shows
 "in-app calling isn't set up yet" and uses the device dialer instead.
 
-Deploy the transcription function (uses the same `OPENAI_API_KEY` as consult recordings):
+**Existing numbers:** run `sync-inbound-webhook` via `twilio-provision` (or re-save
+inbound call settings after deploy) so Voice URL is set on numbers purchased before
+this feature.
+
+Deploy functions:
 
 ```bash
+supabase functions deploy twilio-voice-inbound --no-verify-jwt --project-ref eymgqjeudrmeofytnwgs
 supabase functions deploy transcribe-call-log --no-verify-jwt --project-ref eymgqjeudrmeofytnwgs
 supabase functions deploy twilio-recording-callback --no-verify-jwt --project-ref eymgqjeudrmeofytnwgs
 ```
 
-Apply migration `20260604180000_call_log_transcripts.sql` (adds transcript columns on `call_logs`).
+Apply migrations `20260604180000_call_log_transcripts.sql` and
+`20260605120000_inbound_call_settings.sql`.
 
 ## Playback (built)
 - **`twilio-recording-audio`** (verify_jwt on) proxies the recording: the browser

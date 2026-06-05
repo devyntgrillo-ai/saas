@@ -26,6 +26,8 @@ import RecordConsultButton from './RecordConsultButton'
 import AccountSwitcher from './AccountSwitcher'
 import ImpersonationBanner from './ImpersonationBanner'
 import { RecorderProvider } from '../context/RecorderContext'
+import { VoiceProvider } from '../context/VoiceContext'
+import VoiceCallBar from './VoiceCallBar'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { usePermissions } from '../lib/permissions'
@@ -201,6 +203,7 @@ export default function Layout() {
 
   return (
     <RecorderProvider>
+      <VoiceProvider>
       <div className="flex h-screen flex-col overflow-hidden bg-surface">
       {/* Impersonation bar - pinned above the nav, visible while impersonating. */}
       <ImpersonationBanner />
@@ -323,6 +326,8 @@ export default function Layout() {
       )}
       </div>
       </div>
+      <VoiceCallBar />
+      </VoiceProvider>
     </RecorderProvider>
   )
 }

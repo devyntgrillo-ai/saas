@@ -7,14 +7,25 @@ export function mailgunPlatformDomain(): string | null {
   return Deno.env.get("MAILGUN_DOMAIN") || null;
 }
 
+/** Normalize env value that may mistakenly be a full email (office@domain.com → domain.com). */
+function mailgunHostEnv(name: string, fallback: string): string {
+  const raw = (Deno.env.get(name) || fallback).trim();
+  if (!raw) return fallback;
+  if (raw.includes("@")) {
+    const host = raw.split("@").pop()?.trim();
+    if (host) return host;
+  }
+  return raw;
+}
+
 /** DNS root for per-practice patient hosts: {subdomain}.mail.heyhope.ai */
 export function mailgunPatientMailRoot(): string {
-  return Deno.env.get("MAILGUN_PATIENT_MAIL_ROOT") || "mail.heyhope.ai";
+  return mailgunHostEnv("MAILGUN_PATIENT_MAIL_ROOT", "mail.heyhope.ai");
 }
 
 /** Mailgun API domain for patient sends (wildcard domain in Mailgun, e.g. mail.heyhope.ai). */
 export function mailgunPatientApiDomain(): string {
-  return Deno.env.get("MAILGUN_PATIENT_MAIL_DOMAIN") || mailgunPatientMailRoot();
+  return mailgunHostEnv("MAILGUN_PATIENT_MAIL_DOMAIN", mailgunPatientMailRoot());
 }
 
 export function practiceMailHostname(subdomain: string): string {

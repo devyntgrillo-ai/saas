@@ -131,6 +131,8 @@ Deno.serve(async (req: Request) => {
 
     let result: Awaited<ReturnType<typeof sendMailgunMessage>>;
     let usedFallback = false;
+    /** Reply-To actually sent on the wire (may differ from practice-host when using platform fallback). */
+    let sentReplyTo: string | null = replyTo;
 
     // Sandbox / single-domain Mailgun: send via verified MAILGUN_DOMAIN (From @mg…).
     // Per-practice From (office@sub.mail…) requires wildcard mail.heyhope.ai in Mailgun.
@@ -138,6 +140,7 @@ Deno.serve(async (req: Request) => {
       const platformReply = conversationId
         ? conversationReplyOnPracticeHost(conversationId, platformDomain)
         : replyTo;
+      sentReplyTo = platformReply;
       result = await sendMailgunMessage({
         to,
         subject,
@@ -172,6 +175,7 @@ Deno.serve(async (req: Request) => {
         const platformReply = conversationId
           ? conversationReplyOnPracticeHost(conversationId, platformDomain)
           : replyTo;
+        sentReplyTo = platformReply;
         result = await sendMailgunMessage({
           to,
           subject,
@@ -186,6 +190,7 @@ Deno.serve(async (req: Request) => {
         usedFallback = result.sent;
       }
     } else {
+      sentReplyTo = replyTo;
       result = await sendMailgunMessage({
         to,
         subject,
@@ -217,9 +222,10 @@ Deno.serve(async (req: Request) => {
           mailgun_id: result.id,
           delivery_status: "sent",
           subject: subject || null,
-          reply_to: inboundReply || replyTo,
-          from_address: mail.fromAddress,
+          reply_to: sentReplyTo,
+          from_address: usedFallback ? mailgunFromAddress("noreply") : mail.fromAddress,
           mail_subdomain: mail.subdomain,
+          used_platform_fallback: usedFallback,
         },
       }).eq("id", payload.conversation_message_id);
 

@@ -59,7 +59,8 @@ import { auditConversationViewed, auditPatientAccessed, auditMessageSent } from 
 import { SkeletonList } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
 import { formatMoney } from '../lib/analytics'
-import { formatCallTime, useTwilioVoiceDevice } from '../lib/voice'
+import { formatCallTime } from '../lib/voice'
+import { useVoice } from '../context/VoiceContext'
 import CallMessageBubble from '../components/CallMessageBubble'
 import EmailComposer from '../components/EmailComposer'
 import ChannelToggle from '../components/ChannelToggle'
@@ -633,7 +634,7 @@ export default function Conversations() {
   }, [draft])
 
 
-  const voice = useTwilioVoiceDevice({ enabled: Boolean(practiceId && activeConv?.patient_phone) })
+  const voice = useVoice()
 
   useEffect(() => {
     if (voice.callState === 'idle') return
@@ -1152,42 +1153,6 @@ export default function Conversations() {
                 </div>
               )}
             </div>
-
-            {voice.callState !== 'idle' && (
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-emerald-200 bg-emerald-50 px-4 py-2">
-                <span className="flex items-center gap-2 text-sm font-medium text-emerald-800">
-                  {voice.callState === 'in_call' ? (
-                    <>
-                      <Circle className="h-2 w-2 animate-pulse fill-rose-500 text-rose-500" />
-                      Recording · {formatCallTime(voice.seconds)}
-                    </>
-                  ) : (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
-                      {voice.callState === 'ringing' ? 'Ringing…' : 'Connecting…'}
-                    </>
-                  )}
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={voice.toggleMute}
-                    disabled={voice.callState !== 'in_call'}
-                    className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-2.5 py-1 text-xs font-medium text-emerald-900 disabled:opacity-40"
-                  >
-                    {voice.muted ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
-                    {voice.muted ? 'Unmute' : 'Mute'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={voice.hangup}
-                    className="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-rose-500"
-                  >
-                    <PhoneOff className="h-3.5 w-3.5" /> End call
-                  </button>
-                </div>
-              </div>
-            )}
 
             {consult?.sequence_status === 'paused' && (
               <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-[11px] font-medium text-amber-700">
