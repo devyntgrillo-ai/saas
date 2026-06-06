@@ -28,7 +28,6 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { CASELIFT_BRAND, escapeHtml, renderBrandedEmail } from "../_shared/brand.ts";
 import { sendMailgunToMany } from "../_shared/mailgun.ts";
-import { postSlack } from "../notify-slack/index.ts";
 import { getTwilioConfig, sendSms } from "../_shared/twilio.ts";
 
 const SUPER_ADMIN_EMAIL = "devyntgrillo@gmail.com";
@@ -43,12 +42,13 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 // Post to the dedicated adoption-alert Slack channel when configured, otherwise
-// fall back to the shared SLACK_WEBHOOK_URL (postSlack). Keeping a separate var
-// lets these internal alerts land in their own channel without re-routing the
-// other Slack notifications.
+// fall back to the shared SLACK_WEBHOOK_URL. Keeping a separate var lets these
+// internal alerts land in their own channel without re-routing the other Slack
+// notifications. (Inlined rather than importing notify-slack, whose top-level
+// Deno.serve() would otherwise hijack this function's requests.)
 async function postAdoptionSlack(text: string): Promise<{ sent: boolean; reason?: string }> {
-  const url = Deno.env.get("ADOPTION_SLACK_WEBHOOK_URL");
-  if (!url) return postSlack(text);
+  const url = Deno.env.get("ADOPTION_SLACK_WEBHOOK_URL") || Deno.env.get("SLACK_WEBHOOK_URL");
+  if (!url) return { sent: false, reason: "not_configured" };
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -81,6 +81,52 @@ Deno.serve(async (req: Request) => {
     );
 
     const body = await req.json().catch(() => ({}));
+    const appUrlBase = Deno.env.get("APP_URL") || "https://app.caselift.io";
+
+    // Delivery smoke-test: send one sample alert through every channel to the
+    // internal recipients (super admin + optional reseller email / SMS) without
+    // touching any practice data. Trigger with { "test": true }.
+    if (body.test) {
+      const sampleName = "Sample Dental (TEST)";
+      const internal = [...new Set([body.email, SUPER_ADMIN_EMAIL].filter(Boolean))] as string[];
+      const line =
+        `[TEST] ${sampleName} has let 5 implant consults pass without recording any of them ` +
+        `(alert threshold: 5). This is a delivery test of the adoption alert - no real practice is affected.`;
+      const htmlBody = renderBrandedEmail(CASELIFT_BRAND, {
+        heading: `${escapeHtml(sampleName)} may be churning`,
+        bodyHtml:
+          `<p style="margin:0"><strong style="color:#e2e8f0">This is a delivery test</strong> of the consecutive-unrecorded adoption alert - no real practice is affected.</p>` +
+          `<p style="margin:12px 0 0">A live alert looks like this: ${escapeHtml(sampleName)} has let <strong style="color:#e2e8f0">5 implant consults</strong> pass in a row without recording any of them (threshold 5).</p>`,
+        button: { label: "Open CaseLift Admin", url: `${appUrlBase}/admin` },
+        footerNote: "Internal adoption alert - the practice is not notified.",
+      });
+      const email = await sendMailgunToMany({
+        to: internal,
+        subject: "[Internal][TEST] Adoption alert delivery check",
+        text: line,
+        html: htmlBody,
+        fromName: CASELIFT_BRAND.fromName,
+        replyTo: CASELIFT_BRAND.supportEmail,
+      });
+      const slack = await postAdoptionSlack(
+        `:test_tube: *Adoption alert delivery test* - this is what a live alert looks like:\n` +
+        `:warning: *Adoption risk* - *${sampleName}* has skipped *5 consults in a row* (threshold 5). ` +
+        `Reach out to re-engage. <${appUrlBase}/admin|Open Admin>`,
+      );
+      let sms: unknown = { sent: false, reason: "not_configured" };
+      const tw = getTwilioConfig();
+      const smsTo = Deno.env.get("STAFF_ALERT_SMS") || null;
+      if (tw && smsTo) {
+        try {
+          const r = await sendSms(tw, { to: smsTo, from: tw.callerIdFallback || undefined, body: `CaseLift [TEST]: ${line}` });
+          sms = { sent: true, sid: r.sid };
+        } catch (e) {
+          sms = { sent: false, reason: String((e as Error)?.message ?? e) };
+        }
+      }
+      return json({ ok: true, test: true, recipients: internal, email, slack, sms });
+    }
+
     const globalDefault = Number(Deno.env.get("UNRECORDED_STREAK_THRESHOLD")) || DEFAULT_THRESHOLD;
     const nowISO = new Date().toISOString();
     const sinceISO = new Date(Date.now() - LOOKBACK_DAYS * 86400000).toISOString();
