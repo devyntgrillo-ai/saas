@@ -7,7 +7,7 @@ const EVENTS = [
   { key: 'patient_replied', label: 'Patient Replied', tip: 'Get notified when a patient responds to a CaseLift follow-up sequence', def: { email: true, sms: true, slack: true } },
   { key: 'case_converted', label: 'Case Converted', tip: 'Get notified when a treatment plan is marked as won or accepted', def: { email: true, sms: true, slack: true } },
   { key: 'daily_calls_due', label: 'Daily Calls Due', tip: 'Get a daily list of patients scheduled for a manual follow-up call today', def: { email: true, sms: true, slack: false } },
-  { key: 'low_recording_rate', label: 'Low Recording Rate', tip: 'Get alerted when your team records fewer consults than your weekly average', def: { email: true, sms: false, slack: true } },
+  { key: 'low_recording_rate', label: 'Low Recording Reminder', tip: 'Email a reminder when several implant consults pass in a row without being recorded', def: { email: true, sms: false, slack: false }, emailOnly: true },
 ]
 const CHANNELS = ['email', 'sms', 'slack']
 
@@ -159,7 +159,9 @@ export default function NotificationSettings() {
                   </td>
                   {CHANNELS.map((c) => (
                     <td key={c} className="py-2.5 text-center">
-                      <span className="inline-flex"><Switch checked={Boolean(prefs[e.key]?.[c])} onChange={() => toggleCell(e.key, c)} /></span>
+                      {e.emailOnly && c !== 'email'
+                        ? <span className="text-slate-600">—</span>
+                        : <span className="inline-flex"><Switch checked={Boolean(prefs[e.key]?.[c])} onChange={() => toggleCell(e.key, c)} /></span>}
                     </td>
                   ))}
                 </tr>
