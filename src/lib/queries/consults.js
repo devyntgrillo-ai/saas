@@ -8,6 +8,14 @@ import { queryKeys } from './keys'
 // progress. transcription_error is surfaced on the detail page, not here.
 export const PROCESSING_STATUSES = ['analyzing', 'transcribed']
 
+// A healthy consult goes analyzing → transcribed → analyzed within minutes.
+// Anything still "processing" after this window is an abandoned recording (the
+// placeholder row created at record-start whose upload/transcription never
+// finished) — age it out of the processing cards/dashboard so it doesn't show
+// as "being analyzed" forever. The row still appears in the normal Consults
+// list; it just stops claiming to be in progress.
+export const PROCESSING_MAX_AGE_MS = 2 * 60 * 60 * 1000 // 2 hours
+
 const TYPE_RE = /consult|implant/i
 
 export async function fetchDayAppointments(practiceId, date) {
@@ -68,11 +76,13 @@ export function useUnlinkedConsults(practiceId) {
 // "processing" cards at the top of the Consults list and as the dashboard count.
 export async function fetchProcessingConsults(practiceId) {
   if (!practiceId) return []
+  const cutoff = new Date(Date.now() - PROCESSING_MAX_AGE_MS).toISOString()
   const { data, error } = await supabase
     .from('consults')
     .select('id, patient_name, patient_first, patient_last, treatment_type, status, created_at')
     .eq('practice_id', practiceId)
     .in('status', PROCESSING_STATUSES)
+    .gte('created_at', cutoff)
     .order('created_at', { ascending: false })
     .limit(25)
   if (error) throw error
