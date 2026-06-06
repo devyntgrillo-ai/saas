@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useRecorder } from '../context/RecorderContext'
-import { useConsultsDay, useUpcomingAppointments, useProcessingConsults, useRecentConsults, useConsultArchive, ARCHIVE_PAGE_SIZE, useConsultsRealtime } from '../lib/queries'
+import { useConsultsDay, useUpcomingAppointments, useNextConsults, useProcessingConsults, useRecentConsults, useConsultArchive, ARCHIVE_PAGE_SIZE, useConsultsRealtime } from '../lib/queries'
 import { statusMeta } from '../lib/consults'
 import { useRecentRecordings } from '../lib/recentRecordings'
 import { supabase } from '../lib/supabase'
@@ -50,6 +50,8 @@ export default function Consults() {
 
   const { data: dayData, isLoading: loading } = useConsultsDay(practiceId, date)
   const { data: upcoming = [] } = useUpcomingAppointments(practiceId)
+  // Next 5 upcoming consults (today onward, any date) so the Schedule is never empty.
+  const { data: nextConsults = [] } = useNextConsults(practiceId, 5)
 
   const appts = useMemo(() => dayData?.appts ?? [], [dayData])
   const allNote = dayData?.allNote ?? false
@@ -235,7 +237,11 @@ export default function Consults() {
       ) : loading ? (
         <div className="card flex justify-center py-16"><Clock className="h-6 w-6 animate-pulse text-slate-500" /></div>
       ) : appts.length === 0 ? (
-        <EmptyCard icon={Calendar} title="No consults scheduled today" sub="Hit record for a walk-in, or see what's coming up below." />
+        nextConsults.length > 0 ? (
+          <NextConsults rows={nextConsults} navigate={navigate} openRecorder={openRecorder} />
+        ) : (
+          <EmptyCard icon={Calendar} title="No upcoming consults scheduled" sub="Hit record for a walk-in, or add appointments in your PMS." />
+        )
       ) : rows.length === 0 ? (
         <EmptyCard icon={Calendar} title="No appointments match your filters" />
       ) : counts.recorded === counts.all ? (
@@ -244,8 +250,9 @@ export default function Consults() {
         <RecordedTable rows={rows} navigate={navigate} openRecorder={openRecorder} consultStatus={consultStatus} />
       )}
 
-      {/* ── Upcoming (next 7 days) ───────────────────────────────────────── */}
-      {upcoming.length > 0 && (
+      {/* ── Upcoming (next 7 days) ─ shown alongside a populated day; when the day
+          is empty the "Next consults" table above already covers what's coming. ── */}
+      {appts.length > 0 && upcoming.length > 0 && (
         <UpcomingSchedule appts={upcoming} navigate={navigate} openRecorder={openRecorder} />
       )}
       </>
@@ -518,6 +525,56 @@ function dayLabel(dayStr) {
 
 // Read-ahead schedule for the next 7 days, grouped by day — PMS-style, with a
 // Record button on each so a consult can be started early if needed.
+// Date label for the "Next consults" table (e.g. "Mon, Jun 9").
+function fmtDate(ts) {
+  if (!ts) return ''
+  return new Date(ts).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+// The next few upcoming consults regardless of day, with Date + Time columns,
+// earliest first. Used so the Schedule tab is never an empty page.
+function NextConsults({ rows, navigate, openRecorder }) {
+  return (
+    <section className="space-y-2">
+      <h2 className="text-sm font-semibold text-slate-200">Next {rows.length} consult{rows.length === 1 ? '' : 's'}</h2>
+      <div className="card overflow-hidden p-0">
+        <div className="hidden items-center gap-3 border-b border-surface-700 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:flex">
+          <span className="w-[120px] shrink-0">Date</span>
+          <span className="w-[72px] shrink-0">Time</span>
+          <span className="flex-1">Patient</span>
+          <span className="w-[88px] shrink-0" />
+        </div>
+        <div className="divide-y divide-surface-700/60">
+          {rows.map((a) => {
+            const recorded = Boolean(a.consult_id)
+            return (
+              <div key={a.id} className="flex items-center gap-3 px-4 py-2.5">
+                <span className="w-[120px] shrink-0 text-sm font-medium text-slate-200">{fmtDate(a.appointment_time)}</span>
+                <span className="w-[72px] shrink-0 text-sm tabular-nums text-slate-400">{fmtTime(a.appointment_time)}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-slate-100">{fullName(a)}</p>
+                  <p className="truncate text-xs text-slate-500">
+                    {a.appointment_type || 'Consult'}{a.provider ? ` · ${a.provider}` : ''}
+                  </p>
+                </div>
+                {recorded ? (
+                  <button onClick={() => navigate(`/consults/${a.consult_id}`)} className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1.5 text-sm font-medium text-green-700 transition hover:bg-green-200">
+                    <Check className="h-4 w-4" /> View
+                  </button>
+                ) : (
+                  <button onClick={() => openRecorder(a)} className="inline-flex items-center gap-1.5 rounded-lg border border-surface-600 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:bg-surface-800">
+                    <Mic className="h-3.5 w-3.5" /> Record
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function UpcomingSchedule({ appts, navigate, openRecorder }) {
   const groups = useMemo(() => {
     const m = new Map()

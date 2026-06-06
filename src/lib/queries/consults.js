@@ -91,6 +91,34 @@ export function useUpcomingAppointments(practiceId) {
   })
 }
 
+// The next N upcoming consult appointments from now onward, regardless of how far
+// out they are, sorted earliest first. Used so the Schedule tab is never empty.
+export async function fetchNextConsults(practiceId, limit = 5) {
+  if (!practiceId) return []
+  const now = new Date().toISOString()
+  const { data, error } = await supabase
+    .from('pms_appointments')
+    .select('*')
+    .eq('practice_id', practiceId)
+    .gte('appointment_time', now)
+    .order('appointment_time', { ascending: true })
+    .limit(50)
+  if (error) throw error
+  const rows = data || []
+  const consultRows = rows.filter((a) => TYPE_RE.test(a.appointment_type || ''))
+  // Mirror the day/upcoming views: if nothing is consult-typed, fall back to all.
+  const chosen = consultRows.length === 0 && rows.length > 0 ? rows : consultRows
+  return chosen.slice(0, limit)
+}
+
+export function useNextConsults(practiceId, limit = 5) {
+  return useQuery({
+    queryKey: [...queryKeys.upcomingConsults(practiceId), 'next', limit],
+    queryFn: () => fetchNextConsults(practiceId, limit),
+    enabled: Boolean(practiceId),
+  })
+}
+
 export function useConsultsDay(practiceId, date) {
   return useQuery({
     queryKey: queryKeys.consultsDay(practiceId, date),
