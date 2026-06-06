@@ -300,6 +300,26 @@ Deno.serve(async (req: Request) => {
       return json({ demoPractices: rows });
     }
 
+    if (body.debug === "find" && sql) {
+      const q = `%${body.q || ""}%`;
+      const [p] = await sql`select id from public.practices where email = ${DEMO_PRACTICE_EMAIL}`;
+      const consults = await sql`select id, patient_name, status, outcome, recording_date, appointment_id, created_at from public.consults where practice_id = ${p.id} and patient_name ilike ${q}`;
+      const appts = await sql`select id, patient_first, patient_last, appointment_time, consult_id, pms_appointment_id, appointment_type from public.pms_appointments where practice_id = ${p.id} and (coalesce(patient_first,'') || ' ' || coalesce(patient_last,'')) ilike ${q}`;
+      return json({ consults, appts });
+    }
+
+    // Re-date a demo consult (by patient name) to N days ago so it rolls off the
+    // "today" Schedule into the Recordings archive. Also backfills recording_date.
+    if (body.action === "redate" && sql) {
+      const daysAgo = Number(body.daysAgo) || 1;
+      const iso = bizTs(daysAgo, 10, 0);
+      const [p] = await sql`select id from public.practices where email = ${DEMO_PRACTICE_EMAIL}`;
+      const r = await sql`update public.consults set created_at = ${iso}, recording_date = ${iso.slice(0, 10)}
+        where practice_id = ${p.id} and patient_name ilike ${`%${body.name || ""}%`}
+        returning id, patient_name, recording_date, created_at`;
+      return json({ redated: r });
+    }
+
     // Apply the new demo name (and matching KB overview) to the live record
     // without a full reseed, so existing demo data is preserved.
     if (body.action === "fixname") {
