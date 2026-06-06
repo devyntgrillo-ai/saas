@@ -667,6 +667,12 @@ export default function Sequences() {
   // the sequence list — surface them as "pending" cards at the top instead.
   const { data: processing = [] } = useProcessingConsults(practiceId)
   useConsultsRealtime(practiceId)
+  // Drop pending cards for consults whose sequence has already loaded into the
+  // real list, so the card and its row never show at the same time.
+  const pendingCards = useMemo(() => {
+    const rowIds = new Set(rows.map((r) => r.id))
+    return processing.filter((c) => !rowIds.has(c.id))
+  }, [processing, rows])
   const toggleSeqMutation = useToggleSequenceStatus()
   const updateMsgMutation = useUpdateSequenceMessage()
   const [drawerRow, setDrawerRow] = useState(null)
@@ -837,11 +843,13 @@ export default function Sequences() {
         </div>
       </div>
 
-      {/* Pending sequences — consults still being analyzed (no messages yet). */}
-      {processing.length > 0 && (
+      {/* Pending sequences — consults still being analyzed (no messages yet).
+          Exclude any that have since landed in the real list to avoid a
+          duplicate during the analyzing → analyzed transition. */}
+      {pendingCards.length > 0 && (
         <div className="space-y-2">
           <style>{PENDING_SEQ_CSS}</style>
-          {processing.map((c) => (
+          {pendingCards.map((c) => (
             <PendingSequenceCard key={c.id} c={c} />
           ))}
         </div>

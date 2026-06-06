@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useRecorder } from '../context/RecorderContext'
-import { useConsultsDay, useUnlinkedConsults, useProcessingConsults, useConsultsRealtime } from '../lib/queries'
+import { useConsultsDay, useUnlinkedConsults, useProcessingConsults, useRecentConsults, useConsultsRealtime } from '../lib/queries'
 import { supabase } from '../lib/supabase'
 
 const todayStr = () => new Date().toLocaleDateString('en-CA')
@@ -48,14 +48,30 @@ export default function Consults() {
   const { data: dayData, isLoading: loading } = useConsultsDay(practiceId, date)
   const { data: unlinked = [] } = useUnlinkedConsults(practiceId)
 
-  const appts = dayData?.appts ?? []
+  const appts = useMemo(() => dayData?.appts ?? [], [dayData])
   const allNote = dayData?.allNote ?? false
 
   // Consults still being transcribed/analyzed — shown as processing cards at the
   // top. Realtime (with a poll fallback) flips them to normal once 'analyzed'.
   const { data: processing = [] } = useProcessingConsults(practiceId)
+  // Recently-completed consults (analysis done / errored) — shown as "complete"
+  // cards so a freshly-recorded consult stays put instead of vanishing once it
+  // leaves the processing state. Excludes any already shown as a scheduled row.
+  const { data: recentDone = [] } = useRecentConsults(practiceId)
   useConsultsRealtime(practiceId)
   const processingIds = useMemo(() => new Set(processing.map((c) => c.id)), [processing])
+
+  // Consult ids already represented as an appointment row in the current day's
+  // view — those stay as rows (richer: time/type); everything else gets a card.
+  const apptConsultIds = useMemo(
+    () => new Set(appts.filter((a) => a.consult_id).map((a) => a.consult_id)),
+    [appts]
+  )
+  const doneCards = useMemo(
+    () => recentDone.filter((c) => !apptConsultIds.has(c.id) && !processingIds.has(c.id)),
+    [recentDone, apptConsultIds, processingIds]
+  )
+  const doneCardIds = useMemo(() => new Set(doneCards.map((c) => c.id)), [doneCards])
 
   // Processing/Ready badges: appointments don't carry the consult's transcription
   // status, so fetch it for the recorded ones and refresh every 15s so a
@@ -148,12 +164,16 @@ export default function Consults() {
         </p>
       )}
 
-      {/* Processing consults — pinned to the top so they're immediately visible. */}
-      {processing.length > 0 && (
+      {/* Processing + just-completed consults — pinned to the top so a recording
+          stays visible from "analyzing" through "complete" without vanishing. */}
+      {(processing.length > 0 || doneCards.length > 0) && (
         <section className="space-y-2">
           <style>{PROCESSING_CARD_CSS}</style>
           {processing.map((c) => (
             <ProcessingCard key={c.id} c={c} onOpen={() => navigate(`/consults/${c.id}/processing`)} />
+          ))}
+          {doneCards.map((c) => (
+            <CompleteCard key={c.id} c={c} onOpen={() => navigate(`/consults/${c.id}`)} />
           ))}
         </section>
       )}
@@ -173,11 +193,11 @@ export default function Consults() {
         <RecordedTable rows={rows} navigate={navigate} openRecorder={openRecorder} consultStatus={consultStatus} />
       )}
 
-      {unlinked.length > 0 && (
+      {unlinked.filter((c) => !doneCardIds.has(c.id) && !processingIds.has(c.id)).length > 0 && (
         <section className="space-y-1.5">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Unlinked recordings</h2>
           <div className="divide-y divide-surface-700/60 rounded-lg border border-dashed border-surface-700 bg-surface-800/30">
-            {unlinked.map((c) => (
+            {unlinked.filter((c) => !doneCardIds.has(c.id) && !processingIds.has(c.id)).map((c) => (
               <div key={c.id} className="flex items-center gap-3 px-4 py-2 text-xs">
                 <span className="min-w-0 flex-1 truncate text-slate-400">
                   {c.patient_name || `Consult · ${new Date(c.created_at).toLocaleDateString()}`}
@@ -231,6 +251,42 @@ function ProcessingCard({ c, onOpen }) {
         </span>
       </div>
       <span className="pc-shimmer mt-3 block h-[3px] w-full rounded-full" />
+    </button>
+  )
+}
+
+// A consult whose analysis just finished — keeps it visible (and clickable into
+// the detail page) instead of disappearing the moment it leaves "processing".
+function CompleteCard({ c, onOpen }) {
+  const name = c.patient_name || [c.patient_first, c.patient_last].filter(Boolean).join(' ') || 'New patient'
+  const failed = c.status === 'transcription_error'
+  return (
+    <button
+      onClick={onOpen}
+      className={`relative block w-full overflow-hidden rounded-lg border px-4 py-3 text-left transition ${
+        failed
+          ? 'border-rose-500/30 bg-rose-500/[0.06] hover:bg-rose-500/[0.10]'
+          : 'border-emerald-500/30 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.10]'
+      }`}
+    >
+      <span className={`absolute inset-y-0 left-0 w-[3px] ${failed ? 'bg-rose-400' : 'bg-emerald-400'}`} />
+      <div className="flex items-center justify-between gap-3 pl-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-slate-100">{name}</p>
+          <p className="mt-0.5 text-xs text-slate-400">
+            {failed ? 'Transcription failed — tap to review' : 'Analysis complete — sequence ready to review'}
+          </p>
+        </div>
+        <span
+          className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+            failed
+              ? 'border-rose-400/30 bg-rose-400/15 text-rose-300'
+              : 'border-emerald-400/30 bg-emerald-400/15 text-emerald-300'
+          }`}
+        >
+          {failed ? '⚠️ Error' : <><CheckCircle2 className="h-3 w-3" /> Complete</>}
+        </span>
+      </div>
     </button>
   )
 }

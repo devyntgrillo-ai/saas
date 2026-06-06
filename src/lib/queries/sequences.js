@@ -32,6 +32,9 @@ export function useSequences(practiceId) {
     queryKey: queryKeys.sequences(practiceId),
     queryFn: () => fetchSequences(practiceId),
     enabled: Boolean(practiceId),
+    // Poll fallback so a just-analyzed consult's sequence appears even if the
+    // realtime event is missed; realtime (useSequencesRealtime) is immediate.
+    refetchInterval: 30000,
   })
 }
 

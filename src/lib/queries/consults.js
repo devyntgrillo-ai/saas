@@ -100,6 +100,38 @@ export function useProcessingConsults(practiceId) {
   })
 }
 
+// A consult whose analysis just finished — surfaced as a "complete" card in the
+// Consults list so a freshly-recorded consult doesn't vanish when it leaves the
+// processing state. 'analyzed' = ready to review; 'transcription_error' = failed.
+// (Once the user approves/activates the sequence the consult moves on to the
+// Sequences list, so we only keep recent ones here.)
+export const RECENT_DONE_STATUSES = ['analyzed', 'transcription_error']
+export const RECENT_DONE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+
+export async function fetchRecentConsults(practiceId) {
+  if (!practiceId) return []
+  const cutoff = new Date(Date.now() - RECENT_DONE_MAX_AGE_MS).toISOString()
+  const { data, error } = await supabase
+    .from('consults')
+    .select('id, patient_name, patient_first, patient_last, treatment_type, status, appointment_id, created_at')
+    .eq('practice_id', practiceId)
+    .in('status', RECENT_DONE_STATUSES)
+    .gte('created_at', cutoff)
+    .order('created_at', { ascending: false })
+    .limit(25)
+  if (error) throw error
+  return data || []
+}
+
+export function useRecentConsults(practiceId) {
+  return useQuery({
+    queryKey: queryKeys.recentConsults(practiceId),
+    queryFn: () => fetchRecentConsults(practiceId),
+    enabled: Boolean(practiceId),
+    refetchInterval: 30000,
+  })
+}
+
 // Realtime: when any consult for this practice changes status, refresh the
 // processing list + the day/sequences/dashboard views so processing cards
 // transition to "ready" without a manual reload. Falls back to the poll above
@@ -114,9 +146,22 @@ export function useConsultsRealtime(practiceId) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'consults', filter: `practice_id=eq.${practiceId}` },
         () => {
+          // A consult changed status — refresh every view that renders one so a
+          // processing card transitions to its "complete" state (and the real
+          // sequence row appears) without a manual reload.
           queryClient.invalidateQueries({ queryKey: queryKeys.processingConsults(practiceId) })
+          queryClient.invalidateQueries({ queryKey: queryKeys.recentConsults(practiceId) })
           queryClient.invalidateQueries({ queryKey: queryKeys.unlinkedConsults(practiceId) })
           queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(practiceId) })
+          queryClient.invalidateQueries({ queryKey: queryKeys.sequences(practiceId) })
+          queryClient.invalidateQueries({ queryKey: queryKeys.sequenceActiveCount(practiceId) })
+          // consultsDay's key carries the viewed date, so match by prefix.
+          queryClient.invalidateQueries({
+            predicate: (q) =>
+              q.queryKey[0] === 'practice' &&
+              q.queryKey[1] === practiceId &&
+              q.queryKey[2] === 'consults-day',
+          })
         },
       )
       .subscribe()
