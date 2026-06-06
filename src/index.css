@@ -44,6 +44,10 @@
     --accent-subtle: rgba(14, 165, 233, 0.1);
     --accent-border: rgba(14, 165, 233, 0.25);
     --accent-dark: #0284C7;
+    /* Sidebar brand vars (white-label overrides these via whitelabel.js). */
+    --brand-primary: #0EA5E9;
+    --brand-primary-15: #0EA5E926;
+    --brand-primary-hover: #0284C7;
     --success: #10B981;
     --success-subtle: rgba(16, 185, 129, 0.1);
     --warning: #F59E0B;

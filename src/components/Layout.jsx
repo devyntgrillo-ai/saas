@@ -56,9 +56,9 @@ const agencyNav = [
 // Shared styling for sidebar nav links (active = brand accent + left border).
 const navItemClass = ({ isActive }) =>
   [
-    'flex h-9 items-center gap-2.5 rounded-lg border-l-2 px-3 text-sm transition',
+    'flex h-9 items-center gap-2.5 rounded-lg border-l-[3px] px-3 text-sm transition',
     isActive
-      ? 'border-primary bg-primary/10 font-medium text-primary-300'
+      ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-15)] font-medium text-[var(--brand-primary)]'
       : 'border-transparent text-slate-400 hover:bg-surface-800 hover:text-slate-200',
   ].join(' ')
 

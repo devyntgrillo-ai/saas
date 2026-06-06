@@ -97,6 +97,13 @@ export function applyPrimaryColor(hex) {
   root.style.setProperty('--color-primary-100', hexToRgba(hex, 0.1))
   root.style.setProperty('--color-primary-300', hexToRgba(hex, 0.6))
   root.style.setProperty('--color-primary-600', darkenColor(hex, 15))
+  // Sidebar brand vars - consumed directly via var(--brand-primary*) so the
+  // active nav item (bg/border/text), Record Consult button, etc. recolor
+  // instantly. Normalize to a 6-digit hex so the +"26" (15% alpha) suffix works.
+  const hex6 = '#' + base.map((x) => clamp(x).toString(16).padStart(2, '0')).join('')
+  root.style.setProperty('--brand-primary', hex6)
+  root.style.setProperty('--brand-primary-15', `${hex6}26`)
+  root.style.setProperty('--brand-primary-hover', darkenColor(hex6, 10))
   return true
 }
 
@@ -109,4 +116,9 @@ export function resetPrimaryColor() {
   for (const v of LITERAL_VARS) {
     root.style.removeProperty(v)
   }
+  // Restore the sidebar brand vars to the CaseLift defaults (also defined in
+  // index.css :root, but set explicitly so a reset always lands on them).
+  root.style.setProperty('--brand-primary', '#0EA5E9')
+  root.style.setProperty('--brand-primary-15', '#0EA5E926')
+  root.style.setProperty('--brand-primary-hover', '#0284C7')
 }
