@@ -12,6 +12,7 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
+import { isSuperAdminUser } from "../_shared/admin.ts";
 import {
   ensureFreshToken,
   getAppCreds,
@@ -51,7 +52,7 @@ Deno.serve(async (req: Request) => {
     if (userErr || !user) return json({ error: "Unauthorized" }, 401);
     // Super-admin only.
     const { data: prof } = await supabase.from("users").select("access_level").eq("id", user.id).maybeSingle();
-    if (prof?.access_level !== "super_admin") return json({ error: "Forbidden - admin only." }, 403);
+    if (!isSuperAdminUser(user, prof?.access_level)) return json({ error: "Forbidden - admin only." }, 403);
 
     const { practice_id } = await req.json().catch(() => ({ practice_id: "" }));
     if (!practice_id) return json({ error: "practice_id required." }, 400);

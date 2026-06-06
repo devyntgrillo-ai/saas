@@ -1,10 +1,5 @@
-// Admin "mission control" data layer.
-//
-// The admin view is demo-first with a real-table overlay: it renders a rich,
-// realistic dataset so the business looks alive even before any seed SQL has
-// run, and overlays real agency_accounts / practices rows whenever they exist.
-// This also keeps the view fully functional while the Supabase MCP / RPCs are
-// unavailable.
+// Admin data layer — loads real agency_accounts / practices; no silent demo blending.
+// Use loadAdminDemoData() or VITE_ADMIN_SHOW_DEMO=true for local previews only.
 import { supabase } from './supabase'
 
 export const PRICING = {
@@ -168,7 +163,7 @@ function deriveDemoAgencies() {
 
 function shapeRealPractice(row, consultCount, agencyName) {
   const doctor =
-    row.doctor_name || [row.doctor_first, row.doctor_last].filter(Boolean).join(' ') || null
+    [row.doctor_first, row.doctor_last].filter(Boolean).join(' ') || null
   const created = row.created_at ? new Date(row.created_at) : null
   const days = created ? Math.max(0, Math.round((Date.now() - created.getTime()) / DAY)) : null
   const sms = row.sms_enabled ? 'active' : row.a2p_status === 'pending' ? 'pending' : 'none'
@@ -180,6 +175,7 @@ function shapeRealPractice(row, consultCount, agencyName) {
     agency_id: row.agency_id || null,
     agency_name: agencyName || null,
     subscription_status: row.subscription_status || 'active',
+    created_at: row.created_at || null,
     days_on_platform: days ?? 0,
     consults_month: consultCount ?? 0,
     recovered: DEMO_RECOVERED[(row.name || '').toLowerCase()] ?? 0,
@@ -191,64 +187,85 @@ function shapeRealPractice(row, consultCount, agencyName) {
 
 // ---- Loader ----------------------------------------------------------------
 
+function emptyAdminPayload({ loadErrors = [], isEmpty = false } = {}) {
+  return {
+    isDemo: false,
+    isEmpty,
+    loadErrors,
+    agencies: [],
+    practices: [],
+    cancellations: [],
+    activity: [],
+    mrrHistory: [],
+  }
+}
+
 export async function loadAdminData() {
-  try {
-    const monthStart = new Date()
-    monthStart.setDate(monthStart.getDate() - 30)
+  const monthStart = new Date()
+  monthStart.setDate(monthStart.getDate() - 30)
+  const loadErrors = []
 
-    const [agRes, prRes, coRes, cfRes, leRes] = await Promise.all([
-      supabase.from('agency_accounts').select('*').limit(500),
-      supabase.from('practices').select('*, agency:agency_accounts(name)').is('archived_at', null).limit(500),
-      supabase.from('consults').select('id, practice_id, status, created_at').gte('created_at', monthStart.toISOString()).order('created_at', { ascending: false }),
-      supabase.from('cancellation_feedback').select('*').order('created_at', { ascending: false }).limit(500),
-      // Best-effort; table/columns may not exist or be RLS-restricted → ignored.
-      supabase.from('ai_learning_events').select('*').order('created_at', { ascending: false }).limit(15),
-    ])
+  const [agRes, prRes, coRes, cfRes, leRes] = await Promise.all([
+    supabase.from('agency_accounts').select('*').limit(500),
+    supabase.from('practices').select('*, agency:agency_accounts(name)').is('archived_at', null).limit(500),
+    supabase.from('consults').select('id, practice_id, status, created_at').gte('created_at', monthStart.toISOString()).order('created_at', { ascending: false }),
+    supabase.from('cancellation_feedback').select('*').order('created_at', { ascending: false }).limit(500),
+    supabase.from('ai_learning_events').select('*').order('created_at', { ascending: false }).limit(15),
+  ])
 
-    const realAgencies = agRes.error ? [] : agRes.data || []
-    const realPractices = prRes.error ? [] : prRes.data || []
+  if (agRes.error) loadErrors.push({ source: 'agencies', message: agRes.error.message })
+  if (prRes.error) loadErrors.push({ source: 'practices', message: prRes.error.message })
+  if (coRes.error) loadErrors.push({ source: 'consults', message: coRes.error.message })
+  if (cfRes.error) loadErrors.push({ source: 'cancellations', message: cfRes.error.message })
 
-    // Nothing real yet → pure demo so the view is still impressive.
-    if (realAgencies.length === 0 && realPractices.length === 0) {
-      return demoData()
-    }
+  if (loadErrors.length) {
+    return emptyAdminPayload({ loadErrors })
+  }
 
-    // Real overlay.
-    const consultCounts = {}
-    ;(coRes.data || []).forEach((c) => {
-      consultCounts[c.practice_id] = (consultCounts[c.practice_id] || 0) + 1
-    })
+  const realAgencies = agRes.data || []
+  const realPractices = prRes.data || []
 
-    const practices = realPractices.map((p) =>
-      shapeRealPractice(p, consultCounts[p.id] || 0, p.agency?.name),
-    )
-    const agencies = realAgencies.map((a) => shapeRealAgency(a, practices))
+  if (realAgencies.length === 0 && realPractices.length === 0) {
+    return emptyAdminPayload({ isEmpty: true })
+  }
 
-    const cancellations = (cfRes.data || []).map((c, i) => ({
-      id: c.id || `cancel-${i}`,
-      practice: practices.find((p) => p.id === c.practice_id)?.name || 'Former practice',
-      agency: null,
-      reason: c.reason || 'unknown',
-      reason_label: reasonLabel(c.reason),
-      mrr_lost: Number(c.mrr_at_cancellation) || PRICING.directPractice,
-      date: c.created_at,
-      tenure_days: null,
-    }))
+  const consultCounts = {}
+  ;(coRes.data || []).forEach((c) => {
+    consultCounts[c.practice_id] = (consultCounts[c.practice_id] || 0) + 1
+  })
 
-    // Build the activity feed from real consults + cancellations + AI learning
-    // events; fall back to the synthesized demo feed when there's nothing real.
-    const realActivity = buildActivity(coRes.data, cancellations, practices, leRes?.error ? [] : leRes?.data)
+  const practices = realPractices.map((p) =>
+    shapeRealPractice(p, consultCounts[p.id] || 0, p.agency?.name),
+  )
+  const agencies = realAgencies.map((a) => shapeRealAgency(a, practices))
 
-    return {
-      isDemo: false,
-      agencies: agencies.length ? agencies : deriveDemoAgencies(),
-      practices: practices.length ? practices : DEMO_PRACTICES,
-      cancellations: cancellations.length ? cancellations : DEMO_CANCELLATIONS,
-      activity: realActivity.length ? realActivity : DEMO_ACTIVITY,
-      mrrHistory: DEMO_MRR_HISTORY,
-    }
-  } catch {
-    return demoData()
+  const cancellations = (cfRes.data || []).map((c, i) => ({
+    id: c.id || `cancel-${i}`,
+    practice: practices.find((p) => p.id === c.practice_id)?.name || 'Former practice',
+    agency: null,
+    reason: c.reason || 'unknown',
+    reason_label: reasonLabel(c.reason),
+    mrr_lost: Number(c.mrr_at_cancellation) || PRICING.directPractice,
+    date: c.created_at,
+    tenure_days: null,
+  }))
+
+  const activity = buildActivity(
+    coRes.data,
+    cancellations,
+    practices,
+    leRes?.error ? [] : leRes?.data,
+  )
+
+  return {
+    isDemo: false,
+    isEmpty: false,
+    loadErrors: [],
+    agencies,
+    practices,
+    cancellations,
+    activity,
+    mrrHistory: [],
   }
 }
 
@@ -297,6 +314,8 @@ function buildActivity(consults, cancellations, practices, learning) {
 function demoData() {
   return {
     isDemo: true,
+    isEmpty: false,
+    loadErrors: [],
     agencies: deriveDemoAgencies(),
     practices: DEMO_PRACTICES,
     cancellations: DEMO_CANCELLATIONS,
@@ -305,7 +324,32 @@ function demoData() {
   }
 }
 
+/** Opt-in demo dataset for local previews (set VITE_ADMIN_SHOW_DEMO=true). */
+export function loadAdminDemoData() {
+  return demoData()
+}
+
 // ---- Derived metrics -------------------------------------------------------
+
+export function computeMonthlySignupsChurn(practices, cancellations) {
+  const now = new Date()
+  const months = []
+  for (let i = 5; i >= 0; i -= 1) {
+    const start = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
+    const label = start.toLocaleString('en-US', { month: 'short' })
+    const signups = (practices || []).filter((p) => {
+      const created = p.created_at ? new Date(p.created_at) : null
+      return created && created >= start && created < end
+    }).length
+    const churn = (cancellations || []).filter((c) => {
+      const dt = c.date ? new Date(c.date) : null
+      return dt && dt >= start && dt < end
+    }).length
+    months.push({ month: label, signups, churn })
+  }
+  return months
+}
 
 export function computeOverview(data) {
   const { agencies, practices, cancellations } = data
@@ -393,14 +437,9 @@ export async function logImpersonation({ actorId, targetType, targetId, targetNa
 // Build the 12-month stacked MRR series for the Revenue chart, extending the
 // 6-month demo history so the chart always has a full year.
 export function mrrSeries12(history) {
-  const base = history || DEMO_MRR_HISTORY
-  const labels = ['Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov']
-  const ramp = labels.map((month, i) => {
-    const agency = Math.round(200 + i * 60)
-    const direct = Math.round(100 + i * 30)
-    return { month, agency, direct, total: agency + direct }
-  })
-  return [...ramp, ...base]
+  const base = (history || []).filter(Boolean)
+  if (base.length >= 6) return base
+  return base
 }
 
 export const MRR_MILESTONES = [

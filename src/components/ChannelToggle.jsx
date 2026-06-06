@@ -10,8 +10,8 @@ import { Mail, MessageSquare } from 'lucide-react'
 // (`:root:not(.dark) .text-white { color: var(--text-primary) }`) that would
 // otherwise flip it to near-black — i.e. dark text on the blue fill.
 const OPTIONS = [
-  { value: 'email', label: 'Email', Icon: Mail },
   { value: 'sms', label: 'SMS', Icon: MessageSquare },
+  { value: 'email', label: 'Email', Icon: Mail },
 ]
 
 export default function ChannelToggle({ channel, onSwitch }) {

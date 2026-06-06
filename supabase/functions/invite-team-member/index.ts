@@ -8,6 +8,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
+import { isSuperAdminUser } from "../_shared/admin.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -94,14 +95,15 @@ Deno.serve(async (req: Request) => {
       practiceRow = pr;
 
       const { data: caller } = await admin.from("users").select("practice_id, access_level, role").eq("id", user.id).maybeSingle();
+      const callerIsSuperAdmin = isSuperAdminUser(user, caller?.access_level);
       const canInvite =
         caller?.practice_id === practiceId &&
-        (caller?.role === "owner" || caller?.access_level === "practice_owner" || caller?.access_level === "super_admin");
+        (caller?.role === "owner" || caller?.access_level === "practice_owner" || callerIsSuperAdmin);
       if (!canInvite) {
         const { data: mem } = await admin.from("agency_members").select("role, agency_id")
           .eq("user_id", user.id).maybeSingle();
         const agencyOk = mem && pr.agency_id && mem.agency_id === pr.agency_id && ["owner", "admin"].includes(mem.role);
-        if (!agencyOk && caller?.access_level !== "super_admin") {
+        if (!agencyOk && !callerIsSuperAdmin) {
           return json({ error: "You cannot invite users to this practice" }, 403);
         }
       }

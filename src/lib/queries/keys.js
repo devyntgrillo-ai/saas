@@ -3,7 +3,6 @@ export const queryKeys = {
   admin: {
     all: ['admin'],
     data: () => ['admin', 'data'],
-    dashboard: () => ['admin', 'dashboard'],
     billing: () => ['admin', 'billing'],
     referrals: () => ['admin', 'referrals'],
     training: () => ['admin', 'training'],

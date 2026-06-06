@@ -61,7 +61,16 @@ export async function loadRecordingUrl(callLogId) {
       apikey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
     },
   })
-  if (!res.ok) throw new Error('Could not load recording.')
+  if (!res.ok) {
+    let message = 'Could not load recording.'
+    try {
+      const payload = await res.json()
+      if (payload?.error) message = payload.error
+    } catch {
+      /* non-JSON body */
+    }
+    throw new Error(message)
+  }
   return URL.createObjectURL(await res.blob())
 }
 
