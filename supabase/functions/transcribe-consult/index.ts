@@ -85,7 +85,6 @@ Deno.serve(async (req: Request) => {
 
     // Save the consult immediately with status "transcribed".
     const record: Record<string, unknown> = {
-      practice_id: practiceId,
       status: "transcribed",
       transcript_deidentified: deidentified,
       recording_date: body.recording_date ?? null,
@@ -101,10 +100,15 @@ Deno.serve(async (req: Request) => {
 
     let savedId = body.consult_id;
     if (savedId) {
+      // Existing consult (created client-side with its own practice_id). Do NOT
+      // write practice_id here — the caller's JWT-resolved practice can differ
+      // from the sub-account the consult belongs to (e.g. a super-admin viewing
+      // a client), and overwriting it would move the consult to the wrong practice.
       const { error } = await admin.from("consults").update(record).eq("id", savedId);
       if (error) return json({ error: "Could not save the transcript.", detail: error.message }, 500);
     } else {
-      const { data, error } = await admin.from("consults").insert(record).select("id").single();
+      // Brand-new consult (e.g. inbound email / Plaud) — set the resolved practice.
+      const { data, error } = await admin.from("consults").insert({ ...record, practice_id: practiceId }).select("id").single();
       if (error) return json({ error: "Could not save the consult.", detail: error.message }, 500);
       savedId = data.id;
     }

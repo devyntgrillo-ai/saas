@@ -193,7 +193,6 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const { ctx, error: authErr } = await resolveAuth(req, body);
     if (authErr || !ctx) return authErr ?? json({ error: "Unauthorized" }, 401);
-    const { practiceId } = ctx;
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const auditClient = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -212,7 +211,18 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (cErr) throw cErr;
     if (!consult) return json({ error: "Consult not found." }, 404);
-    if (consult.practice_id !== practiceId) return json({ error: "Not your practice's consult." }, 403);
+    // Access check: a user JWT can act on this consult only if RLS lets them see
+    // it (practice member, agency owner of the practice, or super-admin). This is
+    // impersonation-aware — unlike comparing against the caller's OWN practice,
+    // which would wrongly 403 a super-admin/agency working in a sub-account.
+    // Service-role calls (internal) are trusted. All writes below use the
+    // consult's OWN practice id so the data never lands in the caller's practice.
+    if (!ctx.isServiceRole) {
+      const { data: allowed } = await ctx.client
+        .from("consults").select("id").eq("id", consultId).maybeSingle();
+      if (!allowed) return json({ error: "Not your practice's consult." }, 403);
+    }
+    const consultPracticeId = consult.practice_id;
     // Idempotent - the detail-page poller may trigger this more than once. A
     // regenerate request intentionally bypasses this to re-run the analysis.
     if (consult.status === "analyzed" && !regenerate) return json({ consult_id: consultId, status: "analyzed", already: true });
@@ -245,7 +255,7 @@ Deno.serve(async (req: Request) => {
     const { data: practiceRow } = await admin
       .from("practices")
       .select("sequence_config, auto_start_followup, timezone")
-      .eq("id", practiceId)
+      .eq("id", consultPracticeId)
       .maybeSingle();
     const autoStart = practiceRow?.auto_start_followup === true;
     const seqRules = rulesFrom(practiceRow?.sequence_config, practiceRow?.timezone);
@@ -309,7 +319,7 @@ Deno.serve(async (req: Request) => {
           const scheduled_for = autoStart ? computeScheduledFor(createdAt, day, seqRules) : null;
           return {
             consult_id: savedId,
-            practice_id: practiceId,
+            practice_id: consultPracticeId,
             type: m.type,
             channel: m.channel,
             subject: m.subject,
@@ -330,7 +340,7 @@ Deno.serve(async (req: Request) => {
       const obj = nn(a.primary_objection);
       const exit = nn(a.exit_intent);
       await admin.from("notifications").insert({
-        practice_id: practiceId,
+        practice_id: consultPracticeId,
         type: "consult_analyzed",
         event: "consult_analyzed",
         title: "New consult ready for review",
