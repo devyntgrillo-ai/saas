@@ -815,7 +815,7 @@ Deno.serve(async (req: Request) => {
     summary.pms_patients_created = patientRows.length;
 
     // ----- 7. Conversations --------------------------------------------------
-    async function makeConversation(c: Consult, msgs: { dir: "inbound" | "outbound"; channel: string; body: string; daysAgo: number; hour: number }[], unread: number) {
+    async function makeConversation(c: Consult, msgs: { dir: "inbound" | "outbound"; channel: string; body: string; daysAgo: number; hour: number; subject?: string }[], unread: number) {
       const consultId = consultIdByName.get(`${c.first} ${c.last}`)!;
       const last = msgs[msgs.length - 1];
       const lastIso = bizTs(last.daysAgo, last.hour, 5);
@@ -827,6 +827,7 @@ Deno.serve(async (req: Request) => {
           patient_first: c.first,
           patient_last: c.last,
           patient_phone: c.phone,
+          patient_email: `${c.first.toLowerCase()}.${c.last.toLowerCase()}@example.com`,
           last_message_at: lastIso,
           last_message_preview: last.body.slice(0, 120),
           unread_count: unread,
@@ -837,7 +838,7 @@ Deno.serve(async (req: Request) => {
       if (convErr) throw new Error(`conversation insert (${c.key}): ${convErr.message}`);
       const cmRows = msgs.map((m) => {
         const iso = bizTs(m.daysAgo, m.hour, (m.hour * 3) % 60);
-        return { conversation_id: conv.id, direction: m.dir, channel: m.channel, body: m.body, sent_at: iso, created_at: iso };
+        return { conversation_id: conv.id, direction: m.dir, channel: m.channel, body: m.body, meta: m.subject ? { subject: m.subject } : null, sent_at: iso, created_at: iso };
       });
       const { error: cmErr } = await admin.from("conversation_messages").insert(cmRows);
       if (cmErr) throw new Error(`conversation_messages insert (${c.key}): ${cmErr.message}`);
@@ -920,9 +921,10 @@ Deno.serve(async (req: Request) => {
       karen,
       [
         { dir: "outbound", channel: "sms", body: "Hi Karen, following up on your full-arch consult — happy to answer anything you and your husband are weighing.", daysAgo: 10, hour: 11 },
-        { dir: "outbound", channel: "email", body: "Hi Karen, sending over the treatment summary and a couple of patient stories in case they're helpful as you decide. We're here whenever you're ready.", daysAgo: 6, hour: 9 },
+        { dir: "outbound", channel: "email", subject: "Your full arch treatment plan and financing options", body: "Hi Karen,\n\nGreat meeting you and your husband today. As promised, here is the full breakdown of your full arch treatment plan along with the financing options we discussed. Most patients are surprised how manageable the monthly number ends up being, and I included a couple of before and after results from patients who were in a similar spot.\n\nWhenever you two are ready, I can hold a surgical date for you. No pressure at all.\n\nWarmly,\nThe Pinnacle Dental team", daysAgo: 6, hour: 9 },
+        { dir: "inbound", channel: "email", subject: "Re: Your full arch treatment plan and financing options", body: "Thank you so much for sending this over. The monthly option actually looks doable. I am going to talk it through with my husband this weekend and should have an answer for you Monday. Really appreciate how patient you have been with us.", daysAgo: 1, hour: 15 },
       ],
-      0,
+      1,
     );
     convMsgCount += karenConv.count;
     await addCall(karenConv.id, consultIdByName.get(`${karen.first} ${karen.last}`)!, {
@@ -936,6 +938,7 @@ Deno.serve(async (req: Request) => {
       jennifer,
       [
         { dir: "outbound", channel: "sms", body: "Hi Jennifer! Great meeting you today. You mentioned wanting to heal before your son's graduation in May — I can walk you through surgical dates whenever you're ready.", daysAgo: 2, hour: 16 },
+        { dir: "outbound", channel: "email", subject: "Your timeline to be ready by graduation", body: "Hi Jennifer,\n\nYou mentioned wanting to feel confident for your son's graduation in May, so I wanted to put the timeline in writing. If we start within the next two weeks, you will be fully healed and smiling for the photos. I attached a simple month by month schedule and the financing summary.\n\nWant me to pencil in a tentative surgery date this week?\n\nTalk soon,\nThe Pinnacle Dental team", daysAgo: 1, hour: 10 },
       ],
       0,
     );
