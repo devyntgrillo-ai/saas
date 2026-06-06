@@ -21,7 +21,22 @@ export async function fetchConversationsList(practiceId) {
     if (res.error) throw res.error
   }
 
-  return data || []
+  const convs = data || []
+  if (!convs.length) return []
+
+  const ids = convs.map((c) => c.id)
+  const { data: recentMsgs } = await supabase
+    .from('conversation_messages')
+    .select('conversation_id, channel, created_at')
+    .in('conversation_id', ids)
+    .order('created_at', { ascending: false })
+
+  const lastChannelByConv = {}
+  for (const m of recentMsgs || []) {
+    if (!lastChannelByConv[m.conversation_id]) lastChannelByConv[m.conversation_id] = m.channel
+  }
+
+  return convs.map((c) => ({ ...c, last_channel: lastChannelByConv[c.id] || null }))
 }
 
 export async function fetchConversationThread(practiceId, conversationId) {
