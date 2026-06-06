@@ -30,6 +30,7 @@ export const queryKeys = {
   unlinkedConsults: (practiceId) => ['practice', practiceId, 'unlinked-consults'],
   processingConsults: (practiceId) => ['practice', practiceId, 'processing-consults'],
   recentConsults: (practiceId) => ['practice', practiceId, 'recent-consults'],
+  consultArchive: (practiceId, search, page) => ['practice', practiceId, 'consult-archive', search, page],
   consult: (consultId) => ['consult', consultId],
   consultMessages: (consultId) => ['consult', consultId, 'messages'],
   consultConversation: (consultId) => ['consult', consultId, 'conversation'],

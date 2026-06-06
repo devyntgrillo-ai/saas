@@ -132,6 +132,43 @@ export function useRecentConsults(practiceId) {
   })
 }
 
+// The persistent, searchable archive of every recorded consult for a practice —
+// powers the paginated "Recordings" list on the Consults page. Excludes the
+// in-progress / empty placeholder states (those live in the processing cards).
+export const ARCHIVE_PAGE_SIZE = 20
+const ARCHIVE_EXCLUDED = '("analyzing","transcribed","new")'
+
+export async function fetchConsultArchive(practiceId, { search = '', page = 0, pageSize = ARCHIVE_PAGE_SIZE } = {}) {
+  if (!practiceId) return { rows: [], total: 0 }
+  const from = page * pageSize
+  let q = supabase
+    .from('consults')
+    .select(
+      'id, patient_name, patient_first, patient_last, treatment_type, status, created_at, recording_date, duration',
+      { count: 'exact' }
+    )
+    .eq('practice_id', practiceId)
+    .not('status', 'in', ARCHIVE_EXCLUDED)
+  const s = search.trim().replace(/[%,()]/g, ' ').trim() // strip chars that break the or() filter
+  if (s) {
+    q = q.or(`patient_name.ilike.%${s}%,patient_first.ilike.%${s}%,patient_last.ilike.%${s}%`)
+  }
+  const { data, count, error } = await q
+    .order('created_at', { ascending: false })
+    .range(from, from + pageSize - 1)
+  if (error) throw error
+  return { rows: data || [], total: count || 0 }
+}
+
+export function useConsultArchive(practiceId, search, page) {
+  return useQuery({
+    queryKey: queryKeys.consultArchive(practiceId, search, page),
+    queryFn: () => fetchConsultArchive(practiceId, { search, page }),
+    enabled: Boolean(practiceId),
+    placeholderData: (prev) => prev, // keep the current page visible while the next loads
+  })
+}
+
 // Realtime: when any consult for this practice changes status, refresh the
 // processing list + the day/sequences/dashboard views so processing cards
 // transition to "ready" without a manual reload. Falls back to the poll above

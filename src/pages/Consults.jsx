@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Mic, Calendar, Search, CheckCircle2, Clock, Check, Circle, Loader2,
-  Plug, ArrowRight,
+  Plug, ArrowRight, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useRecorder } from '../context/RecorderContext'
-import { useConsultsDay, useUnlinkedConsults, useProcessingConsults, useRecentConsults, useConsultsRealtime } from '../lib/queries'
+import { useConsultsDay, useUnlinkedConsults, useProcessingConsults, useRecentConsults, useConsultArchive, ARCHIVE_PAGE_SIZE, useConsultsRealtime } from '../lib/queries'
+import { statusMeta } from '../lib/consults'
 import { supabase } from '../lib/supabase'
 
 const todayStr = () => new Date().toLocaleDateString('en-CA')
@@ -41,6 +42,7 @@ export default function Consults() {
   const navigate = useNavigate()
   const connected = Boolean(practice?.sikka_connected || practice?.pms_connected)
 
+  const [view, setView] = useState('schedule') // 'schedule' (today) | 'recordings' (archive)
   const [date, setDate] = useState(todayStr())
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
@@ -130,18 +132,42 @@ export default function Consults() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight text-white">Consults</h1>
-            {counts.missed > 0 && (
+            {view === 'schedule' && counts.missed > 0 && (
               <span className="rounded-full bg-rose-500/15 px-2.5 py-0.5 text-xs font-semibold text-rose-300">
                 {counts.missed} missed
               </span>
             )}
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            {niceDate} · {counts.all} consult{counts.all === 1 ? '' : 's'} · {counts.recorded} recorded · {counts.needs} to record
+            {view === 'schedule'
+              ? `${niceDate} · ${counts.all} consult${counts.all === 1 ? '' : 's'} · ${counts.recorded} recorded · ${counts.needs} to record`
+              : 'Every recorded consult — search and open any past recording.'}
           </p>
         </div>
       </div>
 
+      {/* Schedule (today's appointments) vs Recordings (full searchable archive). */}
+      <div className="flex gap-6 border-b border-surface-700">
+        {[
+          { key: 'schedule', label: 'Schedule' },
+          { key: 'recordings', label: 'Recordings' },
+        ].map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setView(t.key)}
+            className={`-mb-px border-b-2 px-1 pb-2 text-sm font-medium transition ${
+              view === t.key ? 'border-primary text-white' : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'recordings' ? (
+        <ConsultArchive practiceId={practiceId} navigate={navigate} />
+      ) : (
+      <>
       <div className="flex flex-wrap items-center gap-3">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input h-9 w-auto py-1 text-sm" />
         <div className="flex flex-wrap gap-1">
@@ -211,6 +237,8 @@ export default function Consults() {
             ))}
           </div>
         </section>
+      )}
+      </>
       )}
     </div>
   )
@@ -288,6 +316,97 @@ function CompleteCard({ c, onOpen }) {
         </span>
       </div>
     </button>
+  )
+}
+
+// The persistent, searchable, paginated archive of every recorded consult.
+function ConsultArchive({ practiceId, navigate }) {
+  const [search, setSearch] = useState('')
+  const [debounced, setDebounced] = useState('')
+  const [page, setPage] = useState(0)
+
+  // Debounce the search box (300ms) and reset to the first page on a new query.
+  useEffect(() => {
+    const t = setTimeout(() => { setDebounced(search.trim()); setPage(0) }, 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const { data, isLoading, isFetching } = useConsultArchive(practiceId, debounced, page)
+  const rows = data?.rows ?? []
+  const total = data?.total ?? 0
+  const pageCount = Math.max(1, Math.ceil(total / ARCHIVE_PAGE_SIZE))
+  const first = total === 0 ? 0 : page * ARCHIVE_PAGE_SIZE + 1
+  const last = Math.min(total, (page + 1) * ARCHIVE_PAGE_SIZE)
+
+  return (
+    <div className="space-y-4">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search past consults by patient name..."
+          className="input pl-9"
+        />
+      </div>
+
+      {isLoading ? (
+        <div className="card flex justify-center py-16"><Clock className="h-6 w-6 animate-pulse text-slate-500" /></div>
+      ) : rows.length === 0 ? (
+        <EmptyCard
+          icon={Mic}
+          title={debounced ? 'No recordings match your search' : 'No recorded consults yet'}
+          sub={debounced ? 'Try a different name.' : 'Recorded consults will appear here once analysis completes.'}
+        />
+      ) : (
+        <>
+          <div className="card divide-y divide-surface-700/60 overflow-hidden p-0">
+            {rows.map((c) => {
+              const meta = statusMeta(c.status)
+              const name = c.patient_name || [c.patient_first, c.patient_last].filter(Boolean).join(' ') || 'Unknown patient'
+              const d = c.recording_date || c.created_at
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => navigate(`/consults/${c.id}`)}
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-surface-800"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-slate-100">{name}</p>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">
+                      {c.treatment_type || 'Consult'}{d ? ` · ${new Date(d).toLocaleDateString()}` : ''}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ${meta.classes}`}>{meta.label}</span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-slate-500" />
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-slate-500">
+            <span>Showing {first}–{last} of {total}{isFetching ? ' · updating…' : ''}</span>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={page === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                className="inline-flex items-center gap-0.5 rounded-lg px-2 py-1 font-medium text-slate-300 transition hover:bg-surface-800 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronLeft className="h-4 w-4" /> Prev
+              </button>
+              <span className="tabular-nums">Page {page + 1} of {pageCount}</span>
+              <button
+                disabled={page + 1 >= pageCount}
+                onClick={() => setPage((p) => p + 1)}
+                className="inline-flex items-center gap-0.5 rounded-lg px-2 py-1 font-medium text-slate-300 transition hover:bg-surface-800 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 
