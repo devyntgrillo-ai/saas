@@ -153,9 +153,21 @@ export default function AccountSwitcher() {
           className="animate-dropdown absolute left-2 z-50 mt-1 w-80 max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-surface-700 bg-surface-900 shadow-[0_12px_32px_rgba(0,0,0,0.45)]"
         >
           <div className="p-2.5">
-            {/* Back action — only while inside a specific sub-account. Returns to
-                the reseller view if there's a reseller context behind the
-                impersonation, otherwise to the super-admin view. */}
+            {/* Back action while impersonating. Reseller level (super-admin
+                viewing as a reseller) → straight back to the admin view, so a
+                super-admin is never stranded in a reseller dashboard. Practice
+                level → back to the reseller view if there's a reseller behind it,
+                otherwise to the admin view. */}
+            {isSuperAdmin && isImpersonating && impersonation?.level === 'reseller' && (
+              <button
+                onClick={() => { setOpen(false); exitAgency(); navigate('/admin') }}
+                style={{ color: 'var(--accent)' }}
+                className="mb-2 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-surface-800"
+              >
+                <Shield className="h-4 w-4 shrink-0" />
+                <span className="text-sm font-medium">Back to Super Admin View</span>
+              </button>
+            )}
             {(isSuperAdmin || isAgencyUser) && isImpersonating && impersonation?.level === 'practice' && (() => {
               const toReseller = Boolean(impersonation?.reseller) || isAgencyUser
               const onBack = () => {
