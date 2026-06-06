@@ -56,6 +56,41 @@ export async function fetchUnlinkedConsults(practiceId) {
   return data || []
 }
 
+// Consult-type appointments over the next `days` days (starting tomorrow) —
+// powers the "Upcoming" section of the Schedule tab. Today is handled separately
+// by fetchDayAppointments so its allNote fallback stays intact.
+export async function fetchUpcomingAppointments(practiceId, days = 7) {
+  if (!practiceId) return []
+  const start = new Date()
+  start.setHours(0, 0, 0, 0)
+  start.setDate(start.getDate() + 1) // tomorrow
+  const end = new Date(start)
+  end.setDate(end.getDate() + days)
+
+  const { data, error } = await supabase
+    .from('pms_appointments')
+    .select('*')
+    .eq('practice_id', practiceId)
+    .gte('appointment_time', start.toISOString())
+    .lt('appointment_time', end.toISOString())
+    .order('appointment_time', { ascending: true })
+  if (error) throw error
+
+  const rows = data || []
+  const consultRows = rows.filter((a) => TYPE_RE.test(a.appointment_type || ''))
+  // Mirror the day view: if nothing is consult-typed but there are appointments,
+  // show them all rather than an empty upcoming list.
+  return consultRows.length === 0 && rows.length > 0 ? rows : consultRows
+}
+
+export function useUpcomingAppointments(practiceId) {
+  return useQuery({
+    queryKey: queryKeys.upcomingConsults(practiceId),
+    queryFn: () => fetchUpcomingAppointments(practiceId),
+    enabled: Boolean(practiceId),
+  })
+}
+
 export function useConsultsDay(practiceId, date) {
   return useQuery({
     queryKey: queryKeys.consultsDay(practiceId, date),

@@ -27,6 +27,7 @@ export const queryKeys = {
   networkComparison: (practiceId) => ['practice', practiceId, 'network-comparison'],
   analytics: (practiceId) => ['practice', practiceId, 'analytics'],
   consultsDay: (practiceId, date) => ['practice', practiceId, 'consults-day', date],
+  upcomingConsults: (practiceId) => ['practice', practiceId, 'upcoming-consults'],
   unlinkedConsults: (practiceId) => ['practice', practiceId, 'unlinked-consults'],
   processingConsults: (practiceId) => ['practice', practiceId, 'processing-consults'],
   recentConsults: (practiceId) => ['practice', practiceId, 'recent-consults'],

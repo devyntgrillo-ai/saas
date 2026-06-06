@@ -642,9 +642,9 @@ function PendingSequenceCard({ c }) {
       className="block rounded-xl border border-amber-400/25 bg-amber-400/[0.04] p-4 transition hover:bg-amber-400/[0.08]"
     >
       <div className="flex items-center justify-between gap-3">
-        <p className="truncate text-sm font-semibold text-slate-100">{name} — Sequence Pending</p>
+        <p className="truncate text-sm font-semibold text-slate-100">{name} — Building Sequence</p>
         <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/15 px-2.5 py-1 text-[11px] font-medium text-amber-300">
-          <span className="psq-dot h-1.5 w-1.5 rounded-full bg-amber-400" /> ⚡ Generating sequence...
+          <span className="psq-dot h-1.5 w-1.5 rounded-full bg-amber-400" /> ⚡ Building sequence...
         </span>
       </div>
       <p className="mt-1.5 text-xs text-slate-400">

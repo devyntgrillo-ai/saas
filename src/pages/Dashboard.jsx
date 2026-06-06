@@ -198,7 +198,7 @@ export default function Dashboard() {
       {analyzingCount > 0 && (
         <Link
           to="/consults"
-          className="flex items-center gap-2.5 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm font-medium text-primary-200 transition hover:bg-primary/15"
+          className="flex items-center gap-2.5 rounded-xl border border-primary/40 bg-primary/10 px-4 py-3 text-sm font-medium text-primary-300 transition hover:bg-primary/15 dark:text-primary-200"
         >
           <span className="relative flex h-2.5 w-2.5 shrink-0">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />

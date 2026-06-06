@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useRecorder } from '../context/RecorderContext'
-import { useConsultsDay, useUnlinkedConsults, useProcessingConsults, useRecentConsults, useConsultArchive, ARCHIVE_PAGE_SIZE, useConsultsRealtime } from '../lib/queries'
+import { useConsultsDay, useUpcomingAppointments, useProcessingConsults, useRecentConsults, useConsultArchive, ARCHIVE_PAGE_SIZE, useConsultsRealtime } from '../lib/queries'
 import { statusMeta } from '../lib/consults'
 import { useRecentRecordings } from '../lib/recentRecordings'
 import { supabase } from '../lib/supabase'
@@ -44,50 +44,57 @@ export default function Consults() {
   const connected = Boolean(practice?.sikka_connected || practice?.pms_connected)
 
   const [view, setView] = useState('schedule') // 'schedule' (today) | 'recordings' (archive)
-  const [date, setDate] = useState(todayStr())
+  const [date] = useState(todayStr()) // Schedule is always today-focused.
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
 
   const { data: dayData, isLoading: loading } = useConsultsDay(practiceId, date)
-  const { data: unlinked = [] } = useUnlinkedConsults(practiceId)
+  const { data: upcoming = [] } = useUpcomingAppointments(practiceId)
 
   const appts = useMemo(() => dayData?.appts ?? [], [dayData])
   const allNote = dayData?.allNote ?? false
 
-  // Consults still being transcribed/analyzed — shown as processing cards at the
-  // top. Realtime (with a poll fallback) flips them to normal once 'analyzed'.
+  // Start of "today" (local). Completed walk-in recordings only stay on the
+  // Schedule while they belong to today; older ones live in the Recordings tab.
+  const todayStartMs = useMemo(() => new Date(`${date}T00:00:00`).getTime(), [date])
+
   const { data: processing = [] } = useProcessingConsults(practiceId)
-  // Recently-completed consults (analysis done / errored) — shown as "complete"
-  // cards so a freshly-recorded consult stays put instead of vanishing once it
-  // leaves the processing state. Excludes any already shown as a scheduled row.
+  // Recently-completed consults (analysis done / errored).
   const { data: recentDone = [] } = useRecentConsults(practiceId)
   useConsultsRealtime(practiceId)
-
-  // Just-recorded consults (client-side) merged with the DB processing list so
-  // the "AI is analyzing…" card reliably shows for a short window right after
-  // recording, even when backend analysis finishes in a couple of seconds.
+  // Just-recorded consults (client-side) so the "analyzing" card shows instantly.
   const recentRecordings = useRecentRecordings(practiceId)
+
+  // Consult ids tied to a today appointment — those render as rows in the
+  // schedule table (Record → Processing → green Ready), never as cards.
+  const apptConsultIds = useMemo(
+    () => new Set(appts.filter((a) => a.consult_id).map((a) => a.consult_id)),
+    [appts]
+  )
+
+  // Walk-in (no appointment) consults: analyzing → animated card, done → green
+  // complete card. Appointment-linked ones are excluded — they live in the table.
   const procCards = useMemo(() => {
     const map = new Map()
     processing.forEach((c) => map.set(c.id, c))
     recentRecordings.forEach((r) => {
       if (!map.has(r.id)) map.set(r.id, { id: r.id, patient_name: r.name || undefined, status: 'analyzing' })
     })
-    return [...map.values()]
-  }, [processing, recentRecordings])
-  const processingIds = useMemo(() => new Set(procCards.map((c) => c.id)), [procCards])
+    return [...map.values()].filter((c) => !apptConsultIds.has(c.id))
+  }, [processing, recentRecordings, apptConsultIds])
+  const procCardIds = useMemo(() => new Set(procCards.map((c) => c.id)), [procCards])
 
-  // Consult ids already represented as an appointment row in the current day's
-  // view — those stay as rows (richer: time/type); everything else gets a card.
-  const apptConsultIds = useMemo(
-    () => new Set(appts.filter((a) => a.consult_id).map((a) => a.consult_id)),
-    [appts]
-  )
+  // Today's completed walk-ins only — older completed consults live in Recordings.
   const doneCards = useMemo(
-    () => recentDone.filter((c) => !apptConsultIds.has(c.id) && !processingIds.has(c.id)),
-    [recentDone, apptConsultIds, processingIds]
+    () =>
+      recentDone.filter(
+        (c) =>
+          !apptConsultIds.has(c.id) &&
+          !procCardIds.has(c.id) &&
+          new Date(c.created_at).getTime() >= todayStartMs
+      ),
+    [recentDone, apptConsultIds, procCardIds, todayStartMs]
   )
-  const doneCardIds = useMemo(() => new Set(doneCards.map((c) => c.id)), [doneCards])
 
   // Processing/Ready badges: appointments don't carry the consult's transcription
   // status, so fetch it for the recorded ones and refresh every 15s so a
@@ -115,13 +122,11 @@ export default function Consults() {
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
     return appts.filter((a) => {
-      // Processing consults render as their own cards up top — don't duplicate.
-      if (a.consult_id && processingIds.has(a.consult_id)) return false
       if (statusFilter !== 'all' && statusOf(a) !== statusFilter) return false
       if (q && !fullName(a).toLowerCase().includes(q)) return false
       return true
     })
-  }, [appts, statusFilter, search, processingIds])
+  }, [appts, statusFilter, search])
 
   const counts = useMemo(() => {
     const c = { all: appts.length, needs: 0, recorded: 0, missed: 0 }
@@ -182,30 +187,33 @@ export default function Consults() {
         <ConsultArchive practiceId={practiceId} navigate={navigate} />
       ) : (
       <>
-      <div className="flex flex-wrap items-center gap-3">
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input h-9 w-auto py-1 text-sm" />
-        <div className="flex flex-wrap gap-1">
-          {STATUS_FILTERS.map((f) => (
-            <button key={f.key} onClick={() => setStatusFilter(f.key)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${statusFilter === f.key ? 'bg-primary/10 text-primary-300' : 'text-slate-400 hover:text-slate-200'}`}>
-              {f.label} <span className="text-xs text-slate-500">({f.n})</span>
-            </button>
-          ))}
-        </div>
-        <div className="relative min-w-[180px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search patient name..." className="input pl-9" />
+      {/* ── Today ───────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-slate-200">Today · {niceDate}</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap gap-1">
+            {STATUS_FILTERS.map((f) => (
+              <button key={f.key} onClick={() => setStatusFilter(f.key)}
+                className={`rounded-lg px-2.5 py-1 text-sm font-medium transition ${statusFilter === f.key ? 'bg-primary/10 text-primary-300' : 'text-slate-400 hover:text-slate-200'}`}>
+                {f.label} <span className="text-xs text-slate-500">({f.n})</span>
+              </button>
+            ))}
+          </div>
+          <div className="relative min-w-[160px]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search patient..." className="input h-9 py-1 pl-9 text-sm" />
+          </div>
         </div>
       </div>
 
       {allNote && (
         <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-          Showing all appointments - no consult-type appointments found on this day.
+          Showing all appointments - no consult-type appointments found today.
         </p>
       )}
 
-      {/* Processing + just-completed consults — pinned to the top so a recording
-          stays visible from "analyzing" through "complete" without vanishing. */}
+      {/* In-progress + just-completed walk-in recordings for today. Appointment
+          recordings transition inline in the table below instead. */}
       {(procCards.length > 0 || doneCards.length > 0) && (
         <section className="space-y-2">
           <style>{PROCESSING_CARD_CSS}</style>
@@ -219,12 +227,15 @@ export default function Consults() {
       )}
 
       {!connected ? (
-        <EmptyCard icon={Plug} title="Connect your PMS to see appointments here"
-          action={<Link to="/settings/pms" className="btn-primary mt-4">Connect your PMS</Link>} />
+        (procCards.length > 0 || doneCards.length > 0) ? null : (
+          <EmptyCard icon={Plug} title="Connect your PMS to see your daily schedule here"
+            sub="No PMS? You can still hit record for any walk-in consult."
+            action={<Link to="/settings/pms" className="btn-primary mt-4">Connect your PMS</Link>} />
+        )
       ) : loading ? (
         <div className="card flex justify-center py-16"><Clock className="h-6 w-6 animate-pulse text-slate-500" /></div>
       ) : appts.length === 0 ? (
-        <EmptyCard icon={Calendar} title="CaseLift is ready to listen. Hit record to start your first consult." sub="Pick another date to view the schedule." />
+        <EmptyCard icon={Calendar} title="No consults scheduled today" sub="Hit record for a walk-in, or see what's coming up below." />
       ) : rows.length === 0 ? (
         <EmptyCard icon={Calendar} title="No appointments match your filters" />
       ) : counts.recorded === counts.all ? (
@@ -233,24 +244,9 @@ export default function Consults() {
         <RecordedTable rows={rows} navigate={navigate} openRecorder={openRecorder} consultStatus={consultStatus} />
       )}
 
-      {unlinked.filter((c) => !doneCardIds.has(c.id) && !processingIds.has(c.id)).length > 0 && (
-        <section className="space-y-1.5">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Unlinked recordings</h2>
-          <div className="divide-y divide-surface-700/60 rounded-lg border border-dashed border-surface-700 bg-surface-800/30">
-            {unlinked.filter((c) => !doneCardIds.has(c.id) && !processingIds.has(c.id)).map((c) => (
-              <div key={c.id} className="flex items-center gap-3 px-4 py-2 text-xs">
-                <span className="min-w-0 flex-1 truncate text-slate-400">
-                  {c.patient_name || `Consult · ${new Date(c.created_at).toLocaleDateString()}`}
-                </span>
-                <span className="shrink-0 rounded-full bg-surface-700 px-2 py-0.5 text-[11px] capitalize text-slate-400">{c.status || 'pending'}</span>
-                <span className="shrink-0 text-slate-500">{new Date(c.created_at).toLocaleDateString()}</span>
-                <Link to={`/consults/${c.id}`} className="inline-flex shrink-0 items-center gap-0.5 font-medium text-primary-300 transition hover:text-primary-200">
-                  View <ArrowRight className="h-3 w-3" />
-                </Link>
-              </div>
-            ))}
-          </div>
-        </section>
+      {/* ── Upcoming (next 7 days) ───────────────────────────────────────── */}
+      {upcoming.length > 0 && (
+        <UpcomingSchedule appts={upcoming} navigate={navigate} openRecorder={openRecorder} />
       )}
       </>
       )}
@@ -512,6 +508,61 @@ function RecordedTable({ rows, navigate, openRecorder, caughtUp, consultStatus =
         })}
       </div>
     </div>
+  )
+}
+
+function dayLabel(dayStr) {
+  const d = new Date(`${dayStr}T12:00:00`)
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+}
+
+// Read-ahead schedule for the next 7 days, grouped by day — PMS-style, with a
+// Record button on each so a consult can be started early if needed.
+function UpcomingSchedule({ appts, navigate, openRecorder }) {
+  const groups = useMemo(() => {
+    const m = new Map()
+    appts.forEach((a) => {
+      const key = new Date(a.appointment_time).toLocaleDateString('en-CA')
+      if (!m.has(key)) m.set(key, [])
+      m.get(key).push(a)
+    })
+    return [...m.entries()]
+  }, [appts])
+
+  return (
+    <section className="space-y-3 pt-2">
+      <h2 className="text-sm font-semibold text-slate-200">Upcoming · next 7 days</h2>
+      {groups.map(([day, list]) => (
+        <div key={day} className="space-y-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{dayLabel(day)}</p>
+          <div className="card divide-y divide-surface-700/60 overflow-hidden p-0">
+            {list.map((a) => {
+              const recorded = Boolean(a.consult_id)
+              return (
+                <div key={a.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <span className="w-[64px] shrink-0 text-sm tabular-nums text-slate-400">{fmtTime(a.appointment_time)}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-slate-100">{fullName(a)}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {a.appointment_type || 'Consult'}{a.provider ? ` · ${a.provider}` : ''}
+                    </p>
+                  </div>
+                  {recorded ? (
+                    <button onClick={() => navigate(`/consults/${a.consult_id}`)} className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1.5 text-sm font-medium text-green-700 transition hover:bg-green-200">
+                      <Check className="h-4 w-4" /> View
+                    </button>
+                  ) : (
+                    <button onClick={() => openRecorder(a)} className="inline-flex items-center gap-1.5 rounded-lg border border-surface-600 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:bg-surface-800">
+                      <Mic className="h-3.5 w-3.5" /> Record
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </section>
   )
 }
 

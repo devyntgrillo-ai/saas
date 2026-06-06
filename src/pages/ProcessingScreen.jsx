@@ -247,12 +247,15 @@ export default function ProcessingScreen() {
         {MESSAGES[msgIndex]}
       </p>
 
-      {/* Progress bar — 240px × 3px, fills to 85% over 45s */}
-      <div className="mt-6 h-[3px] w-60 overflow-hidden rounded-full bg-surface-800">
-        <div
-          className="h-full rounded-full bg-primary transition-[width] duration-300 ease-linear"
-          style={{ width: `${progress}%` }}
-        />
+      {/* Progress bar + live percentage */}
+      <div className="mt-6 w-60">
+        <div className="h-[3px] w-full overflow-hidden rounded-full bg-surface-800">
+          <div
+            className="h-full rounded-full bg-primary transition-[width] duration-300 ease-linear"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <p className="mt-2 text-xs font-medium tabular-nums text-primary-300">{Math.round(progress)}% analyzed</p>
       </div>
 
       {/* Info box */}
