@@ -412,6 +412,9 @@ verify_jwt = false
 # Internal adoption alert — invoked by pg_cron with the service-role bearer.
 [functions.check-unrecorded-streak]
 verify_jwt = false
+# One-shot demo-account seeder (service-role only; invoked manually).
+[functions.seed-demo-practice]
+verify_jwt = false
 
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
