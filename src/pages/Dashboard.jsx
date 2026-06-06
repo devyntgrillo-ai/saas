@@ -7,6 +7,7 @@ import {
   Plug,
   DollarSign,
   Info,
+  ArrowRight,
 } from 'lucide-react'
 import { Link, Navigate } from 'react-router-dom'
 import AILearningFeed from '../components/AILearningFeed'
@@ -22,7 +23,7 @@ import {
   countSentMessages,
   closeRateForRows,
 } from '../lib/dashboard'
-import { useDashboard, useNetworkComparison } from '../lib/queries'
+import { useDashboard, useNetworkComparison, useProcessingConsults, useConsultsRealtime } from '../lib/queries'
 
 function parseDate(d) {
   if (!d) return null
@@ -92,6 +93,8 @@ export default function Dashboard() {
   const { practiceId, practice, user, isAgencyUser } = useAuth()
   const { data, isLoading: loading, error, refetch } = useDashboard(practiceId)
   const { data: comparison } = useNetworkComparison(practiceId)
+  const { data: processing = [] } = useProcessingConsults(practiceId)
+  useConsultsRealtime(practiceId)
 
   const consults = data?.consults ?? []
   const messages = data?.messages ?? []
@@ -182,6 +185,21 @@ export default function Dashboard() {
           Here's how your practice is recovering unconverted patients this month.
         </p>
       </div>
+
+      {/* Live "being analyzed" notice — hidden when nothing is processing. */}
+      {processing.length > 0 && (
+        <Link
+          to="/consults"
+          className="flex items-center gap-2.5 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm font-medium text-primary-200 transition hover:bg-primary/15"
+        >
+          <span className="relative flex h-2.5 w-2.5 shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
+          </span>
+          🧠 {processing.length} consultation{processing.length === 1 ? '' : 's'} being analyzed right now
+          <ArrowRight className="ml-auto h-4 w-4" />
+        </Link>
+      )}
 
       {!practiceId && !loading && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
