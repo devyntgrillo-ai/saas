@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
     if (me) return json({ error: me.message }, 400)
     if (!msg) return json({ error: 'Message not found' }, 404)
 
-    const { data: consult } = await supabase.from('consults').select('objection_type, exit_intent_level, primary_objection').eq('id', msg.consult_id).maybeSingle()
+    const { data: consult } = await supabase.from('consults').select('objection_type, exit_intent_level, primary_objection, treatment_type').eq('id', msg.consult_id).maybeSingle()
     const { data: practice } = await supabase.from('practices').select('knowledge_base').eq('id', msg.practice_id).maybeSingle()
 
     let kb = ''
@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
     }
     const insightText = insights.length ? insights.map((i) => `- ${i.finding} Recommendation: ${i.recommendation}`).join('\n') : 'No specific network insights for this patient type yet.'
 
-    const prompt = `You are optimizing a single dental-implant follow-up message. Rewrite it to be more likely to get a reply for this patient type, using the practice intelligence and proven network insights below. Keep the same channel (${msg.channel}) and keep it natural and human. Preserve any template variables like {{first_name}}. Never use em dashes (—) in any generated content. Use short sentences, commas, or periods instead.\n\nPatient type: ${consult?.objection_type || 'unknown'} objection, ${consult?.exit_intent_level || 'unknown'} intent.\n\nPractice Intelligence:\n${kb || '(none yet)'}\n\nNetwork insights for this patient type:\n${insightText}\n\nCurrent message:\n${msg.body}\n\nReturn ONLY a JSON object: {"optimized": "the rewritten message", "explanation": "1-2 sentences on what changed and why"}. No markdown.`
+    const prompt = `You are optimizing a single dental follow-up message. The consult is for ${consult?.treatment_type || 'an unspecified treatment'} - do not assume dental implants; keep the message consistent with that treatment. Rewrite it to be more likely to get a reply for this patient type, using the practice intelligence and proven network insights below. Keep the same channel (${msg.channel}) and keep it natural and human. Preserve any template variables like {{first_name}}. Never use em dashes (—) in any generated content. Use short sentences, commas, or periods instead.\n\nPatient type: ${consult?.objection_type || 'unknown'} objection, ${consult?.exit_intent_level || 'unknown'} intent.\n\nPractice Intelligence:\n${kb || '(none yet)'}\n\nNetwork insights for this patient type:\n${insightText}\n\nCurrent message:\n${msg.body}\n\nReturn ONLY a JSON object: {"optimized": "the rewritten message", "explanation": "1-2 sentences on what changed and why"}. No markdown.`
 
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',

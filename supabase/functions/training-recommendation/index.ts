@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
       })
       .join('\n\n')
 
-    const prompt = `You are a sales coach for dental-implant treatment coordinators (TCs). Below are the practice's ${consults.length} most recent analyzed consults, plus the training modules available to them. Identify the single most valuable thing this team should study or practice next, based on recurring patterns across these consults (common objections, exit-intent mix, missed actions, lost outcomes).
+    const prompt = `You are a sales coach for dental treatment coordinators (TCs). Their consults span many treatment types (implants, Invisalign, veneers, cosmetic, sleep apnea, perio, and more), so do not assume implants. Below are the practice's ${consults.length} most recent analyzed consults, plus the training modules available to them. Identify the single most valuable thing this team should study or practice next, based on recurring patterns across these consults (common objections, exit-intent mix, missed actions, lost outcomes).
 
 Write a SHORT, specific, encouraging recommendation the TC reads on their Training page. Hard limit: at most 2 sentences, roughly 45 words. Name the one recurring pattern, then the single action plus the most relevant module to study next. Do NOT enumerate individual consult numbers. Name at most one module (a second only if it is truly complementary), and ONLY use modules that appear verbatim in the AVAILABLE TRAINING MODULES list, never invent one. Be direct. Never use em dashes (-) ; use commas or periods instead.
 

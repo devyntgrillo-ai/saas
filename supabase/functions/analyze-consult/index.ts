@@ -30,13 +30,15 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 // ---- Claude analysis --------------------------------------------------------
-const analysisSystemPrompt = (treatmentType: string) => `You are CaseLift, an AI system that analyzes dental consultation recordings to help treatment coordinators recover unconverted patients.
+const analysisSystemPrompt = (treatmentType: string) => `You are CaseLift, an AI system that analyzes dental consultation recordings to help treatment coordinators recover unconverted patients. Practices run many kinds of consults, NOT just dental implants - it could be Invisalign or clear aligners, cosmetic veneers, crowns or bridges, sleep apnea, periodontal, full-arch, full-mouth rehab, general or restorative dentistry, and more.
 
-Treatment type being analyzed: ${treatmentType}
+Treatment type hint (pre-filled at booking, often just a default and sometimes wrong): ${treatmentType}
+
+CRITICAL: Do NOT assume this is a dental implant consult. Identify the ACTUAL treatment being discussed from the transcript itself - the procedure named, what the patient and coordinator actually talk about, and the concerns raised. If the hint above conflicts with the transcript, trust the transcript. Tailor your entire analysis and every follow-up message to the treatment the patient is actually considering, and report what you identified in the treatment_type field.
 
 Analyze the transcript and call the emit_analysis tool with your structured analysis. Never use em dashes (—) under any circumstances. Use commas, periods, or short sentences instead.
 
-Adapt your analysis based on treatment type:
+Use the playbook below that matches the treatment you identify (these are guides, not limits):
 
 For dental_implants / full_arch:
 - Primary objections: price, fear_surgery, spouse_approval, timing, health_concerns
@@ -70,6 +72,7 @@ For full_mouth_rehab / other:
 
 Populate exactly these fields (this is the emit_analysis tool's schema):
 {
+  "treatment_type": "the treatment you identified from the transcript (e.g. dental_implants, full_arch, invisalign, cosmetic_veneers, sleep_apnea, periodontal, full_mouth_rehab, general, or a short descriptive label). Base this on the conversation, not the hint.",
   "what_happened": "2-3 sentence narrative of what happened in the consult",
   "primary_objection": "one of the objection types listed above for this treatment",
   "primary_objection_detail": "specific detail from the conversation",
@@ -98,6 +101,7 @@ const ANALYSIS_SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
+    treatment_type: STR,
     what_happened: STR,
     primary_objection: STR,
     primary_objection_detail: STR,
@@ -121,6 +125,7 @@ const ANALYSIS_SCHEMA = {
     email_3_body: STR,
   },
   required: [
+    "treatment_type",
     "what_happened", "primary_objection", "primary_objection_detail", "secondary_objection",
     "secondary_objection_detail", "exit_intent", "exit_intent_detail", "personal_detail",
     "coaching_insight", "downsell_opportunity", "tc_action",
@@ -237,7 +242,9 @@ Deno.serve(async (req: Request) => {
     if (!anthropicKey) return json({ error: "Analysis is unavailable - ANTHROPIC_API_KEY is not configured." }, 503);
     const anthropic = new Anthropic({ apiKey: anthropicKey });
 
-    const treatmentType = nn(consult.treatment_type) ?? "dental_implants";
+    // Pass the stored type only as a hint - never default to implants. The model
+    // identifies the real treatment from the transcript (see system prompt).
+    const treatmentType = nn(consult.treatment_type) ?? "unknown (identify from the transcript)";
 
     let a: Record<string, unknown>;
     try {
@@ -277,6 +284,13 @@ Deno.serve(async (req: Request) => {
       downsell_opportunity: nn(a.downsell_opportunity),
       tc_action: nn(a.tc_action),
     };
+
+    // Backfill the treatment type from what the AI identified in the transcript,
+    // but only when the consult had none set - don't clobber a TC/PMS choice.
+    const detectedType = nn(a.treatment_type);
+    if (detectedType && !nn(consult.treatment_type)) {
+      record.treatment_type = detectedType;
+    }
 
     // Treatment-value estimate: only fill it in when the consult lacks an
     // authoritative value. Never overwrite a manual or PMS-sourced value.
