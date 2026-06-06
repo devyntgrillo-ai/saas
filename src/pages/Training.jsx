@@ -43,7 +43,7 @@ export default function Training() {
   // callers control when state updates happen.
   async function loadRec(pid, force) {
     if (!pid) return { skip: true }
-    const cacheKey = `ciq_training_rec_${pid}`
+    const cacheKey = `ciq_training_rec_v2_${pid}`
     if (!force) {
       try {
         const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null')
@@ -54,9 +54,10 @@ export default function Training() {
     }
     try {
       const data = await fetchTrainingRecommendation(pid)
-      // Only cache real AI results; retry the AI path next load when we had to
-      // fall back to the local heuristic (e.g. edge function not yet deployed).
-      if (data?.source !== 'heuristic') {
+      // Only cache real AI results with an actual recommendation; retry next load
+      // when we fell back to the local heuristic OR got the empty "record a few
+      // consults" placeholder (based_on 0), so a real rec isn't masked by a cache.
+      if (data?.source !== 'heuristic' && (data?.based_on ?? 0) > 0) {
         localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data }))
       }
       return { data }
