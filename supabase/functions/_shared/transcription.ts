@@ -47,6 +47,94 @@ export async function transcribeAudioWhisper(apiKey: string, blob: Blob, filenam
   }
 }
 
+export interface TranscriptSegment {
+  start: number;
+  text: string;
+}
+
+// Like transcribeAudioWhisper, but asks Whisper for verbose_json with per-segment
+// timestamps so we can render the consult as a timestamped, turn-by-turn dialogue.
+export async function transcribeAudioWhisperVerbose(
+  apiKey: string,
+  blob: Blob,
+  filename = "recording.mp3",
+): Promise<{ text: string; segments: TranscriptSegment[] }> {
+  const form = new FormData();
+  form.append("file", blob, filename);
+  form.append("model", "whisper-1");
+  form.append("response_format", "verbose_json");
+  form.append("timestamp_granularities[]", "segment");
+  const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form,
+  });
+  const rawBody = await res.text();
+  if (!res.ok) {
+    let detail = rawBody;
+    try {
+      const err = JSON.parse(rawBody)?.error;
+      if (err) detail = `${err.type ?? "error"}${err.code ? ` (${err.code})` : ""}: ${err.message ?? rawBody}`;
+    } catch { /* not JSON */ }
+    console.error(`Whisper API error - status=${res.status}; file=${filename}; size=${blob.size}B; body=${rawBody}`);
+    throw new Error(`Whisper transcription failed (${res.status}): ${detail}`);
+  }
+  try {
+    const parsed = JSON.parse(rawBody);
+    const segments: TranscriptSegment[] = Array.isArray(parsed.segments)
+      ? parsed.segments
+          .map((s: { start?: number; text?: string }) => ({ start: Number(s.start) || 0, text: String(s.text || "").trim() }))
+          .filter((s: TranscriptSegment) => s.text)
+      : [];
+    return { text: parsed.text ?? "", segments };
+  } catch {
+    throw new Error("Whisper returned an unparseable response body.");
+  }
+}
+
+function mmss(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+// Non-AI fallback: render segments as timestamped lines (no speaker labels).
+export function formatSegments(segments: TranscriptSegment[]): string {
+  return segments.map((s) => `[${mmss(s.start)}] ${s.text}`).join("\n");
+}
+
+// Use a cheap LLM pass to turn timestamped segments into a two-speaker dialogue
+// (TC vs Patient), one line per turn, formatted "[TC] m:ss — text". Input should
+// already be de-identified. Throws on any failure so callers can fall back to
+// formatSegments().
+export async function diarizeSegments(apiKey: string, segments: TranscriptSegment[]): Promise<string> {
+  if (!segments.length) return "";
+  const numbered = segments.map((s, i) => `${i}\t${mmss(s.start)}\t${s.text}`).join("\n");
+  const system =
+    "You format a dental treatment-consultation transcript into a readable two-speaker dialogue. " +
+    'The speakers are the treatment coordinator/clinician ("TC") and the "Patient". Decide, from the content, ' +
+    "who is speaking in each segment: the TC explains treatment, cost, financing, and scheduling and asks qualifying " +
+    "questions; the Patient asks questions and raises concerns or objections. Merge consecutive segments from the same " +
+    "speaker into a single turn, using the timestamp of that turn's first segment. Output ONLY the dialogue, one line " +
+    "per turn, in EXACTLY this format with no extra commentary:\n[TC] m:ss — text\n[Patient] m:ss — text\n" +
+    "Keep the wording verbatim. Never use em dashes inside the spoken text; use commas or periods instead.";
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      temperature: 0,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: `Segments (index, timestamp, text):\n${numbered}` },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`Diarization failed (${res.status})`);
+  const out = (await res.json())?.choices?.[0]?.message?.content?.trim();
+  if (!out) throw new Error("Diarization returned empty content.");
+  return out;
+}
+
 /** Download a Twilio recording (.mp3 URL) using API key auth. */
 export async function downloadTwilioRecording(recordingUrl: string): Promise<Blob> {
   const sid = Deno.env.get("TWILIO_API_KEY_SID");

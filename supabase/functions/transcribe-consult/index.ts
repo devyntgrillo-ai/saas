@@ -12,7 +12,7 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { resolveAuth } from "../_shared/auth.ts";
-import { stripPHI, transcribeAudioWhisper } from "../_shared/transcription.ts";
+import { stripPHI, transcribeAudioWhisperVerbose, diarizeSegments, formatSegments } from "../_shared/transcription.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,9 +39,13 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const auditClient = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // Transcript: text passthrough or transcribe stored audio.
-    let transcript: string | undefined = body.transcript;
-    if (!transcript && body.audio_path) {
+    // Transcript: text passthrough, or transcribe stored audio into a timestamped,
+    // speaker-labeled dialogue (TC vs Patient) so the consult reads as a back-and-forth.
+    let deidentified: string | undefined;
+    if (typeof body.transcript === "string" && body.transcript.trim()) {
+      // Caller supplied raw text - just de-identify it (no timestamps/speakers).
+      deidentified = stripPHI(body.transcript);
+    } else if (body.audio_path) {
       const openaiKey = Deno.env.get("OPENAI_API_KEY");
       if (!openaiKey) return json({ error: "Transcription is unavailable - OPENAI_API_KEY is not configured." }, 503);
       await admin.storage.createBucket(BUCKET, { public: false }).catch(() => {});
@@ -51,18 +55,33 @@ Deno.serve(async (req: Request) => {
         return json({ error: `Could not read the uploaded audio from storage (${body.audio_path}).` }, 502);
       }
       try {
-        transcript = await transcribeAudioWhisper(openaiKey, file as Blob, body.audio_path.split("/").pop());
+        const { text, segments } = await transcribeAudioWhisperVerbose(openaiKey, file as Blob, body.audio_path.split("/").pop());
+        if (!text.trim()) {
+          return json({ error: "No transcript could be produced - the recording may be empty or unreadable." }, 422);
+        }
+        // De-identify each segment BEFORE the diarization LLM sees it, so PHI never
+        // leaves in the dialogue step. Then label speakers; fall back to plain
+        // timestamped lines if diarization fails, so we never lose the transcript.
+        const deidentSegments = segments.map((s) => ({ start: s.start, text: stripPHI(s.text) }));
+        if (deidentSegments.length) {
+          try {
+            deidentified = await diarizeSegments(openaiKey, deidentSegments);
+          } catch (e) {
+            console.warn("Diarization failed, falling back to timestamped lines:", (e as Error)?.message ?? e);
+            deidentified = formatSegments(deidentSegments);
+          }
+        } else {
+          deidentified = stripPHI(text);
+        }
       } catch (e) {
         const detail = (e as Error)?.message ?? String(e);
         console.error(`Transcription failed (audio_path=${body.audio_path}):`, detail);
         return json({ error: "Transcription failed.", detail }, 502);
       }
     }
-    if (!transcript || typeof transcript !== "string" || !transcript.trim()) {
+    if (!deidentified || !deidentified.trim()) {
       return json({ error: "No transcript could be produced - the recording may be empty or unreadable." }, 422);
     }
-
-    const deidentified = stripPHI(transcript);
 
     // Save the consult immediately with status "transcribed".
     const record: Record<string, unknown> = {
