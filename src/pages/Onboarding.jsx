@@ -1,33 +1,33 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Building2,
-  Mic,
-  Plug,
+  CreditCard,
+  ShieldCheck,
+  MessageSquare,
   UserPlus,
-  PartyPopper,
-  Copy,
   Check,
   Loader2,
-  CheckCircle2,
   ArrowRight,
-  ArrowLeft,
-  Zap,
-  XCircle,
-  PhoneCall,
-  MessagesSquare,
-  GraduationCap,
+  CheckCircle2,
+  Lock,
+  Mail,
 } from 'lucide-react'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { createCheckout } from '../lib/billing'
+import PhoneSetupWizard from '../components/PhoneSetupWizard'
 
+// Steps are intentionally NOT labeled "Step 1 of 5" anywhere — the sidebar just
+// lists the named stages with quiet completion ticks (Asana/ClickUp feel). Each
+// stage saves independently so a practice can leave and resume any time.
 const STEPS = [
-  { key: 'profile', label: 'Practice', icon: Building2 },
-  { key: 'plaud', label: 'Plaud', icon: Mic },
-  { key: 'phone', label: 'Phone', icon: Plug },
-  { key: 'tc', label: 'Invite TC', icon: UserPlus },
-  { key: 'done', label: 'Done', icon: PartyPopper },
+  { key: 'profile', label: 'Practice details', icon: Building2, blurb: 'Tell us about your practice.' },
+  { key: 'payment', label: 'Activate your plan', icon: CreditCard, blurb: 'Start your subscription.' },
+  { key: 'baa', label: 'Sign the BAA', icon: ShieldCheck, blurb: 'HIPAA business associate agreement.' },
+  { key: 'a2p', label: 'Carrier registration', icon: MessageSquare, blurb: 'Get SMS approved fast.' },
+  { key: 'team', label: 'Invite your team', icon: UserPlus, blurb: 'Bring in your coordinators.' },
 ]
 
 function Field({ label, children }) {
@@ -39,420 +39,357 @@ function Field({ label, children }) {
   )
 }
 
-function TestResult({ state }) {
-  if (state === 'ok')
-    return (
-      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-300">
-        <CheckCircle2 className="h-4 w-4" /> Connection looks good
-      </span>
-    )
-  if (state === 'fail')
-    return (
-      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-rose-300">
-        <XCircle className="h-4 w-4" /> Fill in the fields above first
-      </span>
-    )
-  return null
-}
-
 export default function Onboarding() {
   const { practice, practiceId, refreshProfile, isAgencyUser } = useAuth()
   const navigate = useNavigate()
-  const [stepIdx, setStepIdx] = useState(0)
-  const step = STEPS[stepIdx].key
+  const [searchParams, setSearchParams] = useSearchParams()
 
-  const [form, setForm] = useState({
-    name: '',
-    doctor_first: '',
-    doctor_last: '',
-    phone: '',
-    address: '',
-  })
+  const [active, setActive] = useState(0)
+  const [seeded, setSeeded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
-  const [copied, setCopied] = useState(false)
-  const [plaudTest, setPlaudTest] = useState(null)
-  const [testing, setTesting] = useState(false)
-  const [tcEmail, setTcEmail] = useState('')
-  const [inviteState, setInviteState] = useState(null) // null | sending | sent
+
+  const [form, setForm] = useState({ name: '', doctor_first: '', doctor_last: '', phone: '', address: '' })
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
-  // Agency users manage clients elsewhere; they shouldn't see onboarding.
+  const [baaAgree, setBaaAgree] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('member')
+  const [inviting, setInviting] = useState(false)
+  const [invited, setInvited] = useState([])
+
+  // Agency users manage clients elsewhere — they never see practice onboarding.
   useEffect(() => {
     if (isAgencyUser) navigate('/agency', { replace: true })
   }, [isAgencyUser, navigate])
 
-  // Already done → straight to the app.
-  useEffect(() => {
-    if (practice?.onboarding_completed) navigate('/', { replace: true })
-  }, [practice?.onboarding_completed, navigate])
-
-  useEffect(() => {
-    if (practice) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setForm((f) => ({
-        ...f,
-        name: practice.name || '',
-        doctor_first: practice.doctor_first || '',
-        doctor_last: practice.doctor_last || '',
-        phone: practice.phone || '',
-        address: practice.address || practice.location || '',
-      }))
+  // Per-step completion, derived from the practice's own data so it stays correct
+  // across reloads and the Chargebee redirect round-trip.
+  const done = useMemo(() => {
+    const p = practice || {}
+    return {
+      profile: Boolean((p.name || '').trim() && (p.phone || '').trim()),
+      payment: p.subscription_status === 'active',
+      baa: Boolean(p.baa_accepted_at),
+      a2p: Boolean(p.a2p_submitted_at) || (p.a2p_brand_status && p.a2p_brand_status !== 'unregistered') || Boolean(p.twilio_phone_e164 || p.twilio_phone_number),
+      team: Boolean(p.onboarding_completed) || invited.length > 0,
     }
-  }, [practice])
+  }, [practice, invited.length])
+  const doneList = STEPS.map((s) => done[s.key])
 
-  const webhookBase = import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co'
-  const webhookUrl = useMemo(
-    () => (practiceId ? `${webhookBase}/functions/v1/plaud-ingest/${practiceId}` : ''),
-    [practiceId, webhookBase]
-  )
+  // Seed the form + open the right step once the practice loads. Prefer the
+  // saved onboarding_step; otherwise the first incomplete step. Returning from
+  // Chargebee (?success) refreshes and lands on payment.
+  useEffect(() => {
+    if (!practice || seeded) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setForm({
+      name: practice.name || '',
+      doctor_first: practice.doctor_first || '',
+      doctor_last: practice.doctor_last || '',
+      phone: practice.phone || '',
+      address: practice.address || practice.location || '',
+    })
+    const firstIncomplete = STEPS.findIndex((s) => !done[s.key])
+    const fromUrl = searchParams.get('step')
+    const initial = searchParams.get('success')
+      ? 1
+      : fromUrl != null
+        ? Math.max(0, Math.min(STEPS.length - 1, Number(fromUrl)))
+        : typeof practice.onboarding_step === 'number' && practice.onboarding_step > 0
+          ? Math.min(practice.onboarding_step, STEPS.length - 1)
+          : firstIncomplete === -1 ? STEPS.length - 1 : firstIncomplete
+    setActive(initial)
+    setSeeded(true)
+    if (searchParams.get('success')) { void refreshProfile() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [practice, seeded])
 
-  async function savePatch(patch, { refresh = false } = {}) {
-    if (!practiceId) {
-      setSaveError('Your account is not linked to a practice yet. Sign out and sign back in, or contact support.')
-      return new Error('no_practice')
-    }
-    setSaving(true)
+  async function persistStep(idx) {
+    if (!practiceId) return
+    await supabase.from('practices').update({ onboarding_step: idx }).eq('id', practiceId).then(() => {}, () => {})
+  }
+
+  function goTo(idx) {
+    setActive(idx)
     setSaveError('')
+    void persistStep(idx)
+    try { setSearchParams({}, { replace: true }) } catch { /* noop */ }
+  }
+  function nextStep() { goTo(Math.min(active + 1, STEPS.length - 1)) }
+
+  async function savePatch(patch, { refresh = true } = {}) {
+    if (!practiceId) { setSaveError('Your account is not linked to a practice yet. Sign out and back in, or contact support.'); return false }
+    setSaving(true); setSaveError('')
     const { error } = await supabase.from('practices').update(patch).eq('id', practiceId)
     setSaving(false)
-    if (error) {
-      setSaveError(error.message || 'Could not save. Please try again.')
-      return error
-    }
-    if (refresh) void refreshProfile()
-    return null
+    if (error) { setSaveError(error.message || 'Could not save. Please try again.'); return false }
+    if (refresh) await refreshProfile()
+    return true
   }
 
-  function next() {
-    setStepIdx((i) => Math.min(i + 1, STEPS.length - 1))
-  }
-  function back() {
-    setStepIdx((i) => Math.max(i - 1, 0))
+  async function saveProfile() {
+    const ok = await savePatch({ name: form.name, doctor_first: form.doctor_first, doctor_last: form.doctor_last, phone: form.phone, address: form.address })
+    if (ok) nextStep()
   }
 
-  async function saveProfileAndNext() {
-    const err = await savePatch({
-      name: form.name,
-      doctor_first: form.doctor_first,
-      doctor_last: form.doctor_last,
-      phone: form.phone,
-      address: form.address,
-    })
-    if (!err) {
-      next()
-      void refreshProfile()
-    }
-  }
-
-  async function copyWebhook() {
+  async function startCheckout() {
+    setSaving(true); setSaveError('')
     try {
-      await navigator.clipboard.writeText(webhookUrl)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      /* clipboard unavailable */
+      const { url } = await createCheckout({
+        practiceId,
+        email: practice?.email,
+        planAmount: practice?.plan_amount,
+        redirectPath: '/onboarding?success=true',
+      })
+      window.location.href = url
+    } catch (e) {
+      setSaveError(e?.message || 'Could not start checkout. Please try again.')
+      setSaving(false)
     }
   }
 
-  async function testPlaud() {
-    setTesting(true)
-    setPlaudTest(null)
-    await new Promise((r) => setTimeout(r, 700))
-    setPlaudTest(webhookUrl ? 'ok' : 'fail')
-    setTesting(false)
-  }
-
-  async function connectPlaudAndNext() {
-    const err = await savePatch({ plaud_webhook_url: webhookUrl })
-    if (!err) {
-      next()
-      void refreshProfile()
-    }
+  async function acceptBaa() {
+    if (!baaAgree) return
+    const ok = await savePatch({ baa_accepted_at: new Date().toISOString() })
+    if (ok) nextStep()
   }
 
   async function sendInvite() {
-    if (!tcEmail.trim()) return
-    setInviteState('sending')
+    const email = inviteEmail.trim()
+    if (!email) return
+    setInviting(true)
     try {
       await supabase.functions.invoke('invite-team-member', {
         body: {
           practice_id: practiceId,
-          email: tcEmail.trim(),
-          role: 'member',
-          access_level: 'practice_member',
+          email,
+          role: inviteRole,
+          access_level: inviteRole === 'admin' ? 'practice_admin' : 'practice_member',
           app_origin: window.location.origin,
         },
       })
-    } catch {
-      /* function optional in some environments - treat as queued */
-    }
-    setInviteState('sent')
+    } catch { /* treat as queued */ }
+    setInvited((prev) => [...prev, email])
+    setInviteEmail('')
+    setInviting(false)
   }
 
   async function finish() {
-    const err = await savePatch({ onboarding_completed: true })
-    if (!err) {
-      await refreshProfile()
-      navigate('/', { replace: true })
-    }
+    const ok = await savePatch({ onboarding_completed: true })
+    if (ok) navigate('/', { replace: true })
   }
 
-  return (
-    <div className="flex min-h-screen flex-col bg-surface">
-      {/* Header */}
-      <header className="border-b border-surface-700 px-4 py-4 sm:px-6">
-        <div className="mx-auto flex max-w-3xl items-center justify-between">
-          <Logo />
-          <button
-            type="button"
-            onClick={finish}
-            className="text-xs font-medium text-slate-500 transition hover:text-slate-300"
-          >
-            Skip setup for now
-          </button>
-        </div>
-      </header>
+  const stepKey = STEPS[active].key
+  const planPrice = Number(practice?.plan_amount) > 0 ? Number(practice.plan_amount) : 997
 
-      {/* Stepper */}
-      <div className="border-b border-surface-700 px-4 py-4 sm:px-6">
-        <ol className="mx-auto flex max-w-3xl items-center justify-between">
+  return (
+    <div className="flex min-h-screen flex-col bg-surface lg:flex-row">
+      {/* ── Sidebar: brand + stage list (no "step N of 5" anywhere) ─────────── */}
+      <aside className="shrink-0 border-b border-surface-700 bg-surface-900 px-6 py-6 lg:w-80 lg:border-b-0 lg:border-r lg:py-8">
+        <Logo />
+        <p className="mt-6 hidden text-sm font-medium text-slate-300 lg:block">Welcome to CaseLift</p>
+        <p className="mt-0.5 hidden text-xs text-slate-500 lg:block">Let’s get your practice set up. You can leave and pick up right where you left off.</p>
+
+        <ol className="mt-6 space-y-1">
           {STEPS.map((s, i) => {
             const Icon = s.icon
-            const active = i === stepIdx
-            const done = i < stepIdx
+            const isActive = i === active
+            const isDone = doneList[i]
             return (
-              <li key={s.key} className="flex flex-1 items-center last:flex-none">
-                <div className="flex flex-col items-center gap-1.5">
-                  <div
-                    className={[
-                      'flex h-9 w-9 items-center justify-center rounded-full border transition',
-                      done
-                        ? 'border-primary bg-primary !text-white'
-                        : active
-                          ? 'border-primary bg-primary/10 text-primary-300'
-                          : 'border-surface-700 bg-surface-800 text-slate-500',
-                    ].join(' ')}
+              <li key={s.key}>
+                <button
+                  type="button"
+                  onClick={() => goTo(i)}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
+                    isActive ? 'bg-surface-800' : 'hover:bg-surface-800/60'
+                  }`}
+                >
+                  <span
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs transition ${
+                      isDone
+                        ? 'border-emerald-500 bg-emerald-500 !text-white'
+                        : isActive
+                          ? 'border-primary bg-primary/15 text-primary-300'
+                          : 'border-surface-600 bg-surface-800 text-slate-500'
+                    }`}
                   >
-                    {done ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
-                  </div>
-                  <span className={`text-[11px] font-medium ${active ? 'text-slate-200' : 'text-slate-500'}`}>
-                    {s.label}
+                    {isDone ? <Check className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
                   </span>
-                </div>
-                {i < STEPS.length - 1 && (
-                  <div className={`mx-2 h-px flex-1 ${done ? 'bg-primary' : 'bg-surface-700'}`} />
-                )}
+                  <span className="min-w-0">
+                    <span className={`block truncate text-sm font-medium ${isActive || isDone ? 'text-slate-100' : 'text-slate-400'}`}>{s.label}</span>
+                    <span className="block truncate text-[11px] text-slate-500">{isDone ? 'Completed' : s.blurb}</span>
+                  </span>
+                </button>
               </li>
             )
           })}
         </ol>
-      </div>
 
-      {/* Body */}
-      <main className="flex flex-1 items-start justify-center px-4 py-8 sm:px-6">
+        <button
+          type="button"
+          onClick={() => navigate('/', { replace: true })}
+          className="mt-6 text-xs font-medium text-slate-500 transition hover:text-slate-300"
+        >
+          I’ll finish later
+        </button>
+      </aside>
+
+      {/* ── Content panel ──────────────────────────────────────────────────── */}
+      <main className="flex flex-1 items-start justify-center px-4 py-8 sm:px-8 lg:py-14">
         <div className="w-full max-w-xl">
-          {step === 'profile' && (
-            <div className="card p-6">
-              <h1 className="text-lg font-semibold text-white">Let's introduce CaseLift to your practice.</h1>
-              <p className="mt-1 text-sm text-slate-400">
-                Meet CaseLift. She's your AI team member for patient conversion. This personalizes the
-                follow-ups your patients receive.
-              </p>
-              {saveError && (
-                <p className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                  {saveError}
-                </p>
-              )}
+          {saveError && (
+            <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{saveError}</p>
+          )}
+
+          {/* 1. Practice details */}
+          {stepKey === 'profile' && (
+            <section>
+              <h1 className="text-2xl font-bold tracking-tight text-white">Tell us about your practice</h1>
+              <p className="mt-1.5 text-sm text-slate-400">This personalizes the follow-ups your patients receive.</p>
               <form
-                className="mt-5"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  if (!saving && form.name.trim()) saveProfileAndNext()
-                }}
+                className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2"
+                onSubmit={(e) => { e.preventDefault(); if (!saving && form.name.trim()) saveProfile() }}
               >
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <Field label="Practice name">
-                    <input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Perry Family Dentistry" />
-                  </Field>
+                  <Field label="Practice name"><input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Pinnacle Dental" /></Field>
                 </div>
-                <Field label="Doctor first name">
-                  <input className="input" value={form.doctor_first} onChange={(e) => set('doctor_first', e.target.value)} />
-                </Field>
-                <Field label="Doctor last name">
-                  <input className="input" value={form.doctor_last} onChange={(e) => set('doctor_last', e.target.value)} />
-                </Field>
-                <Field label="Phone">
-                  <input className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="(512) 555-0142" />
-                </Field>
+                <Field label="Doctor first name"><input className="input" value={form.doctor_first} onChange={(e) => set('doctor_first', e.target.value)} /></Field>
+                <Field label="Doctor last name"><input className="input" value={form.doctor_last} onChange={(e) => set('doctor_last', e.target.value)} /></Field>
+                <Field label="Office phone"><input className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="(480) 555-0142" /></Field>
                 <div className="sm:col-span-2">
-                  <Field label="Address">
-                    <input className="input" value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="123 Main St, Austin, TX 78701" />
-                  </Field>
+                  <Field label="Address"><input className="input" value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="123 Main St, Phoenix, AZ 85001" /></Field>
                 </div>
-              </div>
-              <div className="mt-6 flex justify-end">
-                <button type="submit" disabled={saving || !form.name.trim()} className="btn-primary">
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Continue <ArrowRight className="h-4 w-4" />
-                </button>
-              </div>
+                <div className="sm:col-span-2 mt-2 flex justify-end">
+                  <button type="submit" disabled={saving || !form.name.trim()} className="btn-primary">
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save &amp; continue <ArrowRight className="h-4 w-4" />
+                  </button>
+                </div>
               </form>
-            </div>
+            </section>
           )}
 
-          {step === 'plaud' && (
-            <div className="card p-6">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary-400">
-                <Mic className="h-5 w-5" />
-              </div>
-              <h1 className="mt-4 text-lg font-semibold text-white">Connect your Plaud recorder</h1>
-              <p className="mt-1 text-sm text-slate-400">
-                CaseLift listens to every consult so nothing slips through the cracks. Paste this webhook
-                into Plaud AutoFlow so recorded consults flow into CaseLift automatically.
-              </p>
-              <div className="mt-5">
-                <Field label="Webhook URL">
-                  <div className="flex gap-2">
-                    <input className="input font-mono text-xs" readOnly value={webhookUrl} />
-                    <button onClick={copyWebhook} type="button" className="btn-ghost shrink-0">
-                      {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
-                      {copied ? 'Copied' : 'Copy'}
-                    </button>
+          {/* 2. Activate plan (payment) */}
+          {stepKey === 'payment' && (
+            <section>
+              <h1 className="text-2xl font-bold tracking-tight text-white">Activate your plan</h1>
+              <p className="mt-1.5 text-sm text-slate-400">Your subscription activates your account so CaseLift can start recovering cases.</p>
+
+              {done.payment ? (
+                <div className="mt-6 flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-4">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-200">Your plan is active</p>
+                    <p className="mt-0.5 text-sm text-emerald-200/80">You’re all set on billing. Continue to the next step.</p>
                   </div>
-                </Field>
-              </div>
-              <div className="mt-4 flex items-center gap-3">
-                <button onClick={testPlaud} disabled={testing} type="button" className="btn-ghost">
-                  {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-                  Test connection
-                </button>
-                <TestResult state={plaudTest} />
-              </div>
-              <div className="mt-6 flex items-center justify-between">
-                <button onClick={back} className="btn-ghost">
-                  <ArrowLeft className="h-4 w-4" /> Back
-                </button>
-                <div className="flex gap-2">
-                  <button onClick={next} className="text-sm font-medium text-slate-400 hover:text-slate-200">
-                    Skip
-                  </button>
-                  <button onClick={connectPlaudAndNext} disabled={saving} className="btn-primary">
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    Connect &amp; continue <ArrowRight className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === 'phone' && (
-            <div className="card p-6">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary-400">
-                <Plug className="h-5 w-5" />
-              </div>
-              <h1 className="mt-4 text-lg font-semibold text-white">Phone &amp; messaging</h1>
-              <p className="mt-1 text-sm text-slate-400">
-                CaseLift follows up with every patient automatically - SMS and email from your own
-                dedicated number, no third-party tools required. You'll pick your number and complete
-                carrier registration in Settings → Messaging.
-              </p>
-              <div className="mt-5 rounded-lg border border-surface-700 bg-surface-800/50 p-4 text-sm text-slate-400">
-                <p className="flex items-center gap-2 font-medium text-slate-200">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" /> Included in your subscription
-                </p>
-                <p className="mt-1">
-                  A local number is $1/month and email follow-up activates immediately. SMS turns on once
-                  carrier registration is approved (1-7 business days).
-                </p>
-              </div>
-              <div className="mt-6 flex items-center justify-between">
-                <button onClick={back} className="btn-ghost">
-                  <ArrowLeft className="h-4 w-4" /> Back
-                </button>
-                <button onClick={next} className="btn-primary">
-                  Continue <ArrowRight className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {step === 'tc' && (
-            <div className="card p-6">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary-400">
-                <UserPlus className="h-5 w-5" />
-              </div>
-              <h1 className="mt-4 text-lg font-semibold text-white">Invite your treatment coordinator</h1>
-              <p className="mt-1 text-sm text-slate-400">
-                Your TC reviews consults and approves follow-ups. They'll get an email invite to join.
-              </p>
-              {inviteState === 'sent' ? (
-                <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>Invitation sent to <span className="font-semibold">{tcEmail}</span>.</span>
                 </div>
               ) : (
-                <div className="mt-5">
-                  <Field label="TC email address">
-                    <div className="flex gap-2">
-                      <input className="input" type="email" value={tcEmail} onChange={(e) => setTcEmail(e.target.value)} placeholder="tc@yourpractice.com" />
-                      <button onClick={sendInvite} disabled={inviteState === 'sending' || !tcEmail.trim()} className="btn-primary shrink-0">
-                        {inviteState === 'sending' ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-                        Send invite
-                      </button>
-                    </div>
-                  </Field>
+                <div className="mt-6 rounded-2xl border border-surface-700 bg-surface-900 p-6">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-3xl font-bold text-white">${planPrice.toLocaleString()}</span>
+                    <span className="text-sm text-slate-400">/month</span>
+                  </div>
+                  <ul className="mt-4 space-y-2 text-sm text-slate-300">
+                    {['AI consult analysis on every recording', 'Automated SMS + email follow-up sequences', 'Your own dedicated phone number', 'Unlimited team members'].map((f) => (
+                      <li key={f} className="flex items-center gap-2"><Check className="h-4 w-4 shrink-0 text-emerald-400" /> {f}</li>
+                    ))}
+                  </ul>
+                  <button onClick={startCheckout} disabled={saving} className="btn-primary mt-6 w-full justify-center">
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Activate — secure checkout
+                  </button>
+                  <p className="mt-2 text-center text-[11px] text-slate-500">Powered by Chargebee. Cancel anytime.</p>
                 </div>
               )}
-              <div className="mt-6 flex items-center justify-between">
-                <button onClick={back} className="btn-ghost">
-                  <ArrowLeft className="h-4 w-4" /> Back
-                </button>
-                <div className="flex gap-2">
-                  <button onClick={next} className="text-sm font-medium text-slate-400 hover:text-slate-200">
-                    Skip
-                  </button>
-                  <button onClick={next} className="btn-primary">
-                    Continue <ArrowRight className="h-4 w-4" />
-                  </button>
-                </div>
+
+              <div className="mt-6 flex justify-end">
+                <button onClick={nextStep} className="btn-ghost">Continue <ArrowRight className="h-4 w-4" /></button>
               </div>
-            </div>
+            </section>
           )}
 
-          {step === 'done' && (
-            <div className="card p-8 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
-                <PartyPopper className="h-8 w-8" />
-              </div>
-              <h1 className="mt-5 text-xl font-bold text-white">You're all set!</h1>
-              <p className="mt-2 text-sm text-slate-400">
-                CaseLift is ready to start recovering unconverted patients for {form.name || 'your practice'}.
-                She learns what works and gets smarter every week.
-              </p>
-              <div className="mt-6 space-y-3 text-left">
-                {[
-                  { icon: PhoneCall, title: 'Record your first consult', desc: 'It’ll appear under Consults within a minute of recording.' },
-                  { icon: MessagesSquare, title: 'Review & approve follow-ups', desc: 'Your TC approves the AI plan and the sequence kicks off.' },
-                  { icon: GraduationCap, title: 'Sharpen your team', desc: 'Explore Training modules while your data builds up.' },
-                ].map((s) => (
-                  <div key={s.title} className="flex items-start gap-3 rounded-xl border border-surface-700 bg-surface-800/50 p-4">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary-400">
-                      <s.icon className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-200">{s.title}</p>
-                      <p className="text-xs text-slate-500">{s.desc}</p>
-                    </div>
+          {/* 3. BAA */}
+          {stepKey === 'baa' && (
+            <section>
+              <h1 className="text-2xl font-bold tracking-tight text-white">Business Associate Agreement</h1>
+              <p className="mt-1.5 text-sm text-slate-400">Required for HIPAA compliance before we handle any patient information.</p>
+
+              {done.baa ? (
+                <div className="mt-6 flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-4">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+                  <p className="text-sm font-semibold text-emerald-200">BAA signed. Thank you.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="mt-5 max-h-64 overflow-y-auto rounded-xl border border-surface-700 bg-surface-900 p-4 text-xs leading-relaxed text-slate-400">
+                    <p className="font-semibold text-slate-200">CaseLift Business Associate Agreement (summary)</p>
+                    <p className="mt-2">CaseLift acts as a Business Associate to your practice (the Covered Entity). We will use and disclose Protected Health Information (PHI) only to provide the agreed services, as permitted by this agreement, or as required by law.</p>
+                    <p className="mt-2">We implement administrative, physical, and technical safeguards to protect PHI, will report any breach or impermissible use without unreasonable delay, ensure our subcontractors agree to equivalent restrictions, and will return or destroy PHI upon termination where feasible.</p>
+                    <p className="mt-2">Your practice agrees to obtain any patient consents required for recording and follow-up communications. This summary is provided for convenience; the full agreement governs.</p>
+                    <button type="button" onClick={() => navigate('/baa')} className="mt-3 font-medium text-primary-300 hover:underline">Read the full agreement</button>
                   </div>
-                ))}
+                  <label className="mt-4 flex items-start gap-2.5 text-sm text-slate-300">
+                    <input type="checkbox" checked={baaAgree} onChange={(e) => setBaaAgree(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-surface-600 bg-surface-800 text-primary focus:ring-primary/40" />
+                    I have read and agree to the CaseLift Business Associate Agreement on behalf of my practice.
+                  </label>
+                  <div className="mt-6 flex justify-end">
+                    <button onClick={acceptBaa} disabled={!baaAgree || saving} className="btn-primary">
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Accept &amp; continue
+                    </button>
+                  </div>
+                </>
+              )}
+            </section>
+          )}
+
+          {/* 4. A2P / carrier registration — reuse the working phone+A2P wizard */}
+          {stepKey === 'a2p' && (
+            <section>
+              <h1 className="text-2xl font-bold tracking-tight text-white">Get your texting approved</h1>
+              <p className="mt-1.5 text-sm text-slate-400">Carriers require a quick one-time registration before SMS can send. Doing it now means it’s approved by the time you’re recording consults.</p>
+              <div className="mt-6">
+                <PhoneSetupWizard practiceId={practiceId} practiceName={practice?.name} embedded onComplete={() => refreshProfile()} />
               </div>
-              <button onClick={finish} disabled={saving} className="btn-primary mt-7 w-full">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Go to dashboard <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
+              <div className="mt-6 flex justify-end">
+                <button onClick={nextStep} className="btn-ghost">Continue <ArrowRight className="h-4 w-4" /></button>
+              </div>
+            </section>
+          )}
+
+          {/* 5. Invite team */}
+          {stepKey === 'team' && (
+            <section>
+              <h1 className="text-2xl font-bold tracking-tight text-white">Invite your team</h1>
+              <p className="mt-1.5 text-sm text-slate-400">Add your treatment coordinators and front desk. They’ll get an email to join your account.</p>
+
+              <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+                <input className="input flex-1" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="teammate@yourpractice.com" />
+                <select className="input sm:w-36" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
+                  <option value="member">Team member</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <button onClick={sendInvite} disabled={inviting || !inviteEmail.trim()} className="btn-primary shrink-0">
+                  {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Send invite
+                </button>
+              </div>
+
+              {invited.length > 0 && (
+                <ul className="mt-4 space-y-1.5">
+                  {invited.map((em) => (
+                    <li key={em} className="flex items-center gap-2 rounded-lg border border-surface-700 bg-surface-800/50 px-3 py-2 text-sm text-slate-300">
+                      <Mail className="h-4 w-4 text-slate-500" /> {em}
+                      <span className="ml-auto inline-flex items-center gap-1 text-xs text-emerald-300"><Check className="h-3.5 w-3.5" /> Invited</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <div className="mt-8 flex items-center justify-between">
+                <span className="text-xs text-slate-500">{invited.length ? `${invited.length} invite${invited.length === 1 ? '' : 's'} sent` : 'You can always invite people later in Settings.'}</span>
+                <button onClick={finish} disabled={saving} className="btn-primary">
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Finish setup
+                </button>
+              </div>
+            </section>
           )}
         </div>
       </main>

@@ -1,26 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2, Gift, Check, CreditCard, ArrowLeft, Building2 } from 'lucide-react'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { createCheckout } from '../lib/billing'
 import { REF_STORAGE_KEY } from '../components/ReferralRedirect'
-
-// PMS systems offered in the dropdown.
-const PMS_OPTIONS = [
-  'Dentrix',
-  'Eaglesoft',
-  'Curve Dental',
-  'Open Dental',
-  'Carestream',
-  'Dolphin',
-  'Orthotrac',
-  'Lighthouse 360',
-  'Dentimax',
-  'MacPractice',
-  'Other',
-]
 
 const HEARD_FROM_OPTIONS = ['Referral', 'Instagram', 'Facebook', 'Google', 'Podcast', 'Other']
 
@@ -33,6 +18,7 @@ function parsePlanAmount(searchParams) {
 
 export default function Signup() {
   const { signUp, refreshProfile } = useAuth()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
   const [step, setStep] = useState(1)
@@ -42,7 +28,6 @@ export default function Signup() {
     contactName: '',
     email: '',
     password: '',
-    pms: '',
     heardFrom: '',
   })
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
@@ -134,7 +119,7 @@ export default function Signup() {
         phone: form.phone,
         doctor_first,
         doctor_last,
-        pms_type: form.pms || null,
+        pms_type: null,
         heard_from: form.heardFrom || null,
         plan_amount: planAmount,
         ...(refCode ? { referred_by_code: refCode } : {}),
@@ -180,7 +165,8 @@ export default function Signup() {
     await refreshProfile()
     setPracticeId(practice.id)
     setLoading(false)
-    setStep(2)
+    // Hand off to the multi-step onboarding (payment, BAA, A2P, invites live there).
+    navigate('/onboarding', { replace: true })
   }
 
   // Step 2 → start hosted checkout. On success, the provider redirects back to
@@ -308,14 +294,6 @@ export default function Signup() {
                       className="input" placeholder="At least 6 characters" value={form.password} onChange={set('password')} />
                   </div>
                 )}
-
-                <div>
-                  <label className="label" htmlFor="pms">PMS system</label>
-                  <select id="pms" required className="input" value={form.pms} onChange={set('pms')}>
-                    <option value="" disabled>Select your practice management system</option>
-                    {PMS_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
 
                 <div>
                   <label className="label" htmlFor="heardFrom">Where did you hear about us?</label>

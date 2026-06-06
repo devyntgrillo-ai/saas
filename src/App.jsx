@@ -130,15 +130,9 @@ function AppContent() {
                 <Route path="/baa" element={<BAAEntry />} />
                 {/* Lockout screen for archived practices (ProtectedRoute redirects here). */}
                 <Route path="/suspended" element={<Suspended />} />
-                <Route
-                  element={
-                    <RequireBAA>
-                      <Outlet />
-                    </RequireBAA>
-                  }
-                >
-                  <Route path="/onboarding" element={<Onboarding />} />
-                </Route>
+                {/* Onboarding handles payment + BAA + A2P + invites as its own steps,
+                    so it sits behind the session only — NOT behind the BAA gate. */}
+                <Route path="/onboarding" element={<Onboarding />} />
 
                 {/* Super-admin portal - standalone shell, outside BAA/onboarding.
                     AdminShell self-gates on isSuperAdmin and provides AdminProvider. */}
