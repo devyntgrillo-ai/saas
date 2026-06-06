@@ -240,11 +240,14 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between">
                   <p className="flex items-center gap-1.5 text-sm text-slate-400">
                     Production Recovered
-                    <span
-                      className="inline-flex cursor-help"
-                      title="Confirmed = actual treatment plan values from your PMS or manual entry, attributed to CaseLift."
-                    >
+                    <span className="group relative inline-flex cursor-help">
                       <Info className="h-3.5 w-3.5 text-slate-500" />
+                      <span
+                        role="tooltip"
+                        className="pointer-events-none absolute left-0 top-full z-30 mt-1.5 hidden w-56 rounded-lg border border-surface-700 bg-surface-900 px-3 py-2 text-xs font-normal leading-snug text-slate-200 shadow-lg group-hover:block"
+                      >
+                        Confirmed is actual treatment plan value from your PMS or manual entry, attributed to CaseLift.
+                      </span>
                     </span>
                   </p>
                   <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
