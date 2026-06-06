@@ -6,7 +6,7 @@ import { useRecorder } from '../context/RecorderContext'
 export default function RecordConsultButton({ onLaunch }) {
   const { openRecorder } = useRecorder()
   return (
-    <div className="px-3 pb-3 pt-2">
+    <div className="px-3 pb-3 pt-6">
       <button
         onClick={() => {
           openRecorder()
