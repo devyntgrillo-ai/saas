@@ -140,15 +140,17 @@ export function BrandingProvider({ children }) {
     }
   }, [])
 
-  // The reseller for the current viewer: their own agency, the agency a
-  // super-admin is impersonating directly, the agency of the practice they're
-  // impersonating, or their home practice's agency.
-  // activeAgency (the reseller a super-admin is impersonating) takes precedence
-  // over the super-admin's own agency membership, so branding follows the
-  // impersonated reseller rather than the viewer's own agency.
+  // The reseller whose brand applies to the current view.
+  // IMPORTANT: when a specific subaccount is in context (a practice user, or a
+  // super-admin/reseller impersonating a practice), branding comes from THAT
+  // practice's own reseller (practice.agency) - so a subaccount only ever shows
+  // its own reseller's brand, never a lingering impersonated reseller. A practice
+  // with no reseller (or whose reseller hasn't enabled white-label) falls back to
+  // CaseLift. Only at the reseller level (no practice in context) do we use the
+  // impersonated/own agency.
   const resellerAgency = useMemo(
-    () => activeAgency || agency || practice?.agency || profile?.practice?.agency || null,
-    [agency, activeAgency, practice, profile]
+    () => (practice ? practice.agency || null : activeAgency || agency || profile?.practice?.agency || null),
+    [practice, activeAgency, agency, profile]
   )
 
   // The effective brand, derived from auth context and any domain match. No
