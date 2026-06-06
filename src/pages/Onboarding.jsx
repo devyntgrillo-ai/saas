@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
+  UserCircle,
   Building2,
   CreditCard,
   ShieldCheck,
@@ -18,11 +19,24 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { createCheckout } from '../lib/billing'
 import PhoneSetupWizard from '../components/PhoneSetupWizard'
+import { REF_STORAGE_KEY } from '../components/ReferralRedirect'
+
+const HEARD_FROM_OPTIONS = ['Referral', 'Instagram', 'Facebook', 'Google', 'Podcast', 'Other']
+
+function parsePlanAmount(searchParams) {
+  const raw = Number(searchParams.get('plan'))
+  return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 997
+}
+function splitContactName(full) {
+  const parts = (full || '').trim().split(/\s+/)
+  return { doctor_first: parts[0] || '', doctor_last: parts.slice(1).join(' ') || '' }
+}
 
 // Steps are intentionally NOT labeled "Step 1 of 5" anywhere — the sidebar just
 // lists the named stages with quiet completion ticks (Asana/ClickUp feel). Each
 // stage saves independently so a practice can leave and resume any time.
 const STEPS = [
+  { key: 'account', label: 'Create your account', icon: UserCircle, blurb: 'A few details to get started.' },
   { key: 'profile', label: 'Practice details', icon: Building2, blurb: 'Tell us about your practice.' },
   { key: 'payment', label: 'Activate your plan', icon: CreditCard, blurb: 'Start your subscription.' },
   { key: 'baa', label: 'Sign the BAA', icon: ShieldCheck, blurb: 'HIPAA business associate agreement.' },
@@ -40,7 +54,7 @@ function Field({ label, children }) {
 }
 
 export default function Onboarding() {
-  const { practice, practiceId, refreshProfile, isAgencyUser } = useAuth()
+  const { signUp, practice, practiceId, refreshProfile, isAgencyUser } = useAuth()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -49,8 +63,30 @@ export default function Onboarding() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
 
+  // Step 1 (pre-auth): create the account. Carries referral / multi-location /
+  // plan context from the URL, mirroring the old standalone signup page.
+  const planAmount = useMemo(() => parsePlanAmount(searchParams), [searchParams])
+  const parentPracticeId = useMemo(() => (searchParams.get('parent_practice') || '').trim(), [searchParams])
+  const [refCode] = useState(() => {
+    let stored = ''
+    try { stored = localStorage.getItem(REF_STORAGE_KEY) || '' } catch { /* storage unavailable */ }
+    return (searchParams.get('ref') || stored || '').trim()
+  })
+  const [referrer, setReferrer] = useState(null)
+  const [acct, setAcct] = useState({ practiceName: '', phone: '', contactName: '', email: '', password: '', heardFrom: '' })
+  const setA = (k) => (e) => setAcct((f) => ({ ...f, [k]: e.target.value }))
+
   const [form, setForm] = useState({ name: '', doctor_first: '', doctor_last: '', phone: '', address: '' })
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+
+  useEffect(() => {
+    if (!refCode) return
+    let on = true
+    supabase.rpc('resolve_referral_code', { p_code: refCode }).then(({ data }) => {
+      if (on && Array.isArray(data) && data[0]) setReferrer(data[0])
+    }, () => {})
+    return () => { on = false }
+  }, [refCode])
 
   const [baaAgree, setBaaAgree] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
@@ -68,13 +104,14 @@ export default function Onboarding() {
   const done = useMemo(() => {
     const p = practice || {}
     return {
+      account: Boolean(practiceId),
       profile: Boolean((p.name || '').trim() && (p.phone || '').trim()),
       payment: p.subscription_status === 'active',
       baa: Boolean(p.baa_accepted_at),
       a2p: Boolean(p.a2p_submitted_at) || (p.a2p_brand_status && p.a2p_brand_status !== 'unregistered') || Boolean(p.twilio_phone_e164 || p.twilio_phone_number),
       team: Boolean(p.onboarding_completed) || invited.length > 0,
     }
-  }, [practice, invited.length])
+  }, [practice, practiceId, invited.length])
   const doneList = STEPS.map((s) => done[s.key])
 
   // Seed the form + open the right step once the practice loads. Prefer the
@@ -111,6 +148,8 @@ export default function Onboarding() {
   }
 
   function goTo(idx) {
+    // Can't jump past account creation until the account exists.
+    if (!practiceId && idx > 0) return
     setActive(idx)
     setSaveError('')
     void persistStep(idx)
@@ -126,6 +165,49 @@ export default function Onboarding() {
     if (error) { setSaveError(error.message || 'Could not save. Please try again.'); return false }
     if (refresh) await refreshProfile()
     return true
+  }
+
+  async function createAccount(e) {
+    e?.preventDefault?.()
+    setSaveError('')
+    setSaving(true)
+    const { data, error: signUpError } = await signUp(acct.email, acct.password, { practice_name: acct.practiceName })
+    if (signUpError) { setSaving(false); setSaveError(signUpError.message); return }
+    if (!data.session || !data.user) {
+      setSaving(false)
+      setSaveError('Please confirm your email, then sign in to continue. (Email confirmation is enabled on this project.)')
+      return
+    }
+    const { doctor_first, doctor_last } = splitContactName(acct.contactName)
+    const { data: created, error: practiceError } = await supabase
+      .from('practices')
+      .insert({
+        name: acct.practiceName,
+        email: acct.email,
+        phone: acct.phone,
+        doctor_first,
+        doctor_last,
+        heard_from: acct.heardFrom || null,
+        plan_amount: planAmount,
+        ...(refCode ? { referred_by_code: refCode } : {}),
+        ...(referrer?.practice_id ? { referred_by_practice_id: referrer.practice_id } : {}),
+      })
+      .select('id')
+      .single()
+    if (practiceError) { setSaving(false); setSaveError(practiceError.message || 'Could not create your practice.'); return }
+    try { localStorage.removeItem(REF_STORAGE_KEY) } catch { /* noop */ }
+    const { error: linkError } = await supabase.from('users').update({ practice_id: created.id }).eq('id', data.user.id)
+    if (linkError) { setSaving(false); setSaveError(linkError.message || 'Practice created but could not link it to your account.'); return }
+    if (parentPracticeId) {
+      try {
+        await supabase.functions.invoke('link-location', { body: { parent_practice_id: parentPracticeId, new_practice_id: created.id } })
+      } catch { /* non-blocking */ }
+    }
+    await refreshProfile()
+    setSaving(false)
+    // Move into the protected onboarding route; the stepper continues at "Practice details".
+    setActive(1)
+    navigate('/onboarding', { replace: true })
   }
 
   async function saveProfile() {
@@ -196,13 +278,15 @@ export default function Onboarding() {
             const Icon = s.icon
             const isActive = i === active
             const isDone = doneList[i]
+            const locked = !practiceId && i > 0
             return (
               <li key={s.key}>
                 <button
                   type="button"
                   onClick={() => goTo(i)}
+                  disabled={locked}
                   className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
-                    isActive ? 'bg-surface-800' : 'hover:bg-surface-800/60'
+                    locked ? 'cursor-not-allowed opacity-50' : isActive ? 'bg-surface-800' : 'hover:bg-surface-800/60'
                   }`}
                 >
                   <span
@@ -214,7 +298,7 @@ export default function Onboarding() {
                           : 'border-surface-600 bg-surface-800 text-slate-500'
                     }`}
                   >
-                    {isDone ? <Check className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
+                    {isDone ? <Check className="h-3.5 w-3.5" /> : locked ? <Lock className="h-3 w-3" /> : <Icon className="h-3.5 w-3.5" />}
                   </span>
                   <span className="min-w-0">
                     <span className={`block truncate text-sm font-medium ${isActive || isDone ? 'text-slate-100' : 'text-slate-400'}`}>{s.label}</span>
@@ -226,13 +310,15 @@ export default function Onboarding() {
           })}
         </ol>
 
-        <button
-          type="button"
-          onClick={() => navigate('/', { replace: true })}
-          className="mt-6 text-xs font-medium text-slate-500 transition hover:text-slate-300"
-        >
-          I’ll finish later
-        </button>
+        {practiceId && (
+          <button
+            type="button"
+            onClick={() => navigate('/', { replace: true })}
+            className="mt-6 text-xs font-medium text-slate-500 transition hover:text-slate-300"
+          >
+            I’ll finish later
+          </button>
+        )}
       </aside>
 
       {/* ── Content panel ──────────────────────────────────────────────────── */}
@@ -242,7 +328,53 @@ export default function Onboarding() {
             <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{saveError}</p>
           )}
 
-          {/* 1. Practice details */}
+          {/* 1. Create account (pre-auth) */}
+          {stepKey === 'account' && (
+            done.account ? (
+              <section>
+                <h1 className="text-2xl font-bold tracking-tight text-white">Account created</h1>
+                <p className="mt-1.5 text-sm text-slate-400">You’re signed in. Continue setting up your practice.</p>
+                <div className="mt-6 flex justify-end">
+                  <button onClick={nextStep} className="btn-primary">Continue <ArrowRight className="h-4 w-4" /></button>
+                </div>
+              </section>
+            ) : (
+              <section>
+                <h1 className="text-2xl font-bold tracking-tight text-white">Create your account</h1>
+                <p className="mt-1.5 text-sm text-slate-400">Just a few details to get started. You can finish the rest of setup any time.</p>
+                {referrer?.name && (
+                  <div className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+                    {referrer.name} referred you to CaseLift. Welcome!
+                  </div>
+                )}
+                <form className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={createAccount}>
+                  <div className="sm:col-span-2">
+                    <Field label="Practice name"><input className="input" required value={acct.practiceName} onChange={setA('practiceName')} placeholder="Pinnacle Dental" /></Field>
+                  </div>
+                  <Field label="Your name"><input className="input" required value={acct.contactName} onChange={setA('contactName')} placeholder="Dr. Jordan Rivera" /></Field>
+                  <Field label="Office phone"><input className="input" value={acct.phone} onChange={setA('phone')} placeholder="(480) 555-0142" /></Field>
+                  <Field label="Work email"><input className="input" type="email" required value={acct.email} onChange={setA('email')} placeholder="you@yourpractice.com" /></Field>
+                  <Field label="Password"><input className="input" type="password" required minLength={6} value={acct.password} onChange={setA('password')} placeholder="At least 6 characters" /></Field>
+                  <div className="sm:col-span-2">
+                    <Field label="Where did you hear about us?">
+                      <select className="input" required value={acct.heardFrom} onChange={setA('heardFrom')}>
+                        <option value="" disabled>Select one</option>
+                        {HEARD_FROM_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="sm:col-span-2 mt-2 flex items-center justify-between">
+                    <Link to="/login" className="text-sm font-medium text-slate-400 hover:text-slate-200">Already have an account? Log in</Link>
+                    <button type="submit" disabled={saving} className="btn-primary">
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Create account <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </form>
+              </section>
+            )
+          )}
+
+          {/* 2. Practice details */}
           {stepKey === 'profile' && (
             <section>
               <h1 className="text-2xl font-bold tracking-tight text-white">Tell us about your practice</h1>

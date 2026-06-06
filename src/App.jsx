@@ -16,7 +16,6 @@ import LoadingScreen from './components/LoadingScreen'
 //    (Dashboard shell, Consults, Conversations) so they paint without a chunk
 //    fetch. Their charts/heavy panels are split out separately (see below). ──
 import Login from './pages/Login'
-import Signup from './pages/Signup'
 import Suspended from './pages/Suspended'
 import ResellerSignup from './pages/ResellerSignup'
 import ReferralRedirect from './components/ReferralRedirect'
@@ -111,7 +110,8 @@ function AppContent() {
               )}
               {/* Public */}
               <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
+              {/* Signup is the first step of the unified onboarding stepper. */}
+              <Route path="/signup" element={<Onboarding />} />
               {/* White-labeled reseller client signup (SaaS mode). Public. */}
               <Route path="/signup/:slug" element={<ResellerSignup />} />
               {/* Referral link entry: stores the code and forwards to signup. */}
