@@ -24,10 +24,19 @@ export default function RecordingPlayer({ consultId }) {
     /* eslint-enable react-hooks/set-state-in-effect */
     supabase.functions
       .invoke('get-recording-url', { body: { consult_id: consultId } })
-      .then(({ data, error: err }) => {
+      .then(async ({ data, error: err }) => {
         if (!active) return
-        if (err || data?.error || !data?.url) {
-          setError(data?.error || err?.message || 'Recording unavailable.')
+        if (err) {
+          // functions.invoke reports non-2xx generically; pull the real reason
+          // out of the response body so the message is actionable.
+          let msg = err.message || 'Recording unavailable.'
+          try {
+            const body = await err.context?.json?.()
+            if (body?.error) msg = body.error
+          } catch { /* keep generic message */ }
+          setError(msg)
+        } else if (data?.error || !data?.url) {
+          setError(data?.error || 'Recording unavailable.')
         } else {
           setUrl(data.url)
         }

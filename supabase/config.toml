@@ -403,6 +403,9 @@ verify_jwt = true
 # Public white-labeled client signup (/signup/<reseller-slug>) — no caller JWT.
 [functions.reseller-signup]
 verify_jwt = false
+# Consult recording playback — self-authenticates the caller's token + RLS inside.
+[functions.get-recording-url]
+verify_jwt = false
 
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"

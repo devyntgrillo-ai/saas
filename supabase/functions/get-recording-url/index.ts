@@ -40,7 +40,8 @@ Deno.serve(async (req: Request) => {
       : createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
 
     if (!isServiceRole) {
-      const { data: { user } } = await scoped.auth.getUser();
+      // Validate the specific bearer token (more robust than reading a session).
+      const { data: { user } } = await scoped.auth.getUser(token);
       if (!user) return json({ error: "Unauthorized" }, 401);
     }
 
