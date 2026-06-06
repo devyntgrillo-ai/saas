@@ -52,6 +52,11 @@ begin
   perform cron.unschedule('check-unrecorded-streak');
 exception when others then null;
 end $$;
+do $$
+begin
+  perform cron.unschedule('demo-today-refresh');
+exception when others then null;
+end $$;
 
 -- PMS appointment sync - every 15 minutes.
 select cron.schedule(
@@ -130,6 +135,22 @@ select cron.schedule(
     ),
     body    := jsonb_build_object('tick', true)
   );
+  $$
+);
+
+-- Demo: keep the 3 "today" appointments always dated to the current day so the
+-- sales-demo subaccount shows a live worklist no matter when it's opened.
+-- Pure SQL (no edge function), runs at 07:10 UTC (~00:10 MST).
+select cron.schedule(
+  'demo-today-refresh',
+  '10 7 * * *',
+  $$
+  update public.pms_appointments set appointment_time = case pms_appointment_id
+    when 'demo-today-0' then (current_date + time '09:00') at time zone 'America/Phoenix'
+    when 'demo-today-1' then (current_date + time '11:30') at time zone 'America/Phoenix'
+    when 'demo-today-2' then (current_date + time '14:00') at time zone 'America/Phoenix'
+  end
+  where pms_appointment_id in ('demo-today-0','demo-today-1','demo-today-2');
   $$
 );
 

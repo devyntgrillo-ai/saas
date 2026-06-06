@@ -47,6 +47,13 @@ function bizTsFuture(inDays: number, hourMst = 10, minute = 0): string {
   d.setUTCHours(hourMst + 7, minute, 0, 0);
   return d.toISOString();
 }
+// Today at a Mountain-Standard business hour (no weekend shift — these demo
+// appointments must always read as "today"). A daily cron keeps them current.
+function bizTsToday(hourMst = 10, minute = 0): string {
+  const d = new Date();
+  d.setUTCHours(hourMst + 7, minute, 0, 0);
+  return d.toISOString();
+}
 function ymd(iso: string): string {
   return iso.slice(0, 10);
 }
@@ -316,6 +323,7 @@ Deno.serve(async (req: Request) => {
           (select count(*) from public.consults where practice_id = (select id from p limit 1) and appointment_id is not null) as consults_pms_linked,
           (select count(*) from public.consults where practice_id = (select id from p limit 1) and transcript is not null) as consults_with_transcript,
           (select count(*) from public.pms_appointments where practice_id = (select id from p limit 1) and consult_id is null and appointment_time > now()) as upcoming_to_record,
+          (select count(*) from public.pms_appointments where practice_id = (select id from p limit 1) and appointment_time::date = current_date) as appointments_today,
           (select count(*) from public.call_logs where practice_id = (select id from p limit 1) and conversation_id is not null) as calls_in_threads,
           (select a2p_brand_status || '/' || a2p_campaign_status from public.practices where id = (select id from p limit 1)) as a2p_status,
           (select (knowledge_base_sections is not null) from public.practices where id = (select id from p limit 1)) as has_knowledge_base,
@@ -630,11 +638,10 @@ Deno.serve(async (req: Request) => {
     const fillerRows: Record<string, unknown>[] = [];
     let fi = 0;
     for (let w = 0; w < 4; w++) {
-      for (let j = 0; j < 3; j++) {
-        const daysAgo = w * 7 + j * 2 + 2;
-        const recorded = j < 2; // 2 recorded + 1 unrecorded per week
+      for (let j = 0; j < 5; j++) {
+        const daysAgo = w * 7 + j + 1;
         const nm = NAME_POOL[fi % NAME_POOL.length];
-        const iso = bizTs(daysAgo, 9 + j, (j * 15) % 60);
+        const iso = bizTs(daysAgo, 9 + j, (j * 12) % 60);
         fillerRows.push({
           practice_id: practiceId,
           pms_appointment_id: `demo-appt-f-${w}-${j}`,
@@ -644,7 +651,7 @@ Deno.serve(async (req: Request) => {
           appointment_type: "Implant Consult",
           provider: "Dr. Torres",
           is_implant_consult: true,
-          consult_id: recorded ? implantConsultIds[fi % implantConsultIds.length] : null,
+          consult_id: implantConsultIds[fi % implantConsultIds.length],
           created_at: iso,
         });
         fi++;
@@ -671,10 +678,33 @@ Deno.serve(async (req: Request) => {
       created_at: bizTs(0, 8, 0),
     }));
 
-    const { error: apErr2 } = await admin.from("pms_appointments").insert([...fillerRows, ...upcomingRows]);
+    // 4) Three appointments dated TODAY (the demo "day view" / today's worklist).
+    // A daily cron (apply_cron.sql: demo-today-refresh) rolls these to the
+    // current date so they always read as today without re-seeding.
+    const todaySpecs = [
+      { first: "Brian", last: "Foster", type: "Implant Consult", implant: true, hour: 9, min: 0 },
+      { first: "Michelle", last: "Carter", type: "Full Arch Consult", implant: true, hour: 11, min: 30 },
+      { first: "Daniel", last: "Wong", type: "Invisalign Consult", implant: false, hour: 14, min: 0 },
+    ];
+    const todayRows = todaySpecs.map((u, idx) => ({
+      practice_id: practiceId,
+      pms_appointment_id: `demo-today-${idx}`,
+      patient_first: u.first,
+      patient_last: u.last,
+      patient_phone: `(480) 555-03${10 + idx}`,
+      appointment_time: bizTsToday(u.hour, u.min),
+      appointment_type: u.type,
+      provider: "Dr. Torres",
+      is_implant_consult: u.implant,
+      consult_id: null,
+      created_at: bizTs(0, 8, 0),
+    }));
+
+    const { error: apErr2 } = await admin.from("pms_appointments").insert([...fillerRows, ...upcomingRows, ...todayRows]);
     if (apErr2) throw new Error(`pms_appointments filler insert: ${apErr2.message}`);
-    summary.pms_appointments_created = perConsultAppts.length + fillerRows.length + upcomingRows.length;
+    summary.pms_appointments_created = perConsultAppts.length + fillerRows.length + upcomingRows.length + todayRows.length;
     summary.upcoming_to_record = upcomingRows.length;
+    summary.today_appointments = todayRows.length;
 
     // ----- 7. Conversations --------------------------------------------------
     async function makeConversation(c: Consult, msgs: { dir: "inbound" | "outbound"; channel: string; body: string; daysAgo: number; hour: number }[], unread: number) {
