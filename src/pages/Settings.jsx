@@ -176,7 +176,6 @@ export default function Settings() {
         auto_analyze: practice.auto_analyze ?? true,
         auto_start_followup: practice.auto_start_followup ?? false,
         timezone: practice.timezone || 'America/Chicago',
-        audio_retention_days: practice.audio_retention_days ?? 30,
       })
     }
   }, [practice])
@@ -301,23 +300,6 @@ export default function Settings() {
                     </select>
                   </Field>
                 </div>
-                <div className="sm:col-span-2">
-                  <Field label="Audio retention period">
-                    <select
-                      className="input"
-                      value={form.audio_retention_days ?? 30}
-                      onChange={(e) => set('audio_retention_days', Number(e.target.value))}
-                    >
-                      <option value={7}>7 days</option>
-                      <option value={30}>30 days</option>
-                      <option value={60}>60 days</option>
-                      <option value={90}>90 days</option>
-                    </select>
-                    <p className="mt-1.5 text-xs text-slate-500">
-                      How long raw consult recordings are kept before automatic deletion. Transcripts and analysis are kept permanently.
-                    </p>
-                  </Field>
-                </div>
               </div>
               {saveError && tab === 'profile' && (
                 <p className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
@@ -335,7 +317,6 @@ export default function Settings() {
                       email: form.email,
                       address: form.address,
                       timezone: form.timezone,
-                      audio_retention_days: Number(form.audio_retention_days) || 30,
                     })
                   }
                   disabled={saving || !practice?.id}
