@@ -1,6 +1,12 @@
-import { useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../supabase'
 import { queryKeys } from './keys'
+
+// A consult is "processing" until analysis + message drafting finish (status
+// flips to 'analyzed'). 'analyzing' = transcribing, 'transcribed' = analysis in
+// progress. transcription_error is surfaced on the detail page, not here.
+export const PROCESSING_STATUSES = ['analyzing', 'transcribed']
 
 const TYPE_RE = /consult|implant/i
 
@@ -56,4 +62,54 @@ export function useUnlinkedConsults(practiceId) {
     queryFn: () => fetchUnlinkedConsults(practiceId),
     enabled: Boolean(practiceId),
   })
+}
+
+// Consults currently being transcribed/analyzed for this practice — surfaced as
+// "processing" cards at the top of the Consults list and as the dashboard count.
+export async function fetchProcessingConsults(practiceId) {
+  if (!practiceId) return []
+  const { data, error } = await supabase
+    .from('consults')
+    .select('id, patient_name, patient_first, patient_last, treatment_type, status, created_at')
+    .eq('practice_id', practiceId)
+    .in('status', PROCESSING_STATUSES)
+    .order('created_at', { ascending: false })
+    .limit(25)
+  if (error) throw error
+  return data || []
+}
+
+export function useProcessingConsults(practiceId) {
+  return useQuery({
+    queryKey: queryKeys.processingConsults(practiceId),
+    queryFn: () => fetchProcessingConsults(practiceId),
+    enabled: Boolean(practiceId),
+    // Light poll as a fallback in case realtime isn't enabled on the consults
+    // table; realtime (useConsultsRealtime) invalidates this immediately.
+    refetchInterval: 15000,
+  })
+}
+
+// Realtime: when any consult for this practice changes status, refresh the
+// processing list + the day/sequences/dashboard views so processing cards
+// transition to "ready" without a manual reload. Falls back to the poll above
+// if the consults table isn't in the realtime publication yet.
+export function useConsultsRealtime(practiceId) {
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    if (!practiceId) return
+    const channel = supabase
+      .channel(`consults-status:${practiceId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'consults', filter: `practice_id=eq.${practiceId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.processingConsults(practiceId) })
+          queryClient.invalidateQueries({ queryKey: queryKeys.unlinkedConsults(practiceId) })
+          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(practiceId) })
+        },
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [practiceId, queryClient])
 }

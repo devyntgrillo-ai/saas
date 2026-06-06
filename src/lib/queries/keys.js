@@ -28,6 +28,7 @@ export const queryKeys = {
   analytics: (practiceId) => ['practice', practiceId, 'analytics'],
   consultsDay: (practiceId, date) => ['practice', practiceId, 'consults-day', date],
   unlinkedConsults: (practiceId) => ['practice', practiceId, 'unlinked-consults'],
+  processingConsults: (practiceId) => ['practice', practiceId, 'processing-consults'],
   consult: (consultId) => ['consult', consultId],
   consultMessages: (consultId) => ['consult', consultId, 'messages'],
   consultConversation: (consultId) => ['consult', consultId, 'conversation'],

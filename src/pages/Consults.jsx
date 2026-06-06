@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useRecorder } from '../context/RecorderContext'
-import { useConsultsDay, useUnlinkedConsults } from '../lib/queries'
+import { useConsultsDay, useUnlinkedConsults, useProcessingConsults, useConsultsRealtime } from '../lib/queries'
 import { supabase } from '../lib/supabase'
 
 const todayStr = () => new Date().toLocaleDateString('en-CA')
@@ -51,6 +51,12 @@ export default function Consults() {
   const appts = dayData?.appts ?? []
   const allNote = dayData?.allNote ?? false
 
+  // Consults still being transcribed/analyzed — shown as processing cards at the
+  // top. Realtime (with a poll fallback) flips them to normal once 'analyzed'.
+  const { data: processing = [] } = useProcessingConsults(practiceId)
+  useConsultsRealtime(practiceId)
+  const processingIds = useMemo(() => new Set(processing.map((c) => c.id)), [processing])
+
   // Processing/Ready badges: appointments don't carry the consult's transcription
   // status, so fetch it for the recorded ones and refresh every 15s so a
   // "Processing" badge flips to "Ready" on its own.
@@ -77,11 +83,13 @@ export default function Consults() {
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
     return appts.filter((a) => {
+      // Processing consults render as their own cards up top — don't duplicate.
+      if (a.consult_id && processingIds.has(a.consult_id)) return false
       if (statusFilter !== 'all' && statusOf(a) !== statusFilter) return false
       if (q && !fullName(a).toLowerCase().includes(q)) return false
       return true
     })
-  }, [appts, statusFilter, search])
+  }, [appts, statusFilter, search, processingIds])
 
   const counts = useMemo(() => {
     const c = { all: appts.length, needs: 0, recorded: 0, missed: 0 }
@@ -140,6 +148,16 @@ export default function Consults() {
         </p>
       )}
 
+      {/* Processing consults — pinned to the top so they're immediately visible. */}
+      {processing.length > 0 && (
+        <section className="space-y-2">
+          <style>{PROCESSING_CARD_CSS}</style>
+          {processing.map((c) => (
+            <ProcessingCard key={c.id} c={c} onOpen={() => navigate(`/consults/${c.id}/processing`)} />
+          ))}
+        </section>
+      )}
+
       {!connected ? (
         <EmptyCard icon={Plug} title="Connect your PMS to see appointments here"
           action={<Link to="/settings/pms" className="btn-primary mt-4">Connect your PMS</Link>} />
@@ -175,6 +193,45 @@ export default function Consults() {
         </section>
       )}
     </div>
+  )
+}
+
+// ── Processing consult card (transcribing/analyzing) ───────────────────────
+const PROC_BADGES = ['🧠 Analyzing...', '📝 Transcribing...', '🔍 Detecting objections...', '⚡ Building sequence...']
+const PROCESSING_CARD_CSS = `
+.pc-leftbar { background: linear-gradient(180deg,#38bdf8,#0EA5E9,#38bdf8); background-size:100% 200%; animation: pcBar 2s ease-in-out infinite; }
+@keyframes pcBar { 0%,100% { opacity:.5; background-position:0 0 } 50% { opacity:1; background-position:0 100% } }
+.pc-badge { animation: pcFade .4s ease-out; }
+@keyframes pcFade { from { opacity:0; transform: translateY(-2px) } to { opacity:1; transform:none } }
+.pc-shimmer { background: linear-gradient(90deg, rgba(14,165,233,.12) 0%, rgba(56,189,248,.6) 50%, rgba(14,165,233,.12) 100%); background-size:200% 100%; animation: pcShimmer 1.5s linear infinite; }
+@keyframes pcShimmer { from { background-position:200% 0 } to { background-position:-200% 0 } }
+@media (prefers-reduced-motion: reduce) { .pc-leftbar,.pc-shimmer,.pc-badge { animation: none !important } }
+`
+
+function ProcessingCard({ c, onOpen }) {
+  const [bi, setBi] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setBi((i) => (i + 1) % PROC_BADGES.length), 2500)
+    return () => clearInterval(t)
+  }, [])
+  const name = c.patient_name || [c.patient_first, c.patient_last].filter(Boolean).join(' ') || 'New patient'
+  return (
+    <button
+      onClick={onOpen}
+      className="relative block w-full overflow-hidden rounded-lg border border-primary/30 bg-surface-800/60 px-4 py-3 text-left transition hover:bg-surface-800"
+    >
+      <span className="pc-leftbar absolute inset-y-0 left-0 w-[3px]" />
+      <div className="flex items-start justify-between gap-3 pl-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-slate-100">{name}</p>
+          <p className="mt-0.5 text-xs text-slate-400">Consultation recorded — analysis in progress</p>
+        </div>
+        <span key={bi} className="pc-badge shrink-0 rounded-full border border-amber-400/30 bg-amber-400/15 px-2.5 py-1 text-[11px] font-medium text-amber-300">
+          {PROC_BADGES[bi]}
+        </span>
+      </div>
+      <span className="pc-shimmer mt-3 block h-[3px] w-full rounded-full" />
+    </button>
   )
 }
 
