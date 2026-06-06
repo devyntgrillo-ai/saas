@@ -56,14 +56,14 @@ import {
 
 // ── Small presentational helpers ────────────────────────────────────────────
 
-// Consistent card chrome: white background, hairline gray border, rounded-xl,
-// subtle shadow so cards pop against the gray-50 page. Light border weight so
-// the page reads as a clean summary rather than a dashboard of boxes.
+// Light card chrome — hairline border, generous padding, subtle shadow. Kept
+// intentionally low-contrast so the page reads as a calm summary, not a grid of
+// competing boxes.
 function Card({ className = '', children }) {
-  return <div className={`rounded-xl border border-gray-100 bg-white p-5 shadow-sm ${className}`}>{children}</div>
+  return <div className={`rounded-2xl border border-gray-100 bg-white p-5 shadow-sm ${className}`}>{children}</div>
 }
 
-// xs uppercase muted section label with an optional leading icon.
+// Subtle section heading.
 function SectionLabel({ icon: Icon, children, className = '' }) {
   return (
     <p className={`flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400 ${className}`}>
@@ -84,13 +84,13 @@ function SkeletonLines({ lines = 3, className = '' }) {
   )
 }
 
-// A label-over-value stat box (Primary / Secondary Objection, Exit Intent) with a
-// subtle colored left accent. White background, gray border, gray-900 value.
-function StatBox({ label, accent, children }) {
+// A label / value row used in the analysis list — replaces the old boxed grid so
+// the analysis reads as a clean, scannable list.
+function AnalysisRow({ label, children }) {
   return (
-    <div className={`rounded-lg border border-gray-100 border-l-4 ${accent} bg-white p-3`}>
-      <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">{label}</p>
-      <div className="mt-1.5 text-sm font-medium text-gray-900">{children}</div>
+    <div className="flex flex-col gap-0.5 py-3 sm:flex-row sm:gap-4">
+      <dt className="shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400 sm:w-40 sm:pt-0.5">{label}</dt>
+      <dd className="min-w-0 text-sm text-gray-900">{children}</dd>
     </div>
   )
 }
@@ -132,29 +132,15 @@ function fmtRemaining(ms) {
   return `${h}h ${m}m`
 }
 
-// Contact item in the header row. Missing values render muted with a warning icon.
-function ContactItem({ icon: Icon, value, missing }) {
-  if (!value) {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-gray-400">
-        <AlertTriangle className="h-3.5 w-3.5" /> {missing}
-      </span>
-    )
-  }
-  return (
-    <span className="inline-flex items-center gap-1.5 text-gray-700">
-      <Icon className="h-4 w-4 text-gray-400" /> {value}
-    </span>
-  )
-}
-
+// One labeled contact/detail line in the Patient card — the single place contact
+// info lives (it used to be duplicated in the header).
 function InfoRow({ icon: Icon, label, value }) {
   return (
-    <div className="flex items-center gap-3">
-      <Icon className="h-4 w-4 shrink-0 text-gray-400" />
+    <div className="flex items-start gap-3">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
       <div className="min-w-0">
-        {label && <p className="text-[11px] uppercase tracking-wide text-gray-500">{label}</p>}
-        <p className="truncate text-gray-900">{value}</p>
+        {label && <p className="text-[11px] uppercase tracking-wide text-gray-400">{label}</p>}
+        <p className="truncate text-sm text-gray-900">{value}</p>
       </div>
     </div>
   )
@@ -387,16 +373,22 @@ export default function ConsultDetail() {
   const hasPatient = Boolean(consult.patient_name || consult.patient_phone || consult.patient_email)
   const showPatient = linked || hasPatient
   const attrBadge = attribution && attribution.status !== 'unknown' ? attributionStatusBadge(attribution.status) : null
+  const isWon = consult.outcome === 'closed_won' || ['closed_won', 'recovered'].includes(consult.status)
 
   // Resolved treatment-plan value + its display descriptor.
   const tx = consultTxValue(consult, practice)
   const txDisp = txValueDisplay(tx)
   const txSourceLabel = TX_VALUE_SOURCES[tx.source]?.label || 'Estimated'
 
+  const hasAnalysis =
+    consult.objection_type || consult.primary_objection || consult.secondary_objection ||
+    consult.exit_intent_level || consult.exit_intent || consult.coaching_insight ||
+    consult.personal_detail || consult.downsell_opportunity || consult.tc_action
+
   return (
     // Edge-bleed wrapper paints the whole content area gray-50 so white cards pop.
     <div className="-mx-4 -my-6 bg-gray-50 px-4 py-6 sm:-mx-6 sm:px-6 lg:-mx-8 lg:-my-8 lg:px-8 lg:py-8">
-      <div className="mx-auto max-w-5xl space-y-8">
+      <div className="mx-auto max-w-5xl">
         {/* Back link */}
         <Link
           to="/consults"
@@ -405,179 +397,165 @@ export default function ConsultDetail() {
           <ArrowLeft className="h-4 w-4" /> Consults
         </Link>
 
-        {/* ── Header card ─────────────────────────────────────────────────── */}
-        <Card>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            {/* Left: patient name + appointment type + treatment badge */}
-            <div className="min-w-0">
-              <h1 className="truncate text-2xl font-bold tracking-tight text-gray-900">{heading}</h1>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <p className="text-sm text-gray-500">{apptType}</p>
-                {/* Treatment type - pulled from the PMS at record time, editable here. */}
-                <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 py-0.5 pl-2 pr-1 text-[11px] font-semibold text-gray-600">
-                  <Stethoscope className="h-3 w-3" />
-                  <select
-                    value={consult.treatment_type || 'dental_implants'}
-                    disabled={savingTreatment}
-                    onChange={(e) => saveTreatment(e.target.value)}
-                    title="Treatment type (editable)"
-                    className="cursor-pointer rounded-md border-0 bg-transparent py-0 pl-1 pr-5 text-[11px] font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary/40"
-                  >
-                    {TREATMENT_TYPES.map((t) => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
-                    ))}
-                  </select>
-                  {savingTreatment && <Loader2 className="h-3 w-3 animate-spin text-gray-400" />}
-                </span>
-              </div>
+        {/* ── Header (borderless — name, status, primary action) ──────────── */}
+        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="truncate text-[28px] font-bold leading-tight tracking-tight text-gray-900">{heading}</h1>
+              {/* Treatment type - pulled from the PMS at record time, editable here. */}
+              <span className="inline-flex items-center gap-1 rounded-full bg-white py-1 pl-2 pr-1 text-[11px] font-semibold text-gray-600 ring-1 ring-gray-200">
+                <Stethoscope className="h-3 w-3" />
+                <select
+                  value={consult.treatment_type || 'dental_implants'}
+                  disabled={savingTreatment}
+                  onChange={(e) => saveTreatment(e.target.value)}
+                  title="Treatment type (editable)"
+                  className="cursor-pointer rounded-md border-0 bg-transparent py-0 pl-1 pr-5 text-[11px] font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                >
+                  {TREATMENT_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+                {savingTreatment && <Loader2 className="h-3 w-3 animate-spin text-gray-400" />}
+              </span>
             </div>
-            {/* Right: status badge(s) + Mark as Won */}
-            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-              {analysisPending ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
-                  <Loader2 className="h-3 w-3 animate-spin" /> Analyzing
+            {/* Meta line: appointment type + date / time / duration. No contact here. */}
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
+              <span>{apptType}</span>
+              <span className="inline-flex items-center gap-1.5">
+                <Calendar className="h-4 w-4 text-gray-400" /> {formatDate(consult.recording_date)}
+              </span>
+              {consult.recording_time && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="h-4 w-4 text-gray-400" /> {formatTime(consult.recording_time)}
+                </span>
+              )}
+              {formatDuration(consult.duration) && formatDuration(consult.duration) !== '0 min' && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Timer className="h-4 w-4 text-gray-400" /> {formatDuration(consult.duration)}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Status badge(s) + Mark as Won */}
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            {analysisPending ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
+                <Loader2 className="h-3 w-3 animate-spin" /> Analyzing
+              </span>
+            ) : (
+              <StatusPill status={consult.status} />
+            )}
+            {attrBadge && (
+              <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${attrBadge.badge}`}>
+                {attrBadge.label}{attrBadge.check ? ' ✓' : ''}
+              </span>
+            )}
+            {consult.pms_synced && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
+                <RefreshCcw className="h-3 w-3" /> Auto-synced
+              </span>
+            )}
+            {!analysisPending && (
+              isWon ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                  <Trophy className="h-3 w-3" /> Won ✓
                 </span>
               ) : (
-                <StatusPill status={consult.status} />
-              )}
-              {attrBadge && (
-                <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${attrBadge.badge}`}>
-                  {attrBadge.label}{attrBadge.check ? ' ✓' : ''}
-                </span>
-              )}
-              {consult.pms_synced && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
-                  <RefreshCcw className="h-3 w-3" /> Auto-synced
-                </span>
-              )}
-              {!analysisPending && (
-                consult.outcome === 'closed_won' || ['closed_won', 'recovered'].includes(consult.status) ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                    <Trophy className="h-3 w-3" /> Won ✓
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => setWonOpen(true)}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-emerald-500"
-                  >
-                    <Trophy className="h-3 w-3" /> Mark as Won
+                <button
+                  onClick={() => setWonOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-emerald-500"
+                >
+                  <Trophy className="h-3 w-3" /> Mark as Won
+                </button>
+              )
+            )}
+          </div>
+        </div>
+
+        {/* Transcription error - amber (recoverable), not red. Full width. */}
+        {transcriptionError && (
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-800">Transcription failed</p>
+              <p className="mt-0.5 text-sm text-amber-700">{consult.transcript_error || 'Failed to send a request to the Edge Function'}</p>
+              <p className="mt-1 text-xs text-amber-600">The consult was saved but couldn’t be transcribed. This is recoverable — retry to generate the transcript, analysis, and follow-up messages.</p>
+              <button
+                onClick={retryTranscription}
+                disabled={retryingTranscription}
+                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-50 disabled:opacity-60"
+              >
+                {retryingTranscription ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
+                Retry Transcription
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Decision: treatment value + outcome (full width) ────────────── */}
+        <Card className="mt-5">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <SectionLabel>Treatment plan value</SectionLabel>
+              {editingTx ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="100"
+                      autoFocus
+                      className="input !w-40 !py-2 !pl-7 text-sm"
+                      value={txInput}
+                      onChange={(e) => setTxInput(e.target.value)}
+                      placeholder="0"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveTxValue()
+                        if (e.key === 'Escape') setEditingTx(false)
+                      }}
+                    />
+                  </div>
+                  <button onClick={saveTxValue} disabled={savingTx} className="btn-primary px-3 py-1.5 text-xs">
+                    {savingTx ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    Save
                   </button>
-                )
+                  <button onClick={() => setEditingTx(false)} disabled={savingTx} className="btn-ghost px-3 py-1.5 text-xs">
+                    <X className="h-3.5 w-3.5" /> Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <span className={`text-2xl font-bold ${txDisp.tone}`} title={txDisp.tooltip || undefined}>
+                    {txDisp.prefix}{txDisp.text}
+                  </span>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      txDisp.confirmed ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                    }`}
+                    title={txDisp.tooltip || undefined}
+                  >
+                    {txSourceLabel}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setTxInput(txDisp.confirmed && Number(consult.tx_plan_value) > 0 ? String(consult.tx_plan_value) : '')
+                      setEditingTx(true)
+                    }}
+                    className="inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-xs font-medium text-gray-400 transition hover:bg-gray-50 hover:text-gray-600"
+                    title="Edit treatment plan value"
+                  >
+                    <Pencil className="h-3.5 w-3.5" /> Edit
+                  </button>
+                </div>
               )}
             </div>
           </div>
 
-          {/* Middle: contact + recording details in one row */}
-          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-            <ContactItem icon={Phone} value={phone} missing="No phone on file" />
-            <ContactItem icon={Mail} value={email} missing="No email on file" />
-            <span className="inline-flex items-center gap-1.5 text-gray-700">
-              <Calendar className="h-4 w-4 text-gray-400" /> {formatDate(consult.recording_date)}
-            </span>
-            {consult.recording_time && (
-              <span className="inline-flex items-center gap-1.5 text-gray-700">
-                <Clock className="h-4 w-4 text-gray-400" /> {formatTime(consult.recording_time)}
-              </span>
-            )}
-            {formatDuration(consult.duration) && formatDuration(consult.duration) !== '0 min' && (
-              <span className="inline-flex items-center gap-1.5 text-gray-700">
-                <Timer className="h-4 w-4 text-gray-400" /> {formatDuration(consult.duration)}
-              </span>
-            )}
-          </div>
-
-          {/* ── Treatment-plan value (editable, with source badge) ──────────── */}
-          <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
-              Actual treatment plan value - used in all reporting
-            </p>
-            {editingTx ? (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">$</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="100"
-                    autoFocus
-                    className="input !w-40 !py-2 !pl-7 text-sm"
-                    value={txInput}
-                    onChange={(e) => setTxInput(e.target.value)}
-                    placeholder="0"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') saveTxValue()
-                      if (e.key === 'Escape') setEditingTx(false)
-                    }}
-                  />
-                </div>
-                <button onClick={saveTxValue} disabled={savingTx} className="btn-primary px-3 py-1.5 text-xs">
-                  {savingTx ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                  Save
-                </button>
-                <button onClick={() => setEditingTx(false)} disabled={savingTx} className="btn-ghost px-3 py-1.5 text-xs">
-                  <X className="h-3.5 w-3.5" /> Cancel
-                </button>
-                <span className="text-[11px] text-gray-400">Leave blank to clear.</span>
-              </div>
-            ) : (
-              <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                <span className={`text-xl font-bold ${txDisp.tone}`} title={txDisp.tooltip || undefined}>
-                  {txDisp.prefix}{txDisp.text}
-                </span>
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                    txDisp.confirmed ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'
-                  }`}
-                  title={txDisp.tooltip || undefined}
-                >
-                  {txSourceLabel}
-                </span>
-                <button
-                  onClick={() => {
-                    // Pre-fill with the stored manual/PMS amount when present; never
-                    // with an estimate so the TC types the real number deliberately.
-                    setTxInput(txDisp.confirmed && Number(consult.tx_plan_value) > 0 ? String(consult.tx_plan_value) : '')
-                    setEditingTx(true)
-                  }}
-                  className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-50"
-                  title="Edit treatment plan value"
-                >
-                  <Pencil className="h-3.5 w-3.5" /> Edit
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Attribution trail - what triggered the attribution */}
-          {attrBadge && attribution?.explanation && (
-            <div className="mt-3 flex items-start gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-              <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-              <span><span className="font-medium text-gray-700">{attrBadge.label}:</span> {attribution.explanation}</span>
-            </div>
-          )}
-
-          {/* Transcription error - amber (recoverable), not red. */}
-          {transcriptionError && (
-            <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-amber-800">Transcription failed</p>
-                <p className="mt-0.5 text-sm text-amber-700">{consult.transcript_error || 'Failed to send a request to the Edge Function'}</p>
-                <p className="mt-1 text-xs text-amber-600">The consult was saved but couldn’t be transcribed. This is recoverable — retry to generate the transcript, analysis, and follow-up messages.</p>
-                <button
-                  onClick={retryTranscription}
-                  disabled={retryingTranscription}
-                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-50 disabled:opacity-60"
-                >
-                  {retryingTranscription ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
-                  Retry Transcription
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Outcome decision - compact button group inside the header */}
-          <div className="mt-5 border-t border-gray-100 pt-4">
+          {/* Outcome decision - compact button group */}
+          <div className="mt-4 border-t border-gray-100 pt-4">
             <OutcomeControls
               consult={consult}
               holdHours={holdHours}
@@ -587,106 +565,104 @@ export default function ConsultDetail() {
           </div>
         </Card>
 
-        {/* ── Main content - two columns (60 / 40) ────────────────────────── */}
-        <div className="grid gap-8 lg:grid-cols-5">
-          {/* LEFT (60%) */}
-          <div className="space-y-8 lg:col-span-3">
-            {/* What happened - white card with a brand-red left accent */}
-            <div className="rounded-xl border border-gray-100 border-l-[3px] border-l-red-600 bg-white p-5 shadow-sm">
+        {/* ── Main content — summary/analysis (left) + sidebar (right) ────── */}
+        <div className="mt-6 grid gap-6 lg:grid-cols-3">
+          {/* LEFT — the read */}
+          <div className="space-y-6 lg:col-span-2">
+            {/* What happened */}
+            <Card>
               <SectionLabel>What Happened</SectionLabel>
               {stillProcessing ? (
                 <SkeletonLines className="mt-3" />
               ) : consult.what_happened ? (
-                <p className="mt-2 text-sm leading-relaxed text-gray-900">{stripEmDashes(consult.what_happened)}</p>
+                <p className="mt-2.5 text-[15px] leading-relaxed text-gray-800">{stripEmDashes(consult.what_happened)}</p>
               ) : (
                 <SkeletonLines className="mt-3" />
               )}
-            </div>
+            </Card>
 
             {/* CaseLift analysis */}
             <Card>
               <SectionLabel icon={Sparkles}>CaseLift Analysis</SectionLabel>
               {stillProcessing ? (
                 <SkeletonLines lines={5} className="mt-4" />
+              ) : !hasAnalysis ? (
+                <p className="mt-3 text-sm text-gray-400">No analysis available for this consult.</p>
               ) : (
-                <div className="mt-4 space-y-5">
-                  {/* Three stat boxes with colored left accents */}
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <StatBox label="CaseLift identified the primary objection as" accent="border-l-red-400">
+                <div className="mt-3 space-y-5">
+                  {/* Objections + exit intent as a clean label/value list */}
+                  <dl className="divide-y divide-gray-100">
+                    <AnalysisRow label="Primary objection">
                       {consult.objection_type || consult.primary_objection ? (
                         <span className="flex flex-wrap items-center gap-1.5">
-                          {consult.objection_type && <span>{objectionMeta(consult.objection_type).label}</span>}
-                          {consult.primary_objection && <span>{consult.primary_objection}</span>}
+                          {consult.objection_type && <span className="font-medium">{objectionMeta(consult.objection_type).label}</span>}
+                          {consult.primary_objection && <span className="text-gray-600">{consult.primary_objection}</span>}
                         </span>
-                      ) : (
-                        DASH
-                      )}
-                    </StatBox>
-                    <StatBox label="Secondary Objection" accent="border-l-orange-400">
+                      ) : DASH}
+                    </AnalysisRow>
+                    <AnalysisRow label="Secondary objection">
                       {consult.secondary_objection || DASH}
-                    </StatBox>
-                    <StatBox label="Exit Intent" accent="border-l-blue-400">
+                    </AnalysisRow>
+                    <AnalysisRow label="Exit intent">
                       {consult.exit_intent_level || consult.exit_intent ? (
                         <span className="flex flex-wrap items-center gap-1.5">
-                          {consult.exit_intent_level && <span>{exitIntentMeta(consult.exit_intent_level).label}</span>}
-                          {consult.exit_intent && <span className="font-normal text-gray-600">{consult.exit_intent}</span>}
+                          {consult.exit_intent_level && <span className="font-medium">{exitIntentMeta(consult.exit_intent_level).label}</span>}
+                          {consult.exit_intent && <span className="text-gray-600">{consult.exit_intent}</span>}
                         </span>
-                      ) : (
-                        DASH
-                      )}
-                    </StatBox>
-                  </div>
+                      ) : DASH}
+                    </AnalysisRow>
+                  </dl>
 
-                  {/* Coaching insight - highlighted callout */}
+                  {/* Coaching insight - the one highlighted callout */}
                   {consult.coaching_insight && (
-                    <div className="rounded-lg border border-gray-100 border-l-4 border-l-blue-500 bg-blue-50 p-4">
+                    <div className="rounded-xl border-l-[3px] border-l-blue-500 bg-blue-50/70 px-4 py-3">
                       <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700">
-                        <Lightbulb className="h-3.5 w-3.5" /> CaseLift&apos;s coaching insight
+                        <Lightbulb className="h-3.5 w-3.5" /> Coaching insight
                       </p>
-                      <p className="mt-2 text-[15px] leading-relaxed text-gray-900">{stripEmDashes(consult.coaching_insight)}</p>
+                      <p className="mt-1.5 text-[15px] leading-relaxed text-gray-900">{stripEmDashes(consult.coaching_insight)}</p>
                     </div>
                   )}
 
-                  {/* Personal detail (kept) */}
+                  {/* Recommended next step + downsell */}
+                  {(consult.tc_action || consult.downsell_opportunity) && (
+                    <div className="space-y-3">
+                      {consult.tc_action && (
+                        <div>
+                          <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                            <ListChecks className="h-3.5 w-3.5 text-blue-600" /> Recommended next step
+                          </p>
+                          <p className="mt-1 text-sm leading-relaxed text-gray-800">{stripEmDashes(consult.tc_action)}</p>
+                        </div>
+                      )}
+                      {consult.downsell_opportunity && (
+                        <div>
+                          <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                            <TrendingDown className="h-3.5 w-3.5 text-green-600" /> Downsell opportunity
+                          </p>
+                          <p className="mt-1 text-sm leading-relaxed text-gray-800">{stripEmDashes(consult.downsell_opportunity)}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Personal detail */}
                   {consult.personal_detail && (
-                    <div className="flex items-start gap-2 rounded-lg border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700">
+                    <p className="flex items-start gap-2 text-sm text-gray-500">
                       <Heart className="mt-0.5 h-4 w-4 shrink-0 text-pink-400" />
                       <span>{stripEmDashes(consult.personal_detail)}</span>
-                    </div>
-                  )}
-
-                  {/* Downsell + TC action side by side */}
-                  {(consult.downsell_opportunity || consult.tc_action) && (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      {consult.downsell_opportunity && (
-                        <div className="rounded-lg border border-gray-100 bg-white p-4">
-                          <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-500">
-                            <TrendingDown className="h-3.5 w-3.5 text-green-600" /> Downsell Opportunity
-                          </p>
-                          <p className="mt-1.5 text-sm leading-relaxed text-gray-900">{stripEmDashes(consult.downsell_opportunity)}</p>
-                        </div>
-                      )}
-                      {consult.tc_action && (
-                        <div className="rounded-lg border border-gray-100 bg-white p-4">
-                          <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-500">
-                            <ListChecks className="h-3.5 w-3.5 text-blue-600" /> CaseLift&apos;s recommended next step
-                          </p>
-                          <p className="mt-1.5 text-sm leading-relaxed text-gray-900">{stripEmDashes(consult.tc_action)}</p>
-                        </div>
-                      )}
-                    </div>
+                    </p>
                   )}
                 </div>
               )}
             </Card>
           </div>
 
-          {/* RIGHT (40%) */}
-          <div className="space-y-8 lg:col-span-2">
-            {/* Patient information */}
+          {/* RIGHT — the facts */}
+          <div className="space-y-6">
+            {/* Patient — the single home for contact info */}
             <Card>
               <div className="flex items-center justify-between gap-2">
-                <SectionLabel icon={User}>Patient Information</SectionLabel>
+                <SectionLabel icon={User}>Patient</SectionLabel>
                 {linked && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700">
                     <Link2 className="h-3 w-3" /> PMS
@@ -694,7 +670,7 @@ export default function ConsultDetail() {
                 )}
               </div>
               {showPatient ? (
-                <dl className="mt-3 space-y-2.5 text-sm">
+                <dl className="mt-3 space-y-3">
                   <InfoRow icon={User} label="Name" value={heading} />
                   <InfoRow icon={Phone} label="Phone" value={phone || '-'} />
                   <InfoRow icon={Mail} label="Email" value={email || '-'} />
@@ -708,9 +684,14 @@ export default function ConsultDetail() {
                     onClick={() => setShowPatientEdit(true)}
                     className="shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50"
                   >
-                    Enter patient info
+                    Enter info
                   </button>
                 </div>
+              )}
+              {attrBadge && attribution?.explanation && (
+                <p className="mt-3 border-t border-gray-100 pt-3 text-xs text-gray-500">
+                  <span className="font-medium text-gray-600">{attrBadge.label}:</span> {attribution.explanation}
+                </p>
               )}
             </Card>
 
@@ -758,19 +739,21 @@ export default function ConsultDetail() {
         {/* Transcript - de-identified, speaker-labeled, key moments highlighted.
             While transcription runs, show a live placeholder instead of an empty
             viewer (the page auto-refreshes every 10s via stillProcessing above). */}
-        {!consult.transcript_deidentified && stillProcessing ? (
-          <div className="rounded-xl border border-gray-100 bg-white p-6 text-center shadow-sm">
-            <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-400" />
-            <p className="mt-3 text-sm font-medium text-gray-700">Transcript is being generated…</p>
-            <p className="mt-1 text-xs text-gray-500">This updates automatically — you can leave and come back.</p>
-          </div>
-        ) : (
-          <TranscriptViewer
-            transcript={consult.transcript_deidentified}
-            duration={consult.duration}
-            source={consult.recording_source}
-          />
-        )}
+        <div className="mt-6">
+          {!consult.transcript_deidentified && stillProcessing ? (
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-sm">
+              <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-400" />
+              <p className="mt-3 text-sm font-medium text-gray-700">Transcript is being generated…</p>
+              <p className="mt-1 text-xs text-gray-500">This updates automatically — you can leave and come back.</p>
+            </div>
+          ) : (
+            <TranscriptViewer
+              transcript={consult.transcript_deidentified}
+              duration={consult.duration}
+              source={consult.recording_source}
+            />
+          )}
+        </div>
 
         {showPatientEdit && (
           <PatientEditModal consult={consult} onClose={() => setShowPatientEdit(false)} onSave={savePatientInfo} />
