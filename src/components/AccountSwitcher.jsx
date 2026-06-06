@@ -158,8 +158,15 @@ export default function AccountSwitcher() {
                 super-admin is never stranded in a reseller dashboard. Practice
                 level → back to the reseller view if there's a reseller behind it,
                 otherwise to the admin view. */}
-            {(isSuperAdmin || isAgencyUser) && isImpersonating && (() => {
-              const inResellerSubaccount = impersonation?.level === 'practice' && (Boolean(impersonation?.reseller) || isAgencyUser)
+            {(() => {
+              // Route-based so "Back to Super Admin View" persists in the reseller
+              // view AND subaccounts regardless of the impersonation flag - a
+              // super-admin is anywhere outside /admin → offer the way back.
+              const onAdmin = location.pathname.startsWith('/admin')
+              const inResellerSubaccount =
+                isImpersonating && impersonation?.level === 'practice' && (Boolean(impersonation?.reseller) || isAgencyUser)
+              const showAdminExit = isSuperAdmin && !onAdmin
+              if (!inResellerSubaccount && !showAdminExit) return null
               const backBtn = 'mb-1 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-surface-800'
               return (
                 <div className="mb-1">
@@ -170,9 +177,9 @@ export default function AccountSwitcher() {
                       <span className="text-sm font-medium">Back to Reseller View</span>
                     </button>
                   )}
-                  {/* Super-admins always get a path straight back to the admin view,
-                      stacked beneath "Back to Reseller View" when in a subaccount. */}
-                  {isSuperAdmin && (
+                  {/* Super-admin path back to the admin view - persists in the
+                      reseller view and subaccounts (stacked under the reseller one). */}
+                  {showAdminExit && (
                     <button onClick={() => { setOpen(false); exitAgency(); navigate('/admin') }} style={{ color: 'var(--accent)' }} className={backBtn}>
                       <Shield className="h-4 w-4 shrink-0" />
                       <span className="text-sm font-medium">Back to Super Admin View</span>
