@@ -58,9 +58,31 @@ const OUTCOME_OPTIONS = [
   },
 ]
 
+// Demo-only: a rich, pre-formatted example consult pushed straight through the
+// real pipeline (transcribe -> analyze -> sequence build -> consult detail) so a
+// sales demo can show the whole flow without recording live audio. Speaker-
+// labeled + timestamped so the transcript viewer renders it as a clean dialogue.
+const EXAMPLE_DURATION = 165
+const EXAMPLE_TRANSCRIPT = `[TC] 0:03 — Thanks for coming in today. Before we get into the plan, tell me what brought you in.
+[Patient] 0:11 — Honestly I have been hiding my smile for years. My bottom teeth are failing and the partial I have never fit right.
+[TC] 0:24 — That is exactly what we fix here. Based on the scan, the doctor is recommending a full arch restoration on the lower. It is fixed, never comes out, and feels like real teeth.
+[Patient] 0:40 — That is what I want. I am just nervous about two things, the surgery and honestly the cost.
+[TC] 0:51 — Both totally normal. Let me take the fear first. We do this under IV sedation, you are completely comfortable, and most patients tell me it was easier than a regular extraction.
+[Patient] 1:09 — Okay, that helps. My sister had hers done and said the same thing.
+[TC] 1:16 — Perfect, so you already have a great reference. Now the investment. The full arch with sedation comes to forty two thousand.
+[Patient] 1:28 — That is a lot. I do not have that kind of money sitting around.
+[TC] 1:34 — You do not need to. Most of our patients finance it. With approved credit we can get you to around five hundred eighty a month. Would a monthly number like that feel more manageable?
+[Patient] 1:49 — That actually sounds doable. I would want to talk it over with my husband first though.
+[TC] 2:01 — Of course, this is a big decision and he should be part of it. What timeline are you hoping for?
+[Patient] 2:09 — My daughter is getting married in June and I would love to feel confident in the photos.
+[TC] 2:18 — That is a wonderful reason, and June is very doable if we start soon. I will send you the financing breakdown and a few before and afters tonight. Can I follow up with you and your husband on Thursday?
+[Patient] 2:34 — Yes, Thursday works. Thank you, this was a lot less scary than I expected.
+[TC] 2:41 — That is exactly what I love to hear. We are going to take great care of you.`
+
 export default function RecordingModal({ onClose, patient = null }) {
   const { practice, practiceId, user } = useAuth()
   const navigate = useNavigate()
+  const isDemo = practice?.email === 'demo@pinnacledental.com'
 
   // Patient is resolved up-front by the AssignmentModal.
   const patientName = patient
@@ -295,6 +317,31 @@ export default function RecordingModal({ onClose, patient = null }) {
     }
   }
 
+  // Demo-only: push a canned example transcript through the same pipeline as a
+  // real recording, so the next steps (analysis, sequence build, consult detail)
+  // all run as a live example. Skips audio entirely via the transcript passthrough.
+  async function loadExample() {
+    setPhase('processing')
+    setError('')
+    let id
+    try {
+      id = await createBrowserConsult(practiceId, { durationSec: EXAMPLE_DURATION, patient: patient || undefined })
+      markRecording({ id, practiceId, name: patientName })
+      setConsultId(id)
+      await transcribeRecording({
+        consultId: id,
+        transcript: EXAMPLE_TRANSCRIPT,
+        durationSec: EXAMPLE_DURATION,
+        appointmentId: patient?.appointmentId,
+        patient: patient || undefined,
+      })
+      setPhase('outcome')
+    } catch (e) {
+      setError(`${e?.message || 'Something went wrong'} (step: ${id ? 'transcribe' : 'create'})`)
+      setPhase('error')
+    }
+  }
+
   // Record the chosen outcome immediately (before analysis finishes), show a
   // 1s confirmation, then redirect to the consult detail page.
   async function chooseOutcome(option) {
@@ -477,6 +524,17 @@ export default function RecordingModal({ onClose, patient = null }) {
                   title="Start recording"
                 >
                   <Mic className="h-8 w-8" />
+                </button>
+              )}
+
+              {/* Demo-only shortcut: load a rich example consult and run it through
+                  the full pipeline so the rest of the flow demos end to end. */}
+              {phase === 'ready' && isDemo && (
+                <button
+                  onClick={loadExample}
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-medium text-primary-300 transition hover:bg-primary/20"
+                >
+                  <Sparkles className="h-3.5 w-3.5" /> Load example consult recording
                 </button>
               )}
 
