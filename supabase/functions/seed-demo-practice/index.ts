@@ -415,6 +415,7 @@ Deno.serve(async (req: Request) => {
       await admin.from("call_logs").delete().eq("practice_id", prior.id);
       await admin.from("message_outcomes").delete().eq("practice_id", prior.id);
       await admin.from("pms_appointments").delete().eq("practice_id", prior.id);
+      await admin.from("pms_patients").delete().eq("practice_id", prior.id);
       await admin.from("assisted_wins").delete().eq("practice_id", prior.id);
       await admin.from("conversations").delete().eq("practice_id", prior.id); // cascades conversation_messages
       await admin.from("consults").delete().eq("practice_id", prior.id); // cascades messages
@@ -786,6 +787,32 @@ Deno.serve(async (req: Request) => {
     summary.pms_appointments_created = perConsultAppts.length + fillerRows.length + upcomingRows.length + todayRows.length;
     summary.upcoming_to_record = upcomingRows.length;
     summary.today_appointments = todayRows.length;
+
+    // ----- 6b. PMS patient roster (as if a PMS sync populated it) -------------
+    // 36 patients so the "Select Patient" picker in the recording flow has a full,
+    // searchable roster for demos.
+    const PATIENT_ROSTER: [string, string][] = [
+      ["Olivia", "Bennett"], ["Marcus", "Reed"], ["Diana", "Foster"], ["Henry", "Park"],
+      ["Sofia", "Nguyen"], ["Walter", "Hayes"], ["Grace", "Coleman"], ["Victor", "Ramirez"],
+      ["Eleanor", "Brooks"], ["Felix", "Morgan"], ["Ruth", "Sanders"], ["Leo", "Dawson"],
+      ["Amelia", "Cole"], ["Nathan", "Boyd"], ["Camila", "Ortiz"], ["Owen", "Fleming"],
+      ["Hazel", "Stein"], ["Julian", "Vance"], ["Maya", "Patel"], ["Caleb", "Frost"],
+      ["Nora", "Lindqvist"], ["Elijah", "Barrett"], ["Layla", "Haddad"], ["Sebastian", "Cho"],
+      ["Aria", "Donovan"], ["Miles", "Hoffman"], ["Stella", "Maddox"], ["Adrian", "Quinn"],
+      ["Violet", "Acosta"], ["Theo", "Whitfield"], ["Iris", "Calloway"], ["Roman", "Esparza"],
+      ["Daphne", "Mercer"], ["Oscar", "Trent"], ["Lucia", "Romano"], ["Beatrice", "Holloway"],
+    ];
+    const patientRows = PATIENT_ROSTER.map(([first, last], i) => ({
+      practice_id: practiceId,
+      external_id: `demo-pat-${i + 1}`,
+      first_name: first,
+      last_name: last,
+      phone: `(480) 555-${String(1001 + i).padStart(4, "0")}`,
+      email: `${first.toLowerCase()}.${last.toLowerCase()}@example.com`,
+    }));
+    const { error: ppErr } = await admin.from("pms_patients").insert(patientRows);
+    if (ppErr) throw new Error(`pms_patients insert: ${ppErr.message}`);
+    summary.pms_patients_created = patientRows.length;
 
     // ----- 7. Conversations --------------------------------------------------
     async function makeConversation(c: Consult, msgs: { dir: "inbound" | "outbound"; channel: string; body: string; daysAgo: number; hour: number }[], unread: number) {
