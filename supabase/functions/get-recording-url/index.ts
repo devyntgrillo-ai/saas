@@ -60,7 +60,9 @@ Deno.serve(async (req: Request) => {
       .from(BUCKET)
       .createSignedUrl(consult.audio_storage_path as string, 3600);
     if (sErr || !signed?.signedUrl) {
-      return json({ error: "Could not load the recording.", detail: sErr?.message }, 500);
+      // Path is recorded but the audio file is gone (e.g. older consult recorded
+      // before audio was retained). Treat as "no recording" rather than an error.
+      return json({ error: "This recording is no longer available." }, 404);
     }
 
     return json({ url: signed.signedUrl });
