@@ -63,7 +63,9 @@ export default function RecordingPlayer({ consultId, hasAudio = true, processing
   const emptyMessage = processing
     ? 'The recording is being processed…'
     : deletedAt
-      ? `Recording deleted after ${retentionDays}-day retention period. Transcript and analysis are preserved.`
+      ? (Number(retentionDays) === 0
+          ? 'Recording deleted immediately after transcription. Transcript and analysis are preserved.'
+          : `Recording deleted after ${retentionDays}-day retention period. Transcript and analysis are preserved.`)
       : 'Recording not retained for this consult. Audio is kept only for consults recorded recently.'
 
   return (

@@ -16,7 +16,6 @@ const json = (body: unknown, status = 200) =>
 
 const BUCKET = "consult-recordings";
 const DEFAULT_RETENTION_DAYS = 30;
-const MIN_RETENTION_DAYS = 7; // smallest selectable window — used to pre-filter
 const DAY_MS = 86_400_000;
 
 Deno.serve(async (req: Request) => {
@@ -30,14 +29,12 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const now = Date.now();
 
-    // Only consults older than the smallest possible window can be due; fetch
-    // those with their practice's retention setting and decide per-row.
-    const preCutoff = new Date(now - MIN_RETENTION_DAYS * DAY_MS).toISOString();
+    // Fetch every consult that still has retained audio + its practice's window,
+    // then decide per-row (retention 0 = delete now; N = delete once older than N days).
     const { data: rows, error } = await admin
       .from("consults")
       .select("id, audio_storage_path, created_at, practice:practices(audio_retention_days)")
       .not("audio_storage_path", "is", null)
-      .lt("created_at", preCutoff)
       .limit(2000);
     if (error) return json({ error: "Query failed", detail: error.message }, 500);
 
@@ -45,7 +42,8 @@ Deno.serve(async (req: Request) => {
     let failed = 0;
     for (const r of rows ?? []) {
       const practice = Array.isArray(r.practice) ? r.practice[0] : r.practice;
-      const days = Number(practice?.audio_retention_days) || DEFAULT_RETENTION_DAYS;
+      // Keep 0 ("immediately") distinct from null/unset (default 30).
+      const days = practice?.audio_retention_days == null ? DEFAULT_RETENTION_DAYS : Number(practice.audio_retention_days);
       const cutoff = now - days * DAY_MS;
       if (new Date(r.created_at as string).getTime() >= cutoff) continue; // not old enough for this practice
 

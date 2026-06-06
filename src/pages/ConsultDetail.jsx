@@ -745,7 +745,7 @@ export default function ConsultDetail() {
             hasAudio={Boolean(consult.audio_storage_path)}
             processing={stillProcessing}
             deletedAt={consult.audio_deleted_at}
-            retentionDays={practice?.audio_retention_days || 30}
+            retentionDays={practice?.audio_retention_days ?? 30}
           />
         </div>
 

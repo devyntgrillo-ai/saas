@@ -123,8 +123,18 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Audio is intentionally retained (not deleted) so it can be played back on
-    // the consult detail page via a short-lived signed URL (get-recording-url).
+    // Audio is normally retained so it can be played back (get-recording-url),
+    // then purged by the daily retention cron. If the owning practice's retention
+    // is set to 0 ("immediately"), delete the raw audio now so it's never playable.
+    if (body.audio_path) {
+      const { data: row } = await admin.from("consults").select("practice_id").eq("id", savedId).maybeSingle();
+      const ownerPracticeId = row?.practice_id ?? practiceId;
+      const { data: prac } = await admin.from("practices").select("audio_retention_days").eq("id", ownerPracticeId).maybeSingle();
+      if (Number(prac?.audio_retention_days) === 0) {
+        await admin.storage.from(BUCKET).remove([body.audio_path]).catch(() => {});
+        await admin.from("consults").update({ audio_storage_path: null, audio_deleted_at: new Date().toISOString() }).eq("id", savedId);
+      }
+    }
 
     try {
       await auditClient.rpc("log_audit_event", { p_action: "consult.transcribed", p_resource_type: "consult", p_resource_id: savedId, p_ip_address: ip });

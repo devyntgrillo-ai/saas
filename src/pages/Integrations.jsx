@@ -198,21 +198,18 @@ function RecordingSettingsCard({ practice, save }) {
               value={retention}
               onChange={(e) => { setRetention(Number(e.target.value)); save({ audio_retention_days: Number(e.target.value) }, 'rec') }}
             >
+              <option value={0}>Immediately after transcription (no playback)</option>
               <option value={7}>7 days</option>
               <option value={30}>30 days</option>
               <option value={60}>60 days</option>
               <option value={90}>90 days</option>
             </select>
             <p className="mt-1.5 text-xs text-slate-500">
-              Raw recordings are auto-deleted after this period. Transcripts and analysis are kept permanently.
+              How long the raw recording is kept before automatic deletion. “Immediately” deletes it as
+              soon as the transcript is saved (HIPAA-friendly, but no playback). Transcripts and analysis are kept permanently.
             </p>
           </div>
           <div className="mt-4 border-t border-surface-700 pt-1">
-            <Toggle
-              label="Auto-delete raw audio after transcription"
-              description="HIPAA: the original recording is removed once the de-identified transcript is saved. Recommended on."
-              checked={practice?.auto_delete_audio !== false} onChange={(v) => save({ auto_delete_audio: v }, 'rec')}
-            />
             <Toggle
               label="Auto-analyze after recording"
               description="Run CaseLift analysis automatically when a recording finishes."
