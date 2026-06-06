@@ -346,7 +346,7 @@ export default function ConsultDetail() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
+      <div className="flex h-full items-center justify-center bg-gray-50">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-surface-700 border-t-primary" />
       </div>
     )
@@ -354,12 +354,14 @@ export default function ConsultDetail() {
 
   if (notFound) {
     return (
-      <div className="space-y-4">
-        <button onClick={() => navigate('/consults')} className="btn-ghost">
-          <ArrowLeft className="h-4 w-4" /> Back to consults
-        </button>
-        <div className="card px-6 py-16 text-center text-sm text-slate-400">
-          This consult could not be found.
+      <div className="h-full overflow-y-auto bg-gray-50">
+        <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <button onClick={() => navigate('/consults')} className="btn-ghost">
+            <ArrowLeft className="h-4 w-4" /> Back to consults
+          </button>
+          <div className="card px-6 py-16 text-center text-sm text-slate-400">
+            This consult could not be found.
+          </div>
         </div>
       </div>
     )
@@ -387,9 +389,11 @@ export default function ConsultDetail() {
     consult.personal_detail || consult.downsell_opportunity || consult.tc_action
 
   return (
-    // Edge-bleed wrapper paints the whole content area gray-50 so white cards pop.
-    <div className="-mx-4 -my-6 bg-gray-50 px-4 py-6 sm:-mx-6 sm:px-6 lg:-mx-8 lg:-my-8 lg:px-8 lg:py-8">
-      <div className="mx-auto max-w-5xl">
+    // Full-bleed: own the entire content area and paint the page background
+    // edge-to-edge (gray-50 in light, dark surface in dark) so cards pop. The
+    // page manages its own scroll; content stays centered at max-w-5xl.
+    <div className="h-full overflow-y-auto bg-gray-50">
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         {/* Back link */}
         <Link
           to="/consults"
