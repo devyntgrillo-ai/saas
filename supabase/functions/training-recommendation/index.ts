@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
     // Last 10 analyzed consults (any post-analysis status).
     const { data: consults, error: ce } = await supabase
       .from('consults')
-      .select('recording_date, status, outcome, objection_type, primary_objection, exit_intent_level, coaching_insight, tc_action, downsell_opportunity, what_happened')
+      .select('recording_date, status, outcome, treatment_type, objection_type, primary_objection, exit_intent_level, coaching_insight, tc_action, downsell_opportunity, what_happened')
       .eq('practice_id', practice_id)
       .in('status', ['analyzed', 'followed_up', 'recovered', 'lost'])
       .order('recording_date', { ascending: false })
@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
     const consultSummary = consults
       .map((c, i) => {
         const parts = [
-          `Consult ${i + 1} (${c.recording_date || 'date n/a'}, status: ${c.status}${c.outcome ? `, outcome: ${c.outcome}` : ''})`,
+          `Consult ${i + 1} (${c.recording_date || 'date n/a'}, status: ${c.status}${c.outcome ? `, outcome: ${c.outcome}` : ''}${c.treatment_type ? `, treatment: ${c.treatment_type}` : ''})`,
           c.objection_type ? `  objection: ${c.objection_type}${c.primary_objection ? ` - ${c.primary_objection}` : ''}` : null,
           c.exit_intent_level ? `  exit intent: ${c.exit_intent_level}` : null,
           c.what_happened ? `  what happened: ${c.what_happened}` : null,
@@ -64,6 +64,8 @@ Deno.serve(async (req) => {
       .join('\n\n')
 
     const prompt = `You are a sales coach for dental treatment coordinators (TCs). Their consults span many treatment types (implants, Invisalign, veneers, cosmetic, sleep apnea, perio, and more), so do not assume implants. Below are the practice's ${consults.length} most recent analyzed consults, plus the training modules available to them. Identify the single most valuable thing this team should study or practice next, based on recurring patterns across these consults (common objections, exit-intent mix, missed actions, lost outcomes).
+
+These modules teach treatment-coordinator SALES skills (handling objections, financing, rapport, presenting, closing) that apply across ALL treatment types, even when a title references implants. Recommend the module whose underlying SKILL best fixes the team's recurring pattern. Do NOT send a consult to a module that is specific to a different procedure than that consult is about (for example, never point an Invisalign, veneers, or cosmetic consult at an implant-procedure module like "Dental Implants 101" or "Full-Arch Specific Tactics"). If the only close match is procedure-specific to a different treatment, recommend the nearest transferable skill module instead, or give the coaching focus without naming a module.
 
 Write a SHORT, specific, encouraging recommendation the TC reads on their Training page. Hard limit: at most 2 sentences, roughly 45 words. Name the one recurring pattern, then the single action plus the most relevant module to study next. Do NOT enumerate individual consult numbers. Name at most one module (a second only if it is truly complementary), and ONLY use modules that appear verbatim in the AVAILABLE TRAINING MODULES list, never invent one. Be direct. Never use em dashes (-) ; use commas or periods instead.
 
