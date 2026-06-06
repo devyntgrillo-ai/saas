@@ -93,6 +93,9 @@ Deno.serve(async (req: Request) => {
     };
     if (body.recording_source) record.recording_source = body.recording_source;
     if (body.appointment_id) record.appointment_id = body.appointment_id;
+    // Retain the audio so the consult detail page can play it back. (PHI: the raw
+    // recording stays in the private consult-recordings bucket - see get-recording-url.)
+    if (body.audio_path) record.audio_storage_path = body.audio_path;
     const patientName = [body.patient_first_name, body.patient_last_name].filter(Boolean).join(" ").trim();
     if (patientName) record.patient_name = patientName;
     if (body.patient_phone) record.patient_phone = body.patient_phone;
@@ -120,8 +123,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Clean up raw audio - we keep only the de-identified transcript.
-    if (body.audio_path) admin.storage.from(BUCKET).remove([body.audio_path]).catch(() => {});
+    // Audio is intentionally retained (not deleted) so it can be played back on
+    // the consult detail page via a short-lived signed URL (get-recording-url).
 
     try {
       await auditClient.rpc("log_audit_event", { p_action: "consult.transcribed", p_resource_type: "consult", p_resource_id: savedId, p_ip_address: ip });

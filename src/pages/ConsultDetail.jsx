@@ -38,6 +38,7 @@ import { requestAnalysis, transcribeRecording } from '../lib/recording'
 import OutcomeControls from '../components/OutcomeControls'
 import { parseSequenceConfig } from '../lib/sequence'
 import TranscriptViewer from '../components/TranscriptViewer'
+import RecordingPlayer from '../components/RecordingPlayer'
 import {
   formatDate,
   formatTime,
@@ -735,6 +736,13 @@ export default function ConsultDetail() {
             )}
           </div>
         </div>
+
+        {/* Recording playback (only when the audio was retained). */}
+        {consult.audio_storage_path && (
+          <div className="mt-6">
+            <RecordingPlayer consultId={consult.id} />
+          </div>
+        )}
 
         {/* Transcript - de-identified, speaker-labeled, key moments highlighted.
             While transcription runs, show a live placeholder instead of an empty
