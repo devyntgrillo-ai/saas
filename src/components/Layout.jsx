@@ -88,7 +88,11 @@ export default function Layout() {
     Boolean(practiceId) && (practice?.agency?.status === 'suspended' || practice?.agency?.active === false)
   // Full-bleed pages own the entire content area (no padding/max-width/scroll)
   // so they can manage their own internal scrolling - e.g. the chat view.
-  const fullBleed = location.pathname === '/conversations'
+  // The consult detail page (/consults/:id) paints its own full-width background;
+  // the list (/consults) and processing screen (/consults/:id/processing) do not.
+  const fullBleed =
+    location.pathname === '/conversations' ||
+    /^\/consults\/[^/]+$/.test(location.pathname)
 
   const handleSignOut = async () => {
     await signOut()

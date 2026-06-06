@@ -395,6 +395,28 @@
 :root.dark .border-blue-500 {
   border-color: rgb(var(--primary-500));
 }
+/* Pale -100 / fractional status fills not caught by the -50 rules — give them the
+   same dark treatment so badges (Analyzed/Analyzing/Won/Auto-synced), the coaching
+   callout, and transcript highlights read as subtle tints on dark surfaces instead
+   of glowing as bright light chips. */
+:root.dark .bg-blue-100,
+:root.dark .bg-blue-50\/70 {
+  background-color: var(--accent-subtle);
+}
+:root.dark .bg-emerald-100 {
+  background-color: var(--success-subtle);
+}
+:root.dark .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.14);
+}
+:root.dark .bg-rose-50,
+:root.dark .bg-rose-100 {
+  background-color: rgba(244, 63, 94, 0.12);
+}
+:root.dark .text-rose-600,
+:root.dark .text-rose-700 {
+  color: #fb7185; /* rose-400 - readable on dark */
+}
 :root.dark .bg-emerald-50 {
   background-color: var(--success-subtle);
 }
