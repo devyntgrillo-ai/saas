@@ -39,6 +39,15 @@ export function markRecording({ id, practiceId, name }) {
   write(list)
 }
 
+// The timestamp (ms) a consult was recorded, if we still have it locally — used
+// as an instant anchor for the processing-screen progress bar before the DB
+// created_at loads. Returns null when unknown.
+export function recordingStartedAt(id) {
+  if (!id) return null
+  const entry = read().find((r) => r.id === id)
+  return entry ? entry.ts : null
+}
+
 function snapshot(practiceId, windowMs) {
   if (!practiceId) return []
   const now = Date.now()

@@ -4,6 +4,7 @@ import { ArrowRight } from 'lucide-react'
 import Logo from '../components/Logo'
 import { supabase } from '../lib/supabase'
 import { requestAnalysis } from '../lib/recording'
+import { recordingStartedAt } from '../lib/recentRecordings'
 
 // Post-recording processing state. The recording is uploaded and transcription
 // runs in the background (status: analyzing → transcribed → analyzed). Instead of
@@ -51,6 +52,12 @@ const SIGNALS = [
   { a: 8, b: 9, dur: 3 },
   { a: 9, b: 10, dur: 2.4 },
 ]
+
+// How far the bar may fill at each stage, so it reflects real progress rather
+// than just elapsed time: it advances with time but won't pass a stage's ceiling
+// until the consult actually reaches the next status.
+const STATUS_CEIL = { analyzing: 60, transcribed: 85, analyzed: 97 }
+const ESTIMATED_MS = 45000
 
 const KEYFRAMES = `
 @keyframes nnNodePulse { 0%,100% { transform: scale(1); opacity: .7 } 50% { transform: scale(1.3); opacity: 1 } }
@@ -133,6 +140,16 @@ export default function ProcessingScreen() {
   const doneRef = useRef(false)
   const triggeredAnalysisRef = useRef(false)
   const analyzedSeenRef = useRef(0)
+  // Anchor for the progress bar: when analysis actually started. Seeded from the
+  // local record timestamp (instant), then corrected to the DB created_at.
+  const startedAtRef = useRef(recordingStartedAt(id))
+  const statusRef = useRef(null)
+
+  // Fall back to "now" if we have no recorded start (e.g. opened the URL
+  // directly); the DB created_at from the first poll will correct it.
+  useEffect(() => {
+    if (!startedAtRef.current) startedAtRef.current = Date.now()
+  }, [])
 
   // Cycle the status copy every 3s.
   useEffect(() => {
@@ -140,10 +157,19 @@ export default function ProcessingScreen() {
     return () => clearInterval(t)
   }, [])
 
-  // Animate the bar 0 → 85% over ~45s; never completes until we navigate.
+  // Progress is anchored to when analysis actually started and gated by the real
+  // status, so leaving and returning resumes the true elapsed progress instead
+  // of restarting at 0. (The bar never completes until we navigate.)
   useEffect(() => {
-    const step = 85 / (45000 / 250)
-    const t = setInterval(() => setProgress((p) => Math.min(85, p + step)), 250)
+    const tick = () => {
+      const start = startedAtRef.current
+      if (!start) return
+      const byTime = Math.min(95, ((Date.now() - start) / ESTIMATED_MS) * 95)
+      const ceiling = STATUS_CEIL[statusRef.current] ?? 85
+      const target = Math.min(byTime, ceiling)
+      setProgress((p) => (target > p ? target : p)) // monotonic — never goes backward
+    }
+    const t = setInterval(tick, 250)
     return () => clearInterval(t)
   }, [])
 
@@ -158,11 +184,17 @@ export default function ProcessingScreen() {
     const check = async () => {
       const { data } = await supabase
         .from('consults')
-        .select('status')
+        .select('status, created_at')
         .eq('id', id)
         .maybeSingle()
       if (!active || doneRef.current || !data) return
       const status = data.status
+      statusRef.current = status
+      // Use the authoritative start time so the bar reflects true elapsed time.
+      if (data.created_at) {
+        const ts = Date.parse(data.created_at)
+        if (!Number.isNaN(ts)) startedAtRef.current = ts
+      }
 
       // Transcription failed → open the detail page (shows the error + retry).
       if (status === 'transcription_error') {
