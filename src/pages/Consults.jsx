@@ -464,7 +464,11 @@ function RecordedTable({ rows, navigate, openRecorder, caughtUp, consultStatus =
               bLabel = 'Ready'; bText = 'text-emerald-300'; bDot = 'text-emerald-400'; BIcon = Check; bFill = true
             }
           }
-          const goDetail = () => navigate(`/consults/${a.consult_id}`)
+          // While the consult is still transcribing/analyzing, open the progress
+          // screen (it polls and redirects to the detail page once it's Ready).
+          const isProcessing = recorded && (cStatus === 'analyzing' || cStatus === 'transcribed')
+          const targetPath = isProcessing ? `/consults/${a.consult_id}/processing` : `/consults/${a.consult_id}`
+          const goDetail = () => navigate(targetPath)
           const onRow = recorded ? goDetail : () => openRecorder(a)
           return (
             <div
@@ -477,7 +481,7 @@ function RecordedTable({ rows, navigate, openRecorder, caughtUp, consultStatus =
               <div className="min-w-0 flex-1 py-3">
                 {recorded ? (
                   <Link
-                    to={`/consults/${a.consult_id}`}
+                    to={targetPath}
                     onClick={(e) => e.stopPropagation()}
                     className="block truncate text-sm font-medium text-slate-100 underline-offset-2 hover:text-white hover:underline"
                   >
