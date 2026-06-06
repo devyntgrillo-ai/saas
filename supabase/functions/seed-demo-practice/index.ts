@@ -325,6 +325,8 @@ Deno.serve(async (req: Request) => {
           (select count(*) from public.pms_appointments where practice_id = (select id from p limit 1) and consult_id is null and appointment_time > now()) as upcoming_to_record,
           (select count(*) from public.pms_appointments where practice_id = (select id from p limit 1) and appointment_time::date = current_date) as appointments_today,
           (select count(*) from public.call_logs where practice_id = (select id from p limit 1) and conversation_id is not null) as calls_in_threads,
+          (select count(*) from public.messages where practice_id = (select id from p limit 1) and (type='call' or channel='call') and status='scheduled') as power_dialer_queue,
+          (select count(*) from public.pms_appointments where practice_id = (select id from p limit 1) and patient_email is null) as appts_missing_email,
           (select a2p_brand_status || '/' || a2p_campaign_status from public.practices where id = (select id from p limit 1)) as a2p_status,
           (select (knowledge_base_sections is not null) from public.practices where id = (select id from p limit 1)) as has_knowledge_base,
           (select agency_id from public.practices where id = (select id from p limit 1)) as agency_id,
@@ -600,6 +602,37 @@ Deno.serve(async (req: Request) => {
     }
     summary.message_outcomes_total = (outs || []).length;
     summary.message_outcomes_replied = repliedIds.length;
+
+    // ----- 6c. Power Dialer queue: call tasks due today ----------------------
+    // The Power Dialer reads messages with type/channel 'call' that are due by
+    // end of today and whose consult has a phone number. Seed a few warm leads
+    // so the dialer opens with a live call list.
+    const callTaskSpecs = [
+      { key: "thomas", note: "Call Thomas — address surgery fear, lead with sedation options. Very warm." },
+      { key: "lisa", note: "Call Lisa — re-frame cost as monthly; she said too expensive but is engaged." },
+      { key: "christopher", note: "Call Christopher — walk through financing options. Warm." },
+      { key: "karen", note: "Call Karen — offer a joint call with her husband to align on the decision." },
+      { key: "robert", note: "Call Robert back — ready to schedule, confirm surgical date." },
+    ];
+    const callTaskRows = callTaskSpecs.map((t, i) => {
+      const c = CONSULTS.find((x) => x.key === t.key)!;
+      return {
+        consult_id: consultIdByName.get(`${c.first} ${c.last}`)!,
+        practice_id: practiceId,
+        type: "call",
+        channel: "call",
+        subject: null,
+        body: t.note,
+        send_day: null,
+        status: "scheduled",
+        scheduled_for: bizTsToday(8 + i, (i * 15) % 60),
+        sent_at: null,
+        created_at: bizTs(1, 9, 0),
+      };
+    });
+    const { error: ctErr } = await admin.from("messages").insert(callTaskRows);
+    if (ctErr) throw new Error(`call tasks insert: ${ctErr.message}`);
+    summary.power_dialer_queue = callTaskRows.length;
 
     // ----- 6b. PMS appointments ---------------------------------------------
     // Everything looks synced from Dentrix: one linked appointment per consult
