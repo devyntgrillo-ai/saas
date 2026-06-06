@@ -81,7 +81,7 @@ function KpiCard({ icon: Icon, label, value, sub, accent = 'primary', to }) {
           <Icon className="h-[18px] w-[18px]" />
         </span>
       </div>
-      <p className={`mt-3 text-3xl font-bold tracking-tight ${valueTone}`}>{value}</p>
+      <p className={`mt-1 text-3xl font-bold tracking-tight ${valueTone}`}>{value}</p>
       {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
     </>
   )
