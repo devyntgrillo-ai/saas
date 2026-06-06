@@ -3,6 +3,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import Logo from '../components/Logo'
 import { supabase } from '../lib/supabase'
+import { requestAnalysis } from '../lib/recording'
 
 // Post-recording processing state. The recording is uploaded and transcription
 // runs in the background (status: analyzing → transcribed → analyzed). Instead of
@@ -130,6 +131,8 @@ export default function ProcessingScreen() {
   const [msgIndex, setMsgIndex] = useState(0)
   const [progress, setProgress] = useState(0)
   const doneRef = useRef(false)
+  const triggeredAnalysisRef = useRef(false)
+  const analyzedSeenRef = useRef(0)
 
   // Cycle the status copy every 3s.
   useEffect(() => {
@@ -144,21 +147,51 @@ export default function ProcessingScreen() {
     return () => clearInterval(t)
   }, [])
 
-  // Poll the consult until transcription lands, then advance to the real page.
+  // Hold here until the consult is FULLY generated — transcript, AI analysis, and
+  // the drafted follow-up messages — then open the detail page. Lifecycle:
+  // analyzing → transcribed → analyzed (analyze-consult drafts the messages, then
+  // flips to 'analyzed'). Analysis is client-triggered, so we kick it off here at
+  // 'transcribed'; otherwise we'd wait forever.
   useEffect(() => {
     if (!id) return
     let active = true
     const check = async () => {
       const { data } = await supabase
         .from('consults')
-        .select('status, transcript_deidentified')
+        .select('status')
         .eq('id', id)
         .maybeSingle()
-      if (!active || doneRef.current) return
-      const ready = data && (data.transcript_deidentified || (data.status && data.status !== 'analyzing'))
-      if (ready) {
+      if (!active || doneRef.current || !data) return
+      const status = data.status
+
+      // Transcription failed → open the detail page (shows the error + retry).
+      if (status === 'transcription_error') {
         doneRef.current = true
         navigate(`/consults/${id}`, { replace: true })
+        return
+      }
+
+      // Transcript ready but analysis hasn't run — kick it off (it drafts the
+      // follow-up messages and then flips status to 'analyzed'). Keep waiting.
+      if (status === 'transcribed' && !triggeredAnalysisRef.current) {
+        triggeredAnalysisRef.current = true
+        requestAnalysis(id).catch(() => {})
+      }
+
+      // Fully generated: analysis done AND the follow-up messages are drafted.
+      // (Status flips to 'analyzed' a beat before the message insert in the same
+      // invocation, so confirm messages exist; fall back after a couple polls.)
+      if (status === 'analyzed') {
+        const { count } = await supabase
+          .from('messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('consult_id', id)
+        if (!active || doneRef.current) return
+        analyzedSeenRef.current += 1
+        if ((count && count > 0) || analyzedSeenRef.current >= 2) {
+          doneRef.current = true
+          navigate(`/consults/${id}`, { replace: true })
+        }
       }
     }
     check()
