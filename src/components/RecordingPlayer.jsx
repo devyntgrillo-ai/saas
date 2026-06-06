@@ -5,17 +5,19 @@ import { supabase } from '../lib/supabase'
 // Playback speeds offered for reviewing a consult recording.
 const SPEEDS = [1, 1.25, 1.5, 2]
 
-// Plays back a consult's audio recording. The audio lives in a private bucket,
-// so we fetch a short-lived signed URL from the get-recording-url edge function
-// (which authorizes via the caller's RLS). Light-themed to match the consult page.
-export default function RecordingPlayer({ consultId }) {
+// Recording section for the consult detail page. Always rendered so it's clear
+// whether a recording exists. When audio was retained it fetches a short-lived
+// signed URL (from get-recording-url, authorized via the caller's RLS) and shows
+// a player with speed control; otherwise it explains why there's nothing to play.
+export default function RecordingPlayer({ consultId, hasAudio = true, processing = false }) {
   const audioRef = useRef(null)
   const [url, setUrl] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(hasAudio)
   const [error, setError] = useState('')
   const [speed, setSpeed] = useState(1)
 
   useEffect(() => {
+    if (!hasAudio) return // nothing to fetch
     let active = true
     /* eslint-disable react-hooks/set-state-in-effect */
     setLoading(true)
@@ -44,7 +46,7 @@ export default function RecordingPlayer({ consultId }) {
       .catch((e) => { if (active) setError(e?.message || 'Recording unavailable.') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [consultId])
+  }, [consultId, hasAudio])
 
   // Keep the chosen speed applied across element (re)loads.
   useEffect(() => {
@@ -56,20 +58,30 @@ export default function RecordingPlayer({ consultId }) {
     if (audioRef.current) audioRef.current.playbackRate = r
   }
 
+  // The "no audio" explanation: still transcribing vs. simply not retained.
+  const emptyMessage = processing
+    ? 'The recording is being processed…'
+    : 'Recording not retained for this consult. Audio is kept only for consults recorded recently.'
+
   return (
     <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
       <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
         <AudioLines className="h-3.5 w-3.5" /> Recording
       </p>
 
-      {loading ? (
+      {!hasAudio ? (
+        <p className="mt-3 flex items-center gap-2 text-sm text-gray-400">
+          {processing && <Loader2 className="h-4 w-4 animate-spin" />}
+          {emptyMessage}
+        </p>
+      ) : loading ? (
         <div className="mt-3 flex items-center gap-2 text-sm text-gray-500">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading recording…
         </div>
       ) : error ? (
-        <div className="mt-3 flex items-center gap-2 text-sm text-gray-400">
+        <p className="mt-3 flex items-center gap-2 text-sm text-gray-400">
           <AlertTriangle className="h-4 w-4" /> {error}
-        </div>
+        </p>
       ) : (
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
           <audio ref={audioRef} src={url} controls preload="metadata" className="h-10 w-full min-w-0 flex-1" />

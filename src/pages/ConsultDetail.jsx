@@ -737,12 +737,15 @@ export default function ConsultDetail() {
           </div>
         </div>
 
-        {/* Recording playback (only when the audio was retained). */}
-        {consult.audio_storage_path && (
-          <div className="mt-6">
-            <RecordingPlayer consultId={consult.id} />
-          </div>
-        )}
+        {/* Recording playback. Always shown so it's clear whether audio exists;
+            plays when retained, otherwise explains why there's nothing to play. */}
+        <div className="mt-6">
+          <RecordingPlayer
+            consultId={consult.id}
+            hasAudio={Boolean(consult.audio_storage_path)}
+            processing={stillProcessing}
+          />
+        </div>
 
         {/* Transcript - de-identified, speaker-labeled, key moments highlighted.
             While transcription runs, show a live placeholder instead of an empty
