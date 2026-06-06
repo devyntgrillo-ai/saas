@@ -95,12 +95,16 @@ export function useUpcomingAppointments(practiceId) {
 // out they are, sorted earliest first. Used so the Schedule tab is never empty.
 export async function fetchNextConsults(practiceId, limit = 5) {
   if (!practiceId) return []
-  const now = new Date().toISOString()
+  // From the start of tomorrow onward, so these never duplicate today's rows
+  // (which already render in the day table above).
+  const start = new Date()
+  start.setHours(0, 0, 0, 0)
+  start.setDate(start.getDate() + 1)
   const { data, error } = await supabase
     .from('pms_appointments')
     .select('*')
     .eq('practice_id', practiceId)
-    .gte('appointment_time', now)
+    .gte('appointment_time', start.toISOString())
     .order('appointment_time', { ascending: true })
     .limit(50)
   if (error) throw error

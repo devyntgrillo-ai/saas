@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useRecorder } from '../context/RecorderContext'
-import { useConsultsDay, useUpcomingAppointments, useNextConsults, useProcessingConsults, useRecentConsults, useConsultArchive, ARCHIVE_PAGE_SIZE, useConsultsRealtime } from '../lib/queries'
+import { useConsultsDay, useNextConsults, useProcessingConsults, useRecentConsults, useConsultArchive, ARCHIVE_PAGE_SIZE, useConsultsRealtime } from '../lib/queries'
 import { statusMeta } from '../lib/consults'
 import { useRecentRecordings } from '../lib/recentRecordings'
 import { supabase } from '../lib/supabase'
@@ -49,8 +49,8 @@ export default function Consults() {
   const [search, setSearch] = useState('')
 
   const { data: dayData, isLoading: loading } = useConsultsDay(practiceId, date)
-  const { data: upcoming = [] } = useUpcomingAppointments(practiceId)
-  // Next 5 upcoming consults (today onward, any date) so the Schedule is never empty.
+  // Next 5 upcoming consults (tomorrow onward, any date) — always shown so there's
+  // a forward view and the Schedule is never an empty page.
   const { data: nextConsults = [] } = useNextConsults(practiceId, 5)
 
   const appts = useMemo(() => dayData?.appts ?? [], [dayData])
@@ -238,7 +238,9 @@ export default function Consults() {
         <div className="card flex justify-center py-16"><Clock className="h-6 w-6 animate-pulse text-slate-500" /></div>
       ) : appts.length === 0 ? (
         nextConsults.length > 0 ? (
-          <NextConsults rows={nextConsults} navigate={navigate} openRecorder={openRecorder} />
+          <p className="rounded-lg border border-surface-700 bg-surface-800/30 px-4 py-3 text-sm text-slate-400">
+            No consults scheduled for today. Your next consults are below.
+          </p>
         ) : (
           <EmptyCard icon={Calendar} title="No upcoming consults scheduled" sub="Hit record for a walk-in, or add appointments in your PMS." />
         )
@@ -250,10 +252,10 @@ export default function Consults() {
         <RecordedTable rows={rows} navigate={navigate} openRecorder={openRecorder} consultStatus={consultStatus} />
       )}
 
-      {/* ── Upcoming (next 7 days) ─ shown alongside a populated day; when the day
-          is empty the "Next consults" table above already covers what's coming. ── */}
-      {appts.length > 0 && upcoming.length > 0 && (
-        <UpcomingSchedule appts={upcoming} navigate={navigate} openRecorder={openRecorder} />
+      {/* ── Next 5 upcoming consults ─ always shown so there's a forward view of
+          what's coming, with date + time columns sorted earliest to latest. ── */}
+      {nextConsults.length > 0 && (
+        <NextConsults rows={nextConsults} navigate={navigate} openRecorder={openRecorder} />
       )}
       </>
       )}
@@ -518,13 +520,6 @@ function RecordedTable({ rows, navigate, openRecorder, caughtUp, consultStatus =
   )
 }
 
-function dayLabel(dayStr) {
-  const d = new Date(`${dayStr}T12:00:00`)
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
-}
-
-// Read-ahead schedule for the next 7 days, grouped by day — PMS-style, with a
-// Record button on each so a consult can be started early if needed.
 // Date label for the "Next consults" table (e.g. "Mon, Jun 9").
 function fmtDate(ts) {
   if (!ts) return ''
@@ -571,54 +566,6 @@ function NextConsults({ rows, navigate, openRecorder }) {
           })}
         </div>
       </div>
-    </section>
-  )
-}
-
-function UpcomingSchedule({ appts, navigate, openRecorder }) {
-  const groups = useMemo(() => {
-    const m = new Map()
-    appts.forEach((a) => {
-      const key = new Date(a.appointment_time).toLocaleDateString('en-CA')
-      if (!m.has(key)) m.set(key, [])
-      m.get(key).push(a)
-    })
-    return [...m.entries()]
-  }, [appts])
-
-  return (
-    <section className="space-y-3 pt-2">
-      <h2 className="text-sm font-semibold text-slate-200">Upcoming · next 7 days</h2>
-      {groups.map(([day, list]) => (
-        <div key={day} className="space-y-1.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{dayLabel(day)}</p>
-          <div className="card divide-y divide-surface-700/60 overflow-hidden p-0">
-            {list.map((a) => {
-              const recorded = Boolean(a.consult_id)
-              return (
-                <div key={a.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className="w-[64px] shrink-0 text-sm tabular-nums text-slate-400">{fmtTime(a.appointment_time)}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-slate-100">{fullName(a)}</p>
-                    <p className="truncate text-xs text-slate-500">
-                      {a.appointment_type || 'Consult'}{a.provider ? ` · ${a.provider}` : ''}
-                    </p>
-                  </div>
-                  {recorded ? (
-                    <button onClick={() => navigate(`/consults/${a.consult_id}`)} className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1.5 text-sm font-medium text-green-700 transition hover:bg-green-200">
-                      <Check className="h-4 w-4" /> View
-                    </button>
-                  ) : (
-                    <button onClick={() => openRecorder(a)} className="inline-flex items-center gap-1.5 rounded-lg border border-surface-600 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:bg-surface-800">
-                      <Mic className="h-3.5 w-3.5" /> Record
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      ))}
     </section>
   )
 }
