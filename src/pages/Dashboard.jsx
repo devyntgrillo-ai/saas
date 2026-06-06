@@ -240,10 +240,12 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between">
                   <p className="flex items-center gap-1.5 text-sm text-slate-400">
                     Production Recovered
-                    <Info
-                      className="h-3.5 w-3.5 cursor-help text-slate-500"
+                    <span
+                      className="inline-flex cursor-help"
                       title="Confirmed = actual treatment plan values from your PMS or manual entry, attributed to CaseLift."
-                    />
+                    >
+                      <Info className="h-3.5 w-3.5 text-slate-500" />
+                    </span>
                   </p>
                   <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
                     <DollarSign className="h-[18px] w-[18px]" />
