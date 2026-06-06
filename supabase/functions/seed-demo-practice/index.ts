@@ -23,6 +23,7 @@ const json = (b: unknown, s = 200) =>
 const DEMO_PRACTICE_EMAIL = "demo@pinnacledental.com";
 const DEMO_LOGIN_EMAIL = "demo@caselift.io";
 const DEMO_LOGIN_PASSWORD = "CaseLift2026!";
+const SUPER_ADMIN_EMAIL = "devyntgrillo@gmail.com";
 const AVG_CASE_VALUE = 38000;
 
 // Arizona is UTC-7 year-round (no DST). Build a UTC ISO string for a given
@@ -66,10 +67,13 @@ type Consult = {
   messagesSent?: number; // for assisted wins
 };
 
+// Dates are re-timed so the current month has real activity (consults this
+// month, a couple of wins this month) while still spanning ~6 weeks of history.
+// Totals are preserved: 12 consults, 4 wins, $93,100 recovered.
 const CONSULTS: Consult[] = [
   {
     key: "robert", first: "Robert", last: "Martinez", phone: "(480) 555-0110",
-    treatment: "full_arch", caseValue: 42000, daysAgo: 87, kind: "active",
+    treatment: "full_arch", caseValue: 42000, daysAgo: 35, kind: "active",
     objection: "Monthly payment amount", objectionType: "price",
     exitIntent: "Warm — requested time to discuss with wife", exitLevel: "warm",
     seqStartDaysAgo: 6,
@@ -78,59 +82,59 @@ const CONSULTS: Consult[] = [
   },
   {
     key: "sandra", first: "Sandra", last: "Williams", phone: "(480) 555-0111",
-    treatment: "full_arch", caseValue: 38500, daysAgo: 82, kind: "won", wonDaysAgo: 79, messagesSent: 4,
+    treatment: "full_arch", caseValue: 38500, daysAgo: 40, kind: "won", wonDaysAgo: 32, messagesSent: 4,
   },
   {
     key: "james", first: "James", last: "Chen", phone: "(480) 555-0112",
-    treatment: "single_implant", caseValue: 4800, daysAgo: 76, kind: "active",
-    objectionType: "timing", exitLevel: "warm", seqStartDaysAgo: 9,
+    treatment: "single_implant", caseValue: 4800, daysAgo: 28, kind: "active",
+    objectionType: "timing", exitLevel: "warm", seqStartDaysAgo: 10,
   },
   {
     key: "patricia", first: "Patricia", last: "Lopez", phone: "(480) 555-0113",
-    treatment: "full_arch", caseValue: 44000, daysAgo: 71, kind: "not_fit",
+    treatment: "full_arch", caseValue: 44000, daysAgo: 17, kind: "not_fit",
   },
   {
     key: "david", first: "David", last: "Thompson", phone: "(480) 555-0114",
-    treatment: "invisalign", caseValue: 6200, daysAgo: 65, kind: "won", wonDaysAgo: 62, messagesSent: 3,
+    treatment: "invisalign", caseValue: 6200, daysAgo: 22, kind: "won", wonDaysAgo: 15, messagesSent: 3,
   },
   {
     key: "karen", first: "Karen", last: "Anderson", phone: "(480) 555-0115",
-    treatment: "full_arch", caseValue: 41000, daysAgo: 58, kind: "active",
+    treatment: "full_arch", caseValue: 41000, daysAgo: 20, kind: "active",
     objection: "Needs to talk to spouse", objectionType: "spouse",
-    exitIntent: "Warm", exitLevel: "warm", seqStartDaysAgo: 12,
+    exitIntent: "Warm", exitLevel: "warm", seqStartDaysAgo: 14,
   },
   {
     key: "michael", first: "Michael", last: "Brown", phone: "(480) 555-0116",
-    treatment: "full_arch", caseValue: 39500, daysAgo: 51, kind: "won", wonDaysAgo: 47, messagesSent: 5,
+    treatment: "full_arch", caseValue: 39500, daysAgo: 4, kind: "won", wonDaysAgo: 1, messagesSent: 5,
   },
   {
     key: "lisa", first: "Lisa", last: "Garcia", phone: "(480) 555-0117",
-    treatment: "dental_implants", caseValue: 12400, daysAgo: 44, kind: "active",
+    treatment: "dental_implants", caseValue: 12400, daysAgo: 13, kind: "active",
     objection: "Too expensive", objectionType: "price",
-    exitIntent: "Uncertain", exitLevel: "long_term", seqStartDaysAgo: 8,
+    exitIntent: "Uncertain", exitLevel: "long_term", seqStartDaysAgo: 9,
   },
   {
     key: "thomas", first: "Thomas", last: "Wilson", phone: "(480) 555-0118",
-    treatment: "full_arch", caseValue: 46000, daysAgo: 37, kind: "active",
+    treatment: "full_arch", caseValue: 46000, daysAgo: 9, kind: "active",
     objection: "Fear of surgery", objectionType: "fear",
-    exitIntent: "Warm — very interested", exitLevel: "hot", seqStartDaysAgo: 16,
+    exitIntent: "Warm — very interested", exitLevel: "hot", seqStartDaysAgo: 7,
     coaching: "Thomas has been wanting this for 3 years. His fear is valid but addressable. Lead with sedation options and patient testimonials from anxious patients who had great experiences.",
   },
   {
     key: "nancy", first: "Nancy", last: "Davis", phone: "(480) 555-0119",
-    treatment: "cosmetic", caseValue: 8900, daysAgo: 28, kind: "won", wonDaysAgo: 25, messagesSent: 2,
+    treatment: "cosmetic", caseValue: 8900, daysAgo: 3, kind: "won", wonDaysAgo: 0, messagesSent: 2,
   },
   {
     key: "christopher", first: "Christopher", last: "Martinez", phone: "(480) 555-0120",
-    treatment: "full_arch", caseValue: 43500, daysAgo: 14, kind: "active",
+    treatment: "full_arch", caseValue: 43500, daysAgo: 4, kind: "active",
     objection: "Financing concern", objectionType: "price",
-    exitIntent: "Warm", exitLevel: "warm", seqStartDaysAgo: 11,
+    exitIntent: "Warm", exitLevel: "warm", seqStartDaysAgo: 4,
   },
   {
     key: "jennifer", first: "Jennifer", last: "Taylor", phone: "(480) 555-0121",
-    treatment: "full_arch", caseValue: 47000, daysAgo: 3, kind: "active",
+    treatment: "full_arch", caseValue: 47000, daysAgo: 2, kind: "active",
     objection: "Needs to think about it", objectionType: "timing",
-    exitIntent: "Very warm — asked about surgery date", exitLevel: "hot", seqStartDaysAgo: 3,
+    exitIntent: "Very warm — asked about surgery date", exitLevel: "hot", seqStartDaysAgo: 2,
     coaching: "Jennifer is ready. She asked about surgery dates unprompted — that is a buying signal. The follow-up sequence should reference her specific timeline concern about healing before her son's graduation in May.",
   },
 ];
@@ -178,8 +182,14 @@ Deno.serve(async (req: Request) => {
           (select count(*) from public.conversations where practice_id = (select id from p limit 1)) as conversations,
           (select coalesce(sum(case_value),0) from public.assisted_wins where practice_id = (select id from p limit 1)) as recovered,
           (select count(*) from public.assisted_wins where practice_id = (select id from p limit 1)) as wins,
+          (select count(*) from public.pms_appointments where practice_id = (select id from p limit 1)) as appointments,
+          (select count(*) from public.message_outcomes where practice_id = (select id from p limit 1)) as message_outcomes,
+          (select count(*) from public.call_logs where practice_id = (select id from p limit 1)) as call_logs,
+          (select count(*) from public.consults where practice_id = (select id from p limit 1) and recording_date >= date_trunc('month', now())::date) as consults_this_month,
+          (select count(*) from public.consults where practice_id = (select id from p limit 1) and recording_date >= date_trunc('month', now())::date and outcome in ('accepted','closed_won')) as closed_this_month,
+          (select agency_id from public.practices where id = (select id from p limit 1)) as agency_id,
           (select practice_id from public.users where email = ${DEMO_LOGIN_EMAIL}) as user_practice_link,
-          (select count(*) from public.training_progress tp join public.users u on u.id = tp.user_id where u.email = ${DEMO_LOGIN_EMAIL}) as lessons_done`;
+          (select count(*) from public.training_progress tp where tp.user_id = (select id from auth.users where lower(email)=${SUPER_ADMIN_EMAIL})) as super_admin_lessons`;
       return json({ verify: v });
     }
 
@@ -205,25 +215,20 @@ Deno.serve(async (req: Request) => {
     }
     summary.auth_user_id = userId;
 
-    // ----- 2. Reseller (Striker Ads) - find or create ------------------------
-    let agencyId: string | null = null;
-    const { data: agencies } = await admin.from("agency_accounts").select("id, name").ilike("name", "striker ads");
-    if (agencies && agencies.length) {
-      agencyId = agencies[0].id;
-    } else {
-      const { data: ag, error: agErr } = await admin
-        .from("agency_accounts")
-        .insert({ name: "Striker Ads", company_name: "Striker Ads", brand_name: "Striker Ads", owner_name: "Striker Ads", owner_email: "team@strikerads.com", status: "active", active: true })
-        .select("id")
-        .single();
-      if (agErr) throw new Error(`agency insert: ${agErr.message}`);
-      agencyId = ag.id;
-    }
-    summary.reseller_id = agencyId;
+    // ----- 2. No reseller → CaseLift branding (direct subaccount) ------------
+    // The demo is a direct CaseLift client (agency_id null) so that clicking
+    // into it from the super-admin Subaccounts list shows CaseLift branding,
+    // never a reseller's white-label.
+    const agencyId: string | null = null;
+    summary.reseller_id = null;
+    summary.branding = "CaseLift (direct subaccount, no reseller)";
 
     // ----- 3. Idempotency: wipe prior demo practice data ---------------------
     const { data: prior } = await admin.from("practices").select("id").eq("email", DEMO_PRACTICE_EMAIL).maybeSingle();
     if (prior?.id) {
+      await admin.from("call_logs").delete().eq("practice_id", prior.id);
+      await admin.from("message_outcomes").delete().eq("practice_id", prior.id);
+      await admin.from("pms_appointments").delete().eq("practice_id", prior.id);
       await admin.from("assisted_wins").delete().eq("practice_id", prior.id);
       await admin.from("conversations").delete().eq("practice_id", prior.id); // cascades conversation_messages
       await admin.from("consults").delete().eq("practice_id", prior.id); // cascades messages
@@ -369,7 +374,9 @@ Deno.serve(async (req: Request) => {
           status: sent ? "sent" : "scheduled",
           sent_at: sent ? sendIso : null,
           scheduled_for: sent ? null : sendIso,
-          created_at: bizTs(startDaysAgo, 9, 0),
+          // Distinct created_at per touch so the track_message_sent trigger
+          // derives the correct sequence position (1..6) for each outcome.
+          created_at: sent ? sendIso : bizTs(startDaysAgo, 9, i),
         });
       }
     }
@@ -381,7 +388,9 @@ Deno.serve(async (req: Request) => {
       const consultId = consultIdByName.get(`${c.first} ${c.last}`)!;
       const n = c.messagesSent ?? 3;
       for (let k = 0; k < n; k++) {
-        const daysAgo = c.wonDaysAgo! + (n - k); // a few days before the win
+        // Space the pre-win touches strictly between the consult and the win.
+        const frac = (k + 1) / (n + 1);
+        const daysAgo = c.daysAgo - frac * (c.daysAgo - c.wonDaysAgo!);
         const channel = k % 2 === 0 ? "sms" : "email";
         const iso = bizTs(daysAgo, 10 + k, (k * 13) % 60);
         messageRows.push({
@@ -406,6 +415,54 @@ Deno.serve(async (req: Request) => {
     summary.messages_sent = (insertedMsgs || []).filter((m) => m.status === "sent").length;
     summary.messages_pending = (insertedMsgs || []).filter((m) => m.status === "scheduled").length;
     summary.pipeline_value = pipelineValue;
+
+    // message_outcomes are auto-created by the track_message_sent trigger (one
+    // per sent message, with the sequence position). Enrich them so the
+    // Analytics "reply rate by position" chart shows a realistic declining curve
+    // (opens on all, replies weighted to the earlier touches).
+    const { data: outs } = await admin.from("message_outcomes").select("id, message_position").eq("practice_id", practiceId);
+    const repliedIds: string[] = [];
+    (outs || []).forEach((o, i) => {
+      const p = (o.message_position as number) || 1;
+      const reply = (p <= 2 && i % 2 === 0) || (p === 3 && i % 3 === 0) || (p === 4 && i % 5 === 0);
+      if (reply) repliedIds.push(o.id as string);
+    });
+    await admin.from("message_outcomes").update({ opened: true, opened_at: bizTs(2, 12, 0) }).eq("practice_id", practiceId);
+    if (repliedIds.length) {
+      await admin.from("message_outcomes").update({ replied: true, replied_at: bizTs(1, 13, 0) }).in("id", repliedIds);
+    }
+    summary.message_outcomes_total = (outs || []).length;
+    summary.message_outcomes_replied = repliedIds.length;
+
+    // ----- 6b. PMS appointments (drives the Recording Rate card + 4-wk trend) -
+    // ~6 implant consults/week for the last 4 weeks, ~83% recorded (linked to a
+    // consult) so the ring reads "On track" with a healthy green trend.
+    const allConsultIds = [...consultIdByName.values()];
+    const apptRows: Record<string, unknown>[] = [];
+    let apptIdx = 0;
+    for (let w = 0; w < 4; w++) {
+      for (let j = 0; j < 6; j++) {
+        const daysAgo = w * 7 + (j % 5) + 1;
+        const recorded = j < 5; // 5 of 6 recorded
+        const iso = bizTs(daysAgo, 8 + j, (j * 10) % 60);
+        apptRows.push({
+          practice_id: practiceId,
+          pms_appointment_id: `demo-appt-${w}-${j}`,
+          patient_first: "Implant",
+          patient_last: `Consult ${apptIdx + 1}`,
+          appointment_time: iso,
+          appointment_type: "Implant Consult",
+          provider: "Dr. Torres",
+          is_implant_consult: true,
+          consult_id: recorded ? allConsultIds[apptIdx % allConsultIds.length] : null,
+          created_at: iso,
+        });
+        apptIdx++;
+      }
+    }
+    const { error: apErr } = await admin.from("pms_appointments").insert(apptRows);
+    if (apErr) throw new Error(`pms_appointments insert: ${apErr.message}`);
+    summary.pms_appointments_created = apptRows.length;
 
     // ----- 7. Conversations --------------------------------------------------
     async function makeConversation(c: Consult, msgs: { dir: "inbound" | "outbound"; channel: string; body: string; daysAgo: number; hour: number }[], unread: number) {
@@ -487,6 +544,36 @@ Deno.serve(async (req: Request) => {
     summary.wins_created = insertedWins?.length ?? 0;
     summary.recovered_production = (insertedWins || []).reduce((s, w) => s + Number(w.case_value || 0), 0);
 
+    // ----- 8b. Call logs (Power Dialer / call history) -----------------------
+    const callSpecs = [
+      { key: "robert", status: "completed", disposition: "Connected — sending financing", dur: 372, daysAgo: 5 },
+      { key: "karen", status: "completed", disposition: "Left voicemail", dur: 38, daysAgo: 6 },
+      { key: "thomas", status: "completed", disposition: "Connected — discussed sedation", dur: 511, daysAgo: 9 },
+      { key: "jennifer", status: "completed", disposition: "Connected — booking surgery date", dur: 248, daysAgo: 1 },
+      { key: "lisa", status: "no_answer", disposition: "No answer", dur: 0, daysAgo: 7 },
+    ];
+    const callRows = callSpecs.map((cs) => {
+      const c = CONSULTS.find((x) => x.key === cs.key)!;
+      const startedIso = bizTs(cs.daysAgo, 11, (cs.dur % 50));
+      return {
+        practice_id: practiceId,
+        consult_id: consultIdByName.get(`${c.first} ${c.last}`)!,
+        user_id: userId,
+        direction: "outbound",
+        to_number: c.phone,
+        from_number: "(480) 555-0199",
+        status: cs.status,
+        disposition: cs.disposition,
+        duration_seconds: cs.dur,
+        started_at: startedIso,
+        ended_at: new Date(new Date(startedIso).getTime() + cs.dur * 1000).toISOString(),
+        created_at: startedIso,
+      };
+    });
+    const { error: clErr } = await admin.from("call_logs").insert(callRows);
+    if (clErr) throw new Error(`call_logs insert: ${clErr.message}`);
+    summary.call_logs_created = callRows.length;
+
     // ----- 9. Training progress ----------------------------------------------
     // Module 1 (all 14 lessons) + first 4 of Module 2, completed for the demo user.
     const { data: mods } = await admin
@@ -497,12 +584,19 @@ Deno.serve(async (req: Request) => {
     const mod1 = (mods || []).filter((m) => m.module_group === "Module 1: Foundation");
     const mod2 = (mods || []).filter((m) => m.module_group === "Module 2: The Consult").slice(0, 4);
     const completeModules = [...mod1, ...mod2];
-    const progressRows = completeModules.map((m, i) => ({
-      user_id: userId,
-      module_id: m.id,
-      progress: 100,
-      completed_at: bizTs(40 - i, 13, (i * 9) % 60),
-    }));
+    const mkRows = (uid: string) =>
+      completeModules.map((m, i) => ({ user_id: uid, module_id: m.id, progress: 100, completed_at: bizTs(40 - i, 13, (i * 9) % 60) }));
+    const progressRows = mkRows(userId);
+
+    // Training progress is per-USER, not per-practice. When the super admin
+    // clicks into the demo via impersonation they're still themselves, so seed
+    // their user too — that's what makes the TC Certification page show as
+    // completed inside the demo. (Also seeded on the demo user.)
+    let superAdminId: string | null = null;
+    if (sql) {
+      const sa = await sql`select id from auth.users where lower(email) = ${SUPER_ADMIN_EMAIL} limit 1`;
+      superAdminId = sa.length ? (sa[0].id as string) : null;
+    }
 
     let trainingResult: unknown = { lessons_completed: 0, note: "no modules found" };
     if (progressRows.length) {
@@ -512,7 +606,10 @@ Deno.serve(async (req: Request) => {
         await admin.from("training_progress").delete().eq("user_id", userId);
         const { error: tpErr } = await admin.from("training_progress").insert(progressRows);
         if (tpErr) throw new Error(`training_progress insert: ${tpErr.message}`);
-        trainingResult = { lessons_completed: progressRows.length, module1: mod1.length, module2: mod2.length, via: "postgrest" };
+        if (superAdminId) {
+          await admin.from("training_progress").upsert(mkRows(superAdminId), { onConflict: "user_id,module_id" });
+        }
+        trainingResult = { lessons_completed: progressRows.length, module1: mod1.length, module2: mod2.length, via: "postgrest", super_admin_seeded: Boolean(superAdminId) };
       } else {
         // Table missing → create it + insert over the direct PG connection.
         if (!sql) {
