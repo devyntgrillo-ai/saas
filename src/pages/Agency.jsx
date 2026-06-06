@@ -21,7 +21,6 @@ import {
   Eye,
   Mic,
   Search,
-  ArrowLeft,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useBranding } from '../context/BrandingContext'
@@ -264,7 +263,7 @@ function SidebarPreview({ mode, color, logoUrl, companyName }) {
 }
 
 export default function Agency() {
-  const { user, effectiveAgency: agency, agencyRole, isAgencyView, contextLoading, viewPractice, refreshAgency, isSuperAdmin, exitAgency } = useAuth()
+  const { user, effectiveAgency: agency, agencyRole, isAgencyView, contextLoading, viewPractice, refreshAgency} = useAuth()
   const { invalidateBrand } = useBranding()
   const navigate = useNavigate()
   // Sub-view is URL-driven (?tab=) so the sidebar agency nav can link to it
@@ -479,20 +478,11 @@ export default function Agency() {
             <p className="text-sm text-slate-400 capitalize">{agencyRole} · {practices.length} client practices</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Super-admins are always impersonating a reseller here - give them a
-              guaranteed, always-visible exit back to the admin view. */}
-          {isSuperAdmin && (
-            <button onClick={() => { exitAgency(); navigate('/admin') }} className="btn-ghost">
-              <ArrowLeft className="h-4 w-4" /> Exit to Admin
-            </button>
-          )}
-          {tab === 'overview' && (
-            <button onClick={() => setShowAdd(true)} className="btn-primary">
-              <Plus className="h-4 w-4" /> Add Practice
-            </button>
-          )}
-        </div>
+        {tab === 'overview' && (
+          <button onClick={() => setShowAdd(true)} className="btn-primary">
+            <Plus className="h-4 w-4" /> Add Practice
+          </button>
+        )}
       </div>
 
       {/* Shared tab bar (persists across all agency pages). */}

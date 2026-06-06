@@ -158,36 +158,27 @@ export default function AccountSwitcher() {
                 super-admin is never stranded in a reseller dashboard. Practice
                 level → back to the reseller view if there's a reseller behind it,
                 otherwise to the admin view. */}
-            {isSuperAdmin && isImpersonating && impersonation?.level === 'reseller' && (
-              <button
-                onClick={() => { setOpen(false); exitAgency(); navigate('/admin') }}
-                style={{ color: 'var(--accent)' }}
-                className="mb-2 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-surface-800"
-              >
-                <Shield className="h-4 w-4 shrink-0" />
-                <span className="text-sm font-medium">Back to Super Admin View</span>
-              </button>
-            )}
-            {(isSuperAdmin || isAgencyUser) && isImpersonating && impersonation?.level === 'practice' && (() => {
-              const toReseller = Boolean(impersonation?.reseller) || isAgencyUser
-              const onBack = () => {
-                setOpen(false)
-                if (toReseller) { exitPractice(); navigate('/agency') }
-                else { exitAgency(); navigate('/admin') }
-              }
+            {(isSuperAdmin || isAgencyUser) && isImpersonating && (() => {
+              const inResellerSubaccount = impersonation?.level === 'practice' && (Boolean(impersonation?.reseller) || isAgencyUser)
+              const backBtn = 'mb-1 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-surface-800'
               return (
-                <button
-                  onClick={onBack}
-                  style={{ color: 'var(--accent)' }}
-                  className="mb-2 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-surface-800"
-                >
-                  {toReseller
-                    ? <ArrowLeft className="h-4 w-4 shrink-0" />
-                    : <Shield className="h-4 w-4 shrink-0" />}
-                  <span className="text-sm font-medium">
-                    {toReseller ? 'Back to Reseller View' : 'Back to Super Admin View'}
-                  </span>
-                </button>
+                <div className="mb-1">
+                  {/* In a subaccount under a reseller → back up to the reseller view. */}
+                  {inResellerSubaccount && (
+                    <button onClick={() => { setOpen(false); exitPractice(); navigate('/agency') }} style={{ color: 'var(--accent)' }} className={backBtn}>
+                      <ArrowLeft className="h-4 w-4 shrink-0" />
+                      <span className="text-sm font-medium">Back to Reseller View</span>
+                    </button>
+                  )}
+                  {/* Super-admins always get a path straight back to the admin view,
+                      stacked beneath "Back to Reseller View" when in a subaccount. */}
+                  {isSuperAdmin && (
+                    <button onClick={() => { setOpen(false); exitAgency(); navigate('/admin') }} style={{ color: 'var(--accent)' }} className={backBtn}>
+                      <Shield className="h-4 w-4 shrink-0" />
+                      <span className="text-sm font-medium">Back to Super Admin View</span>
+                    </button>
+                  )}
+                </div>
               )
             })()}
 
