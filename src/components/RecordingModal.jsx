@@ -13,6 +13,7 @@ import {
   CalendarClock,
   AlertTriangle,
   Sparkles,
+  Building2,
   Settings as SettingsIcon,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -370,9 +371,18 @@ export default function RecordingModal({ onClose, patient = null }) {
       <div className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-surface-700 bg-surface-900 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-surface-700 px-5 py-3.5">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-            <Mic className="h-4 w-4 text-primary-400" /> Hey, I&apos;m CaseLift
-          </h2>
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+              <Mic className="h-4 w-4 text-primary-400" /> Hey, I&apos;m CaseLift
+            </h2>
+            {/* Always show where this recording will be saved, so it can't land
+                in the wrong practice unnoticed. */}
+            {practice?.name && (
+              <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-slate-400">
+                <Building2 className="h-3 w-3 shrink-0 text-slate-500" /> Saving to {practice.name}
+              </p>
+            )}
+          </div>
           {!locked && (
             <button onClick={requestCancel} className="rounded-md p-1.5 text-slate-400 transition hover:bg-surface-800 hover:text-white">
               <X className="h-5 w-5" />
