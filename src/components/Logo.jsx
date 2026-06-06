@@ -13,7 +13,7 @@ export default function Logo({ collapsed = false, size = 'md', showBeta = true }
   const themedLogo = (theme === 'dark' ? logoDarkUrl : logoLightUrl) || logoUrl
 
   if (isWhiteLabeled && themedLogo) {
-    return <img src={themedLogo} alt={brandName} className={`${lg ? 'h-11' : 'h-8'} max-w-[190px] object-contain`} />
+    return <img src={themedLogo} alt={brandName} className={`${lg ? 'h-11' : 'h-8'} min-w-0 max-w-[190px] object-contain`} />
   }
 
   // Mark (matches the favicon): sky-gradient rounded square with an upward
