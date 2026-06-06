@@ -37,6 +37,16 @@ function bizTs(daysAgo: number, hourMst = 10, minute = 0): string {
   d.setUTCHours(hourMst + 7, minute, 0, 0); // MST -> UTC
   return d.toISOString();
 }
+// Future business timestamp (weekends shifted forward to Monday) for upcoming
+// appointments that still need recording.
+function bizTsFuture(inDays: number, hourMst = 10, minute = 0): string {
+  const d = new Date(Date.now() + inDays * 86400000);
+  const dow = d.getUTCDay();
+  if (dow === 6) d.setUTCDate(d.getUTCDate() + 2);
+  else if (dow === 0) d.setUTCDate(d.getUTCDate() + 1);
+  d.setUTCHours(hourMst + 7, minute, 0, 0);
+  return d.toISOString();
+}
 function ymd(iso: string): string {
   return iso.slice(0, 10);
 }
@@ -150,6 +160,121 @@ const SEQ_TEMPLATE = [
   { day: 30, channel: "sms", subject: null, body: (n: string) => `Hi ${n}, last check-in from me for now — we'd love to help you get this done. Reply anytime and we'll pick right back up.` },
 ];
 
+// Human-readable treatment labels + appointment types.
+const TREATMENT_LABEL: Record<string, string> = {
+  full_arch: "full-arch restoration",
+  single_implant: "single implant",
+  dental_implants: "dental implants",
+  invisalign: "Invisalign",
+  cosmetic: "cosmetic veneers",
+};
+const APPT_TYPE: Record<string, string> = {
+  full_arch: "Full Arch Consult",
+  single_implant: "Implant Consult",
+  dental_implants: "Implant Consult",
+  invisalign: "Invisalign Consult",
+  cosmetic: "Cosmetic Consult",
+};
+
+// Objection-specific analysis copy so every consult detail page is fully filled.
+const OBJECTION_PACK: Record<string, { secondary: string; downsell: string; tc: string }> = {
+  price: {
+    secondary: "Wanted to compare against another office's quote",
+    downsell: "Phased treatment — start with the arch causing the most pain, finance the rest",
+    tc: "Re-send the Sunbit pre-approval and the monthly breakdown; lead with the per-day cost framing.",
+  },
+  fear: {
+    secondary: "Concerned about recovery time and pain",
+    downsell: "IV sedation add-on and a single-visit option to reduce chair time",
+    tc: "Send the sedation explainer video and 2 testimonials from anxious patients. Offer a no-pressure call with the doctor.",
+  },
+  spouse: {
+    secondary: "Needs to align on budget at home",
+    downsell: "Offer a joint call with both spouses and a printable one-pager",
+    tc: "Schedule a 10-minute call with both spouses present; send the one-pager they can review together.",
+  },
+  timing: {
+    secondary: "Checking schedule around work and travel",
+    downsell: "Reserve a tentative surgical date to anchor the decision",
+    tc: "Hold a tentative date and frame the healing timeline around their personal milestone.",
+  },
+};
+const DEFAULT_PACK = { secondary: "No major secondary objection", downsell: "Offer a phased plan to fit their budget", tc: "Follow up within 48 hours with the requested details." };
+
+const PERSONAL_DETAIL: Record<string, string> = {
+  robert: "Daughter's wedding in June — wants to feel confident smiling in photos.",
+  sandra: "Recently retired; finally prioritizing herself.",
+  james: "Avid golfer; lost the tooth in a weekend accident.",
+  patricia: "Comparing two offices; very detail-oriented.",
+  david: "Wedding photos coming up; wants a straighter smile.",
+  karen: "Decision-maker is her husband of 30 years.",
+  michael: "Business owner; values efficiency and one-visit options.",
+  lisa: "Budget-conscious single mom; researched extensively.",
+  thomas: "Has wanted this for 3 years; high dental anxiety.",
+  nancy: "Big family reunion this fall she wants to look great for.",
+  christopher: "New to the area; financing is the main hurdle.",
+  jennifer: "Son's graduation in May — wants to be healed in time.",
+};
+
+// A realistic TC↔patient transcript so the detail page reads as a real consult.
+function genTranscript(c: Consult): string {
+  const tx = TREATMENT_LABEL[c.treatment] || "treatment";
+  const obj = (c.objection || "the investment").toLowerCase();
+  return [
+    `TC: Thanks for coming in today, ${c.first}. Dr. Torres walked you through the ${tx} plan — how are you feeling about everything?`,
+    `${c.first}: Honestly, really good. I've been thinking about this for a while. My main hesitation is ${obj}.`,
+    `TC: Totally understandable, and you're not alone there. A lot of our patients feel the same before they see the full picture. Can I show you how the numbers actually break down month to month?`,
+    `${c.first}: Yeah, that would help.`,
+    `TC: Your plan comes to ${"$" + c.caseValue.toLocaleString()}. With Sunbit financing, most patients in your range land around a comfortable monthly payment with no big upfront cost. We can also phase the treatment if that's easier.`,
+    `${c.first}: Okay, that's more manageable than I expected. I do want to talk it over before I commit.`,
+    `TC: Of course — this is a big decision and I want you to feel 100% confident. How about I send you the full breakdown and a couple of stories from patients who were right where you are? Then we can pick a date whenever you're ready.`,
+    `${c.first}: That sounds great, thank you.`,
+    `TC: My pleasure, ${c.first}. You're going to love the result.`,
+  ].join("\n\n");
+}
+
+function analysisFor(c: Consult) {
+  const pack = (c.objectionType && OBJECTION_PACK[c.objectionType]) || DEFAULT_PACK;
+  const tx = TREATMENT_LABEL[c.treatment] || "treatment";
+  return {
+    transcript: genTranscript(c),
+    what_happened:
+      c.summary ||
+      `Strong ${tx} consult with ${c.first}. Engaged throughout and asked buying-signal questions. Main hesitation was ${(c.objection || "the investment").toLowerCase()}; otherwise a great fit. Recommended a prompt, value-led follow-up.`,
+    secondary_objection: pack.secondary,
+    personal_detail: PERSONAL_DETAIL[c.key] || null,
+    downsell_opportunity: pack.downsell,
+    tc_action: pack.tc,
+    coaching_insight:
+      c.coaching ||
+      `${c.first} is a realistic close. Reinforce the value of ${tx}, address the ${(c.objectionType || "main")} concern head-on, and make the next step easy with a tentative date.`,
+  };
+}
+
+// Knowledge base shown in Settings → Knowledge Base (accordion sections + stories).
+const KB_SECTIONS: Record<string, string> = {
+  practice_overview:
+    "Pinnacle Dental Implants is a Scottsdale, AZ implant and cosmetic practice led by Dr. Michael Torres. We focus on full-arch restoration (All-on-4/All-on-X), single implants, and smile makeovers. Our differentiator is a same-week surgical timeline, in-house CBCT, and IV sedation for anxious patients. The treatment coordinator owns every consult follow-up.",
+  pricing:
+    "Full arch (per arch): $38,000–$47,000. Single implant + crown: $4,500–$5,200. Dental implants (multiple): $11,000–$15,000. Invisalign: $5,500–$6,500. Cosmetic veneers: $8,000–$12,000. Financing through Sunbit and Cherry — most full-arch patients land $550–$620/mo with $0 down. We can phase treatment arch-by-arch.",
+  what_works:
+    "Reframing total cost as a per-day number over the life of the implants. Showing before/after photos of patients the same age. Bringing the doctor in for 2 minutes on fear objections. Holding a tentative surgical date to create gentle momentum. Pre-approving financing during the consult, not after.",
+  what_not:
+    "Leading with the full price before establishing value. Pushing for a same-day decision on full-arch cases. Emailing a generic quote with no context. Saying 'let me know if you have questions' and waiting — always set the next step.",
+  coaching_notes:
+    "TC reminders: every consult gets a personal SMS within 24 hours. Reference one specific personal detail from the visit. Send financing breakdown as an image, not a wall of text. Call (don't just text) any warm full-arch lead that goes quiet for 5 days.",
+  doctor_style:
+    "Dr. Torres prefers a calm, education-first tone. He likes patients to understand the 'why' behind the bone graft and healing timeline. Avoid hard-sell language; he wants patients to feel in control of the decision.",
+  scheduling:
+    "Surgical days: Tuesday and Thursday. Typical wait from yes to surgery: 1–2 weeks. Consults available Mon–Fri. Healing/integration window communicated up front so patients can plan around events.",
+};
+const KB_STORIES = [
+  { category: "price_overcome", title: "Robert — $42k full arch", text: "Hesitant on the monthly payment. Pre-approved at $580/mo through Sunbit during the consult; reframed as less than his daily coffee + lunch. Moved forward within a week." },
+  { category: "fear_overcome", title: "Thomas — surgery fear", text: "Wanted implants for 3 years but terrified of surgery. Doctor spent 2 minutes on IV sedation + showed an anxious-patient testimonial. Booked once fear was addressed." },
+  { category: "spouse_converted", title: "Karen — needed spouse buy-in", text: "Decision hinged on her husband. Did a 10-minute joint call with a one-page summary they could review together. Converted after the spouse felt included." },
+  { category: "other", title: "Jennifer — timeline-driven", text: "Wanted to heal before her son's May graduation. Anchored a tentative surgical date around the milestone — the deadline made the decision easy." },
+];
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   const summary: Record<string, unknown> = {};
@@ -187,6 +312,13 @@ Deno.serve(async (req: Request) => {
           (select count(*) from public.call_logs where practice_id = (select id from p limit 1)) as call_logs,
           (select count(*) from public.consults where practice_id = (select id from p limit 1) and recording_date >= date_trunc('month', now())::date) as consults_this_month,
           (select count(*) from public.consults where practice_id = (select id from p limit 1) and recording_date >= date_trunc('month', now())::date and outcome in ('accepted','closed_won')) as closed_this_month,
+          (select count(*) from public.consults where practice_id = (select id from p limit 1) and status='active') as status_active,
+          (select count(*) from public.consults where practice_id = (select id from p limit 1) and appointment_id is not null) as consults_pms_linked,
+          (select count(*) from public.consults where practice_id = (select id from p limit 1) and transcript is not null) as consults_with_transcript,
+          (select count(*) from public.pms_appointments where practice_id = (select id from p limit 1) and consult_id is null and appointment_time > now()) as upcoming_to_record,
+          (select count(*) from public.call_logs where practice_id = (select id from p limit 1) and conversation_id is not null) as calls_in_threads,
+          (select a2p_brand_status || '/' || a2p_campaign_status from public.practices where id = (select id from p limit 1)) as a2p_status,
+          (select (knowledge_base_sections is not null) from public.practices where id = (select id from p limit 1)) as has_knowledge_base,
           (select agency_id from public.practices where id = (select id from p limit 1)) as agency_id,
           (select practice_id from public.users where email = ${DEMO_LOGIN_EMAIL}) as user_practice_link,
           (select count(*) from public.training_progress tp where tp.user_id = (select id from auth.users where lower(email)=${SUPER_ADMIN_EMAIL})) as super_admin_lessons`;
@@ -266,6 +398,7 @@ Deno.serve(async (req: Request) => {
         sms_enabled: true,
         email_enabled: true,
         twilio_phone_number: "(480) 555-0199",
+        twilio_phone_e164: "+14805550199",
         notify_email_address: DEMO_PRACTICE_EMAIL,
         notify_sms_number: "(480) 555-0199",
         weekly_digest_enabled: true,
@@ -273,6 +406,18 @@ Deno.serve(async (req: Request) => {
         weekly_digest_time: "9am",
         digest_owner_email: DEMO_PRACTICE_EMAIL,
         notification_prefs: notificationPrefs,
+        // A2P 10DLC fully approved so the messaging status reads "Active".
+        a2p_brand_status: "approved",
+        a2p_campaign_status: "approved",
+        twilio_brand_sid: "BN0000000000000000000000000demo01",
+        twilio_campaign_sid: "QE0000000000000000000000000demo01",
+        twilio_messaging_service_sid: "MG0000000000000000000000000demo01",
+        twilio_phone_sid: "PN0000000000000000000000000demo01",
+        a2p_submitted_at: bizTs(80, 10, 0),
+        // Knowledge base (Settings → Knowledge Base).
+        knowledge_base_sections: KB_SECTIONS,
+        knowledge_base_stories: KB_STORIES,
+        knowledge_base_updated_at: bizTs(6, 11, 0),
         created_by: userId,
         created_at: bizTs(90, 9, 0),
       })
@@ -289,30 +434,42 @@ Deno.serve(async (req: Request) => {
     // ----- 5. Consults -------------------------------------------------------
     const consultRows = CONSULTS.map((c) => {
       const createdIso = bizTs(c.daysAgo, 9 + (c.daysAgo % 7), (c.daysAgo * 7) % 60);
+      const a = analysisFor(c);
       const base: Record<string, unknown> = {
         practice_id: practiceId,
         patient_name: `${c.first} ${c.last}`,
         patient_first: c.first,
         patient_last: c.last,
         patient_phone: c.phone,
+        patient_email: `${c.first.toLowerCase()}.${c.last.toLowerCase()}@example.com`,
         treatment_type: c.treatment,
         case_value: c.caseValue,
         tx_plan_value: c.caseValue,
-        status: "analyzed",
+        // App-level status vocabulary (drives the Pipeline Value card, status
+        // pills, and activation rate). NOT the base-schema 'analyzed'.
+        status: "active",
         primary_objection: c.objection ?? null,
         objection_type: c.objectionType ?? null,
+        secondary_objection: a.secondary_objection,
         exit_intent: c.exitIntent ?? null,
         exit_intent_level: c.exitLevel ?? null,
-        coaching_insight: c.coaching ?? null,
-        what_happened: c.summary ?? null,
+        coaching_insight: a.coaching_insight,
+        what_happened: a.what_happened,
+        transcript: a.transcript,
+        personal_detail: a.personal_detail,
+        downsell_opportunity: a.downsell_opportunity,
+        tc_action: a.tc_action,
         recording_date: ymd(createdIso),
         recording_time: hms(createdIso),
-        duration: 1100 + ((c.caseValue / 100) % 1500 | 0),
+        recording_source: "plaud_device",
+        duration: 1400 + ((c.caseValue / 50) % 1500 | 0),
+        pms_synced: true,
         created_at: createdIso,
       };
       if (c.kind === "won") {
         const wonIso = bizTs(c.wonDaysAgo!, 14, 30);
         Object.assign(base, {
+          status: "closed_won",
           outcome: "accepted",
           outcome_set_at: wonIso,
           closed_at: wonIso,
@@ -324,6 +481,7 @@ Deno.serve(async (req: Request) => {
         });
       } else if (c.kind === "not_fit") {
         Object.assign(base, {
+          status: "closed_lost",
           outcome: "not_converting",
           outcome_set_at: bizTs(c.daysAgo - 1, 11, 0),
           attribution_status: null,
@@ -333,6 +491,7 @@ Deno.serve(async (req: Request) => {
         });
       } else {
         Object.assign(base, {
+          status: c.key === "robert" ? "replied" : "active",
           outcome: "pending",
           attribution_status: "consultiq_assisted",
           tx_plan_value_source: "estimate",
@@ -434,35 +593,88 @@ Deno.serve(async (req: Request) => {
     summary.message_outcomes_total = (outs || []).length;
     summary.message_outcomes_replied = repliedIds.length;
 
-    // ----- 6b. PMS appointments (drives the Recording Rate card + 4-wk trend) -
-    // ~6 implant consults/week for the last 4 weeks, ~83% recorded (linked to a
-    // consult) so the ring reads "On track" with a healthy green trend.
-    const allConsultIds = [...consultIdByName.values()];
-    const apptRows: Record<string, unknown>[] = [];
-    let apptIdx = 0;
+    // ----- 6b. PMS appointments ---------------------------------------------
+    // Everything looks synced from Dentrix: one linked appointment per consult
+    // (so detail pages show as PMS-linked), 4 weeks of trend appts for the
+    // Recording Rate card, and 3 upcoming appts that still need recording.
+    const isImplant = (t: string) => ["full_arch", "single_implant", "dental_implants"].includes(t);
+
+    // 1) One appointment per consult, linked both ways (recorded).
+    const perConsultAppts = CONSULTS.map((c, idx) => {
+      const apptIso = bizTs(c.daysAgo, 8 + (idx % 6), (idx * 5) % 60);
+      return {
+        practice_id: practiceId,
+        pms_appointment_id: `demo-appt-c-${idx}`,
+        patient_first: c.first,
+        patient_last: c.last,
+        patient_phone: c.phone,
+        patient_email: `${c.first.toLowerCase()}.${c.last.toLowerCase()}@example.com`,
+        appointment_time: apptIso,
+        appointment_type: APPT_TYPE[c.treatment] || "Implant Consult",
+        provider: "Dr. Torres",
+        is_implant_consult: isImplant(c.treatment),
+        consult_id: consultIdByName.get(`${c.first} ${c.last}`)!,
+        created_at: apptIso,
+      };
+    });
+    const { data: insAppts, error: apErr } = await admin.from("pms_appointments").insert(perConsultAppts).select("id, consult_id");
+    if (apErr) throw new Error(`pms_appointments insert: ${apErr.message}`);
+    // Forward-link each consult to its appointment + mark synced (no "not in PMS").
+    for (const a of insAppts || []) {
+      await admin.from("consults").update({ appointment_id: a.id, pms_synced: true }).eq("id", a.consult_id);
+    }
+
+    // 2) Trend filler: a couple recorded + one unrecorded implant appt per week.
+    const implantConsultIds = CONSULTS.filter((c) => isImplant(c.treatment)).map((c) => consultIdByName.get(`${c.first} ${c.last}`)!);
+    const NAME_POOL = [["Olivia", "Bennett"], ["Marcus", "Reed"], ["Diana", "Foster"], ["Henry", "Park"], ["Sofia", "Nguyen"], ["Walter", "Hayes"], ["Grace", "Coleman"], ["Victor", "Ramirez"], ["Eleanor", "Brooks"], ["Felix", "Morgan"], ["Ruth", "Sanders"], ["Leo", "Dawson"]];
+    const fillerRows: Record<string, unknown>[] = [];
+    let fi = 0;
     for (let w = 0; w < 4; w++) {
-      for (let j = 0; j < 6; j++) {
-        const daysAgo = w * 7 + (j % 5) + 1;
-        const recorded = j < 5; // 5 of 6 recorded
-        const iso = bizTs(daysAgo, 8 + j, (j * 10) % 60);
-        apptRows.push({
+      for (let j = 0; j < 3; j++) {
+        const daysAgo = w * 7 + j * 2 + 2;
+        const recorded = j < 2; // 2 recorded + 1 unrecorded per week
+        const nm = NAME_POOL[fi % NAME_POOL.length];
+        const iso = bizTs(daysAgo, 9 + j, (j * 15) % 60);
+        fillerRows.push({
           practice_id: practiceId,
-          pms_appointment_id: `demo-appt-${w}-${j}`,
-          patient_first: "Implant",
-          patient_last: `Consult ${apptIdx + 1}`,
+          pms_appointment_id: `demo-appt-f-${w}-${j}`,
+          patient_first: nm[0],
+          patient_last: nm[1],
           appointment_time: iso,
           appointment_type: "Implant Consult",
           provider: "Dr. Torres",
           is_implant_consult: true,
-          consult_id: recorded ? allConsultIds[apptIdx % allConsultIds.length] : null,
+          consult_id: recorded ? implantConsultIds[fi % implantConsultIds.length] : null,
           created_at: iso,
         });
-        apptIdx++;
+        fi++;
       }
     }
-    const { error: apErr } = await admin.from("pms_appointments").insert(apptRows);
-    if (apErr) throw new Error(`pms_appointments insert: ${apErr.message}`);
-    summary.pms_appointments_created = apptRows.length;
+
+    // 3) Upcoming, still-to-record (synced from PMS): 1 Invisalign + 2 implants.
+    const upcomingSpecs = [
+      { first: "Amanda", last: "Reyes", type: "Invisalign Consult", implant: false, inDays: 1, hour: 9 },
+      { first: "Gregory", last: "Hill", type: "Implant Consult", implant: true, inDays: 2, hour: 11 },
+      { first: "Teresa", last: "Vaughn", type: "Implant Consult", implant: true, inDays: 4, hour: 14 },
+    ];
+    const upcomingRows = upcomingSpecs.map((u, idx) => ({
+      practice_id: practiceId,
+      pms_appointment_id: `demo-appt-up-${idx}`,
+      patient_first: u.first,
+      patient_last: u.last,
+      patient_phone: `(480) 555-02${10 + idx}`,
+      appointment_time: bizTsFuture(u.inDays, u.hour),
+      appointment_type: u.type,
+      provider: "Dr. Torres",
+      is_implant_consult: u.implant,
+      consult_id: null,
+      created_at: bizTs(0, 8, 0),
+    }));
+
+    const { error: apErr2 } = await admin.from("pms_appointments").insert([...fillerRows, ...upcomingRows]);
+    if (apErr2) throw new Error(`pms_appointments filler insert: ${apErr2.message}`);
+    summary.pms_appointments_created = perConsultAppts.length + fillerRows.length + upcomingRows.length;
+    summary.upcoming_to_record = upcomingRows.length;
 
     // ----- 7. Conversations --------------------------------------------------
     async function makeConversation(c: Consult, msgs: { dir: "inbound" | "outbound"; channel: string; body: string; daysAgo: number; hour: number }[], unread: number) {
@@ -491,12 +703,60 @@ Deno.serve(async (req: Request) => {
       });
       const { error: cmErr } = await admin.from("conversation_messages").insert(cmRows);
       if (cmErr) throw new Error(`conversation_messages insert (${c.key}): ${cmErr.message}`);
-      return cmRows.length;
+      return { id: conv.id as string, count: cmRows.length };
+    }
+
+    // A placeholder, publicly-playable recording so the in-thread player works.
+    const PLACEHOLDER_RECORDING = "https://demo.twilio.com/docs/classic.mp3";
+    let callCount = 0;
+    async function addCall(
+      convId: string,
+      consultId: string,
+      o: { inbound: boolean; daysAgo: number; hour: number; duration: number; disposition: string; outcome: string; note: string; transcript: string; phone: string },
+    ) {
+      const startedIso = bizTs(o.daysAgo, o.hour, 0);
+      const { data: cl, error: clErr } = await admin
+        .from("call_logs")
+        .insert({
+          practice_id: practiceId,
+          consult_id: consultId,
+          conversation_id: convId,
+          user_id: userId,
+          direction: o.inbound ? "inbound" : "outbound",
+          to_number: o.inbound ? "(480) 555-0199" : o.phone,
+          from_number: o.inbound ? o.phone : "(480) 555-0199",
+          status: "completed",
+          disposition: o.disposition,
+          duration_seconds: o.duration,
+          recording_url: PLACEHOLDER_RECORDING,
+          recording_duration: o.duration,
+          transcript_deidentified: o.transcript,
+          transcript_status: "completed",
+          started_at: startedIso,
+          ended_at: new Date(new Date(startedIso).getTime() + o.duration * 1000).toISOString(),
+          created_at: startedIso,
+        })
+        .select("id")
+        .single();
+      if (clErr) throw new Error(`call_logs insert: ${clErr.message}`);
+      const { error: cmErr } = await admin.from("conversation_messages").insert({
+        conversation_id: convId,
+        direction: o.inbound ? "inbound" : "outbound",
+        channel: "call",
+        call_log_id: cl.id,
+        body: o.note,
+        meta: { duration_sec: o.duration, outcome: o.outcome, note: o.note },
+        sent_at: startedIso,
+        created_at: startedIso,
+      });
+      if (cmErr) throw new Error(`call conversation_message insert: ${cmErr.message}`);
+      callCount++;
     }
 
     let convMsgCount = 0;
-    convMsgCount += await makeConversation(
-      CONSULTS.find((c) => c.key === "robert")!,
+    const robert = CONSULTS.find((c) => c.key === "robert")!;
+    const robertConv = await makeConversation(
+      robert,
       [
         { dir: "outbound", channel: "sms", body: "Hi Robert, this is the team following up after your consult — any questions as you and your wife think it over?", daysAgo: 5, hour: 10 },
         { dir: "inbound", channel: "sms", body: "Hi, yes we are still interested. Can you send me the financing details again?", daysAgo: 3, hour: 13 },
@@ -505,23 +765,46 @@ Deno.serve(async (req: Request) => {
       ],
       1,
     );
-    convMsgCount += await makeConversation(
-      CONSULTS.find((c) => c.key === "karen")!,
+    convMsgCount += robertConv.count;
+    await addCall(robertConv.id, consultIdByName.get(`${robert.first} ${robert.last}`)!, {
+      inbound: false, daysAgo: 4, hour: 11, duration: 372, disposition: "Connected", outcome: "Connected", phone: robert.phone,
+      note: "Walked through the financing breakdown; sending Sunbit pre-approval.",
+      transcript: "TC: Hi Robert, it's the team from Pinnacle Dental — is now a good time?\nRobert: Sure, go ahead.\nTC: Great. I wanted to walk you through the financing so the number feels real. You're pre-approved at $580 a month with nothing down.\nRobert: That's better than I thought. Let me talk it over with my wife.\nTC: Of course — I'll send the breakdown by text. Want me to pencil in a tentative surgery date?\nRobert: Yeah, let's do that.\nTC: Perfect, I'll text you the options. Thanks Robert!",
+    });
+    await addCall(robertConv.id, consultIdByName.get(`${robert.first} ${robert.last}`)!, {
+      inbound: true, daysAgo: 2, hour: 16, duration: 144, disposition: "Connected", outcome: "Inbound — ready to schedule", phone: robert.phone,
+      note: "Robert called back ready to move forward.",
+      transcript: "Robert: Hi, it's Robert Martinez — my wife and I talked it over and we want to move forward.\nTC: That's wonderful, Robert! I'm so glad. Let's get your surgical date locked in.\nRobert: Sounds good. The earlier the better before our daughter's wedding.\nTC: Absolutely — I'll get you scheduled this week.",
+    });
+
+    const karen = CONSULTS.find((c) => c.key === "karen")!;
+    const karenConv = await makeConversation(
+      karen,
       [
         { dir: "outbound", channel: "sms", body: "Hi Karen, following up on your full-arch consult — happy to answer anything you and your husband are weighing.", daysAgo: 10, hour: 11 },
         { dir: "outbound", channel: "email", body: "Hi Karen, sending over the treatment summary and a couple of patient stories in case they're helpful as you decide. We're here whenever you're ready.", daysAgo: 6, hour: 9 },
       ],
       0,
     );
-    convMsgCount += await makeConversation(
-      CONSULTS.find((c) => c.key === "jennifer")!,
+    convMsgCount += karenConv.count;
+    await addCall(karenConv.id, consultIdByName.get(`${karen.first} ${karen.last}`)!, {
+      inbound: false, daysAgo: 5, hour: 13, duration: 41, disposition: "Left voicemail", outcome: "Voicemail", phone: karen.phone,
+      note: "Left a warm voicemail offering a joint call with her husband.",
+      transcript: "TC: Hi Karen, it's the team at Pinnacle Dental Implants. No rush at all — I just wanted to offer a quick call with you and your husband together so you can both ask questions. Give me a ring back whenever works. Thanks Karen!",
+    });
+
+    const jennifer = CONSULTS.find((c) => c.key === "jennifer")!;
+    const jenniferConv = await makeConversation(
+      jennifer,
       [
         { dir: "outbound", channel: "sms", body: "Hi Jennifer! Great meeting you today. You mentioned wanting to heal before your son's graduation in May — I can walk you through surgical dates whenever you're ready.", daysAgo: 2, hour: 16 },
       ],
       0,
     );
+    convMsgCount += jenniferConv.count;
     summary.conversations_created = 3;
     summary.conversation_messages_created = convMsgCount;
+    summary.calls_in_threads = callCount;
 
     // ----- 8. Assisted wins --------------------------------------------------
     const winRows = CONSULTS.filter((c) => c.kind === "won").map((c) => {
