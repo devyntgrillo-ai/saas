@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
 
     const prompt = `You are a sales coach for dental-implant treatment coordinators (TCs). Below are the practice's ${consults.length} most recent analyzed consults, plus the training modules available to them. Identify the single most valuable thing this team should study or practice next, based on recurring patterns across these consults (common objections, exit-intent mix, missed actions, lost outcomes).
 
-Write a short, encouraging, specific recommendation (2-3 sentences) the TC will read on their Training page. Reference the concrete pattern you see in the consults. If a listed training module clearly matches, name it. Be direct and practical. Never use em dashes (-) ; use commas or periods instead.
+Write a SHORT, specific, encouraging recommendation the TC reads on their Training page. Hard limit: at most 2 sentences, roughly 45 words. Name the one recurring pattern, then the single action plus the most relevant module to study next. Do NOT enumerate individual consult numbers. Name at most one module (a second only if it is truly complementary), and ONLY use modules that appear verbatim in the AVAILABLE TRAINING MODULES list, never invent one. Be direct. Never use em dashes (-) ; use commas or periods instead.
 
 AVAILABLE TRAINING MODULES:
 ${moduleList}
@@ -73,12 +73,12 @@ ${moduleList}
 RECENT CONSULTS:
 ${consultSummary}
 
-Return ONLY a JSON object: {"recommendation": "the 2-3 sentence recommendation", "focus_area": "the single category or module name to focus on"}. No markdown.`
+Return ONLY a JSON object: {"recommendation": "the recommendation (<= 2 sentences)", "focus_area": "the single category or module name to focus on"}. No markdown.`
 
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 600, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 300, messages: [{ role: 'user', content: prompt }] }),
     })
     if (!aiRes.ok) return json({ error: 'Anthropic request failed', detail: await aiRes.text() }, 502)
     const aiData = await aiRes.json()
