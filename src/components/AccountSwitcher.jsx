@@ -118,27 +118,28 @@ export default function AccountSwitcher() {
 
   return (
     <div className="relative px-2 pb-2" ref={ref}>
-      {/* Trigger - light pill so it clearly reads as a clickable button (GHL style). */}
+      {/* Trigger - elevated pill that adapts to the theme (light in light mode,
+          dark in dark mode) via the surface scale + text tokens. */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2.5 rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-2.5 text-left transition hover:bg-slate-200"
+        className="flex w-full items-center gap-2.5 rounded-lg border border-surface-700 bg-surface-800 px-2.5 py-2.5 text-left transition hover:bg-surface-700"
       >
         {idle ? (
           <>
-            <MousePointerClick className="h-4 w-4 shrink-0 text-slate-500" />
-            <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">Click here to switch</span>
-            <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />
+            <MousePointerClick className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--text-secondary)]">Click here to switch</span>
+            <ChevronsUpDown className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
           </>
         ) : (
           <>
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-semibold text-white">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-700 text-xs font-semibold text-[var(--text-primary)]">
               {initials(currentName)}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold text-slate-900">{currentName}</span>
-              {currentSub && <span className="block truncate text-xs text-slate-500">{currentSub}</span>}
+              <span className="block truncate text-sm font-semibold text-[var(--text-primary)]">{currentName}</span>
+              {currentSub && <span className="block truncate text-xs text-[var(--text-muted)]">{currentSub}</span>}
             </span>
-            <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />
+            <ChevronsUpDown className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
           </>
         )}
       </button>
