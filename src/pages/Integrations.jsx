@@ -211,11 +211,6 @@ function RecordingSettingsCard({ practice, save }) {
           </div>
           <div className="mt-4 border-t border-surface-700 pt-1">
             <Toggle
-              label="Auto-analyze after recording"
-              description="Run CaseLift analysis automatically when a recording finishes."
-              checked={Boolean(practice?.auto_analyze)} onChange={(v) => save({ auto_analyze: v }, 'rec')}
-            />
-            <Toggle
               label="Auto-start follow-up after analysis"
               description="When off, the TC reviews and approves before any sequence sends."
               checked={Boolean(practice?.auto_start_followup)} onChange={(v) => save({ auto_start_followup: v }, 'rec')}

@@ -173,7 +173,6 @@ export default function Settings() {
         ghl_api_key: practice.ghl_api_key || '',
         recording_method: practice.recording_method || 'browser',
         audio_quality: practice.audio_quality || 'standard',
-        auto_analyze: practice.auto_analyze ?? true,
         auto_start_followup: practice.auto_start_followup ?? false,
         timezone: practice.timezone || 'America/Chicago',
       })
