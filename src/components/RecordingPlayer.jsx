@@ -9,7 +9,7 @@ const SPEEDS = [1, 1.25, 1.5, 2]
 // whether a recording exists. When audio was retained it fetches a short-lived
 // signed URL (from get-recording-url, authorized via the caller's RLS) and shows
 // a player with speed control; otherwise it explains why there's nothing to play.
-export default function RecordingPlayer({ consultId, hasAudio = true, processing = false }) {
+export default function RecordingPlayer({ consultId, hasAudio = true, processing = false, deletedAt = null, retentionDays = 30 }) {
   const audioRef = useRef(null)
   const [url, setUrl] = useState(null)
   const [loading, setLoading] = useState(hasAudio)
@@ -58,10 +58,13 @@ export default function RecordingPlayer({ consultId, hasAudio = true, processing
     if (audioRef.current) audioRef.current.playbackRate = r
   }
 
-  // The "no audio" explanation: still transcribing vs. simply not retained.
+  // The "no audio" explanation: still transcribing, deleted after retention, or
+  // never retained (older consult predating audio retention).
   const emptyMessage = processing
     ? 'The recording is being processed…'
-    : 'Recording not retained for this consult. Audio is kept only for consults recorded recently.'
+    : deletedAt
+      ? `Recording deleted after ${retentionDays}-day retention period. Transcript and analysis are preserved.`
+      : 'Recording not retained for this consult. Audio is kept only for consults recorded recently.'
 
   return (
     <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
