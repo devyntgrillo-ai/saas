@@ -21,6 +21,7 @@ const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b, null, 2), { status: s, headers: { "Content-Type": "application/json" } });
 
 const DEMO_PRACTICE_EMAIL = "demo@pinnacledental.com";
+const DEMO_PRACTICE_NAME = "Demo Dental";
 const DEMO_LOGIN_EMAIL = "demo@caselift.io";
 const DEMO_LOGIN_PASSWORD = "CaseLift2026!";
 const SUPER_ADMIN_EMAIL = "devyntgrillo@gmail.com";
@@ -261,7 +262,7 @@ function analysisFor(c: Consult) {
 // Knowledge base shown in Settings → Knowledge Base (accordion sections + stories).
 const KB_SECTIONS: Record<string, string> = {
   practice_overview:
-    "Pinnacle Dental Implants is a Scottsdale, AZ implant and cosmetic practice led by Dr. Michael Torres. We focus on full-arch restoration (All-on-4/All-on-X), single implants, and smile makeovers. Our differentiator is a same-week surgical timeline, in-house CBCT, and IV sedation for anxious patients. The treatment coordinator owns every consult follow-up.",
+    "Demo Dental is a Scottsdale, AZ implant and cosmetic practice led by Dr. Michael Torres. We focus on full-arch restoration (All-on-4/All-on-X), single implants, and smile makeovers. Our differentiator is a same-week surgical timeline, in-house CBCT, and IV sedation for anxious patients. The treatment coordinator owns every consult follow-up.",
   pricing:
     "Full arch (per arch): $38,000–$47,000. Single implant + crown: $4,500–$5,200. Dental implants (multiple): $11,000–$15,000. Invisalign: $5,500–$6,500. Cosmetic veneers: $8,000–$12,000. Financing through Sunbit and Cherry — most full-arch patients land $550–$620/mo with $0 down. We can phase treatment arch-by-arch.",
   what_works:
@@ -293,6 +294,49 @@ Deno.serve(async (req: Request) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     if (dbUrl) sql = postgres(dbUrl, { prepare: false, max: 2 });
+
+    if (body.debug === "name" && sql) {
+      const rows = await sql`select id, name, email from public.practices where email = ${DEMO_PRACTICE_EMAIL}`;
+      return json({ demoPractices: rows });
+    }
+
+    // Apply the new demo name (and matching KB overview) to the live record
+    // without a full reseed, so existing demo data is preserved.
+    if (body.action === "fixname") {
+      const { data, error } = await admin
+        .from("practices")
+        .update({ name: DEMO_PRACTICE_NAME, knowledge_base_sections: KB_SECTIONS })
+        .eq("email", DEMO_PRACTICE_EMAIL)
+        .select("id, name");
+      return json({ ok: !error, updated: data, error: error?.message });
+    }
+
+    if (body.debug === "rlstest" && sql) {
+      // Simulate the super admin updating the demo practice name under RLS,
+      // then roll back. Tells us whether a real client edit would persist.
+      const [pr] = await sql`select id from public.practices where email = ${DEMO_PRACTICE_EMAIL}`;
+      const [au] = await sql`select id from public.users where lower(email) = ${SUPER_ADMIN_EMAIL}`;
+      let updated: unknown = "n/a";
+      try {
+        await sql.begin(async (tx) => {
+          await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: au.id, role: "authenticated" })}, true)`;
+          await tx`set local role authenticated`;
+          const r = await tx`update public.practices set name = 'RLS Probe' where id = ${pr.id} returning id`;
+          updated = r.length;
+          throw new Error("__rollback__");
+        });
+      } catch (e) {
+        if ((e as Error).message !== "__rollback__") updated = `error: ${(e as Error).message}`;
+      }
+      return json({ rlstest: { rows_super_admin_can_update: updated } });
+    }
+
+    if (body.debug === "rls" && sql) {
+      const adminUser = await sql`select id, email, role, access_level, practice_id from public.users where lower(email) = ${SUPER_ADMIN_EMAIL}`;
+      const updatePolicies = await sql`select polname, pg_get_expr(polqual, polrelid) as using_expr from pg_policy where polrelid = 'public.practices'::regclass and polcmd in ('w','*')`;
+      const hasFn = await sql`select count(*)::int as n from pg_proc where proname = 'is_platform_super_admin'`;
+      return json({ rls: { adminUser, updatePolicies, has_is_platform_super_admin: hasFn[0]?.n } });
+    }
 
     if (body.debug === "constraints" && sql) {
       const defs = await sql`
@@ -389,7 +433,7 @@ Deno.serve(async (req: Request) => {
     const { data: practice, error: pErr } = await admin
       .from("practices")
       .insert({
-        name: "Pinnacle Dental Implants",
+        name: DEMO_PRACTICE_NAME,
         doctor_first: "Michael",
         doctor_last: "Torres",
         email: DEMO_PRACTICE_EMAIL,
