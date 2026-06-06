@@ -256,11 +256,13 @@ function CallTranscript({ callLogId, status: initialStatus, text: initialText, e
   const [status, setStatus] = useState(initialStatus)
   const [text, setText] = useState(initialText || '')
   const [error, setError] = useState(initialError || '')
+  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     setStatus(initialStatus)
     setText(initialText || '')
     setError(initialError || '')
+    setExpanded(false)
   }, [callLogId, initialStatus, initialText, initialError])
 
   useEffect(() => {
@@ -308,10 +310,41 @@ function CallTranscript({ callLogId, status: initialStatus, text: initialText, e
 
   if (status === 'skipped' || !text?.trim()) return null
 
+  const trimmed = text.trim()
+  // First sentence = up to the first ., !, ? (followed by space/end) or newline.
+  const nl = trimmed.indexOf('\n')
+  const punct = trimmed.search(/[.!?](\s|$)/)
+  let end = trimmed.length
+  if (nl !== -1) end = Math.min(end, nl)
+  if (punct !== -1) end = Math.min(end, punct + 1)
+  const firstSentence = trimmed.slice(0, end).trim()
+  const hasMore = firstSentence.length < trimmed.length
+
   return (
     <div className="mt-2 rounded-md border border-gray-200 bg-white px-3 py-2">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Transcript</p>
-      <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-gray-700">{text}</p>
+      {expanded || !hasMore ? (
+        <>
+          <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-gray-700">{trimmed}</p>
+          {hasMore && (
+            <button
+              onClick={() => setExpanded(false)}
+              className="mt-1.5 text-[11px] font-medium text-[var(--brand-primary)] hover:underline"
+            >
+              Show less
+            </button>
+          )}
+        </>
+      ) : (
+        <button
+          onClick={() => setExpanded(true)}
+          className="mt-1 block w-full cursor-pointer text-left text-xs leading-relaxed text-gray-700 hover:text-gray-900"
+        >
+          {firstSentence}
+          <span className="text-gray-400">… </span>
+          <span className="font-medium text-[var(--brand-primary)] hover:underline">Show more</span>
+        </button>
+      )}
     </div>
   )
 }
