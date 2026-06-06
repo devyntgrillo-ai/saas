@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { useSequences, useToggleSequenceStatus, useUpdateSequenceMessage, useSequencesRealtime, queryKeys } from '../lib/queries'
+import { useSequences, useToggleSequenceStatus, useUpdateSequenceMessage, useSequencesRealtime, useProcessingConsults, useConsultsRealtime, queryKeys } from '../lib/queries'
 import { stripEmDashes } from '../lib/sanitize'
 import {
   parseSequenceConfig,
@@ -624,11 +624,49 @@ function SequenceDrawer({ row, practice, onClose, onChanged, onReload }) {
   )
 }
 
+// ── Pending sequence card (consult still being analyzed) ───────────────────
+const PENDING_SEQ_CSS = `
+.psq-shimmer { background: linear-gradient(90deg, rgba(148,163,184,.08) 25%, rgba(148,163,184,.22) 50%, rgba(148,163,184,.08) 75%); background-size:200% 100%; animation: psqShimmer 1.5s linear infinite; }
+@keyframes psqShimmer { from { background-position:200% 0 } to { background-position:-200% 0 } }
+@keyframes psqDot { 0%,100% { opacity:.4 } 50% { opacity:1 } }
+.psq-dot { animation: psqDot 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .psq-shimmer,.psq-dot { animation: none !important } }
+`
+
+function PendingSequenceCard({ c }) {
+  const name = c.patient_name || [c.patient_first, c.patient_last].filter(Boolean).join(' ') || 'New patient'
+  return (
+    <Link
+      to={`/consults/${c.id}/processing`}
+      className="block rounded-xl border border-amber-400/25 bg-amber-400/[0.04] p-4 transition hover:bg-amber-400/[0.08]"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <p className="truncate text-sm font-semibold text-slate-100">{name} — Sequence Pending</p>
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/15 px-2.5 py-1 text-[11px] font-medium text-amber-300">
+          <span className="psq-dot h-1.5 w-1.5 rounded-full bg-amber-400" /> ⚡ Generating sequence...
+        </span>
+      </div>
+      <p className="mt-1.5 text-xs text-slate-400">
+        Follow-up messages are being built based on the consult analysis. Check back shortly.
+      </p>
+      {/* Shimmer where the message preview would be */}
+      <div className="mt-3 space-y-1.5">
+        <div className="psq-shimmer h-2.5 w-3/4 rounded" />
+        <div className="psq-shimmer h-2.5 w-1/2 rounded" />
+      </div>
+    </Link>
+  )
+}
+
 export default function Sequences() {
   const { practiceId, practice } = useAuth()
   const queryClient = useQueryClient()
   const { data: rows = [], isLoading: loading, refetch } = useSequences(practiceId)
   useSequencesRealtime(practiceId)
+  // Consults still being analyzed have no messages yet, so they're excluded from
+  // the sequence list — surface them as "pending" cards at the top instead.
+  const { data: processing = [] } = useProcessingConsults(practiceId)
+  useConsultsRealtime(practiceId)
   const toggleSeqMutation = useToggleSequenceStatus()
   const updateMsgMutation = useUpdateSequenceMessage()
   const [drawerRow, setDrawerRow] = useState(null)
@@ -798,6 +836,16 @@ export default function Sequences() {
           ))}
         </div>
       </div>
+
+      {/* Pending sequences — consults still being analyzed (no messages yet). */}
+      {processing.length > 0 && (
+        <div className="space-y-2">
+          <style>{PENDING_SEQ_CSS}</style>
+          {processing.map((c) => (
+            <PendingSequenceCard key={c.id} c={c} />
+          ))}
+        </div>
+      )}
 
       {/* List */}
       {loading ? (
