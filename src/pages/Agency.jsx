@@ -20,6 +20,7 @@ import {
   ChevronDown,
   Eye,
   Mic,
+  Search,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useBranding } from '../context/BrandingContext'
@@ -216,39 +217,45 @@ function UploadZone({ kind, url, uploading, inputRef, onFile, onClear, hint, com
   )
 }
 
-// Miniature sidebar that mirrors the real one, recolored with the chosen brand
-// (inline styles so unsaved values preview without touching the global theme).
-function SidebarPreview({ color, logoUrl, companyName }) {
+// Miniature sidebar that mirrors the real one, rendered in a FORCED theme (dark
+// or light via `mode`) regardless of the app's current theme, so a reseller can
+// preview both at once. Recolored with the chosen brand via inline styles.
+function SidebarPreview({ mode, color, logoUrl, companyName }) {
+  const dark = mode === 'dark'
+  const bg = dark ? '#111827' : '#FFFFFF'
+  const border = dark ? 'rgba(255,255,255,0.08)' : '#E2E8F0'
+  const navText = dark ? '#94A3B8' : '#64748B'
+  const titleText = dark ? '#F8FAFC' : '#0F172A'
   const tint = `${color}22` // ~13% opacity active-nav tint
   return (
-    <div className="overflow-hidden rounded-xl border border-surface-700 bg-surface-900">
-      <div className="px-3 pb-2 pt-3">
+    <div className="overflow-hidden rounded-xl border" style={{ backgroundColor: bg, borderColor: border }}>
+      <div className="px-2.5 pb-2 pt-2.5">
         {logoUrl ? (
-          <img src={logoUrl} alt="" className="h-7 max-w-[140px] object-contain" />
+          <img src={logoUrl} alt="" className="h-6 max-w-[120px] object-contain" />
         ) : (
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md" style={{ backgroundColor: color }}>
-              <span className="text-xs font-bold text-white">{(companyName[0] || 'B').toUpperCase()}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="flex h-6 w-6 items-center justify-center rounded-md" style={{ backgroundColor: color }}>
+              <span className="text-[10px] font-bold text-white">{(companyName[0] || 'B').toUpperCase()}</span>
             </span>
-            <span className="truncate text-sm font-bold tracking-tight text-white">{companyName}</span>
+            <span className="truncate text-xs font-bold tracking-tight" style={{ color: titleText }}>{companyName}</span>
           </div>
         )}
       </div>
-      <div className="space-y-1 px-2 py-2">
-        <div className="flex h-8 items-center gap-2 rounded-md border-l-2 px-2 text-xs font-medium"
+      <div className="space-y-1 px-1.5 py-1.5">
+        <div className="flex h-7 items-center gap-1.5 rounded-md border-l-2 px-1.5 text-[11px] font-medium"
           style={{ borderColor: color, backgroundColor: tint, color }}>
-          <LayoutGrid className="h-3.5 w-3.5" /> Dashboard
+          <LayoutGrid className="h-3 w-3" /> Dashboard
         </div>
         {['Consults', 'Conversations'].map((l) => (
-          <div key={l} className="flex h-8 items-center gap-2 rounded-md border-l-2 border-transparent px-2 text-xs text-slate-400">
-            <ChevronRight className="h-3.5 w-3.5" /> {l}
+          <div key={l} className="flex h-7 items-center gap-1.5 rounded-md border-l-2 border-transparent px-1.5 text-[11px]" style={{ color: navText }}>
+            <ChevronRight className="h-3 w-3" /> {l}
           </div>
         ))}
       </div>
-      <div className="px-2 pb-3 pt-1">
-        <div className="flex h-8 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold text-white"
+      <div className="px-1.5 pb-2.5 pt-0.5">
+        <div className="flex h-7 items-center justify-center gap-1 rounded-lg text-[11px] font-semibold text-white"
           style={{ backgroundColor: color }}>
-          <Mic className="h-3.5 w-3.5" /> Record Consult
+          <Mic className="h-3 w-3" /> Record Consult
         </div>
       </div>
     </div>
@@ -256,7 +263,7 @@ function SidebarPreview({ color, logoUrl, companyName }) {
 }
 
 export default function Agency() {
-  const { user, agency, agencyRole, agencyLoading, isAgencyUser, viewPractice, refreshAgency } = useAuth()
+  const { user, effectiveAgency: agency, agencyRole, isAgencyView, contextLoading, viewPractice, refreshAgency} = useAuth()
   const { invalidateBrand } = useBranding()
   const navigate = useNavigate()
   // Sub-view is URL-driven (?tab=) so the sidebar agency nav can link to it
@@ -269,6 +276,16 @@ export default function Agency() {
   const practices = (overview?.practices || []).filter((p) => !p.archived_at)
   const archivedPractices = (overview?.practices || []).filter((p) => p.archived_at)
   const metrics = overview?.metrics || {}
+  // Searchable subaccount list (filter by practice name or doctor).
+  const [searchQ, setSearchQ] = useState('')
+  const q = searchQ.trim().toLowerCase()
+  const filteredPractices = q
+    ? practices.filter(
+        (p) =>
+          p.name?.toLowerCase().includes(q) ||
+          [p.doctor_first, p.doctor_last].filter(Boolean).join(' ').toLowerCase().includes(q),
+      )
+    : practices
   const [showAdd, setShowAdd] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [busyId, setBusyId] = useState(null)
@@ -303,7 +320,8 @@ export default function Agency() {
   const [uploadError, setUploadError] = useState('')
   const [saveError, setSaveError] = useState('')
   const [previewing, setPreviewing] = useState(false)
-  const logoInputRef = useRef(null)
+  const logoDarkInputRef = useRef(null)
+  const logoLightInputRef = useRef(null)
   const faviconInputRef = useRef(null)
 
   // Seed the form once per agency (keyed on id, NOT the object) so that the
@@ -316,6 +334,8 @@ export default function Agency() {
         name: agency.name || '',
         company_name: agency.company_name || agency.brand_name || '',
         logo_url: agency.logo_url || '',
+        logo_url_dark: agency.logo_url_dark || '',
+        logo_url_light: agency.logo_url_light || '',
         favicon_url: agency.favicon_url || '',
         primary_color: agency.primary_color || '#0EA5E9',
         support_email: agency.support_email || '',
@@ -339,16 +359,18 @@ export default function Agency() {
     setSettings((s) => ({ ...s, ...patch })) // optimistic
     setSavingSettings(true)
     setSaveError('')
-    const { error } = await supabase.from('agency_accounts').update(patch).eq('id', agency.id).select().maybeSingle()
-    if (error) {
-      // A "column ... does not exist" / schema-cache error means the brand
-      // migration hasn't been applied yet - surface it instead of failing silently.
-      const schemaIssue = /column|schema cache|PGRST/i.test(`${error.message} ${error.code || ''}`)
-      setSaveError(
-        schemaIssue
-          ? 'Save failed: the brand columns are missing. Apply migration 20260530040000_reseller_white_label_branding.sql to your Supabase project.'
-          : `Save failed: ${error.message}`,
-      )
+    // Persist via the service-role edge function so a super-admin editing brand
+    // while impersonating (or an agency owner/admin) always saves, regardless of
+    // agency_accounts RLS.
+    const { data: res, error } = await supabase.functions.invoke('save-reseller-brand', {
+      body: { agency_id: agency.id, patch },
+    })
+    if (error || res?.error) {
+      let msg = res?.error
+      if (!msg) {
+        try { msg = (await error?.context?.json?.())?.error } catch { /* not json */ }
+      }
+      setSaveError(`Save failed: ${msg || error?.message || 'unknown error'}`)
       setSavingSettings(false)
       return false
     }
@@ -377,6 +399,8 @@ export default function Agency() {
       company_name: null,
       brand_name: null,
       logo_url: null,
+      logo_url_dark: null,
+      logo_url_light: null,
       favicon_url: null,
       primary_color: null,
       white_label_enabled: false,
@@ -423,7 +447,8 @@ export default function Agency() {
       // Cache-bust so a re-upload to the same path shows immediately.
       const url = `${data.publicUrl}?v=${file.size}`
       // Persist immediately (auto-save) - no separate Save click needed.
-      await saveBrand({ [kind === 'logo' ? 'logo_url' : 'favicon_url']: url, white_label_enabled: true })
+      const COLUMN = { logo_dark: 'logo_url_dark', logo_light: 'logo_url_light', favicon: 'favicon_url' }
+      await saveBrand({ [COLUMN[kind] || 'logo_url']: url, white_label_enabled: true })
     } catch (err) {
       setUploadError(err.message || 'Upload failed.')
     } finally {
@@ -432,7 +457,7 @@ export default function Agency() {
   }
 
   // Only agency users belong here.
-  if (!agencyLoading && !isAgencyUser) return <Navigate to="/" replace />
+  if (!contextLoading && !isAgencyView) return <Navigate to="/" replace />
 
   return (
     <div className="space-y-6">
@@ -447,7 +472,7 @@ export default function Agency() {
           )}
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-white">{agency?.name || 'Reseller'}</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-white">{agency?.company_name || agency?.brand_name || agency?.name || 'Reseller'}</h1>
               <span className="rounded-full bg-[var(--accent-subtle)] px-2.5 py-0.5 text-xs font-semibold text-[var(--accent)]">RESELLER</span>
             </div>
             <p className="text-sm text-slate-400 capitalize">{agencyRole} · {practices.length} client practices</p>
@@ -477,8 +502,22 @@ export default function Agency() {
           </div>
         ) : (
           <>
+          {/* Search across all subaccounts. */}
+          <div className="relative max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <input
+              value={searchQ}
+              onChange={(e) => setSearchQ(e.target.value)}
+              placeholder="Search subaccounts…"
+              className="input pl-9"
+            />
+          </div>
+
+          {filteredPractices.length === 0 ? (
+            <p className="py-12 text-center text-sm text-slate-500">No subaccounts match “{searchQ}”.</p>
+          ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {practices.map((p) => {
+            {filteredPractices.map((p) => {
               const m = metrics[p.id] || {}
               const doctor = [p.doctor_first, p.doctor_last].filter(Boolean).join(' ')
               return (
@@ -540,6 +579,7 @@ export default function Agency() {
               )
             })}
           </div>
+          )}
 
           {/* Archived subaccounts - hidden from the list above; restorable. */}
           {archivedPractices.length > 0 && (
@@ -611,7 +651,7 @@ export default function Agency() {
             <BrandSwitch checked={Boolean(settings.white_label_enabled)} onChange={(v) => saveBrand({ white_label_enabled: v })} />
           </label>
 
-          <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_240px]">
+          <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
             {/* ---- Fields (each auto-saves) ---- */}
             <div className="space-y-5">
               <div>
@@ -637,17 +677,26 @@ export default function Agency() {
                 <p className="mt-1.5 text-xs text-slate-500">Buttons, active nav, badges, the Record button.</p>
               </div>
 
+              {/* Two logos so the right one shows in each client theme. */}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="label">Logo</label>
-                  <UploadZone kind="logo" url={settings.logo_url} uploading={uploading === 'logo'} inputRef={logoInputRef}
-                    onFile={(f) => uploadAsset('logo', f)} onClear={() => saveBrand({ logo_url: null })} hint="PNG/SVG · 2MB" compact />
+                  <label className="label">Dark mode logo</label>
+                  <UploadZone kind="logo_dark" url={settings.logo_url_dark} uploading={uploading === 'logo_dark'} inputRef={logoDarkInputRef}
+                    onFile={(f) => uploadAsset('logo_dark', f)} onClear={() => saveBrand({ logo_url_dark: null })} hint="PNG/SVG · 2MB" compact />
+                  <p className="mt-1.5 text-xs text-slate-500">Shown when clients use dark theme. Use a light-colored or white version of your logo.</p>
                 </div>
                 <div>
-                  <label className="label">Favicon <span className="text-slate-500">(optional)</span></label>
-                  <UploadZone kind="favicon" url={settings.favicon_url} uploading={uploading === 'favicon'} inputRef={faviconInputRef}
-                    onFile={(f) => uploadAsset('favicon', f)} onClear={() => saveBrand({ favicon_url: null })} hint="PNG/ICO · 2MB" compact />
+                  <label className="label">Light mode logo</label>
+                  <UploadZone kind="logo_light" url={settings.logo_url_light} uploading={uploading === 'logo_light'} inputRef={logoLightInputRef}
+                    onFile={(f) => uploadAsset('logo_light', f)} onClear={() => saveBrand({ logo_url_light: null })} hint="PNG/SVG · 2MB" compact />
+                  <p className="mt-1.5 text-xs text-slate-500">Shown when clients use light theme. Use a dark-colored version of your logo.</p>
                 </div>
+              </div>
+
+              <div>
+                <label className="label">Favicon <span className="text-slate-500">(optional)</span></label>
+                <UploadZone kind="favicon" url={settings.favicon_url} uploading={uploading === 'favicon'} inputRef={faviconInputRef}
+                  onFile={(f) => uploadAsset('favicon', f)} onClear={() => saveBrand({ favicon_url: null })} hint="PNG/ICO · 2MB" compact />
               </div>
 
               <div>
@@ -688,11 +737,26 @@ export default function Agency() {
             {/* ---- Live preview + actions (sticky) ---- */}
             <div className="lg:sticky lg:top-4 lg:self-start">
               <p className="label">Client preview</p>
-              <SidebarPreview
-                color={settings.primary_color || '#0EA5E9'}
-                logoUrl={settings.logo_url}
-                companyName={settings.company_name || 'Your Brand'}
-              />
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <p className="mb-1.5 text-[11px] font-medium text-slate-400">Dark mode</p>
+                  <SidebarPreview
+                    mode="dark"
+                    color={settings.primary_color || '#0EA5E9'}
+                    logoUrl={settings.logo_url_dark || settings.logo_url}
+                    companyName={settings.company_name || 'Your Brand'}
+                  />
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[11px] font-medium text-slate-400">Light mode</p>
+                  <SidebarPreview
+                    mode="light"
+                    color={settings.primary_color || '#0EA5E9'}
+                    logoUrl={settings.logo_url_light || settings.logo_url}
+                    companyName={settings.company_name || 'Your Brand'}
+                  />
+                </div>
+              </div>
               <button type="button" onClick={togglePreview} className="btn-ghost mt-3 w-full justify-center">
                 <Eye className="h-4 w-4" /> {previewing ? 'Stop preview' : 'Preview as client'}
               </button>

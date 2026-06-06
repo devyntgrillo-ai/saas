@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ChevronsUpDown, Search, Shield, ArrowLeft } from 'lucide-react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { ChevronsUpDown, Search, Shield, ArrowLeft, MousePointerClick } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useBranding } from '../context/BrandingContext'
 import { ACCESS_LABELS } from '../lib/permissions'
@@ -35,12 +35,15 @@ export default function AccountSwitcher() {
     isSuperAdmin,
     isMultiPractice,
     isImpersonating,
+    impersonation,
     accessLevel,
     viewPractice,
     exitPractice,
+    exitAgency,
   } = useAuth()
   const { isWhiteLabeled } = useBranding()
   const navigate = useNavigate()
+  const location = useLocation()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const ref = useRef(null)
@@ -72,15 +75,28 @@ export default function AccountSwitcher() {
 
   // Current context shown on the trigger. When nothing is impersonated, fall back
   // to the role label so the pill always reads sensibly.
+  // While impersonating a reseller (no sub-account), show that reseller's name.
+  const resellerImp = impersonation?.level === 'reseller' ? impersonation.target : null
   const currentName = practice?.name
-    || (isSuperAdmin ? 'Super Admin' : isAgencyUser ? 'Reseller View' : agency?.name || 'Select account')
+    || resellerImp?.name
+    || (isSuperAdmin ? 'Select an account' : isAgencyUser ? 'Select an account' : agency?.name || 'Select account')
   const currentSub = practice
     ? practice.agency?.name || cityState(practice) || practice.address || 'Practice'
-    : isSuperAdmin
-      ? 'Platform admin'
-      : isAgencyUser
-        ? agency?.name || 'Reseller'
-        : ACCESS_LABELS[accessLevel] || ''
+    : resellerImp
+      ? 'Reseller'
+      : isSuperAdmin
+        ? 'Super Admin'
+        : isAgencyUser
+          ? agency?.name || 'Reseller View'
+          : ACCESS_LABELS[accessLevel] || ''
+
+  // "Click here to switch" is ONLY for a super-admin / reseller in their own
+  // portal with nothing impersonated. On /admin routes (and when no practice is
+  // in context) the stored practice is ignored, so the super-admin's own home
+  // practice never leaks onto the trigger. Once impersonating - a practice (show
+  // its name) or a reseller (show the reseller name) - this is false.
+  const onAdminRoute = location.pathname.startsWith('/admin')
+  const idle = (isSuperAdmin || isAgencyUser) && !isImpersonating && (onAdminRoute || !practice?.name)
 
   function pick(id) {
     viewPractice(id)
@@ -102,60 +118,97 @@ export default function AccountSwitcher() {
 
   return (
     <div className="relative px-2 pb-2" ref={ref}>
-      {/* Trigger - light pill so it clearly reads as a clickable button (GHL style). */}
+      {/* Trigger - elevated pill that adapts to the theme (light in light mode,
+          dark in dark mode) via the surface scale + text tokens. */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2.5 rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-2.5 text-left transition hover:bg-slate-200"
+        className="flex w-full items-center gap-2.5 rounded-lg border border-surface-700 bg-surface-800 px-2.5 py-2.5 text-left transition hover:bg-surface-700"
       >
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-semibold text-white">
-          {initials(currentName)}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-slate-900">{currentName}</span>
-          {currentSub && <span className="block truncate text-xs text-slate-500">{currentSub}</span>}
-        </span>
-        <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />
+        {idle ? (
+          <>
+            <MousePointerClick className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--text-secondary)]">Click here to switch</span>
+            <ChevronsUpDown className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
+          </>
+        ) : (
+          <>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-700 text-xs font-semibold text-[var(--text-primary)]">
+              {initials(currentName)}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold text-[var(--text-primary)]">{currentName}</span>
+              {currentSub && <span className="block truncate text-xs text-[var(--text-muted)]">{currentSub}</span>}
+            </span>
+            <ChevronsUpDown className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
+          </>
+        )}
       </button>
 
-      {/* Panel - white/light, floating over the dark sidebar */}
+      {/* Panel - theme-aware surface, floating over the sidebar. --sw-soft is the
+          brand accent at low opacity, used for the active/selected row (so it
+          follows a white-label brand color instead of a hardcoded blue). */}
       {open && (
-        <div className="animate-dropdown absolute left-2 z-50 mt-1 w-80 max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.18)]">
+        <div
+          style={{ '--sw-soft': 'color-mix(in srgb, var(--accent) 15%, transparent)' }}
+          className="animate-dropdown absolute left-2 z-50 mt-1 w-80 max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-surface-700 bg-surface-900 shadow-[0_12px_32px_rgba(0,0,0,0.45)]"
+        >
           <div className="p-2.5">
-            {/* Back to admin/reseller view — only while actively impersonating
-                a subaccount; hidden when already in the super-admin/reseller view. */}
-            {(isSuperAdmin || isAgencyUser) && isImpersonating && (
-              <button
-                onClick={() => { exitPractice(); setOpen(false); navigate(isSuperAdmin ? '/admin' : '/agency') }}
-                className="mb-2 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-slate-50"
-              >
-                {isSuperAdmin
-                  ? <Shield className="h-4 w-4 shrink-0 text-blue-600" />
-                  : <ArrowLeft className="h-4 w-4 shrink-0 text-blue-600" />}
-                <span className="text-sm font-medium text-blue-600">
-                  {isSuperAdmin ? 'Back to Super Admin View' : 'Back to Reseller View'}
-                </span>
-              </button>
-            )}
+            {/* Back action while impersonating. Reseller level (super-admin
+                viewing as a reseller) → straight back to the admin view, so a
+                super-admin is never stranded in a reseller dashboard. Practice
+                level → back to the reseller view if there's a reseller behind it,
+                otherwise to the admin view. */}
+            {(() => {
+              // Route-based so "Back to Super Admin View" persists in the reseller
+              // view AND subaccounts regardless of the impersonation flag - a
+              // super-admin is anywhere outside /admin → offer the way back.
+              const onAdmin = location.pathname.startsWith('/admin')
+              const inResellerSubaccount =
+                isImpersonating && impersonation?.level === 'practice' && (Boolean(impersonation?.reseller) || isAgencyUser)
+              const showAdminExit = isSuperAdmin && !onAdmin
+              if (!inResellerSubaccount && !showAdminExit) return null
+              const backBtn = 'mb-1 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-surface-800'
+              return (
+                <div className="mb-1">
+                  {/* In a subaccount under a reseller → back up to the reseller view. */}
+                  {inResellerSubaccount && (
+                    <button onClick={() => { setOpen(false); exitPractice(); navigate('/agency') }} style={{ color: 'var(--accent)' }} className={backBtn}>
+                      <ArrowLeft className="h-4 w-4 shrink-0" />
+                      <span className="text-sm font-medium">Back to Reseller View</span>
+                    </button>
+                  )}
+                  {/* Super-admin path back to the admin view - persists in the
+                      reseller view and subaccounts (stacked under the reseller one). */}
+                  {showAdminExit && (
+                    <button onClick={() => { setOpen(false); exitAgency(); navigate('/admin') }} style={{ color: 'var(--accent)' }} className={backBtn}>
+                      <Shield className="h-4 w-4 shrink-0" />
+                      <span className="text-sm font-medium">Back to Super Admin View</span>
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Search */}
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
               <input
                 autoFocus
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={searchPlaceholder}
-                className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                style={{ color: 'var(--text-primary)' }}
+                className="h-9 w-full rounded-lg border border-surface-700 bg-surface-800 pl-9 pr-3 text-sm placeholder-slate-500 transition focus:border-[var(--accent)] focus:outline-none"
               />
             </div>
 
             {/* Accounts / practices */}
-            <p className="px-1 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <p className="px-1 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
               {listHeader}
             </p>
             <div className="max-h-[320px] space-y-0.5 overflow-y-auto">
               {filtered.length === 0 ? (
-                <p className="px-2 py-6 text-center text-sm text-slate-400">No accounts found.</p>
+                <p className="px-2 py-6 text-center text-sm text-slate-500">No accounts found.</p>
               ) : (
                 filtered.map((p) => (
                   <AccountRow
@@ -170,7 +223,7 @@ export default function AccountSwitcher() {
             </div>
 
             {isWhiteLabeled && (
-              <p className="mt-2 border-t border-slate-100 px-2 pt-2 text-center text-[10px] text-slate-400">
+              <p className="mt-2 border-t border-surface-700 px-2 pt-2 text-center text-[10px] text-slate-500">
                 Powered by CaseLift
               </p>
             )}
@@ -185,16 +238,19 @@ function AccountRow({ p, active, sub, onPick }) {
   return (
     <button
       onClick={() => onPick(p.id)}
+      // Active row uses the brand accent at low opacity (--sw-soft, set on the
+      // panel); inactive rows get a theme-aware hover.
+      style={active ? { backgroundColor: 'var(--sw-soft)' } : undefined}
       className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition ${
-        active ? 'bg-blue-50' : 'hover:bg-slate-50'
+        active ? '' : 'hover:bg-surface-800'
       }`}
     >
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-700 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
         {firstLetter(p.name)}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-semibold leading-tight text-slate-900">{p.name}</span>
-        {sub && <span className="block truncate text-[11px] leading-tight text-slate-500">{sub}</span>}
+        <span className="block truncate text-[13px] font-semibold leading-tight" style={{ color: active ? 'var(--accent)' : 'var(--text-primary)' }}>{p.name}</span>
+        {sub && <span className="block truncate text-[11px] leading-tight text-slate-400">{sub}</span>}
       </span>
     </button>
   )

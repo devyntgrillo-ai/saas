@@ -13,11 +13,13 @@ import {
   CalendarClock,
   AlertTriangle,
   Sparkles,
+  Building2,
   Settings as SettingsIcon,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { AUDIO_QUALITY, MIC_PREF_KEY, createBrowserConsult, uploadRecording, transcribeRecording, listMicrophones } from '../lib/recording'
+import { markRecording } from '../lib/recentRecordings'
 import { treatmentLabel } from '../lib/treatments'
 import { isNative, nativeRequestPermission, nativeStart, nativePause, nativeResume, nativeStopToBlob } from '../lib/nativeRecorder'
 
@@ -56,9 +58,31 @@ const OUTCOME_OPTIONS = [
   },
 ]
 
+// Demo-only: a rich, pre-formatted example consult pushed straight through the
+// real pipeline (transcribe -> analyze -> sequence build -> consult detail) so a
+// sales demo can show the whole flow without recording live audio. Speaker-
+// labeled + timestamped so the transcript viewer renders it as a clean dialogue.
+const EXAMPLE_DURATION = 165
+const EXAMPLE_TRANSCRIPT = `[TC] 0:03 — Thanks for coming in today. Before we get into the plan, tell me what brought you in.
+[Patient] 0:11 — Honestly I have been hiding my smile for years. My bottom teeth are failing and the partial I have never fit right.
+[TC] 0:24 — That is exactly what we fix here. Based on the scan, the doctor is recommending a full arch restoration on the lower. It is fixed, never comes out, and feels like real teeth.
+[Patient] 0:40 — That is what I want. I am just nervous about two things, the surgery and honestly the cost.
+[TC] 0:51 — Both totally normal. Let me take the fear first. We do this under IV sedation, you are completely comfortable, and most patients tell me it was easier than a regular extraction.
+[Patient] 1:09 — Okay, that helps. My sister had hers done and said the same thing.
+[TC] 1:16 — Perfect, so you already have a great reference. Now the investment. The full arch with sedation comes to forty two thousand.
+[Patient] 1:28 — That is a lot. I do not have that kind of money sitting around.
+[TC] 1:34 — You do not need to. Most of our patients finance it. With approved credit we can get you to around five hundred eighty a month. Would a monthly number like that feel more manageable?
+[Patient] 1:49 — That actually sounds doable. I would want to talk it over with my husband first though.
+[TC] 2:01 — Of course, this is a big decision and he should be part of it. What timeline are you hoping for?
+[Patient] 2:09 — My daughter is getting married in June and I would love to feel confident in the photos.
+[TC] 2:18 — That is a wonderful reason, and June is very doable if we start soon. I will send you the financing breakdown and a few before and afters tonight. Can I follow up with you and your husband on Thursday?
+[Patient] 2:34 — Yes, Thursday works. Thank you, this was a lot less scary than I expected.
+[TC] 2:41 — That is exactly what I love to hear. We are going to take great care of you.`
+
 export default function RecordingModal({ onClose, patient = null }) {
   const { practice, practiceId, user } = useAuth()
   const navigate = useNavigate()
+  const isDemo = practice?.email === 'demo@pinnacledental.com'
 
   // Patient is resolved up-front by the AssignmentModal.
   const patientName = patient
@@ -98,6 +122,45 @@ export default function RecordingModal({ onClose, patient = null }) {
   // visualize. Computed once; native status never changes within a session.
   const native = isNative()
 
+  // ---- Visualizer ----------------------------------------------------------
+  // Declared before initStream (which calls it) so it isn't referenced before
+  // its definition.
+  function setupVisualizer(stream) {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext
+      const ctx = new AudioCtx()
+      audioCtxRef.current = ctx
+      const source = ctx.createMediaStreamSource(stream)
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 256
+      source.connect(analyser)
+      const data = new Uint8Array(analyser.frequencyBinCount)
+
+      const draw = () => {
+        rafRef.current = requestAnimationFrame(draw)
+        const canvas = canvasRef.current
+        if (!canvas) return
+        const c = canvas.getContext('2d')
+        const w = canvas.width
+        const h = canvas.height
+        analyser.getByteFrequencyData(data)
+        c.clearRect(0, 0, w, h)
+        const bars = 40
+        const step = Math.floor(data.length / bars)
+        const bw = w / bars
+        for (let i = 0; i < bars; i++) {
+          const v = data[i * step] / 255
+          const bh = Math.max(2, v * h)
+          c.fillStyle = `rgba(239,68,68,${0.35 + v * 0.65})`
+          c.fillRect(i * bw + 1, (h - bh) / 2, bw - 2, bh)
+        }
+      }
+      draw()
+    } catch {
+      /* visualizer is non-critical */
+    }
+  }
+
   // Request microphone access on mount (and when the chosen mic changes).
   const initStream = useCallback(async (deviceId) => {
     setError('')
@@ -134,42 +197,6 @@ export default function RecordingModal({ onClose, patient = null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ---- Visualizer ----------------------------------------------------------
-  function setupVisualizer(stream) {
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext
-      const ctx = new AudioCtx()
-      audioCtxRef.current = ctx
-      const source = ctx.createMediaStreamSource(stream)
-      const analyser = ctx.createAnalyser()
-      analyser.fftSize = 256
-      source.connect(analyser)
-      const data = new Uint8Array(analyser.frequencyBinCount)
-
-      const draw = () => {
-        rafRef.current = requestAnimationFrame(draw)
-        const canvas = canvasRef.current
-        if (!canvas) return
-        const c = canvas.getContext('2d')
-        const w = canvas.width
-        const h = canvas.height
-        analyser.getByteFrequencyData(data)
-        c.clearRect(0, 0, w, h)
-        const bars = 40
-        const step = Math.floor(data.length / bars)
-        const bw = w / bars
-        for (let i = 0; i < bars; i++) {
-          const v = data[i * step] / 255
-          const bh = Math.max(2, v * h)
-          c.fillStyle = `rgba(239,68,68,${0.35 + v * 0.65})`
-          c.fillRect(i * bw + 1, (h - bh) / 2, bw - 2, bh)
-        }
-      }
-      draw()
-    } catch {
-      /* visualizer is non-critical */
-    }
-  }
 
   // ---- Recording controls --------------------------------------------------
   function startTimer() {
@@ -258,6 +285,13 @@ export default function RecordingModal({ onClose, patient = null }) {
     let id
     try {
       id = await createBrowserConsult(practiceId, { durationSec, patient, source: native ? 'native_mobile' : undefined })
+      // Surface an "AI is analyzing…" card on the list pages immediately, even
+      // if backend analysis finishes before the user navigates there.
+      markRecording({
+        id,
+        practiceId,
+        name: [patient?.firstName, patient?.lastName].filter(Boolean).join(' ') || null,
+      })
       const path = await uploadRecording(practiceId, id, blob)
       setConsultId(id)
 
@@ -283,6 +317,31 @@ export default function RecordingModal({ onClose, patient = null }) {
     }
   }
 
+  // Demo-only: push a canned example transcript through the same pipeline as a
+  // real recording, so the next steps (analysis, sequence build, consult detail)
+  // all run as a live example. Skips audio entirely via the transcript passthrough.
+  async function loadExample() {
+    setPhase('processing')
+    setError('')
+    let id
+    try {
+      id = await createBrowserConsult(practiceId, { durationSec: EXAMPLE_DURATION, patient: patient || undefined })
+      markRecording({ id, practiceId, name: patientName })
+      setConsultId(id)
+      await transcribeRecording({
+        consultId: id,
+        transcript: EXAMPLE_TRANSCRIPT,
+        durationSec: EXAMPLE_DURATION,
+        appointmentId: patient?.appointmentId,
+        patient: patient || undefined,
+      })
+      setPhase('outcome')
+    } catch (e) {
+      setError(`${e?.message || 'Something went wrong'} (step: ${id ? 'transcribe' : 'create'})`)
+      setPhase('error')
+    }
+  }
+
   // Record the chosen outcome immediately (before analysis finishes), show a
   // 1s confirmation, then redirect to the consult detail page.
   async function chooseOutcome(option) {
@@ -304,15 +363,17 @@ export default function RecordingModal({ onClose, patient = null }) {
     }
     setTimeout(() => {
       onClose()
-      navigate(`/consults/${consultId}`)
+      // Hand off to the processing screen (polls transcription, then opens the
+      // consult) instead of dropping onto a blank detail page.
+      navigate(`/consults/${consultId}/processing`, { state: { outcome: option.value } })
     }, 1000)
   }
 
-  // "Skip for now" - outcome defaults to 'pending' (the DB default), just redirect.
+  // "Skip for now" - outcome defaults to 'pending' (the DB default).
   function skipOutcome() {
     if (!consultId) return
     onClose()
-    navigate(`/consults/${consultId}`)
+    navigate(`/consults/${consultId}/processing`, { state: { outcome: 'pending' } })
   }
 
   function requestCancel() {
@@ -357,9 +418,18 @@ export default function RecordingModal({ onClose, patient = null }) {
       <div className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-surface-700 bg-surface-900 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-surface-700 px-5 py-3.5">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-            <Mic className="h-4 w-4 text-primary-400" /> Hey, I&apos;m CaseLift
-          </h2>
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+              <Mic className="h-4 w-4 text-primary-400" /> Hey, I&apos;m CaseLift
+            </h2>
+            {/* Always show where this recording will be saved, so it can't land
+                in the wrong practice unnoticed. */}
+            {practice?.name && (
+              <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-slate-400">
+                <Building2 className="h-3 w-3 shrink-0 text-slate-500" /> Saving to {practice.name}
+              </p>
+            )}
+          </div>
           {!locked && (
             <button onClick={requestCancel} className="rounded-md p-1.5 text-slate-400 transition hover:bg-surface-800 hover:text-white">
               <X className="h-5 w-5" />
@@ -454,6 +524,17 @@ export default function RecordingModal({ onClose, patient = null }) {
                   title="Start recording"
                 >
                   <Mic className="h-8 w-8" />
+                </button>
+              )}
+
+              {/* Demo-only shortcut: load a rich example consult and run it through
+                  the full pipeline so the rest of the flow demos end to end. */}
+              {phase === 'ready' && isDemo && (
+                <button
+                  onClick={loadExample}
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-medium text-primary-300 transition hover:bg-primary/20"
+                >
+                  <Sparkles className="h-3.5 w-3.5" /> Load example consult recording
                 </button>
               )}
 

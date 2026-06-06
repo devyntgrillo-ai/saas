@@ -7,6 +7,7 @@ import {
   Plug,
   DollarSign,
   Info,
+  ArrowRight,
 } from 'lucide-react'
 import { Link, Navigate } from 'react-router-dom'
 import AILearningFeed from '../components/AILearningFeed'
@@ -22,7 +23,8 @@ import {
   countSentMessages,
   closeRateForRows,
 } from '../lib/dashboard'
-import { useDashboard, useNetworkComparison } from '../lib/queries'
+import { useDashboard, useNetworkComparison, useProcessingConsults, useConsultsRealtime } from '../lib/queries'
+import { useRecentRecordings } from '../lib/recentRecordings'
 
 function parseDate(d) {
   if (!d) return null
@@ -92,6 +94,15 @@ export default function Dashboard() {
   const { practiceId, practice, user, isAgencyUser } = useAuth()
   const { data, isLoading: loading, error, refetch } = useDashboard(practiceId)
   const { data: comparison } = useNetworkComparison(practiceId)
+  const { data: processing = [] } = useProcessingConsults(practiceId)
+  useConsultsRealtime(practiceId)
+  // Count just-recorded consults too, so the notice shows the instant someone
+  // records, even before the DB processing list refreshes.
+  const recentRecordings = useRecentRecordings(practiceId)
+  const analyzingCount = useMemo(
+    () => new Set([...processing.map((c) => c.id), ...recentRecordings.map((r) => r.id)]).size,
+    [processing, recentRecordings]
+  )
 
   const consults = data?.consults ?? []
   const messages = data?.messages ?? []
@@ -183,6 +194,21 @@ export default function Dashboard() {
         </p>
       </div>
 
+      {/* Live "being analyzed" notice — hidden when nothing is processing. */}
+      {analyzingCount > 0 && (
+        <Link
+          to="/consults"
+          className="flex items-center gap-2.5 rounded-xl border border-primary/40 bg-primary/10 px-4 py-3 text-sm font-medium text-primary-300 transition hover:bg-primary/15 dark:text-primary-200"
+        >
+          <span className="relative flex h-2.5 w-2.5 shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
+          </span>
+          🧠 {analyzingCount} consultation{analyzingCount === 1 ? '' : 's'} being analyzed right now
+          <ArrowRight className="ml-auto h-4 w-4" />
+        </Link>
+      )}
+
       {!practiceId && !loading && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           Your account isn't linked to a practice yet. Finish setup in{' '}
@@ -213,7 +239,7 @@ export default function Dashboard() {
               <div className="card p-5">
                 <div className="flex items-center justify-between">
                   <p className="flex items-center gap-1.5 text-sm text-slate-400">
-                    Production Lifted by CaseLift
+                    Production Recovered
                     <Info
                       className="h-3.5 w-3.5 cursor-help text-slate-500"
                       title="Confirmed = actual treatment plan values from your PMS or manual entry, attributed to CaseLift."
@@ -226,14 +252,11 @@ export default function Dashboard() {
                 <p className="mt-3 text-3xl font-bold tracking-tight text-emerald-300">
                   {formatMoney(prodMetrics.confirmed)}
                 </p>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  Confirmed recovered · {prodMetrics.attributedCount} CaseLift-attributed
-                  {prodMetrics.pipeline > 0 ? ` · ${formatMoney(prodMetrics.pipeline)} pipeline` : ''}
-                </p>
+                <p className="mt-0.5 text-xs text-slate-500">CaseLift-assisted</p>
               </div>
               <KpiCard icon={TrendingUp} accent="primary" label="Pipeline Value" value={formatMoney(kpis.pipelineValue)} sub={`${activity.active} patients nurtured`} />
-              <KpiCard icon={Clock} accent="violet" label="Hours Saved" value={`${kpis.hoursSaved}h`} sub={`${kpis.messagesSent} auto follow-ups · ~${kpis.minPerFollowup} min each`} />
-              <KpiCard icon={Award} accent="green" label="ROI This Month" value={kpis.roi ? `${kpis.roi}x ROI` : '-'} sub="Production ÷ $997 plan" />
+              <KpiCard icon={Clock} accent="violet" label="Hours Saved" value={`${kpis.hoursSaved}h`} sub={`${kpis.messagesSent} auto follow-ups`} />
+              <KpiCard icon={Award} accent="green" label="ROI This Month" value={kpis.roi ? `${kpis.roi}x ROI` : '-'} sub="Production ÷ Subscription" />
             </div>
           )}
 

@@ -30,13 +30,15 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 // ---- Claude analysis --------------------------------------------------------
-const analysisSystemPrompt = (treatmentType: string) => `You are CaseLift, an AI system that analyzes dental consultation recordings to help treatment coordinators recover unconverted patients.
+const analysisSystemPrompt = (treatmentType: string) => `You are CaseLift, an AI system that analyzes dental consultation recordings to help treatment coordinators recover unconverted patients. Practices run many kinds of consults, NOT just dental implants - it could be Invisalign or clear aligners, cosmetic veneers, crowns or bridges, sleep apnea, periodontal, full-arch, full-mouth rehab, general or restorative dentistry, and more.
 
-Treatment type being analyzed: ${treatmentType}
+Treatment type hint (pre-filled at booking, often just a default and sometimes wrong): ${treatmentType}
 
-Analyze the transcript and return ONLY valid JSON. No markdown, no backticks, no explanation. Just the JSON object. Never use em dashes (—) under any circumstances. Use commas, periods, or short sentences instead.
+CRITICAL: Do NOT assume this is a dental implant consult. Identify the ACTUAL treatment being discussed from the transcript itself - the procedure named, what the patient and coordinator actually talk about, and the concerns raised. If the hint above conflicts with the transcript, trust the transcript. Tailor your entire analysis and every follow-up message to the treatment the patient is actually considering, and report what you identified in the treatment_type field.
 
-Adapt your analysis based on treatment type:
+Analyze the transcript and call the emit_analysis tool with your structured analysis. Never use em dashes (—) under any circumstances. Use commas, periods, or short sentences instead.
+
+Use the playbook below that matches the treatment you identify (these are guides, not limits):
 
 For dental_implants / full_arch:
 - Primary objections: price, fear_surgery, spouse_approval, timing, health_concerns
@@ -68,8 +70,9 @@ For full_mouth_rehab / other:
 - Key personal details: functional issues, confidence, life events
 - Follow-up tone: phased approach, life-changing framing, financing
 
-Return exactly this JSON structure:
+Populate exactly these fields (this is the emit_analysis tool's schema):
 {
+  "treatment_type": "the treatment you identified from the transcript (e.g. dental_implants, full_arch, invisalign, cosmetic_veneers, sleep_apnea, periodontal, full_mouth_rehab, general, or a short descriptive label). Base this on the conversation, not the hint.",
   "what_happened": "2-3 sentence narrative of what happened in the consult",
   "primary_objection": "one of the objection types listed above for this treatment",
   "primary_objection_detail": "specific detail from the conversation",
@@ -98,6 +101,7 @@ const ANALYSIS_SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
+    treatment_type: STR,
     what_happened: STR,
     primary_objection: STR,
     primary_objection_detail: STR,
@@ -121,6 +125,7 @@ const ANALYSIS_SCHEMA = {
     email_3_body: STR,
   },
   required: [
+    "treatment_type",
     "what_happened", "primary_objection", "primary_objection_detail", "secondary_objection",
     "secondary_objection_detail", "exit_intent", "exit_intent_detail", "personal_detail",
     "coaching_insight", "downsell_opportunity", "tc_action",
@@ -129,29 +134,37 @@ const ANALYSIS_SCHEMA = {
   ],
 };
 
-// Tolerant JSON parse: prefer a clean parse, else extract the outermost braces.
-function parseJsonLoose(text: string): Record<string, unknown> {
-  try { return JSON.parse(text); } catch { /* fall through */ }
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start >= 0 && end > start) {
-    return JSON.parse(text.slice(start, end + 1));
-  }
-  throw new Error("Claude did not return parseable JSON.");
-}
+// Force Claude to emit the analysis through this tool. With tool_choice pinned
+// to it, the SDK hands us `input` already parsed as an object - so a stray prose
+// preface, a markdown fence, or a truncated trailing brace can no longer break
+// the response the way free-text JSON parsing did ("did not return parseable JSON").
+const ANALYSIS_TOOL = {
+  name: "emit_analysis",
+  description: "Return the structured consult analysis and the six follow-up messages.",
+  input_schema: ANALYSIS_SCHEMA,
+};
 
 async function analyze(anthropic: Anthropic, deidentified: string, treatmentType: string, note = "") {
   // On a regenerate the TC can steer the rewrite (e.g. "focus on financing").
   const guidance = note ? `\n\nAdditional guidance from the treatment coordinator for the follow-up messages: ${note}` : "";
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 4096,
+    max_tokens: 8192,
     system: analysisSystemPrompt(treatmentType),
+    tools: [ANALYSIS_TOOL],
+    tool_choice: { type: "tool", name: "emit_analysis" },
     messages: [{ role: "user", content: `Analyze this de-identified consult transcript:${guidance}\n\n${deidentified}` }],
   });
-  const tb = response.content.find((b) => b.type === "text");
-  if (!tb || tb.type !== "text") throw new Error("Claude returned no text block.");
-  return parseJsonLoose(tb.text ?? "");
+  // A cut-off response can leave the tool input partial - surface it clearly
+  // rather than persisting half an analysis.
+  if (response.stop_reason === "max_tokens") {
+    throw new Error("Analysis was cut off before completing. Please try again.");
+  }
+  const tu = response.content.find((b) => b.type === "tool_use");
+  if (!tu || tu.type !== "tool_use" || typeof tu.input !== "object" || tu.input === null) {
+    throw new Error("Claude did not return a structured analysis.");
+  }
+  return tu.input as Record<string, unknown>;
 }
 
 // Map Claude's "none"/empty sentinels to null for clean DB storage, and strip
@@ -185,7 +198,6 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const { ctx, error: authErr } = await resolveAuth(req, body);
     if (authErr || !ctx) return authErr ?? json({ error: "Unauthorized" }, 401);
-    const { practiceId } = ctx;
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const auditClient = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -204,7 +216,18 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (cErr) throw cErr;
     if (!consult) return json({ error: "Consult not found." }, 404);
-    if (consult.practice_id !== practiceId) return json({ error: "Not your practice's consult." }, 403);
+    // Access check: a user JWT can act on this consult only if RLS lets them see
+    // it (practice member, agency owner of the practice, or super-admin). This is
+    // impersonation-aware — unlike comparing against the caller's OWN practice,
+    // which would wrongly 403 a super-admin/agency working in a sub-account.
+    // Service-role calls (internal) are trusted. All writes below use the
+    // consult's OWN practice id so the data never lands in the caller's practice.
+    if (!ctx.isServiceRole) {
+      const { data: allowed } = await ctx.client
+        .from("consults").select("id").eq("id", consultId).maybeSingle();
+      if (!allowed) return json({ error: "Not your practice's consult." }, 403);
+    }
+    const consultPracticeId = consult.practice_id;
     // Idempotent - the detail-page poller may trigger this more than once. A
     // regenerate request intentionally bypasses this to re-run the analysis.
     if (consult.status === "analyzed" && !regenerate) return json({ consult_id: consultId, status: "analyzed", already: true });
@@ -219,7 +242,9 @@ Deno.serve(async (req: Request) => {
     if (!anthropicKey) return json({ error: "Analysis is unavailable - ANTHROPIC_API_KEY is not configured." }, 503);
     const anthropic = new Anthropic({ apiKey: anthropicKey });
 
-    const treatmentType = nn(consult.treatment_type) ?? "dental_implants";
+    // Pass the stored type only as a hint - never default to implants. The model
+    // identifies the real treatment from the transcript (see system prompt).
+    const treatmentType = nn(consult.treatment_type) ?? "unknown (identify from the transcript)";
 
     let a: Record<string, unknown>;
     try {
@@ -237,7 +262,7 @@ Deno.serve(async (req: Request) => {
     const { data: practiceRow } = await admin
       .from("practices")
       .select("sequence_config, auto_start_followup, timezone")
-      .eq("id", practiceId)
+      .eq("id", consultPracticeId)
       .maybeSingle();
     const autoStart = practiceRow?.auto_start_followup === true;
     const seqRules = rulesFrom(practiceRow?.sequence_config, practiceRow?.timezone);
@@ -259,6 +284,13 @@ Deno.serve(async (req: Request) => {
       downsell_opportunity: nn(a.downsell_opportunity),
       tc_action: nn(a.tc_action),
     };
+
+    // Backfill the treatment type from what the AI identified in the transcript,
+    // but only when the consult had none set - don't clobber a TC/PMS choice.
+    const detectedType = nn(a.treatment_type);
+    if (detectedType && !nn(consult.treatment_type)) {
+      record.treatment_type = detectedType;
+    }
 
     // Treatment-value estimate: only fill it in when the consult lacks an
     // authoritative value. Never overwrite a manual or PMS-sourced value.
@@ -301,7 +333,7 @@ Deno.serve(async (req: Request) => {
           const scheduled_for = autoStart ? computeScheduledFor(createdAt, day, seqRules) : null;
           return {
             consult_id: savedId,
-            practice_id: practiceId,
+            practice_id: consultPracticeId,
             type: m.type,
             channel: m.channel,
             subject: m.subject,
@@ -322,7 +354,7 @@ Deno.serve(async (req: Request) => {
       const obj = nn(a.primary_objection);
       const exit = nn(a.exit_intent);
       await admin.from("notifications").insert({
-        practice_id: practiceId,
+        practice_id: consultPracticeId,
         type: "consult_analyzed",
         event: "consult_analyzed",
         title: "New consult ready for review",

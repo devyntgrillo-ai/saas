@@ -88,13 +88,16 @@ export async function uploadRecording(practiceId, consultId, blob) {
 // FAST path: upload → transcribe → save (status "transcribed"). Returns quickly
 // so the UI can redirect immediately. AI analysis runs separately (see
 // requestAnalysis), triggered from the consult detail page after redirect.
-export async function transcribeRecording({ consultId, audioPath, durationSec, appointmentId, patient } = {}) {
+export async function transcribeRecording({ consultId, audioPath, transcript, durationSec, appointmentId, patient } = {}) {
   const body = {
     consult_id: consultId,
-    audio_path: audioPath,
     recording_source: 'browser',
     duration: durationSec || null,
   }
+  // Either transcribe stored audio, or pass a transcript straight through
+  // (used by the demo "load example consult" flow).
+  if (transcript) body.transcript = transcript
+  else body.audio_path = audioPath
   if (appointmentId) body.appointment_id = appointmentId
   if (patient) {
     if (patient.firstName) body.patient_first_name = patient.firstName

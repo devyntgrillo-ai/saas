@@ -1,8 +1,9 @@
 import { Mail, MessageSquare } from 'lucide-react'
 
-// Email/SMS channel switcher: a segmented control, always visible on the light
-// composer surface. Active segment = solid brand primary with white text/icon;
-// inactive = dark slate on a light track. No dropdown, no chevron.
+// Email/SMS channel switcher: a segmented control. Theme-aware via the surface
+// tokens so it reads correctly in both light and dark mode. Active segment =
+// solid brand primary with white text/icon; inactive = muted text on the track.
+// No dropdown, no chevron.
 //
 // NOTE: the active text color is set inline (#fff) rather than via the
 // `text-white` utility, because index.css has a light-mode override
@@ -15,7 +16,7 @@ const OPTIONS = [
 
 export default function ChannelToggle({ channel, onSwitch }) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1">
+    <div className="inline-flex items-center gap-1 rounded-lg border border-surface-700 bg-surface-800 p-1">
       {OPTIONS.map(({ value, label, Icon }) => {
         const active = channel === value
         return (
@@ -29,7 +30,7 @@ export default function ChannelToggle({ channel, onSwitch }) {
               'inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition',
               active
                 ? 'bg-primary shadow-sm'
-                : 'text-slate-600 hover:bg-white hover:text-slate-900',
+                : 'text-[var(--text-secondary)] hover:bg-surface-900 hover:text-[var(--text-primary)]',
             ].join(' ')}
           >
             <Icon className="h-4 w-4" strokeWidth={2} />

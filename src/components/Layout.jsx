@@ -58,9 +58,9 @@ const agencyNav = [
 // Shared styling for sidebar nav links (active = brand accent + left border).
 const navItemClass = ({ isActive }) =>
   [
-    'flex h-9 items-center gap-2.5 rounded-lg border-l-2 px-3 text-sm transition',
+    'flex h-9 items-center gap-2.5 rounded-lg border-l-[3px] px-3 text-sm transition',
     isActive
-      ? 'border-primary bg-primary/10 font-medium text-primary-300'
+      ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-15)] font-medium text-[var(--brand-primary)]'
       : 'border-transparent text-slate-400 hover:bg-surface-800 hover:text-slate-200',
   ].join(' ')
 
@@ -71,6 +71,7 @@ export default function Layout() {
     agency,
     agencyRole,
     isAgencyUser,
+    isAgencyView,
     isSuperAdmin,
     practice,
     practiceId,
@@ -89,7 +90,11 @@ export default function Layout() {
     Boolean(practiceId) && (practice?.agency?.status === 'suspended' || practice?.agency?.active === false)
   // Full-bleed pages own the entire content area (no padding/max-width/scroll)
   // so they can manage their own internal scrolling - e.g. the chat view.
-  const fullBleed = location.pathname === '/conversations'
+  // The consult detail page (/consults/:id) paints its own full-width background;
+  // the list (/consults) and processing screen (/consults/:id/processing) do not.
+  const fullBleed =
+    location.pathname === '/conversations' ||
+    /^\/consults\/[^/]+$/.test(location.pathname)
 
   const handleSignOut = async () => {
     await signOut()
@@ -98,16 +103,20 @@ export default function Layout() {
 
   const initials = (user?.email || '?').slice(0, 2).toUpperCase()
 
-  // The sidebar shows practice nav only. Admin and Reseller portals are reached
-  // through the AccountSwitcher's "Your Views" dropdown, not the sidebar.
-  // Practice nav appears only when a practice is in context (their own, or one
-  // they're impersonating).
-  const nav = practiceId ? practiceNav : []
-  const showSettings = practiceId && perms.canViewSettings
+  // Reseller portal: ANY /agency route, OR a viewer in reseller context with no
+  // specific practice selected — an agency user at home, or a super-admin
+  // impersonating a reseller (both covered by isAgencyView; isAgencyUser alone is
+  // false for an impersonating super-admin). Determined first so the practice
+  // nav, Record button, and Settings link are suppressed in the reseller portal
+  // even if a stale practice id lingers in context.
+  const inResellerPortal =
+    location.pathname.startsWith('/agency') || (isAgencyView && !practiceId)
 
-  // Reseller portal: an agency user with no practice in context (or anyone on an
-  // /agency route). Their nav lives in the sidebar instead of a horizontal bar.
-  const inResellerPortal = !practiceId && (isAgencyUser || location.pathname.startsWith('/agency'))
+  // The practice sidebar shows only when a practice is in context AND we're not
+  // viewing the reseller portal.
+  const showPracticeNav = Boolean(practiceId) && !inResellerPortal
+  const nav = showPracticeNav ? practiceNav : []
+  const showSettings = showPracticeNav && perms.canViewSettings
   const agencyActive =
     location.pathname.startsWith('/agency/saas-mode') ? 'saas-mode'
     : location.pathname.startsWith('/agency/analytics') ? 'analytics'
@@ -125,7 +134,7 @@ export default function Layout() {
       <AccountSwitcher />
 
       {/* Record Consult - pinned to the top, above the nav. */}
-      {practiceId && <RecordConsultButton onLaunch={() => setMobileOpen(false)} />}
+      {showPracticeNav && <RecordConsultButton onLaunch={() => setMobileOpen(false)} />}
 
       <nav className="flex-1 space-y-0.5 px-3">
         {inResellerPortal

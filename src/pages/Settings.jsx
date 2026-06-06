@@ -173,7 +173,6 @@ export default function Settings() {
         ghl_api_key: practice.ghl_api_key || '',
         recording_method: practice.recording_method || 'browser',
         audio_quality: practice.audio_quality || 'standard',
-        auto_analyze: practice.auto_analyze ?? true,
         auto_start_followup: practice.auto_start_followup ?? false,
         timezone: practice.timezone || 'America/Chicago',
       })
@@ -750,41 +749,65 @@ function AddLocationCard({ practiceId }) {
 
   return (
     <div className="card p-6">
-      <h2 className="text-base font-semibold text-white">Add Another Location</h2>
-      <p className="mt-0.5 text-sm text-slate-400">
-        Each additional location gets a discounted rate. Volume pricing applied automatically.
-      </p>
-
-      <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-300">How many locations to add?</label>
-          <select
-            value={count}
-            onChange={(e) => setCount(Number(e.target.value))}
-            className="h-10 w-full rounded-lg border border-surface-700 bg-surface-800 px-3 text-sm text-white focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-          >
-            {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>{n} {n === 1 ? 'location' : 'locations'}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="rounded-xl border border-surface-700 bg-surface-800/50 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Per location</p>
-          <p className="mt-1 text-2xl font-bold text-white">
-            ${rate}<span className="text-sm font-medium text-slate-400">/mo</span>
-          </p>
-          <p className="mt-1 text-sm text-slate-400">
-            {count} {count === 1 ? 'location' : 'locations'} × ${rate}/mo ={' '}
-            <span className="font-semibold text-emerald-300">${total.toLocaleString()}/mo</span> additional
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-base font-semibold text-white">Add Another Location</h2>
+        <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-300">
+          Coming Soon
+        </span>
       </div>
 
-      <div className="mt-5 flex justify-end">
-        <button onClick={() => setConfirmOpen(true)} className="btn-primary">
-          <Plus className="h-4 w-4" /> Add {count === 1 ? 'Location' : 'Locations'} — ${total.toLocaleString()}/mo
-        </button>
+      {/* The self-serve add-a-location funnel is gated for now: show it blurred
+          and non-interactive behind a "Coming Soon" overlay that points people to
+          chat/email for a discounted manual setup. */}
+      <div className="relative mt-4">
+        <div aria-hidden="true" className="pointer-events-none select-none opacity-50 blur-[2px]">
+          <p className="text-sm text-slate-400">
+            Each additional location gets a discounted rate. Volume pricing applied automatically.
+          </p>
+
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-300">How many locations to add?</label>
+              <select
+                value={count}
+                onChange={(e) => setCount(Number(e.target.value))}
+                tabIndex={-1}
+                className="h-10 w-full rounded-lg border border-surface-700 bg-surface-800 px-3 text-sm text-white focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              >
+                {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>{n} {n === 1 ? 'location' : 'locations'}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="rounded-xl border border-surface-700 bg-surface-800/50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Per location</p>
+              <p className="mt-1 text-2xl font-bold text-white">
+                ${rate}<span className="text-sm font-medium text-slate-400">/mo</span>
+              </p>
+              <p className="mt-1 text-sm text-slate-400">
+                {count} {count === 1 ? 'location' : 'locations'} × ${rate}/mo ={' '}
+                <span className="font-semibold text-emerald-300">${total.toLocaleString()}/mo</span> additional
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 flex justify-end">
+            <span className="btn-primary">
+              <Plus className="h-4 w-4" /> Add {count === 1 ? 'Location' : 'Locations'} — ${total.toLocaleString()}/mo
+            </span>
+          </div>
+        </div>
+
+        {/* Coming Soon overlay */}
+        <div className="absolute inset-0 flex items-center justify-center px-4">
+          <div className="max-w-sm rounded-xl border border-surface-700 bg-surface-900/85 px-5 py-4 text-center shadow-lg backdrop-blur-sm">
+            <p className="text-sm font-semibold text-white">Coming soon</p>
+            <p className="mt-1 text-sm text-slate-400">
+              Contact us via chat or email to add another location at a discount.
+            </p>
+          </div>
+        </div>
       </div>
 
       {confirmOpen && (

@@ -1,6 +1,6 @@
-import { lazy } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Outlet, Navigate } from 'react-router-dom'
-import { AuthProvider } from './context/AuthContext'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import { BrandingProvider } from './context/BrandingContext'
 import { ThemeProvider } from './context/ThemeContext'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -10,12 +10,14 @@ import RequireOnboarding from './components/RequireOnboarding'
 import RequireActiveBilling from './components/RequireActiveBilling'
 import Layout from './components/Layout'
 import AdminShell from './components/admin/AdminShell'
+import LoadingScreen from './components/LoadingScreen'
 
 // ── Eagerly loaded: auth flow + the core routes a TC hits immediately on login
 //    (Dashboard shell, Consults, Conversations) so they paint without a chunk
 //    fetch. Their charts/heavy panels are split out separately (see below). ──
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import Suspended from './pages/Suspended'
 import ResellerSignup from './pages/ResellerSignup'
 import ReferralRedirect from './components/ReferralRedirect'
 import BAAEntry from './components/BAAEntry'
@@ -24,6 +26,7 @@ import AcceptInvite from './pages/AcceptInvite'
 import AcceptInvitation from './pages/AcceptInvitation'
 import Dashboard from './pages/Dashboard'
 import Consults from './pages/Consults'
+import ProcessingScreen from './pages/ProcessingScreen'
 import ConsultDetail from './pages/ConsultDetail'
 import Conversations from './pages/Conversations'
 import PowerDialer from './pages/PowerDialer'
@@ -43,12 +46,12 @@ const AgencySaaSMode = lazy(() => import('./pages/AgencySaaSMode'))
 const AgencyAnalytics = lazy(() => import('./pages/AgencyAnalytics'))
 const AgencyKnowledgeBase = lazy(() => import('./pages/AgencyKnowledgeBase'))
 const AgencyTeam = lazy(() => import('./pages/AgencyTeam'))
-const AdminOverview = lazy(() => import('./pages/admin/Overview'))
+const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'))
 const AdminAgencies = lazy(() => import('./pages/admin/Agencies'))
 const AdminAgencyDetail = lazy(() => import('./pages/admin/AgencyDetail'))
 const AdminPractices = lazy(() => import('./pages/admin/Practices'))
 const AdminPracticeDetail = lazy(() => import('./pages/admin/PracticeDetail'))
-const AdminRevenue = lazy(() => import('./pages/admin/Revenue'))
+const AdminTeam = lazy(() => import('./pages/admin/Team'))
 const AdminBilling = lazy(() => import('./pages/admin/Billing'))
 const AdminTraining = lazy(() => import('./pages/admin/TrainingAdmin'))
 const AdminWins = lazy(() => import('./pages/admin/Wins'))
@@ -67,6 +70,30 @@ export default function App() {
       <AuthProvider>
         <BrandingProvider>
           <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+        </BrandingProvider>
+      </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
+  )
+}
+
+// Rendered inside the providers so it can read auth state. Shows the branded
+// loading screen while auth/profile/practice context resolves (initial load and
+// when switching or impersonating a practice), with a 1.2s minimum so it never
+// flashes (pages load fast enough that a shorter minimum was imperceptible).
+// Then renders the router (lazy routes fall back to it too).
+function AppContent() {
+  const { contextLoading } = useAuth()
+  const [minDone, setMinDone] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setMinDone(true), 1200)
+    return () => clearTimeout(t)
+  }, [])
+  if (contextLoading || !minDone) return <LoadingScreen />
+  return (
+    <Suspense fallback={<LoadingScreen />}>
             <Routes>
               {/* get.caselift.io root → signup funnel (preserving ?plan=/?ref=).
                   Defined first so it wins the "/" match; otherwise the gated app
@@ -101,6 +128,8 @@ export default function App() {
                 }
               >
                 <Route path="/baa" element={<BAAEntry />} />
+                {/* Lockout screen for archived practices (ProtectedRoute redirects here). */}
+                <Route path="/suspended" element={<Suspended />} />
                 <Route
                   element={
                     <RequireBAA>
@@ -114,12 +143,16 @@ export default function App() {
                 {/* Super-admin portal - standalone shell, outside BAA/onboarding.
                     AdminShell self-gates on isSuperAdmin and provides AdminProvider. */}
                 <Route path="/admin" element={<AdminShell />}>
-                  <Route index element={<AdminOverview />} />
+                  <Route index element={<AdminDashboard />} />
+                  {/* Overview + Revenue merged into Dashboard - redirect old paths. */}
+                  <Route path="dashboard" element={<Navigate to="/admin" replace />} />
+                  <Route path="overview" element={<Navigate to="/admin" replace />} />
+                  <Route path="revenue" element={<Navigate to="/admin" replace />} />
                   <Route path="agencies" element={<AdminAgencies />} />
                   <Route path="agencies/:id" element={<AdminAgencyDetail />} />
                   <Route path="practices" element={<AdminPractices />} />
                   <Route path="practices/:id" element={<AdminPracticeDetail />} />
-                  <Route path="revenue" element={<AdminRevenue />} />
+                  <Route path="team" element={<AdminTeam />} />
                   <Route path="billing" element={<AdminBilling />} />
                   <Route path="training" element={<AdminTraining />} />
                   <Route path="wins" element={<AdminWins />} />
@@ -148,6 +181,7 @@ export default function App() {
                   <Route element={<RequireActiveBilling />}>
                     <Route path="/knowledge-base" element={<Navigate to="/settings/knowledge-base" replace />} />
                     <Route path="/consults" element={<Consults />} />
+                    <Route path="/consults/:id/processing" element={<ProcessingScreen />} />
                     <Route path="/consults/:id" element={<ConsultDetail />} />
                     <Route path="/conversations" element={<Conversations />} />
                     <Route path="/conversations/dialer" element={<PowerDialer />} />
@@ -164,10 +198,6 @@ export default function App() {
                 </Route>
               </Route>
             </Routes>
-          </BrowserRouter>
-        </BrandingProvider>
-      </AuthProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
+    </Suspense>
   )
 }

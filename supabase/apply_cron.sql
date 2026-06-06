@@ -9,26 +9,23 @@
 -- functions are deployed and after apply_all.sql.
 --
 -- ┌─ BEFORE YOU RUN ──────────────────────────────────────────────────────────┐
--- │ 1. Replace <SERVICE_ROLE_KEY> below with your project's service_role key.  │
--- │    (Dashboard → Project Settings → API → service_role secret.)             │
--- │    This key is sensitive - do not commit the filled-in copy.               │
--- │ 2. That's it. The rest is idempotent and safe to re-run.                   │
+-- │ 1. Find/replace EVERY <SERVICE_ROLE_KEY> below with your project's          │
+-- │    service_role key (Dashboard → Project Settings → API → service_role).    │
+-- │    This key is sensitive - do not commit the filled-in copy.                │
+-- │ 2. Run the whole file. It is idempotent and safe to re-run.                 │
 -- └────────────────────────────────────────────────────────────────────────────┘
+--
+-- NOTE: the URL + key are inlined directly into each job body. We do NOT use
+-- `alter database postgres set app.*` / current_setting() here - on hosted
+-- Supabase the SQL-editor role lacks ALTER DATABASE privilege and that errors
+-- with "permission denied to set parameter".
 -- ============================================================================
 
 -- 1) Extensions (no-ops if already enabled; same as the Dashboard toggles).
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
--- 2) Connection settings the cron bodies read via current_setting().
-alter database postgres set app.supabase_url     = 'https://eymgqjeudrmeofytnwgs.supabase.co';
-alter database postgres set app.service_role_key = '<SERVICE_ROLE_KEY>';
--- Make the new settings visible to this session immediately (so a Verify in the
--- same run doesn't read the old/empty value).
-select set_config('app.supabase_url',     'https://eymgqjeudrmeofytnwgs.supabase.co', false);
-select set_config('app.service_role_key', '<SERVICE_ROLE_KEY>', false);
-
--- 3) Idempotent (re)schedule. Unschedule first, ignoring "job not found" so this
+-- 2) Idempotent (re)schedule. Unschedule first, ignoring "job not found" so this
 --    file can be run repeatedly without duplicate-name errors.
 do $$
 begin
@@ -50,6 +47,16 @@ begin
   perform cron.unschedule('process-reactivation-drip');
 exception when others then null;
 end $$;
+do $$
+begin
+  perform cron.unschedule('check-unrecorded-streak');
+exception when others then null;
+end $$;
+do $$
+begin
+  perform cron.unschedule('demo-today-refresh');
+exception when others then null;
+end $$;
 
 -- PMS appointment sync - every 15 minutes.
 select cron.schedule(
@@ -57,10 +64,10 @@ select cron.schedule(
   '*/15 * * * *',
   $$
   select net.http_post(
-    url     := current_setting('app.supabase_url') || '/functions/v1/sync-appointments',
+    url     := 'https://eymgqjeudrmeofytnwgs.supabase.co' || '/functions/v1/sync-appointments',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.service_role_key')
+      'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
     ),
     body    := jsonb_build_object('sync_all', true)
   );
@@ -73,10 +80,10 @@ select cron.schedule(
   '*/5 * * * *',
   $$
   select net.http_post(
-    url     := current_setting('app.supabase_url') || '/functions/v1/process-sequences',
+    url     := 'https://eymgqjeudrmeofytnwgs.supabase.co' || '/functions/v1/process-sequences',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.service_role_key')
+      'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
     ),
     body    := jsonb_build_object('tick', true)
   );
@@ -89,10 +96,10 @@ select cron.schedule(
   '*/5 * * * *',
   $$
   select net.http_post(
-    url     := current_setting('app.supabase_url') || '/functions/v1/send-due-messages',
+    url     := 'https://eymgqjeudrmeofytnwgs.supabase.co' || '/functions/v1/send-due-messages',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.service_role_key')
+      'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
     ),
     body    := jsonb_build_object('tick', true)
   );
@@ -105,13 +112,45 @@ select cron.schedule(
   '*/15 * * * *',
   $$
   select net.http_post(
-    url     := current_setting('app.supabase_url') || '/functions/v1/process-reactivation-drip',
+    url     := 'https://eymgqjeudrmeofytnwgs.supabase.co' || '/functions/v1/process-reactivation-drip',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.service_role_key')
+      'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
     ),
     body    := jsonb_build_object('tick', true)
   );
+  $$
+);
+
+-- Consecutive-unrecorded adoption alert - once daily at 14:00 UTC (~9–10am ET).
+select cron.schedule(
+  'check-unrecorded-streak',
+  '0 14 * * *',
+  $$
+  select net.http_post(
+    url     := 'https://eymgqjeudrmeofytnwgs.supabase.co' || '/functions/v1/check-unrecorded-streak',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
+    ),
+    body    := jsonb_build_object('tick', true)
+  );
+  $$
+);
+
+-- Demo: keep the 3 "today" appointments always dated to the current day so the
+-- sales-demo subaccount shows a live worklist no matter when it's opened.
+-- Pure SQL (no edge function), runs at 07:10 UTC (~00:10 MST).
+select cron.schedule(
+  'demo-today-refresh',
+  '10 7 * * *',
+  $$
+  update public.pms_appointments set appointment_time = case pms_appointment_id
+    when 'demo-today-0' then (current_date + time '09:00') at time zone 'America/Phoenix'
+    when 'demo-today-1' then (current_date + time '11:30') at time zone 'America/Phoenix'
+    when 'demo-today-2' then (current_date + time '14:00') at time zone 'America/Phoenix'
+  end
+  where pms_appointment_id in ('demo-today-0','demo-today-1','demo-today-2');
   $$
 );
 

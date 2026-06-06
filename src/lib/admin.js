@@ -126,7 +126,7 @@ function shapeRealAgency(row, practices) {
   const clientMrr = mine.length * clientPrice
   return {
     id: row.id,
-    name: row.name,
+    name: row.company_name || row.brand_name || row.name,
     owner_name: row.owner_name || null,
     owner_email: row.owner_email || row.owner?.email || null,
     status: agencyStatus(row),

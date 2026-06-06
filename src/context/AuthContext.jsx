@@ -1,3 +1,5 @@
+/* eslint-disable react-refresh/only-export-components -- this module exports the
+   provider/hook plus shared helpers (normalizePractice, SUPER_ADMIN_EMAIL). */
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { ensurePracticeLinked } from '../lib/linkPractice'
 import { supabase } from '../lib/supabase'
@@ -5,6 +7,8 @@ import { resetPrimaryColor } from '../lib/whitelabel'
 
 const AuthContext = createContext({})
 const VIEW_KEY = 'ciq_view_practice'
+// Reseller-level impersonation: which agency a super-admin is "viewing as".
+const AGENCY_VIEW_KEY = 'ciq_view_agency'
 
 /** PostgREST may return a many-to-one join as an object or a one-element array. */
 export function normalizePractice(row) {
@@ -41,6 +45,14 @@ export function AuthProvider({ children }) {
   // guards tell "impersonation target still loading" apart from "loaded, but the
   // practice has no record" — see impersonationPending below.
   const [activePracticeFor, setActivePracticeFor] = useState(null)
+
+  // Reseller-level impersonation: a super-admin "viewing as" an agency (reseller).
+  // Parallel to the practice overlay above; persisted across reloads.
+  const [viewingAgencyId, setViewingAgencyId] = useState(
+    () => localStorage.getItem(AGENCY_VIEW_KEY) || null
+  )
+  const [activeAgency, setActiveAgency] = useState(null)
+  const [activeAgencyFor, setActiveAgencyFor] = useState(null)
 
   // Set of practices this user can switch between (drives the account switcher).
   const [accessiblePractices, setAccessiblePractices] = useState([])
@@ -212,16 +224,49 @@ export function AuthProvider({ children }) {
     }
   }, [canImpersonate, isMultiPractice, viewingPracticeId, loadActivePractice])
 
+  // --- active (impersonated) reseller/agency record ---
+  const loadActiveAgency = useCallback(async (id) => {
+    if (!id) {
+      setActiveAgency(null)
+      setActiveAgencyFor(null)
+      return null
+    }
+    const { data } = await supabase
+      .from('agency_accounts')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
+    setActiveAgency(data ?? null)
+    setActiveAgencyFor(id)
+    return data
+  }, [])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (isSuperAdmin && viewingAgencyId) loadActiveAgency(viewingAgencyId)
+    else {
+      setActiveAgency(null)
+      setActiveAgencyFor(null)
+    }
+  }, [isSuperAdmin, viewingAgencyId, loadActiveAgency])
+
   // --- accessible-practice list for the account switcher ---
-  const loadAccessiblePractices = useCallback(async (lvl, prof, ag) => {
+  const loadAccessiblePractices = useCallback(async (lvl, prof, ag, impAgencyId) => {
     const sel = 'id, name, address, agency_id, city, state'
     try {
+      // Archived practices never appear in the account switcher (any role). The
+      // admin panel uses its own queries (src/lib/queries/admin.js) and keeps
+      // archived accounts visible there.
       if (lvl === 'super_admin') {
-        const { data } = await supabase.from('practices').select(sel).order('name').limit(50)
+        // While impersonating a reseller, scope the switcher to that reseller's
+        // sub-accounts only; otherwise show a sample across the platform.
+        let q = supabase.from('practices').select(sel).is('archived_at', null).order('name')
+        q = impAgencyId ? q.eq('agency_id', impAgencyId).limit(500) : q.limit(50)
+        const { data } = await q
         return data || []
       }
       if (ag) {
-        const { data } = await supabase.from('practices').select(sel).eq('agency_id', ag.id).order('name').limit(500)
+        const { data } = await supabase.from('practices').select(sel).eq('agency_id', ag.id).is('archived_at', null).order('name').limit(500)
         let rows = data || []
         const accessible = prof?.accessible_practice_ids
         if (Array.isArray(accessible) && accessible.length) rows = rows.filter((p) => accessible.includes(p.id))
@@ -233,7 +278,7 @@ export function AuthProvider({ children }) {
         const { data: mem } = await supabase.from('practice_members').select('practice_id').eq('user_id', prof.id)
         const ids = [...new Set([...(mem || []).map((m) => m.practice_id), prof.practice_id].filter(Boolean))]
         if (!ids.length) return []
-        const { data } = await supabase.from('practices').select(sel).in('id', ids).order('name')
+        const { data } = await supabase.from('practices').select(sel).in('id', ids).is('archived_at', null).order('name')
         return data || []
       }
     } catch {
@@ -246,7 +291,7 @@ export function AuthProvider({ children }) {
     if (!session?.user || profileLoading || agencyLoading) return
     let active = true
     ;(async () => {
-      const list = await loadAccessiblePractices(accessLevel, profile, agency)
+      const list = await loadAccessiblePractices(accessLevel, profile, agency, viewingAgencyId)
       if (active) setAccessiblePractices(list)
       // Super-admins also see every reseller, to jump into their admin view.
       if (accessLevel === 'super_admin') {
@@ -264,22 +309,62 @@ export function AuthProvider({ children }) {
       active = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, profile, agency, profileLoading, agencyLoading, accessLevel])
+  }, [session, profile, agency, profileLoading, agencyLoading, accessLevel, viewingAgencyId])
 
   // --- effective practice context (own practice vs. impersonated client) ---
   const profilePractice = normalizePractice(profile?.practice)
   // Admin/reseller impersonation OR a multi-location user switching their own
   // location both swap the active practice; only the former is "impersonation".
   const switchingPractice = (canImpersonate || isMultiPractice) && Boolean(viewingPracticeId)
-  const isImpersonating = canImpersonate && Boolean(viewingPracticeId)
-  const practice = switchingPractice ? activePractice : profilePractice
-  const practiceId = switchingPractice ? viewingPracticeId : profile?.practice_id ?? null
+  // Reseller-level impersonation: super-admin "viewing as" an agency.
+  const impersonatingReseller = isSuperAdmin && Boolean(viewingAgencyId)
+  const isImpersonating = canImpersonate && (Boolean(viewingPracticeId) || Boolean(viewingAgencyId))
+  // While viewing AS a reseller (no sub-account drilled in), there is no current
+  // practice — null it so the shell renders the reseller portal (sidebar nav,
+  // no Record Consult / practice Settings) rather than the super-admin's own.
+  const practice = switchingPractice
+    ? activePractice
+    : impersonatingReseller
+      ? null
+      : profilePractice
+  const practiceId = switchingPractice
+    ? viewingPracticeId
+    : impersonatingReseller
+      ? null
+      : profile?.practice_id ?? null
+
+  // Effective agency = own agency (reseller user) → impersonated agency
+  // (reseller-level) → the impersonated practice's agency (practice-level). This
+  // is what the /agency dashboard + its query hooks should scope to.
+  // Impersonation wins: when a super-admin is "viewing as" a reseller,
+  // activeAgency is that reseller and must take precedence over the super-admin's
+  // OWN agency membership (if any) — otherwise the dashboard scopes to the wrong
+  // reseller. activeAgency is only ever set during reseller impersonation.
+  const effectiveAgency = activeAgency || agency || practice?.agency || null
+  const effectiveAgencyId = effectiveAgency?.id ?? null
+  const isAgencyView = isAgencyUser || Boolean(activeAgency)
+
+  // An ordinary user whose practice is archived is locked out (-> /suspended).
+  // Super admins and resellers can still open archived accounts (they impersonate,
+  // so canImpersonate is true) — see the red banner in ImpersonationBanner.
+  const isSuspended = !canImpersonate && Boolean(practice?.archived_at)
 
   // Keep route guards in a loading state until the practice row that drives
   // baaAccepted / onboardingCompleted is available (profile join or switch fetch).
   const practiceContextPending = switchingPractice
     ? activePracticeFor !== viewingPracticeId
     : Boolean(profile?.practice_id) && !profilePractice
+
+  // Keep guards waiting while the impersonated reseller record loads, so the
+  // /agency view doesn't bounce before its data/branding resolves.
+  const agencyContextPending = impersonatingReseller && activeAgencyFor !== viewingAgencyId
+
+  // Reseller id behind the current view, for data scoping (Part 7 helper).
+  const getResellerId = () => {
+    if (viewingAgencyId) return viewingAgencyId
+    if (isImpersonating && viewingPracticeId) return activePractice?.agency?.id || agency?.id || null
+    return agency?.id || null
+  }
 
   const profileResolved =
     !session?.user?.id || profileResolvedUserId === session.user.id
@@ -295,13 +380,38 @@ export function AuthProvider({ children }) {
     setActivePractice(null)
   }, [])
 
+  // Enter reseller-level impersonation (super-admin only). Clears any sub-account
+  // drill-in so we land on the reseller's own dashboard.
+  const viewAgency = useCallback((id) => {
+    localStorage.setItem(AGENCY_VIEW_KEY, id)
+    localStorage.removeItem(VIEW_KEY)
+    setViewingAgencyId(id)
+    setViewingPracticeId(null)
+    setActivePractice(null)
+  }, [])
+
+  // Exit all impersonation (reseller + any sub-account) back to super admin.
+  const exitAgency = useCallback(() => {
+    localStorage.removeItem(AGENCY_VIEW_KEY)
+    localStorage.removeItem(VIEW_KEY)
+    setViewingAgencyId(null)
+    setActiveAgency(null)
+    setActiveAgencyFor(null)
+    setViewingPracticeId(null)
+    setActivePractice(null)
+  }, [])
+
   // White-label theming (primary color, logo, title, favicon) is resolved and
   // applied by BrandingContext, which reads this auth context. On sign-out we
   // still reset the palette here so the login screen returns to CaseLift.
   const signOut = useCallback(async () => {
     localStorage.removeItem(VIEW_KEY)
+    localStorage.removeItem(AGENCY_VIEW_KEY)
     setViewingPracticeId(null)
     setActivePractice(null)
+    setViewingAgencyId(null)
+    setActiveAgency(null)
+    setActiveAgencyFor(null)
     resetPrimaryColor()
     return supabase.auth.signOut()
   }, [])
@@ -317,6 +427,7 @@ export function AuthProvider({ children }) {
     profileResolved,
     practice,
     practiceId,
+    isSuspended,
     baaAccepted: Boolean(practice?.baa_accepted_at),
     onboardingCompleted: Boolean(practice?.onboarding_completed),
 
@@ -325,12 +436,22 @@ export function AuthProvider({ children }) {
     agencyRole,
     isAgencyUser,
     agencyLoading,
+    // Effective agency context (own / impersonated reseller / impersonated
+    // practice's reseller) — what the /agency dashboard scopes to.
+    effectiveAgency,
+    effectiveAgencyId,
+    isAgencyView,
+    activeAgency,
+    viewAgency,
+    exitAgency,
+    getResellerId,
     contextLoading:
       loading ||
       !profileResolved ||
       profileLoading ||
       agencyLoading ||
-      practiceContextPending,
+      practiceContextPending ||
+      agencyContextPending,
 
     // access
     accessLevel,
@@ -346,16 +467,38 @@ export function AuthProvider({ children }) {
     viewPractice,
     exitPractice,
     // Spec-shaped view of the same impersonation state for UI (e.g. the banner).
+    // level: 'reseller' when viewing as an agency; 'practice' when in a specific
+    // account (a sub-account drill-in keeps the reseller context via `reseller`).
     impersonation: {
       active: isImpersonating,
-      target: isImpersonating
+      level: !isImpersonating ? null : viewingPracticeId ? 'practice' : 'reseller',
+      target: !isImpersonating
+        ? null
+        : viewingPracticeId
+          ? {
+              id: practiceId,
+              name: activePractice?.name || 'this account',
+              email: activePractice?.email || null,
+              role: 'practice_user',
+            }
+          : {
+              id: viewingAgencyId,
+              name: activeAgency?.brand_name || activeAgency?.company_name || activeAgency?.name || 'this reseller',
+              email: activeAgency?.support_email || activeAgency?.owner_email || null,
+              role: 'reseller_admin',
+              logo_url: activeAgency?.logo_url || null,
+              brand_color: activeAgency?.primary_color || null,
+              brand_name: activeAgency?.brand_name || null,
+            },
+      // The reseller context behind a practice impersonation, for "Back to [reseller]".
+      reseller: viewingAgencyId
         ? {
-            id: practiceId,
-            name: activePractice?.name || 'this account',
-            email: activePractice?.email || null,
-            role: 'practice_user',
+            id: viewingAgencyId,
+            name: activeAgency?.brand_name || activeAgency?.company_name || activeAgency?.name || 'Reseller',
           }
         : null,
+      resellerId: getResellerId(),
+      originalRole: isSuperAdmin ? 'super_admin' : isAgencyUser ? 'reseller_admin' : accessLevel || null,
       original: {
         id: session?.user?.id || null,
         name: profile?.full_name || session?.user?.email || null,
@@ -369,9 +512,19 @@ export function AuthProvider({ children }) {
         ? Promise.all([
             loadProfile(session.user.id, { silent: true }),
             isAgencyUser && viewingPracticeId ? loadActivePractice(viewingPracticeId) : null,
+            isSuperAdmin && viewingAgencyId ? loadActiveAgency(viewingAgencyId) : null,
           ])
         : Promise.resolve(null),
-    refreshAgency: () => (session?.user ? loadAgency(session.user.id) : Promise.resolve(null)),
+    // Reload the user's own agency AND, when a super-admin is impersonating a
+    // reseller, that reseller's record — so editing white-label settings (name,
+    // logo, color) re-applies branding immediately instead of staying stale.
+    refreshAgency: () =>
+      session?.user
+        ? Promise.all([
+            loadAgency(session.user.id),
+            isSuperAdmin && viewingAgencyId ? loadActiveAgency(viewingAgencyId) : null,
+          ])
+        : Promise.resolve(null),
 
     signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
     signUp: (email, password, metadata) =>
@@ -382,7 +535,6 @@ export function AuthProvider({ children }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   return useContext(AuthContext)
 }

@@ -16,6 +16,7 @@ const DEFAULT_BRANDING = {
   companyName: 'CaseLift',
   logoUrl: null,
   logoDarkUrl: null,
+  logoLightUrl: null,
   faviconUrl: null,
   primaryColor: null, // null → the default indigo palette from index.css
   secondaryColor: null,
@@ -46,7 +47,9 @@ function brandFromAgency(a) {
     brandName: name,
     companyName: name,
     logoUrl: a.logo_url || null,
-    logoDarkUrl: a.logo_dark_url || null,
+    // Theme-specific logos fall back to the universal logo_url when unset.
+    logoDarkUrl: a.logo_url_dark || a.logo_dark_url || a.logo_url || null,
+    logoLightUrl: a.logo_url_light || a.logo_url || null,
     faviconUrl: a.favicon_url || null,
     primaryColor: a.primary_color || null,
     secondaryColor: a.secondary_color || null,
@@ -66,7 +69,8 @@ function brandFromRpc(data, fallbackSlug) {
     brandName: name,
     companyName: name,
     logoUrl: data.logo_url || null,
-    logoDarkUrl: data.logo_dark_url || null,
+    logoDarkUrl: data.logo_url_dark || data.logo_dark_url || data.logo_url || null,
+    logoLightUrl: data.logo_url_light || data.logo_url || null,
     faviconUrl: data.favicon_url || null,
     primaryColor: data.primary_color || null,
     secondaryColor: data.secondary_color || null,
@@ -112,7 +116,7 @@ function applyFavicon(url) {
 })()
 
 export function BrandingProvider({ children }) {
-  const { agency, profile, practice, isSuperAdmin, isImpersonating } = useAuth()
+  const { agency, activeAgency, profile, practice, isSuperAdmin, isImpersonating } = useAuth()
 
   const [domainBrand, setDomainBrand] = useState(null)
 
@@ -136,11 +140,17 @@ export function BrandingProvider({ children }) {
     }
   }, [])
 
-  // The reseller for the current viewer: their own agency, the agency of the
-  // practice they belong to, or the practice they're impersonating.
+  // The reseller whose brand applies to the current view.
+  // IMPORTANT: when a specific subaccount is in context (a practice user, or a
+  // super-admin/reseller impersonating a practice), branding comes from THAT
+  // practice's own reseller (practice.agency) - so a subaccount only ever shows
+  // its own reseller's brand, never a lingering impersonated reseller. A practice
+  // with no reseller (or whose reseller hasn't enabled white-label) falls back to
+  // CaseLift. Only at the reseller level (no practice in context) do we use the
+  // impersonated/own agency.
   const resellerAgency = useMemo(
-    () => agency || practice?.agency || profile?.practice?.agency || null,
-    [agency, practice, profile]
+    () => (practice ? practice.agency || null : activeAgency || agency || profile?.practice?.agency || null),
+    [practice, activeAgency, agency, profile]
   )
 
   // The effective brand, derived from auth context and any domain match. No
@@ -178,6 +188,13 @@ export function BrandingProvider({ children }) {
       /* ignore */
     }
   }, [])
+
+  // When the resolved reseller changes (e.g. switching impersonation target),
+  // drop the cached brand so a previously-impersonated reseller's name/color can
+  // never linger.
+  useEffect(() => {
+    invalidateBrand()
+  }, [resellerAgency?.id, invalidateBrand])
 
   const value = useMemo(
     () => ({ ...branding, invalidateBrand }),

@@ -152,10 +152,13 @@ function RecordingSettingsCard({ practice, save }) {
   const [mics, setMics] = useState([])
   const [mic, setMic] = useState(() => localStorage.getItem(MIC_PREF_KEY) || '')
   const [quality, setQuality] = useState(practice?.audio_quality || 'standard')
+  const [retention, setRetention] = useState(practice?.audio_retention_days ?? 30)
 
   useEffect(() => { listMicrophones().then(setMics) }, [])
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setQuality(practice?.audio_quality || 'standard') }, [practice?.audio_quality])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setRetention(practice?.audio_retention_days ?? 30) }, [practice?.audio_retention_days])
 
   function chooseMic(id) {
     setMic(id)
@@ -188,17 +191,25 @@ function RecordingSettingsCard({ practice, save }) {
           {mics.filter((m) => m.label).length === 0 && (
             <p className="mt-1.5 text-xs text-slate-500">Start a recording once and allow mic access to see your device names here.</p>
           )}
+          <div className="mt-4">
+            <label className="label">Audio retention period</label>
+            <select
+              className="input sm:max-w-xs"
+              value={retention}
+              onChange={(e) => { setRetention(Number(e.target.value)); save({ audio_retention_days: Number(e.target.value) }, 'rec') }}
+            >
+              <option value={0}>Immediately after transcription (no playback)</option>
+              <option value={7}>7 days</option>
+              <option value={30}>30 days</option>
+              <option value={60}>60 days</option>
+              <option value={90}>90 days</option>
+            </select>
+            <p className="mt-1.5 text-xs text-slate-500">
+              How long the raw recording is kept before automatic deletion. “Immediately” deletes it as
+              soon as the transcript is saved (HIPAA-friendly, but no playback). Transcripts and analysis are kept permanently.
+            </p>
+          </div>
           <div className="mt-4 border-t border-surface-700 pt-1">
-            <Toggle
-              label="Auto-delete raw audio after transcription"
-              description="HIPAA: the original recording is removed once the de-identified transcript is saved. Recommended on."
-              checked={practice?.auto_delete_audio !== false} onChange={(v) => save({ auto_delete_audio: v }, 'rec')}
-            />
-            <Toggle
-              label="Auto-analyze after recording"
-              description="Run CaseLift analysis automatically when a recording finishes."
-              checked={Boolean(practice?.auto_analyze)} onChange={(v) => save({ auto_analyze: v }, 'rec')}
-            />
             <Toggle
               label="Auto-start follow-up after analysis"
               description="When off, the TC reviews and approves before any sequence sends."
