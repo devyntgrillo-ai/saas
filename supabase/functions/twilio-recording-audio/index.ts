@@ -1,23 +1,35 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // twilio-recording-audio - stream a call recording to an authenticated practice
-// member. Twilio media URLs require Twilio auth (can't be used directly in an
-// <audio> tag), so the browser fetches this with the user's Supabase JWT; we
-// verify the user's practice owns the call_log, then proxy the audio from Twilio
-// using Basic auth (API key SID/secret).
+// member (or platform super-admin). Twilio media URLs require auth, so the
+// browser fetches this with the user's Supabase JWT; we verify access, then
+// proxy the audio from Twilio with Basic auth (forwards Range for seeking).
 //
 // verify_jwt on (the browser sends the session token). GET ?id=<call_log_id>.
-// Secrets: TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET.
+// Secrets: TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN or TWILIO_API_KEY_SID/SECRET.
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
+import { isSuperAdminUser } from "../_shared/admin.ts";
+import { getTwilioConfig } from "../_shared/twilio.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, range",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
 };
-const err = (msg: string, s = 400) => new Response(JSON.stringify({ error: msg }), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
+const err = (msg: string, s = 400) =>
+  new Response(JSON.stringify({ error: msg }), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
+
+function twilioAuthHeader(cfg: NonNullable<ReturnType<typeof getTwilioConfig>>): string {
+  if (cfg.apiKeySid && cfg.apiKeySecret) {
+    return `Basic ${btoa(`${cfg.apiKeySid}:${cfg.apiKeySecret}`)}`;
+  }
+  if (cfg.authToken) {
+    return `Basic ${btoa(`${cfg.accountSid}:${cfg.authToken}`)}`;
+  }
+  throw new Error("No Twilio credentials configured");
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -29,35 +41,42 @@ Deno.serve(async (req: Request) => {
 
     const authHeader = req.headers.get("Authorization") || "";
     if (!authHeader) return err("Unauthorized", 401);
-    const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) return err("Unauthorized", 401);
-    const { data: prof } = await userClient.from("users").select("practice_id").eq("id", user.id).maybeSingle();
-    const practiceId = prof?.practice_id;
-    if (!practiceId) return err("No practice in context.", 403);
 
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+    const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+
+    // Service role so access_level is always visible for super-admin checks.
+    const { data: prof } = await admin.from("users").select("practice_id, access_level").eq("id", user.id).maybeSingle();
+    const isSuperAdmin = isSuperAdminUser(user, prof?.access_level);
+
     const { data: row } = await admin.from("call_logs").select("practice_id, recording_url").eq("id", id).maybeSingle();
-    if (!row || row.practice_id !== practiceId) return err("Not found", 404);
+    if (!row) return err("Not found", 404);
+    if (!isSuperAdmin && row.practice_id !== prof?.practice_id) return err("Not found", 404);
+    if (!prof?.practice_id && !isSuperAdmin) return err("No practice in context.", 403);
     if (!row.recording_url) return err("No recording for this call", 404);
 
-    const sid = Deno.env.get("TWILIO_API_KEY_SID");
-    const secret = Deno.env.get("TWILIO_API_KEY_SECRET");
-    if (!sid || !secret) return err("Twilio not configured", 503);
+    const twilio = getTwilioConfig();
+    if (!twilio) return err("Twilio not configured", 503);
 
-    // Proxy the media from Twilio (Basic auth), forwarding Range for seeking.
     const range = req.headers.get("range");
     const twRes = await fetch(row.recording_url, {
       headers: {
-        Authorization: `Basic ${btoa(`${sid}:${secret}`)}`,
+        Authorization: twilioAuthHeader(twilio),
         ...(range ? { Range: range } : {}),
       },
     });
-    if (!twRes.ok && twRes.status !== 206) return err(`Twilio media ${twRes.status}`, 502);
+    if (!twRes.ok && twRes.status !== 206) {
+      console.error("twilio-recording-audio: Twilio media", twRes.status, row.recording_url);
+      return err(`Twilio media ${twRes.status}`, 502);
+    }
 
     const headers = new Headers(cors);
     headers.set("Content-Type", twRes.headers.get("Content-Type") || "audio/mpeg");

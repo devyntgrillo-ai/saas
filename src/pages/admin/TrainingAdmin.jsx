@@ -7,7 +7,7 @@ import {
 import Modal from '../../components/Modal'
 import { Badge } from '../../components/admin/ui'
 import { supabase } from '../../lib/supabase'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth, SUPER_ADMIN_EMAIL } from '../../context/AuthContext'
 import { useAdminTrainingPage, queryKeys } from '../../lib/queries'
 
 // Lessons live in the single shared training_modules table. status drives the
@@ -15,7 +15,6 @@ import { useAdminTrainingPage, queryKeys } from '../../lib/queries'
 // since last push — hidden from practices until re-pushed). RLS lets the super
 // admin see/manage everything; practices only see 'published'.
 const CATEGORIES = ['TC Certification', 'Front Desk', 'Sales & Objections']
-const SUPER_ADMIN_EMAIL = 'devyntgrillo@gmail.com'
 
 function statusMeta(status) {
   if (status === 'published') return { label: 'Live', cls: 'bg-emerald-500/15 text-emerald-300' }

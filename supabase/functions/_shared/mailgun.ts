@@ -2,19 +2,45 @@
 
 export type MailgunAudience = "platform" | "patient";
 
-/** Platform domain (invites, billing, staff digests). */
+/** Platform domain (invites, billing, staff digests). Normalized (no scheme/trailing slash). */
 export function mailgunPlatformDomain(): string | null {
-  return Deno.env.get("MAILGUN_DOMAIN") || null;
+  const raw = Deno.env.get("MAILGUN_DOMAIN");
+  if (!raw) return null;
+  return raw.replace(/^https?:\/\//i, "").replace(/\/+$/, "").trim() || null;
+}
+
+/** Normalize env value that may mistakenly be a full email or URL. */
+function mailgunHostEnv(name: string, fallback: string): string {
+  let raw = (Deno.env.get(name) || fallback).trim();
+  if (raw.includes("@")) {
+    const host = raw.split("@").pop()?.trim();
+    if (host) raw = host;
+  }
+  raw = raw.replace(/^https?:\/\//i, "").replace(/\/+$/, "").trim();
+  return raw || fallback;
 }
 
 /** DNS root for per-practice patient hosts: {subdomain}.mail.heyhope.ai */
 export function mailgunPatientMailRoot(): string {
-  return Deno.env.get("MAILGUN_PATIENT_MAIL_ROOT") || "mail.heyhope.ai";
+  return mailgunHostEnv("MAILGUN_PATIENT_MAIL_ROOT", "mail.heyhope.ai");
 }
 
 /** Mailgun API domain for patient sends (wildcard domain in Mailgun, e.g. mail.heyhope.ai). */
 export function mailgunPatientApiDomain(): string {
-  return Deno.env.get("MAILGUN_PATIENT_MAIL_DOMAIN") || mailgunPatientMailRoot();
+  return mailgunHostEnv("MAILGUN_PATIENT_MAIL_DOMAIN", mailgunPatientMailRoot());
+}
+
+/**
+ * Domain that receives patient replies (must have MX in DNS).
+ * Defaults to MAILGUN_DOMAIN (e.g. mysmileinbox.com). Per-practice From hosts
+ * like gold-dental.mysmileinbox.com are send-only unless you add wildcard MX.
+ */
+export function mailgunInboundReceiveDomain(): string | null {
+  const explicit = Deno.env.get("MAILGUN_INBOUND_DOMAIN");
+  if (explicit?.trim()) {
+    return mailgunHostEnv("MAILGUN_INBOUND_DOMAIN", mailgunPlatformDomain() || "mail.heyhope.ai");
+  }
+  return mailgunPlatformDomain() || mailgunPatientApiDomain() || null;
 }
 
 export function practiceMailHostname(subdomain: string): string {

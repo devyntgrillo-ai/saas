@@ -22,6 +22,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
+import { isSuperAdminUser } from "../_shared/admin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -132,7 +133,7 @@ Deno.serve(async (req: Request) => {
       .select("access_level")
       .eq("id", user.id)
       .maybeSingle();
-    const isSuperAdmin = profile?.access_level === "super_admin";
+    const isSuperAdmin = isSuperAdminUser(user, profile?.access_level);
 
     // The caller's reseller (owner/admin membership). Drives branding + agency_id.
     const { data: membership } = await admin

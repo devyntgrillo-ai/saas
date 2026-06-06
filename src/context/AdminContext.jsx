@@ -18,10 +18,7 @@ export function AdminProvider({ children }) {
 
   const impersonatePractice = useCallback(
     (practice) => {
-      if (!practice?.id || String(practice.id).startsWith('demo-')) {
-        navigate('/')
-        return
-      }
+      if (!practice?.id) return
       logImpersonation({ actorId: user?.id, targetType: 'practice', targetId: practice.id, targetName: practice.name })
       viewPractice(practice.id)
       navigate('/')

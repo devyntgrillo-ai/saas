@@ -119,6 +119,8 @@ export default function PhoneMessaging() {
   const [testEmail, setTestEmail] = useState('')
   const [testEmailState, setTestEmailState] = useState('idle') // idle | sending | ok | err
   const [testEmailError, setTestEmailError] = useState('')
+  const [inboundForwardPhone, setInboundForwardPhone] = useState('')
+  const [inboundRingBrowser, setInboundRingBrowser] = useState(true)
 
   useEffect(() => {
     if (!practice) return
@@ -132,6 +134,8 @@ export default function PhoneMessaging() {
         (docName ? `${docName} - ${practice.name || ''}`.replace(/ - $/, '') : practice.name || ''),
     )
     setEmailReplyTo(practice.email_reply_to || practice.email || '')
+    setInboundForwardPhone(practice.inbound_call_forward_phone || '')
+    setInboundRingBrowser(practice.inbound_call_ring_browser !== false)
   }, [practice])
 
   const provStatus = smsProvisioningStatus(practice)
@@ -214,6 +218,51 @@ export default function PhoneMessaging() {
           onSetup={() => setSetupOpen(true)}
         />
       </div>
+
+      {hasNumber && (
+        <div className="card p-6">
+          <div className="flex items-center gap-2">
+            <Phone className="h-4 w-4 text-primary-400" />
+            <h2 className="text-base font-semibold text-white">Inbound calls</h2>
+          </div>
+          <p className="mt-1 text-sm text-slate-400">
+            When a patient calls your practice number back, CaseLift rings logged-in team members in the browser and can forward to a mobile number.
+          </p>
+
+          <div className="mt-5 border-y border-surface-700 py-3">
+            <Toggle
+              label="Ring in browser"
+              description="Show incoming calls in CaseLift while someone is logged in (Conversations, Dashboard, etc.)."
+              checked={inboundRingBrowser}
+              onChange={setInboundRingBrowser}
+            />
+          </div>
+
+          <div className="mt-5">
+            <Field
+              label="Forward to mobile (optional)"
+              hint="Also ring this phone number when a patient calls back. Use a cell or desk phone for the treatment coordinator."
+            >
+              <input
+                className="input"
+                type="tel"
+                value={inboundForwardPhone}
+                onChange={(e) => setInboundForwardPhone(e.target.value)}
+                placeholder="(509) 555-0100"
+              />
+            </Field>
+          </div>
+
+          <SaveBar
+            onSave={() =>
+              update({
+                inbound_call_ring_browser: inboundRingBrowser,
+                inbound_call_forward_phone: inboundForwardPhone.trim() || null,
+              })
+            }
+          />
+        </div>
+      )}
 
       {setupOpen && (
         <PhoneSetupWizard

@@ -12,6 +12,7 @@ import { resolveBrand } from "../_shared/brand.ts";
 import {
   isPatientMailConfigured,
   mailgunFromAddress,
+  mailgunInboundReceiveDomain,
   mailgunPlatformDomain,
   sendMailgunMessage,
 } from "../_shared/mailgun.ts";
@@ -99,7 +100,12 @@ Deno.serve(async (req: Request) => {
 
     const mail = await ensurePracticeMailSubdomain(admin, pr);
     const brand = await resolveBrand(admin, pr);
-    const fromName = pr.email_from_name || brand.companyName || pr.name || "CaseLift";
+    // Practice name first — patient mail should not show "CaseLift" unless the practice has no name.
+    const fromName =
+      (pr.email_from_name && String(pr.email_from_name).trim()) ||
+      (pr.name && String(pr.name).trim()) ||
+      brand.companyName ||
+      "CaseLift";
 
     let conversationId: string | null = null;
     if (payload.conversation_message_id) {
@@ -113,45 +119,33 @@ Deno.serve(async (req: Request) => {
       conversationId = await resolveConversationForEmail(admin, practiceId, payload.consult_id, to);
     }
 
-    const inboundReply = conversationId
-      ? conversationReplyOnPracticeHost(conversationId, mail.hostname)
-      : null;
+    // Reply-To must land on a host with MX (usually MAILGUN_DOMAIN root).
+    // From can be office@{sub}.mysmileinbox.com (Mailgun wildcard send) without MX on that host.
+    const receiveHost = mailgunInboundReceiveDomain();
+    const inboundReply =
+      conversationId && receiveHost
+        ? conversationReplyOnPracticeHost(conversationId, receiveHost)
+        : null;
     const replyTo = inboundReply || pr.email_reply_to || brand.supportEmail || null;
 
     const text = body;
-    const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.6;color:#111827;white-space:pre-wrap">${escapeHtml(body)}</div>`;
+    const html =
+      `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.6;color:#111827">` +
+      `<p style="margin:0 0 12px;color:#6b7280;font-size:13px">${escapeHtml(fromName)}</p>` +
+      `<div style="white-space:pre-wrap">${escapeHtml(body)}</div></div>`;
 
     const platformFrom = mailgunFromAddress("noreply");
     const platformDomain = mailgunPlatformDomain();
-    const deliverViaPlatform = Deno.env.get("MAILGUN_PATIENT_DELIVER_VIA_PLATFORM") !== "false";
-    const patientApiDomain = mail.apiDomain;
-    const patientApiReady = patientApiDomain &&
-      platformDomain &&
-      patientApiDomain.toLowerCase() !== platformDomain.toLowerCase();
+    /** Legacy sandbox mode — force platform From (hello@…). Default: per-practice subdomain (Option 2). */
+    const forcePlatformOnly = Deno.env.get("MAILGUN_PATIENT_DELIVER_VIA_PLATFORM") === "true";
 
     let result: Awaited<ReturnType<typeof sendMailgunMessage>>;
     let usedFallback = false;
+    let sentReplyTo: string | null = replyTo;
+    let sentFromAddress = mail.fromAddress;
 
-    // Sandbox / single-domain Mailgun: send via verified MAILGUN_DOMAIN (From @mg…).
-    // Per-practice From (office@sub.mail…) requires wildcard mail.heyhope.ai in Mailgun.
-    if (deliverViaPlatform && platformFrom && platformDomain) {
-      const platformReply = conversationId
-        ? conversationReplyOnPracticeHost(conversationId, platformDomain)
-        : replyTo;
-      result = await sendMailgunMessage({
-        to,
-        subject,
-        text,
-        html,
-        fromName,
-        replyTo: platformReply,
-        fromAddress: platformFrom,
-        audience: "platform",
-        mailgunDomain: platformDomain,
-      });
-      usedFallback = true;
-    } else if (patientApiReady) {
-      result = await sendMailgunMessage({
+    const sendPatient = () =>
+      sendMailgunMessage({
         to,
         subject,
         text,
@@ -160,43 +154,49 @@ Deno.serve(async (req: Request) => {
         replyTo,
         fromAddress: mail.fromAddress,
         audience: "patient",
-        mailgunDomain: patientApiDomain,
+        mailgunDomain: mail.apiDomain,
       });
+
+    const sendPlatform = (platformReplyTo: string | null) =>
+      sendMailgunMessage({
+        to,
+        subject,
+        text,
+        html,
+        fromName,
+        replyTo: platformReplyTo,
+        fromAddress: platformFrom!,
+        audience: "platform",
+        mailgunDomain: platformDomain!,
+      });
+
+    if (forcePlatformOnly && platformFrom && platformDomain) {
+      const platformReply = conversationId
+        ? conversationReplyOnPracticeHost(conversationId, platformDomain)
+        : replyTo;
+      sentReplyTo = platformReply;
+      sentFromAddress = platformFrom;
+      result = await sendPlatform(platformReply);
+      usedFallback = true;
+    } else {
+      result = await sendPatient();
       if (
         !result.sent &&
         platformFrom &&
         platformDomain &&
-        (result.reason === "mailgun_401" || result.reason === "mailgun_403" || result.reason === "mailgun_404")
+        (result.reason === "mailgun_401" ||
+          result.reason === "mailgun_403" ||
+          result.reason === "mailgun_404")
       ) {
         console.warn(`mailgun-send: patient domain failed (${result.reason}); trying ${platformDomain}`);
         const platformReply = conversationId
           ? conversationReplyOnPracticeHost(conversationId, platformDomain)
           : replyTo;
-        result = await sendMailgunMessage({
-          to,
-          subject,
-          text,
-          html,
-          fromName,
-          replyTo: platformReply,
-          fromAddress: platformFrom,
-          audience: "platform",
-          mailgunDomain: platformDomain,
-        });
+        sentReplyTo = platformReply;
+        sentFromAddress = platformFrom;
+        result = await sendPlatform(platformReply);
         usedFallback = result.sent;
       }
-    } else {
-      result = await sendMailgunMessage({
-        to,
-        subject,
-        text,
-        html,
-        fromName,
-        replyTo,
-        fromAddress: mail.fromAddress,
-        audience: "patient",
-        mailgunDomain: patientApiDomain,
-      });
     }
 
     if (!result.sent) {
@@ -217,9 +217,10 @@ Deno.serve(async (req: Request) => {
           mailgun_id: result.id,
           delivery_status: "sent",
           subject: subject || null,
-          reply_to: inboundReply || replyTo,
-          from_address: mail.fromAddress,
+          reply_to: sentReplyTo,
+          from_address: sentFromAddress,
           mail_subdomain: mail.subdomain,
+          used_platform_fallback: usedFallback,
         },
       }).eq("id", payload.conversation_message_id);
 
@@ -234,7 +235,8 @@ Deno.serve(async (req: Request) => {
     return json({
       ok: true,
       mailgun_id: result.id,
-      from_address: usedFallback ? mailgunFromAddress("noreply") : mail.fromAddress,
+      from_address: sentFromAddress,
+      from_name: fromName,
       mail_subdomain: mail.subdomain,
       used_platform_fallback: usedFallback,
     });

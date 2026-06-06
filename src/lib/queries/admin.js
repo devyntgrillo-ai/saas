@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { loadAdminData } from '../admin'
 import { fetchAttributionByPractice } from '../attribution'
 import { fetchUnlinkedRegistrations } from '../pms'
@@ -123,118 +123,7 @@ export function useAdminPracticeConsults(practiceId) {
       if (error) throw error
       return data || []
     },
-    enabled: Boolean(practiceId) && !String(practiceId).startsWith('demo-'),
-  })
-}
-
-function shapeAgency(r, practiceCount, emailById) {
-  return {
-    id: r.id,
-    name: r.name,
-    owner_email: r.owner_email || emailById[r.owner_user_id] || null,
-    practices: practiceCount,
-    mrr: Number(r.monthly_fee) || 0,
-    white_labeled: r.white_label_enabled ?? r.white_labeled ?? r.is_white_labeled ?? false,
-    active: r.active ?? (r.status ? r.status === 'active' : true),
-    created_at: r.created_at,
-  }
-}
-
-async function loadAgenciesDirect() {
-  const { data: rows, error } = await supabase
-    .from('agency_accounts')
-    .select('*')
-    .order('created_at', { ascending: true })
-  if (error || !rows?.length) return []
-
-  const { data: pr } = await supabase.from('practices').select('id, agency_id')
-  const counts = {}
-  ;(pr || []).forEach((x) => { if (x.agency_id) counts[x.agency_id] = (counts[x.agency_id] || 0) + 1 })
-
-  const ownerIds = [...new Set(rows.map((r) => r.owner_user_id).filter(Boolean))]
-  const emailById = {}
-  if (ownerIds.length) {
-    const { data: us } = await supabase.from('users').select('id, email').in('id', ownerIds)
-    ;(us || []).forEach((u) => { emailById[u.id] = u.email })
-  }
-  return rows.map((r) => shapeAgency(r, counts[r.id] || 0, emailById))
-}
-
-async function loadPracticesDirect() {
-  const since = new Date()
-  since.setDate(since.getDate() - 30)
-  const { data: rows, error } = await supabase
-    .from('practices')
-    .select('*, agency:agency_accounts(name)')
-    .order('name')
-  if (error || !rows?.length) return []
-
-  const { data: consults } = await supabase
-    .from('consults')
-    .select('practice_id, created_at')
-    .gte('created_at', since.toISOString())
-  const byPractice = {}
-  ;(consults || []).forEach((c) => { byPractice[c.practice_id] = (byPractice[c.practice_id] || 0) + 1 })
-
-  return rows.map((p) => ({
-    id: p.id,
-    name: p.name,
-    agency_name: p.agency?.name || null,
-    doctor:
-      p.doctor_name ||
-      [p.doctor_first, p.doctor_last].filter(Boolean).join(' ') ||
-      null,
-    consults_month: byPractice[p.id] || 0,
-    subscription_status: p.subscription_status,
-  }))
-}
-
-function deriveRevenue(agencies) {
-  const total = agencies.reduce((s, a) => s + (Number(a.mrr) || 0), 0)
-  return {
-    total_mrr: total,
-    new_signups_month: 0,
-    churn_month: 0,
-    by_agency: agencies.map((a) => ({ name: a.name, mrr: Number(a.mrr) || 0 })),
-  }
-}
-
-export async function fetchAdminDashboard() {
-  const [a, p, rev] = await Promise.all([
-    supabase.rpc('admin_agencies'),
-    supabase.rpc('admin_practices'),
-    supabase.rpc('admin_revenue'),
-  ])
-
-  let agencies = a.error ? [] : a.data || []
-  let practices = p.error ? [] : p.data || []
-  let revenue = rev.error ? null : rev.data
-  if (a.error || agencies.length === 0) agencies = await loadAgenciesDirect()
-  if (p.error || practices.length === 0) practices = await loadPracticesDirect()
-  if (!revenue) revenue = deriveRevenue(agencies)
-
-  return { agencies, practices, revenue: revenue || {} }
-}
-
-export function useAdminDashboard(enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.admin.dashboard(),
-    queryFn: fetchAdminDashboard,
-    enabled,
-  })
-}
-
-export function useToggleAdminAgency() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async ({ id, active }) => {
-      const { error } = await supabase.from('agency_accounts').update({ active: !active }).eq('id', id)
-      if (error) throw error
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.admin.dashboard() })
-      queryClient.invalidateQueries({ queryKey: queryKeys.admin.data() })
-    },
+    enabled: Boolean(practiceId),
   })
 }
 

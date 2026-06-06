@@ -59,13 +59,38 @@ import { auditConversationViewed, auditPatientAccessed, auditMessageSent } from 
 import { SkeletonList } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
 import { formatMoney } from '../lib/analytics'
-import { formatCallTime, useTwilioVoiceDevice } from '../lib/voice'
+import { formatCallTime } from '../lib/voice'
+import { useVoice } from '../context/VoiceContext'
 import CallMessageBubble from '../components/CallMessageBubble'
+import EmailMessageBubble from '../components/EmailMessageBubble'
 import EmailComposer from '../components/EmailComposer'
 import ChannelToggle from '../components/ChannelToggle'
 
 function initials(first, last) {
   return `${(first || '?')[0]}${(last || '')[0] || ''}`.toUpperCase()
+}
+
+function emailInitials(email) {
+  const local = (email || '?').split('@')[0] || '?'
+  const parts = local.replace(/[^a-zA-Z0-9]/g, ' ').trim().split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+  return local.slice(0, 2).toUpperCase()
+}
+
+function isEmailConversation(c) {
+  return c?.last_channel === 'email'
+}
+
+// Short date for inbox rows, e.g. "Jun 5".
+function listDateLabel(ts) {
+  if (!ts) return ''
+  const d = new Date(ts)
+  const now = new Date()
+  const startOf = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const diffDays = Math.round((startOf(now) - startOf(d)) / 86400000)
+  if (diffDays === 0) return 'Today'
+  if (diffDays === 1) return 'Yesterday'
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 // Deterministic avatar color so each patient keeps a stable colored circle.
@@ -552,6 +577,7 @@ export default function Conversations() {
   // Patient-context panel state.
   const { openRecorder } = useRecorder()
   const activeConv = conversations.find((c) => c.id === activeId) || null
+  const activeIsEmail = isEmailConversation(activeConv)
   const { data: contextData, isLoading: loadingContext } = useConversationContext(practiceId, activeConv)
   const consult = contextData?.consult ?? null
   const consultMsgs = contextData?.consultMsgs ?? []
@@ -633,7 +659,7 @@ export default function Conversations() {
   }, [draft])
 
 
-  const voice = useTwilioVoiceDevice({ enabled: Boolean(practiceId && activeConv?.patient_phone) })
+  const voice = useVoice()
 
   useEffect(() => {
     if (voice.callState === 'idle') return
@@ -903,6 +929,24 @@ export default function Conversations() {
     setSending(false)
   }
 
+  // Pre-fill the email composer when replying from a thread card.
+  function replyToEmail({ subject, body }) {
+    setChannel('email')
+    const reSubject = subject?.startsWith('Re:') ? subject : `Re: ${subject || 'your message'}`
+    setEmailSubject(reSubject)
+    const quote = body ? `\n\n---\n${body}` : ''
+    setDraft(quote.trim() ? quote : '')
+    setAiSuggested(false)
+    setEmailComposerExpanded(true)
+    taRef.current?.focus()
+  }
+
+  // Default compose channel to match the conversation type.
+  useEffect(() => {
+    if (!activeConv) return
+    setChannel(isEmailConversation(activeConv) ? 'email' : 'sms')
+  }, [activeConv?.id, activeConv?.last_channel])
+
   function suggestReply() {
     setSuggesting(true)
     // Lightweight context-aware suggestion (no network dependency required).
@@ -985,9 +1029,19 @@ export default function Conversations() {
             visible.map((c) => {
               const isActive = c.id === activeId
               const unread = c.unread_count > 0
+              const emailRow = isEmailConversation(c)
               const rowBg = isActive
                 ? 'border-blue-500 bg-blue-50'
                 : 'border-transparent hover:bg-gray-50'
+              const avatarSeed = emailRow
+                ? (c.patient_email || `${c.patient_first || ''}${c.patient_last || ''}`)
+                : `${c.patient_first || ''}${c.patient_last || ''}`
+              const rowInitials = emailRow
+                ? emailInitials(c.patient_email)
+                : initials(c.patient_first, c.patient_last)
+              const rowTitle = emailRow
+                ? (c.patient_email || `${c.patient_first || ''} ${c.patient_last || ''}`.trim())
+                : `${c.patient_first || ''} ${c.patient_last || ''}`.trim()
               return (
                 <div
                   key={c.id}
@@ -1002,7 +1056,6 @@ export default function Conversations() {
                   }}
                   className={`group flex w-full cursor-pointer items-center gap-2.5 border-l-[3px] px-3 py-3 text-left transition ${rowBg}`}
                 >
-                  {/* Bulk-action checkbox (non-functional placeholder) */}
                   <input
                     type="checkbox"
                     aria-label="Select conversation"
@@ -1010,34 +1063,44 @@ export default function Conversations() {
                     className="h-3.5 w-3.5 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500/30"
                   />
                   <div className="relative shrink-0">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-semibold text-white ${avatarColor(`${c.patient_first || ''}${c.patient_last || ''}`)}`}>
-                      {initials(c.patient_first, c.patient_last)}
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-semibold text-white ${avatarColor(avatarSeed)}`}>
+                      {rowInitials}
                     </div>
+                    {emailRow && (
+                      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 ring-2 ring-white">
+                        <Mail className="h-2.5 w-2.5 text-white" strokeWidth={2.5} />
+                      </span>
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="flex min-w-0 items-center gap-1.5">
-                        <Link
-                          to={c.consult_id ? `/consults/${c.consult_id}` : '/consults'}
-                          onClick={(e) => e.stopPropagation()}
-                          className={`truncate text-sm hover:underline ${unread ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'}`}
-                        >
-                          {c.patient_first} {c.patient_last}
-                        </Link>
+                        {emailRow ? (
+                          <span className={`truncate text-sm ${unread ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'}`}>
+                            {rowTitle}
+                          </span>
+                        ) : (
+                          <Link
+                            to={c.consult_id ? `/consults/${c.consult_id}` : '/consults'}
+                            onClick={(e) => e.stopPropagation()}
+                            className={`truncate text-sm hover:underline ${unread ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'}`}
+                          >
+                            {rowTitle}
+                          </Link>
+                        )}
                         {c.reactivation_campaign_id && (
                           <span title="Replied to a reactivation campaign" className="inline-flex shrink-0 items-center rounded-full bg-primary/10 p-0.5 text-primary">
                             <Megaphone className="h-3 w-3" />
                           </span>
                         )}
                       </span>
-                      <span className="shrink-0 text-xs text-gray-400">{timeAgo(c.last_message_at)}</span>
+                      <span className="shrink-0 text-xs text-gray-400">{listDateLabel(c.last_message_at)}</span>
                     </div>
                     <div className="mt-0.5 flex items-center justify-between gap-2">
                       <p className={`truncate text-sm ${unread ? 'font-medium text-gray-700' : 'text-gray-500'}`}>
                         {c.last_message_preview || c.patient_phone || c.patient_email}
                       </p>
                       <div className="flex shrink-0 items-center gap-1.5">
-                        {/* Favorite - solid + always visible when starred. */}
                         <button
                           type="button"
                           title={c.consult?.starred ? 'Unstar conversation' : 'Star conversation'}
@@ -1072,14 +1135,27 @@ export default function Conversations() {
                 <button onClick={() => setActiveId(null)} className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 md:hidden">
                   <ArrowLeft className="h-5 w-5" />
                 </button>
-                <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white ${avatarColor(`${activeConv.patient_first || ''}${activeConv.patient_last || ''}`)}`}>
-                  {initials(activeConv.patient_first, activeConv.patient_last)}
+                <div className="relative shrink-0">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white ${avatarColor(activeIsEmail ? (activeConv.patient_email || '') : `${activeConv.patient_first || ''}${activeConv.patient_last || ''}`)}`}>
+                    {activeIsEmail ? emailInitials(activeConv.patient_email) : initials(activeConv.patient_first, activeConv.patient_last)}
+                  </div>
+                  {activeIsEmail && (
+                    <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 ring-2 ring-white">
+                      <Mail className="h-2.5 w-2.5 text-white" strokeWidth={2.5} />
+                    </span>
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <Link to={consultPath} className="truncate text-lg font-semibold text-gray-900 underline-offset-2 hover:underline">
-                      {activeConv.patient_first} {activeConv.patient_last}
-                    </Link>
+                    {activeIsEmail ? (
+                      <span className="truncate text-lg font-semibold text-gray-900">
+                        {activeConv.patient_email || `${activeConv.patient_first || ''} ${activeConv.patient_last || ''}`.trim()}
+                      </span>
+                    ) : (
+                      <Link to={consultPath} className="truncate text-lg font-semibold text-gray-900 underline-offset-2 hover:underline">
+                        {activeConv.patient_first} {activeConv.patient_last}
+                      </Link>
+                    )}
                     {activeConv.reactivation_campaign_id && (
                       <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary-700">
                         <Megaphone className="h-3 w-3" /> Reactivation
@@ -1087,7 +1163,14 @@ export default function Conversations() {
                     )}
                   </div>
                   <p className="flex items-center gap-1.5 truncate text-sm text-gray-500">
-                    <Phone className="h-3.5 w-3.5" /> {activeConv.patient_phone || activeConv.patient_email}
+                    {activeIsEmail ? (
+                      <><Mail className="h-3.5 w-3.5" /> {activeConv.patient_email || 'Email conversation'}</>
+                    ) : (
+                      <><Phone className="h-3.5 w-3.5" /> {activeConv.patient_phone || activeConv.patient_email}</>
+                    )}
+                    {activeIsEmail && (activeConv.patient_first || activeConv.patient_last) && (
+                      <span className="text-gray-400">· {activeConv.patient_first} {activeConv.patient_last}</span>
+                    )}
                   </p>
                 </div>
 
@@ -1152,42 +1235,6 @@ export default function Conversations() {
                 </div>
               )}
             </div>
-
-            {voice.callState !== 'idle' && (
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-emerald-200 bg-emerald-50 px-4 py-2">
-                <span className="flex items-center gap-2 text-sm font-medium text-emerald-800">
-                  {voice.callState === 'in_call' ? (
-                    <>
-                      <Circle className="h-2 w-2 animate-pulse fill-rose-500 text-rose-500" />
-                      Recording · {formatCallTime(voice.seconds)}
-                    </>
-                  ) : (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
-                      {voice.callState === 'ringing' ? 'Ringing…' : 'Connecting…'}
-                    </>
-                  )}
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={voice.toggleMute}
-                    disabled={voice.callState !== 'in_call'}
-                    className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-2.5 py-1 text-xs font-medium text-emerald-900 disabled:opacity-40"
-                  >
-                    {voice.muted ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
-                    {voice.muted ? 'Unmute' : 'Mute'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={voice.hangup}
-                    className="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-rose-500"
-                  >
-                    <PhoneOff className="h-3.5 w-3.5" /> End call
-                  </button>
-                </div>
-              </div>
-            )}
 
             {consult?.sequence_status === 'paused' && (
               <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-[11px] font-medium text-amber-700">
@@ -1269,13 +1316,52 @@ export default function Conversations() {
                     )
                   }
 
+                  // Email messages: GHL-style cards (not SMS bubbles).
+                  if (m.channel === 'email') {
+                    const inbound = m.direction === 'inbound'
+                    const seed = inbound
+                      ? (activeConv.patient_email || `${activeConv.patient_first || ''}${activeConv.patient_last || ''}`)
+                      : `${practice?.name || tcName}`
+                    const senderName = inbound
+                      ? (`${activeConv.patient_first || ''} ${activeConv.patient_last || ''}`.trim() || activeConv.patient_email || 'Patient')
+                      : (practice?.name || tcName)
+                    const senderEmail = inbound ? activeConv.patient_email : (practice?.email || user?.email)
+                    const recipientEmail = inbound ? (practice?.email || user?.email) : activeConv.patient_email
+                    const senderInitials = inbound
+                      ? (activeConv.patient_email ? emailInitials(activeConv.patient_email) : initials(activeConv.patient_first, activeConv.patient_last))
+                      : emailInitials(practice?.email || user?.email || tcName)
+                    return (
+                      <Fragment key={m.id}>
+                        {newDay && (
+                          <div className="flex justify-center pb-2 pt-3">
+                            <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-medium text-gray-500">{dayLabel(ts)}</span>
+                          </div>
+                        )}
+                        <div className="mt-3 flex justify-start">
+                          <EmailMessageBubble
+                            inbound={inbound}
+                            subject={m.meta?.subject || m.subject}
+                            body={m.body}
+                            sentAt={ts}
+                            senderName={senderName}
+                            senderEmail={senderEmail}
+                            recipientEmail={recipientEmail}
+                            avatarClass={avatarColor(seed)}
+                            senderInitials={senderInitials}
+                            onReply={replyToEmail}
+                          />
+                        </div>
+                      </Fragment>
+                    )
+                  }
+
                   const nextTs = next ? next.sent_at || next.created_at : null
                   const nextNewDay = !nextTs || new Date(nextTs).toDateString() !== new Date(ts).toDateString()
                   const gapBefore = prevTs ? new Date(ts) - new Date(prevTs) : Infinity
                   const gapAfter = nextTs ? new Date(nextTs) - new Date(ts) : Infinity
                   // Cluster = consecutive messages, same sender, within the gap window.
-                  const clusterStart = !prev || prev.direction !== m.direction || prev.channel === 'note' || gapBefore > CLUSTER_GAP_MS || newDay
-                  const clusterEnd = !next || next.direction !== m.direction || next.channel === 'note' || gapAfter > CLUSTER_GAP_MS || nextNewDay
+                  const clusterStart = !prev || prev.direction !== m.direction || prev.channel === 'note' || prev.channel === 'email' || gapBefore > CLUSTER_GAP_MS || newDay
+                  const clusterEnd = !next || next.direction !== m.direction || next.channel === 'note' || next.channel === 'email' || gapAfter > CLUSTER_GAP_MS || nextNewDay
                   // Tail (4px corner) on the first and last bubble of a cluster; middle bubbles are fully round.
                   const tail = clusterStart || clusterEnd
                   // Shared timestamp only after a cluster that's followed by a real time gap (or is the last message).
@@ -1298,11 +1384,6 @@ export default function Conversations() {
                           {clusterStart && (
                             <p className={`mb-0.5 px-1 text-[11px] text-gray-400 ${outbound ? 'text-right' : 'text-left'}`}>
                               {outbound ? tcName : (activeConv.patient_first || 'Patient')}
-                            </p>
-                          )}
-                          {m.channel === 'email' && (m.meta?.subject || m.subject) && clusterStart && (
-                            <p className={`mb-1 text-xs font-semibold text-gray-500 ${outbound ? 'text-right' : ''}`}>
-                              {cleanBody(m.meta?.subject || m.subject)}
                             </p>
                           )}
                           {/* Bubble bg is fixed in both themes, so set text via an arbitrary

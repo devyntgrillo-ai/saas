@@ -25,8 +25,29 @@ const tooltipStyle = {
 }
 const money = (v) => `$${Number(v).toLocaleString()}`
 
+function ChartEmpty({ title, subtitle, message = 'No historical data yet.' }) {
+  return (
+    <div className="card p-5">
+      <h3 className="text-sm font-semibold text-white">{title}</h3>
+      {subtitle ? <p className="mb-3 text-xs text-slate-500">{subtitle}</p> : null}
+      <div className="flex h-[220px] items-center justify-center rounded-lg border border-dashed border-surface-700 bg-surface-900/40 px-4 text-center text-sm text-slate-500">
+        {message}
+      </div>
+    </div>
+  )
+}
+
 // MRR growth: actual line for past months + a dashed projected continuation.
 export function MRRGrowthChart({ data }) {
+  if (!data?.length) {
+    return (
+      <ChartEmpty
+        title="MRR growth"
+        subtitle="Last 6 months + projection"
+        message="MRR history is not tracked yet. Totals above reflect current subscriptions."
+      />
+    )
+  }
   // Append a projected next 2 months (~12% MoM growth) as a dashed line.
   const last = data[data.length - 1]?.total || 0
   const projected = [
@@ -58,6 +79,16 @@ export function MRRGrowthChart({ data }) {
 
 // New signups (green) vs churn (red) per month.
 export function SignupsChurnChart({ data }) {
+  const empty = !data?.length || data.every((d) => !d.signups && !d.churn)
+  if (empty) {
+    return (
+      <ChartEmpty
+        title="Signups vs churn"
+        subtitle="Last 6 months"
+        message="No signups or churn recorded in the last six months."
+      />
+    )
+  }
   return (
     <div className="card p-5">
       <h3 className="text-sm font-semibold text-white">Signups vs churn</h3>
@@ -79,6 +110,15 @@ export function SignupsChurnChart({ data }) {
 
 // Stacked MRR: agency revenue vs direct revenue, with milestone reference lines.
 export function StackedMRRChart({ data, milestones = [] }) {
+  if (!data?.length) {
+    return (
+      <ChartEmpty
+        title="MRR by source"
+        subtitle="Last 12 months · reseller vs direct"
+        message="Historical MRR breakdown is not available yet. Current MRR totals are shown above."
+      />
+    )
+  }
   const max = Math.max(...data.map((d) => d.total), 0)
   return (
     <div className="card p-5">

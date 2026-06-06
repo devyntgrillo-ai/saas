@@ -52,7 +52,7 @@ In [Mailgun](https://app.mailgun.com/) → **Sending** → **Domains** → your 
 
 | Field | Value |
 |-------|--------|
-| Expression | `match_recipient("reply+.*@.*\.mail\.heyhope.ai")` (see `MAILGUN_PATIENT_MAIL_ROOT`) |
+| Expression | `match_recipient("reply+.*@.*\\.mail\\.heyhope.ai")` (see `MAILGUN_PATIENT_MAIL_ROOT`) |
 | Action | `forward("https://eymgqjeudrmeofytnwgs.supabase.co/functions/v1/mailgun-inbound")` |
 | Priority | `0` (or high priority) |
 

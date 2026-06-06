@@ -2,9 +2,9 @@
 
 Patient-facing mail uses **per-practice subdomains** on your managed zone:
 
-- Host: `{mail_subdomain}.mail.heyhope.ai` (e.g. `smith-dental.mail.heyhope.ai`)
-- From: `office@{subdomain}.mail.heyhope.ai` (display name from Settings → Email)
-- Reply-To (Conversations / sequences): `reply+{conversation_id}@{subdomain}.mail.heyhope.ai`
+- Host: `{mail_subdomain}.{MAILGUN_PATIENT_MAIL_ROOT}` (e.g. `gold-dental.mysmileinbox.com`)
+- From: `office@{subdomain}.{root}` (display name from Settings → Email)
+- Reply-To (Conversations / sequences): `reply+{conversation_id}@{MAILGUN_DOMAIN}` — the **receive** domain with MX, not the practice From host
 
 **Platform mail** (invites, billing, staff digests) still uses `MAILGUN_DOMAIN` (e.g. `mg.heyhope.ai`).
 
@@ -57,9 +57,12 @@ No per-practice domain creation in Mailgun is required; the app assigns `practic
 | `MAILGUN_FROM` | optional | `CaseLift <noreply@mg.heyhope.ai>` | Platform From default |
 | `MAILGUN_PATIENT_MAIL_ROOT` | yes | `mail.heyhope.ai` | Host suffix for practices |
 | `MAILGUN_PATIENT_MAIL_DOMAIN` | yes | `mail.heyhope.ai` | Mailgun API v3 domain for patient sends |
+| `MAILGUN_INBOUND_DOMAIN` | optional | `mysmileinbox.com` | Host for Reply-To (must have MX); defaults to `MAILGUN_DOMAIN` |
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | recommended | from Mailgun webhooks | `mailgun-inbound` |
 
 `MAILGUN_PATIENT_MAIL_DOMAIN` is usually the same as `MAILGUN_PATIENT_MAIL_ROOT` (the wildcard domain registered in Mailgun).
+
+**Send behavior:** By default, `mailgun-send` uses **per-practice** From (`office@{subdomain}.{root}`) with the practice display name. Set `MAILGUN_PATIENT_DELIVER_VIA_PLATFORM=true` only for legacy sandbox mode (single shared From like `hello@caselift.io`).
 
 ### 4. Inbound route (patient replies)
 

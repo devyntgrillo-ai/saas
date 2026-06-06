@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import Logo from '../Logo'
 import PageLoader from '../PageLoader'
 import AccountSwitcher from '../AccountSwitcher'
+import AdminStatusBanner from './AdminStatusBanner'
 import { useAuth } from '../../context/AuthContext'
 import { AdminProvider, useAdmin } from '../../context/AdminContext'
 
@@ -61,7 +62,7 @@ const navItemClass = ({ isActive }) =>
 
 function Chrome() {
   const { signOut } = useAuth()
-  const { loading } = useAdmin()
+  const { data, loading } = useAdmin()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -148,6 +149,7 @@ function Chrome() {
         <main className="min-h-0 flex-1 overflow-y-auto">
           <Breadcrumbs />
           <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:py-8">
+            <AdminStatusBanner data={data} />
             {loading ? (
               <div className="flex justify-center py-24">
                 <Loader2 className="h-6 w-6 animate-spin text-slate-500" />

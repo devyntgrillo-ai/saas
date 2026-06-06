@@ -56,11 +56,18 @@ export function inboundWebhookUrl(): string | null {
   return base ? `${base}/functions/v1/twilio-inbound` : null;
 }
 
-/** Per-practice inbound URL for O(1) routing at scale. */
+/** Per-practice inbound SMS URL for O(1) routing at scale. */
 export function inboundWebhookUrlForPractice(practiceId: string): string | null {
   const base = publicWebhookBase();
   if (!base || !practiceId) return inboundWebhookUrl();
   return `${base}/functions/v1/twilio-inbound?practice_id=${encodeURIComponent(practiceId)}`;
+}
+
+/** Per-practice inbound Voice URL (patient calls the practice number back). */
+export function inboundVoiceWebhookUrlForPractice(practiceId: string): string | null {
+  const base = publicWebhookBase();
+  if (!base || !practiceId) return null;
+  return `${base}/functions/v1/twilio-voice-inbound?practice_id=${encodeURIComponent(practiceId)}`;
 }
 
 /** Map Twilio brand/campaign status strings to our enum. */

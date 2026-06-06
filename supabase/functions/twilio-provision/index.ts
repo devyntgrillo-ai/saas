@@ -5,7 +5,12 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
-import { cfgOrThrow, inboundWebhookUrlForPractice, twilioRequest } from "../_shared/twilio-api.ts";
+import {
+  cfgOrThrow,
+  inboundVoiceWebhookUrlForPractice,
+  inboundWebhookUrlForPractice,
+  twilioRequest,
+} from "../_shared/twilio-api.ts";
 import { toE164 } from "../_shared/twilio.ts";
 
 const cors = {
@@ -86,12 +91,15 @@ Deno.serve(async (req: Request) => {
         return json({ error: "No Twilio number on file. Purchase a number first." }, 400);
       }
       const smsUrl = inboundWebhookUrlForPractice(practiceId);
-      if (!smsUrl) {
+      const voiceUrl = inboundVoiceWebhookUrlForPractice(practiceId);
+      if (!smsUrl || !voiceUrl) {
         return json({ error: "TWILIO_WEBHOOK_BASE_URL is not set for this environment." }, 503);
       }
       const form = new URLSearchParams();
       form.set("SmsUrl", smsUrl);
       form.set("SmsMethod", "POST");
+      form.set("VoiceUrl", voiceUrl);
+      form.set("VoiceMethod", "POST");
       await twilioRequest(
         cfg,
         "api",
@@ -103,7 +111,7 @@ Deno.serve(async (req: Request) => {
           twilio_phone_e164: toE164(p.twilio_phone_number),
         }).eq("id", practiceId);
       }
-      return json({ ok: true, sms_url: smsUrl });
+      return json({ ok: true, sms_url: smsUrl, voice_url: voiceUrl });
     }
 
     if (action === "search-numbers") {
@@ -132,10 +140,17 @@ Deno.serve(async (req: Request) => {
       if (!phone) return json({ error: "phone_number required" }, 400);
 
       const smsUrl = inboundWebhookUrlForPractice(practiceId);
+      const voiceUrl = inboundVoiceWebhookUrlForPractice(practiceId);
       const form = new URLSearchParams();
       form.set("PhoneNumber", phone);
-      if (smsUrl) form.set("SmsUrl", smsUrl);
-      if (smsUrl) form.set("SmsMethod", "POST");
+      if (smsUrl) {
+        form.set("SmsUrl", smsUrl);
+        form.set("SmsMethod", "POST");
+      }
+      if (voiceUrl) {
+        form.set("VoiceUrl", voiceUrl);
+        form.set("VoiceMethod", "POST");
+      }
 
       const purchased = await twilioRequest<Record<string, string>>(
         cfg,
