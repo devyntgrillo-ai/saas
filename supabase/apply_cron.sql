@@ -50,6 +50,11 @@ begin
   perform cron.unschedule('process-reactivation-drip');
 exception when others then null;
 end $$;
+do $$
+begin
+  perform cron.unschedule('check-unrecorded-streak');
+exception when others then null;
+end $$;
 
 -- PMS appointment sync - every 15 minutes.
 select cron.schedule(
@@ -106,6 +111,22 @@ select cron.schedule(
   $$
   select net.http_post(
     url     := current_setting('app.supabase_url') || '/functions/v1/process-reactivation-drip',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || current_setting('app.service_role_key')
+    ),
+    body    := jsonb_build_object('tick', true)
+  );
+  $$
+);
+
+-- Consecutive-unrecorded adoption alert - once daily at 14:00 UTC (~9–10am ET).
+select cron.schedule(
+  'check-unrecorded-streak',
+  '0 14 * * *',
+  $$
+  select net.http_post(
+    url     := current_setting('app.supabase_url') || '/functions/v1/check-unrecorded-streak',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer ' || current_setting('app.service_role_key')
