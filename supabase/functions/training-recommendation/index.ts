@@ -15,12 +15,27 @@ const json = (b, s = 200) => new Response(JSON.stringify(b), { status: s, header
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
-    const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
-    if (!apiKey) return json({ error: 'ANTHROPIC_API_KEY not configured' }, 503)
     const { practice_id } = await req.json()
     if (!practice_id) return json({ error: 'practice_id required' }, 400)
     const auth = req.headers.get('Authorization') || ''
     const supabase = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_ANON_KEY'), { global: { headers: { Authorization: auth } } })
+
+    // Demo account only: return a curated, stable AI recommendation so sales
+    // demos always show a clear example of what this card does. Matched by the
+    // demo practice email (survives reseeds), placed before the API-key guard so
+    // it works without ANTHROPIC_API_KEY, and only ever affects the demo.
+    const { data: demoPractice } = await supabase.from('practices').select('email').eq('id', practice_id).maybeSingle()
+    if (demoPractice?.email === 'demo@pinnacledental.com') {
+      return json({
+        ok: true,
+        based_on: 12,
+        recommendation: 'Financing is the objection coming up most across your recent consults, especially on full arch cases. Lead with the monthly payment and pre approve patients during the visit, then study Objection Handling to convert more of these warm leads.',
+        focus_area: 'Objection Handling',
+      })
+    }
+
+    const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
+    if (!apiKey) return json({ error: 'ANTHROPIC_API_KEY not configured' }, 503)
 
     // Last 10 analyzed consults (any post-analysis status).
     const { data: consults, error: ce } = await supabase
