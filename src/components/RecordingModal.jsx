@@ -18,6 +18,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { AUDIO_QUALITY, MIC_PREF_KEY, createBrowserConsult, uploadRecording, transcribeRecording, listMicrophones } from '../lib/recording'
+import { markRecording } from '../lib/recentRecordings'
 import { treatmentLabel } from '../lib/treatments'
 import { isNative, nativeRequestPermission, nativeStart, nativePause, nativeResume, nativeStopToBlob } from '../lib/nativeRecorder'
 
@@ -261,6 +262,13 @@ export default function RecordingModal({ onClose, patient = null }) {
     let id
     try {
       id = await createBrowserConsult(practiceId, { durationSec, patient, source: native ? 'native_mobile' : undefined })
+      // Surface an "AI is analyzing…" card on the list pages immediately, even
+      // if backend analysis finishes before the user navigates there.
+      markRecording({
+        id,
+        practiceId,
+        name: [patient?.firstName, patient?.lastName].filter(Boolean).join(' ') || null,
+      })
       const path = await uploadRecording(practiceId, id, blob)
       setConsultId(id)
 

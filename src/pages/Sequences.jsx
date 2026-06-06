@@ -19,6 +19,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useSequences, useToggleSequenceStatus, useUpdateSequenceMessage, useSequencesRealtime, useProcessingConsults, useConsultsRealtime, queryKeys } from '../lib/queries'
+import { useRecentRecordings } from '../lib/recentRecordings'
 import { stripEmDashes } from '../lib/sanitize'
 import {
   parseSequenceConfig,
@@ -667,12 +668,20 @@ export default function Sequences() {
   // the sequence list — surface them as "pending" cards at the top instead.
   const { data: processing = [] } = useProcessingConsults(practiceId)
   useConsultsRealtime(practiceId)
+  // Just-recorded consults (client-side) so the "Generating sequence…" card
+  // shows the instant a recording is submitted, even before its row loads.
+  const recentRecordings = useRecentRecordings(practiceId)
   // Drop pending cards for consults whose sequence has already loaded into the
   // real list, so the card and its row never show at the same time.
   const pendingCards = useMemo(() => {
     const rowIds = new Set(rows.map((r) => r.id))
-    return processing.filter((c) => !rowIds.has(c.id))
-  }, [processing, rows])
+    const map = new Map()
+    processing.forEach((c) => { if (!rowIds.has(c.id)) map.set(c.id, c) })
+    recentRecordings.forEach((r) => {
+      if (!rowIds.has(r.id) && !map.has(r.id)) map.set(r.id, { id: r.id, patient_name: r.name || undefined, status: 'analyzing' })
+    })
+    return [...map.values()]
+  }, [processing, recentRecordings, rows])
   const toggleSeqMutation = useToggleSequenceStatus()
   const updateMsgMutation = useUpdateSequenceMessage()
   const [drawerRow, setDrawerRow] = useState(null)

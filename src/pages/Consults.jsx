@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import { useRecorder } from '../context/RecorderContext'
 import { useConsultsDay, useUnlinkedConsults, useProcessingConsults, useRecentConsults, useConsultArchive, ARCHIVE_PAGE_SIZE, useConsultsRealtime } from '../lib/queries'
 import { statusMeta } from '../lib/consults'
+import { useRecentRecordings } from '../lib/recentRecordings'
 import { supabase } from '../lib/supabase'
 
 const todayStr = () => new Date().toLocaleDateString('en-CA')
@@ -61,7 +62,20 @@ export default function Consults() {
   // leaves the processing state. Excludes any already shown as a scheduled row.
   const { data: recentDone = [] } = useRecentConsults(practiceId)
   useConsultsRealtime(practiceId)
-  const processingIds = useMemo(() => new Set(processing.map((c) => c.id)), [processing])
+
+  // Just-recorded consults (client-side) merged with the DB processing list so
+  // the "AI is analyzing…" card reliably shows for a short window right after
+  // recording, even when backend analysis finishes in a couple of seconds.
+  const recentRecordings = useRecentRecordings(practiceId)
+  const procCards = useMemo(() => {
+    const map = new Map()
+    processing.forEach((c) => map.set(c.id, c))
+    recentRecordings.forEach((r) => {
+      if (!map.has(r.id)) map.set(r.id, { id: r.id, patient_name: r.name || undefined, status: 'analyzing' })
+    })
+    return [...map.values()]
+  }, [processing, recentRecordings])
+  const processingIds = useMemo(() => new Set(procCards.map((c) => c.id)), [procCards])
 
   // Consult ids already represented as an appointment row in the current day's
   // view — those stay as rows (richer: time/type); everything else gets a card.
@@ -192,10 +206,10 @@ export default function Consults() {
 
       {/* Processing + just-completed consults — pinned to the top so a recording
           stays visible from "analyzing" through "complete" without vanishing. */}
-      {(processing.length > 0 || doneCards.length > 0) && (
+      {(procCards.length > 0 || doneCards.length > 0) && (
         <section className="space-y-2">
           <style>{PROCESSING_CARD_CSS}</style>
-          {processing.map((c) => (
+          {procCards.map((c) => (
             <ProcessingCard key={c.id} c={c} onOpen={() => navigate(`/consults/${c.id}/processing`)} />
           ))}
           {doneCards.map((c) => (
