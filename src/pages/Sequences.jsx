@@ -6,10 +6,6 @@ import {
   Search,
   ExternalLink,
   Loader2,
-  Clock,
-  CheckCircle2,
-  ChevronUp,
-  ChevronDown,
   X,
   MessageSquare,
   Mail,
@@ -58,10 +54,20 @@ const FILTER_BUCKET = {
   completed: 'completed', won: 'done', not_fit: 'done',
 }
 
-function StatusText({ sk }) {
+// Status as a small colored dot + word.
+const STATUS_DOT = {
+  active: 'bg-emerald-500', pending: 'bg-amber-500', paused: 'bg-amber-500',
+  replied: 'bg-emerald-500', completed: 'bg-gray-300', won: 'bg-gray-300', not_fit: 'bg-gray-300',
+}
+function StatusDot({ sk }) {
   const meta = STATUS[sk]
-  if (!meta) return <span className="text-slate-600">-</span>
-  return <span className={`text-sm font-medium ${meta.cls}`}>{meta.label}</span>
+  if (!meta) return <span className="text-[13px] text-gray-400">—</span>
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[13px] text-gray-700">
+      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[sk] || 'bg-gray-300'}`} />
+      {meta.label}
+    </span>
+  )
 }
 
 // Standard smooth pill toggle. ON = sending, OFF = paused. Disabled (and forced
@@ -95,12 +101,16 @@ function fmtRemaining(ms) {
   return `${m}m`
 }
 
-// Objection visual config (dot color + label).
-const OBJ = {
-  price: { dot: 'bg-amber-500', label: 'Price' },
-  fear: { dot: 'bg-red-500', label: 'Fear' },
-  spouse: { dot: 'bg-purple-500', label: 'Spouse' },
-  timing: { dot: 'bg-blue-500', label: 'Timing' },
+// Objection badge — Timing (blue), Price (amber), Fear (red); others neutral.
+const OBJ_BADGE = {
+  timing: 'bg-blue-50 text-blue-700',
+  price: 'bg-amber-50 text-amber-700',
+  fear: 'bg-rose-50 text-rose-700',
+}
+function ObjectionBadge({ objection, label }) {
+  if (!objection) return <span className="text-[13px] text-gray-400">—</span>
+  const cls = OBJ_BADGE[objection] || 'bg-gray-100 text-gray-600'
+  return <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${cls}`}>{label}</span>
 }
 
 const isCallMsg = (m) => m.channel === 'call' || m.type === 'call'
@@ -123,27 +133,6 @@ const MSG_STATUS = {
 const msgStatusKind = (s) => (SENT_MSG.includes(s) ? 'sent' : s === 'draft' ? 'draft' : 'pending')
 const channelIcon = (m) => (isCallMsg(m) ? Phone : m.channel === 'email' ? Mail : MessageSquare)
 const msgPreview = (m) => stripEmDashes((m.subject || m.body || (isCallMsg(m) ? 'Manual call - talking points' : '')).replace(/\s+/g, ' ').trim())
-
-// Ordered touchpoints with display state for the mini sequence visualization.
-function buildViz(msgs, now) {
-  const todayStr = new Date(now).toLocaleDateString('en-CA')
-  return [...(msgs || [])]
-    .filter((m) => m.status !== 'cancelled')
-    .sort((a, b) => (a.send_day ?? 99) - (b.send_day ?? 99) || new Date(a.scheduled_for || a.created_at) - new Date(b.scheduled_for || b.created_at))
-    .slice(0, 7)
-    .map((m) => {
-      let state = 'future'
-      if (['sent', 'opened', 'replied'].includes(m.status)) state = 'sent'
-      else if (m.scheduled_for) {
-        const at = new Date(m.scheduled_for).getTime()
-        const sameDay = String(m.scheduled_for).slice(0, 10) === todayStr
-        if (sameDay) state = 'today'
-        else if (at < now) state = 'overdue'
-        else state = 'future'
-      }
-      return { channel: m.channel, isCall: isCallMsg(m), state, day: m.send_day }
-    })
-}
 
 // Derive everything we render for one consult + its messages.
 function deriveRow(c, holdMs, now) {
@@ -233,56 +222,16 @@ function deriveRow(c, holdMs, now) {
     objection: c.objection_type || c.primary_objection || null,
     objectionLabel: objectionLabel(c.objection_type || c.primary_objection),
     serviceType: treatmentLabel(c.treatment_type),
-    vizPoints: buildViz(msgs, now),
     raw: c,
   }
 }
 
-function SummaryCard({ label, value, tone }) {
-  const tones = {
-    green: 'text-emerald-300',
-    amber: 'text-amber-300',
-    blue: 'text-sky-300',
-    slate: 'text-slate-300',
-  }
+// Minimal stat card — number + label only. 8px radius, no shadow/gradient.
+function SummaryCard({ label, value }) {
   return (
-    <div className="rounded-xl border border-white/[0.07] bg-surface-900 p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={`mt-1.5 text-2xl font-bold ${tones[tone]}`}>{value}</p>
-    </div>
-  )
-}
-
-function SortHeader({ label, col, sort, dir, onSort, className = '' }) {
-  const active = sort === col
-  return (
-    <button
-      onClick={() => onSort(col)}
-      className={`inline-flex items-center gap-1 text-left text-xs font-semibold uppercase tracking-wide transition ${active ? 'text-slate-300' : 'text-slate-500 hover:text-slate-300'} ${className}`}
-    >
-      {label}
-      {active && (dir === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
-    </button>
-  )
-}
-
-// Connected dots: green=sent, blue=today, grey=future, red=overdue. Calls get a
-// phone glyph. The current position (first non-sent) pulses.
-function MiniSequenceViz({ points }) {
-  const stateCls = { sent: 'bg-emerald-500', today: 'bg-sky-500', future: 'bg-transparent border border-slate-500', overdue: 'bg-red-500' }
-  const currentIdx = points.findIndex((p) => p.state !== 'sent')
-  return (
-    <div className="flex items-center">
-      {points.map((p, i) => (
-        <div key={i} className="flex items-center">
-          {i > 0 && <span className="h-px w-3 bg-slate-600" />}
-          {p.isCall ? (
-            <Phone className={`h-3.5 w-3.5 ${p.state === 'sent' ? 'text-emerald-400' : p.state === 'overdue' ? 'text-red-400' : p.state === 'today' ? 'text-sky-400' : 'text-amber-400'} ${i === currentIdx ? 'animate-pulse' : ''}`} />
-          ) : (
-            <span className={`inline-block rounded-full ${stateCls[p.state]} ${i === currentIdx ? 'h-3 w-3 animate-pulse ring-2 ring-sky-400/40' : 'h-2.5 w-2.5'}`} />
-          )}
-        </div>
-      ))}
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <p className="text-[22px] font-semibold leading-none text-gray-900">{value}</p>
+      <p className="mt-2 text-[11px] font-medium uppercase tracking-wide text-gray-500">{label}</p>
     </div>
   )
 }
@@ -690,8 +639,10 @@ export default function Sequences() {
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useState('')
   const [filter, setFilter] = useState('all')
-  const [sort, setSort] = useState('next')
-  const [dir, setDir] = useState('asc')
+  // Fixed sort (soonest next-touchpoint first) — no sortable column headers in
+  // the minimal layout.
+  const sort = 'next'
+  const dir = 'asc'
   const [shown, setShown] = useState(PAGE)
   const [busyId, setBusyId] = useState(null)
   const [flash, setFlash] = useState(null) // { id, text } transient toggle confirmation
@@ -753,11 +704,6 @@ export default function Sequences() {
 
   const visible = filtered.slice(0, shown)
 
-  function onSort(col) {
-    if (sort === col) setDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    else { setSort(col); setDir('asc') }
-  }
-
   // ── On/off toggle ─────────────────────────────────────────────────────────
   // ON = active (sending), OFF = paused (pending messages stay pending but won't
   // send). Sent messages are never touched. Disabled once a sequence has ended.
@@ -780,63 +726,55 @@ export default function Sequences() {
     ['active', 'Active', counts.active],
     ['paused', 'Paused', counts.paused],
     ['pending', 'Pending', counts.pending],
-    ['completed', 'Completed', counts.completed],
   ]
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-white">
-          <GitBranch className="h-6 w-6 text-primary-400" /> Sequences
-        </h1>
-        <p className="mt-1 text-sm text-slate-400">Manage active follow-up sequences and configure timing</p>
-      </div>
-
-      {/* Tab bar + reactivation launcher (inline, right) */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-1">
-          {[['active', 'Active Sequences'], ['settings', 'Sequence Settings']].map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${tab === key ? 'bg-primary/10 text-primary-300' : 'text-slate-400 hover:bg-surface-800 hover:text-slate-200'}`}
-            >
-              {label}
-            </button>
-          ))}
+    <div className="space-y-5">
+      {/* Header — 20px title, no tabs (Active Sequences is the view). */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[20px] font-semibold tracking-tight text-gray-900">Active Sequences</h1>
+          <p className="mt-0.5 text-[13px] text-gray-500">Follow-ups CaseLift is running for unconverted patients.</p>
         </div>
-        <ReactivationLaunchButton onClick={() => setBuilding(true)} />
+        <div className="flex items-center gap-2">
+          <ReactivationLaunchButton onClick={() => setBuilding(true)} />
+          <button
+            onClick={() => setTab(tab === 'settings' ? 'active' : 'settings')}
+            className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[13px] font-medium transition ${tab === 'settings' ? 'border-gray-300 bg-gray-100 text-gray-900' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+          >
+            <Sliders className="h-3.5 w-3.5" /> {tab === 'settings' ? 'Back' : 'Settings'}
+          </button>
+        </div>
       </div>
 
-      {/* Reactivation builder modal (always mounted); compact list only on the Active tab */}
+      {/* Reactivation builder modal (always mounted); list only on the main view */}
       <ReactivationCampaigns building={building} onCloseBuilder={() => setBuilding(false)} showList={tab === 'active'} />
 
       {tab === 'settings' ? (
         <SequenceSettings />
       ) : (
-      <div className="space-y-6">
-      {/* Summary cards */}
+      <div className="space-y-5">
+      {/* Stat cards — minimal, number + label */}
       {loading ? (
         <SkeletonStatGrid count={4} />
       ) : (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <SummaryCard label="Active" value={counts.active} tone="green" />
-          <SummaryCard label="Paused" value={counts.paused} tone="amber" />
-          <SummaryCard label="Completed" value={counts.completed} tone="slate" />
-          <SummaryCard label="Pending (24h hold)" value={counts.pending} tone="blue" />
+          <SummaryCard label="Active" value={counts.active} />
+          <SummaryCard label="Paused" value={counts.paused} />
+          <SummaryCard label="Pending" value={counts.pending} />
+          <SummaryCard label="Completed" value={counts.completed} />
         </div>
       )}
 
-      {/* Search + filters */}
+      {/* Search + filter pills */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-[200px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, phone, or email..."
-            className="input pl-9"
+            className="h-9 w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 text-[13px] text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
           />
         </div>
         <div className="flex flex-wrap gap-1">
@@ -844,17 +782,15 @@ export default function Sequences() {
             <button
               key={key}
               onClick={() => setFilter(key)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${filter === key ? 'bg-primary/10 text-primary-300' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition ${filter === key ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}`}
             >
-              {label} <span className="text-xs text-slate-500">({n})</span>
+              {label} <span className={filter === key ? 'text-white/70' : 'text-gray-400'}>{n}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Pending sequences — consults still being analyzed (no messages yet).
-          Exclude any that have since landed in the real list to avoid a
-          duplicate during the analyzing → analyzed transition. */}
+      {/* Pending sequences — consults still being analyzed (no messages yet). */}
       {pendingCards.length > 0 && (
         <div className="space-y-2">
           <style>{PENDING_SEQ_CSS}</style>
@@ -864,9 +800,9 @@ export default function Sequences() {
         </div>
       )}
 
-      {/* List */}
+      {/* Table — Patient · Objection · Progress · Status · Toggle */}
       {loading ? (
-        <SkeletonTable rows={6} cols={6} />
+        <SkeletonTable rows={6} cols={5} />
       ) : derived.length === 0 ? (
         <EmptyState
           icon={GitBranch}
@@ -876,95 +812,80 @@ export default function Sequences() {
           actionLabel="Go to Consults"
         />
       ) : filtered.length === 0 ? (
-        <div className="card px-6 py-16 text-center text-sm text-slate-400">No sequences match your filters.</div>
+        <div className="rounded-xl border border-gray-200 bg-white px-6 py-16 text-center text-[13px] text-gray-500">No sequences match your filters.</div>
       ) : (
-        <div className="card overflow-hidden">
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
           {/* Column header (desktop) */}
-          <div className="hidden border-b border-surface-700 px-4 py-2.5 lg:grid lg:grid-cols-12 lg:items-center lg:gap-4">
-            <SortHeader label="Patient" col="name" sort={sort} dir={dir} onSort={onSort} className="lg:col-span-3" />
-            <SortHeader label="Sequence" col="next" sort={sort} dir={dir} onSort={onSort} className="lg:col-span-4" />
-            <SortHeader label="Progress" col="progress" sort={sort} dir={dir} onSort={onSort} className="lg:col-span-2" />
-            <SortHeader label="Status" col="status" sort={sort} dir={dir} onSort={onSort} className="lg:col-span-2" />
-            <span className="text-right text-xs font-semibold uppercase tracking-wide text-slate-500 lg:col-span-1">Actions</span>
+          <div className="hidden border-b border-gray-200 px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-gray-500 lg:grid lg:grid-cols-12 lg:items-center lg:gap-4">
+            <span className="lg:col-span-4">Patient</span>
+            <span className="lg:col-span-2">Objection</span>
+            <span className="lg:col-span-3">Progress</span>
+            <span className="lg:col-span-2">Status</span>
+            <span className="text-right lg:col-span-1">Toggle</span>
           </div>
 
-          <div className="divide-y divide-surface-700">
-            {visible.map((r) => {
-              return (
-                <div
-                  key={r.id}
-                  onClick={() => setDrawerRow(r)}
-                  className="grid cursor-pointer grid-cols-1 gap-2 px-4 py-3 transition hover:bg-surface-800/50 lg:grid-cols-12 lg:items-center lg:gap-4"
-                >
-                  {/* Patient + service + objection */}
-                  <div className="min-w-0 lg:col-span-3">
-                    <Link
-                      to={`/consults/${r.id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="truncate text-sm font-semibold text-slate-100 hover:underline"
-                    >
-                      {r.name === 'Unknown patient' ? <span className="italic text-slate-400">Awaiting patient info</span> : r.name}
-                    </Link>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span className="rounded bg-surface-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">{r.serviceType}</span>
-                      {r.objection && (
-                        <span className="inline-flex items-center gap-1 text-xs text-slate-400"><span className={`h-2 w-2 rounded-full ${OBJ[r.objection]?.dot || 'bg-slate-500'}`} /> {r.objectionLabel}</span>
-                      )}
+          <div className="divide-y divide-gray-100">
+            {visible.map((r) => (
+              <div
+                key={r.id}
+                onClick={() => setDrawerRow(r)}
+                className="grid cursor-pointer grid-cols-1 gap-2 px-4 py-3 text-[13px] transition hover:bg-gray-50 lg:grid-cols-12 lg:items-center lg:gap-4"
+              >
+                {/* Patient */}
+                <div className="min-w-0 lg:col-span-4">
+                  <Link
+                    to={`/consults/${r.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="block truncate font-medium text-gray-900 hover:underline"
+                  >
+                    {r.name === 'Unknown patient' ? <span className="italic text-gray-400">Awaiting patient info</span> : r.name}
+                  </Link>
+                  <p className="mt-0.5 truncate text-[11px] text-gray-400">{r.serviceType}</p>
+                </div>
+
+                {/* Objection */}
+                <div className="lg:col-span-2">
+                  <ObjectionBadge objection={r.objection} label={r.objectionLabel} />
+                </div>
+
+                {/* Progress */}
+                <div className="lg:col-span-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1 w-full max-w-[140px] overflow-hidden rounded-full bg-gray-200">
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${Math.round(r.ratio * 100)}%` }} />
                     </div>
-                  </div>
-
-                  {/* Mini sequence viz + next action */}
-                  <div className="lg:col-span-4">
-                    {r.vizPoints.length > 0 && <MiniSequenceViz points={r.vizPoints} />}
-                    <p className="mt-1 flex items-center gap-1.5 truncate text-xs text-slate-400">
-                      {r.status === 'completed' || r.status === 'won' || r.status === 'not_fit' ? <CheckCircle2 className="h-3 w-3 shrink-0 text-slate-500" /> : (r.status === 'active' || r.status === 'pending') ? <Clock className="h-3 w-3 shrink-0 text-slate-500" /> : null}
-                      <span className="truncate">{r.nextLabel}</span>
-                    </p>
-                  </div>
-
-                  {/* Progress */}
-                  <div className="lg:col-span-2">
-                    <p className="text-xs text-slate-400">{r.sent} of {r.total} sent</p>
-                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-700">
-                      <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.round(r.ratio * 100)}%` }} />
-                    </div>
-                  </div>
-
-                  {/* Status (single) - briefly shows the toggle confirmation */}
-                  <div className="flex items-center lg:col-span-2">
-                    {flash && flash.id === r.id
-                      ? <span className="text-sm font-medium text-emerald-600">{flash.text}</span>
-                      : <StatusText sk={r.status} />}
-                  </div>
-
-                  {/* Toggle + actions */}
-                  <div className="flex items-center gap-2 lg:col-span-1 lg:justify-end">
-                    <RowToggle
-                      on={r.toggleOn}
-                      disabled={r.toggleDisabled}
-                      busy={busyId === r.id}
-                      onClick={(e) => { e.stopPropagation(); toggleSeq(r) }}
-                    />
-                    <Link
-                      to={`/consults/${r.id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      title="View consult"
-                      className="rounded-md p-1.5 text-slate-400 transition hover:bg-surface-700 hover:text-slate-100"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                    </Link>
+                    <span className="shrink-0 text-[11px] tabular-nums text-gray-500">{r.sent}/{r.total}</span>
                   </div>
                 </div>
-              )
-            })}
+
+                {/* Status */}
+                <div className="flex items-center lg:col-span-2">
+                  {flash && flash.id === r.id
+                    ? <span className="text-[13px] font-medium text-emerald-600">{flash.text}</span>
+                    : <StatusDot sk={r.status} />}
+                </div>
+
+                {/* Toggle */}
+                <div className="flex items-center gap-1.5 lg:col-span-1 lg:justify-end" onClick={(e) => e.stopPropagation()}>
+                  <RowToggle on={r.toggleOn} disabled={r.toggleDisabled} busy={busyId === r.id} onClick={() => toggleSeq(r)} />
+                  <Link
+                    to={`/consults/${r.id}`}
+                    title="View consult"
+                    className="rounded-md p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Load more */}
           {filtered.length > shown && (
-            <div className="border-t border-surface-700 p-3 text-center">
+            <div className="border-t border-gray-200 p-3 text-center">
               <button
                 onClick={() => setShown((s) => s + PAGE)}
-                className="btn-ghost mx-auto text-sm"
+                className="text-[13px] font-medium text-gray-600 transition hover:text-gray-900"
               >
                 Load more ({filtered.length - shown} remaining)
               </button>
