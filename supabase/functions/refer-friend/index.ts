@@ -30,6 +30,8 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const friendEmail = String(body.friend_email || "").trim();
     const friendName = String(body.friend_name || "").trim();
+    const customSubject = String(body.subject || "").trim();
+    const customMessage = String(body.message || "").trim();
     const appOrigin = String(body.app_origin || "https://app.caselift.io").replace(/\/$/, "");
     if (!isEmail(friendEmail)) return json({ error: "A valid friend email is required." }, 400);
 
@@ -52,20 +54,28 @@ Deno.serve(async (req: Request) => {
     const fromPractice = practice?.name || "A colleague";
     const brand = await resolveBrand(admin, practice);
 
-    const greeting = friendName ? `Hi ${escapeHtml(friendName)},` : "Hi there,";
+    // Use the sender's edited template when provided; otherwise a sensible default.
+    const defaultMessage =
+      `Hi${friendName ? ` ${friendName}` : ""},\n\n` +
+      `${fromPractice} uses ${brand.brandName} to automatically follow up with patients after consults and recover cases that would otherwise slip away. They thought your practice would benefit too.\n\n` +
+      `Take a look:`;
+    const messageText = customMessage || defaultMessage;
+    const bodyHtml = messageText
+      .split(/\n{2,}/)
+      .map((para) => `<p>${escapeHtml(para).replace(/\n/g, "<br>")}</p>`)
+      .join("");
+    const subject = customSubject || `${fromPractice} recommends ${brand.brandName}`;
+
     const html = renderBrandedEmail(brand, {
       heading: `${escapeHtml(fromPractice)} thought you'd love ${escapeHtml(brand.brandName)}`,
-      bodyHtml:
-        `<p>${greeting}</p>` +
-        `<p>${escapeHtml(fromPractice)} uses ${escapeHtml(brand.brandName)} to automatically follow up with patients after consults and recover cases that would otherwise slip away. They thought your practice would benefit too.</p>` +
-        `<p>Take a look:</p>`,
+      bodyHtml,
       button: { label: `Check out ${brand.brandName}`, url: link },
     });
-    const text = `${friendName ? `Hi ${friendName},` : "Hi there,"}\n\n${fromPractice} uses ${brand.brandName} to follow up with patients after consults and recover lost cases, and thought your practice would benefit too.\n\nTake a look: ${link}`;
+    const text = `${messageText}\n\n${link}`;
 
     const sendResult = await sendMailgunMessage({
       to: friendEmail,
-      subject: `${fromPractice} recommends ${brand.brandName}`,
+      subject,
       text,
       html,
       fromName: brand.fromName,

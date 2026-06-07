@@ -48,8 +48,23 @@ export default function GetFreeMonth({ practice }) {
   const [blob, setBlob] = useState(null)
   const [blobUrl, setBlobUrl] = useState(null)
 
-  // Friend form
+  // Friend form + an editable, prepopulated email the sender can tweak before sending.
+  const practiceName = practice?.name || 'our practice'
   const [friend, setFriend] = useState({ name: '', email: '' })
+  const draftSeeded = useRef(false)
+  const [draft, setDraft] = useState({ subject: '', message: '' })
+  useEffect(() => {
+    if (draftSeeded.current || !practice) return
+    draftSeeded.current = true
+    setDraft({
+      subject: `${practiceName} recommends CaseLift`,
+      message:
+        `Hi,\n\n` +
+        `I wanted to share a tool we have been using at ${practiceName}, called CaseLift. It records our treatment consults and automatically follows up with patients by text and email, and it has helped us recover cases that used to slip through the cracks.\n\n` +
+        `I think it could do the same for your practice. Worth a quick look.`,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [practice])
 
   async function saveFm(patch) {
     const next = { ...(practice?.free_month || {}), ...patch }
@@ -78,7 +93,10 @@ export default function GetFreeMonth({ practice }) {
   async function startRecording() {
     setError('')
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 720 }, height: { ideal: 1280 }, aspectRatio: { ideal: 9 / 16 } },
+        audio: true,
+      })
       streamRef.current = stream
       if (liveRef.current) { liveRef.current.srcObject = stream; liveRef.current.muted = true; liveRef.current.play().catch(() => {}) }
       chunksRef.current = []
@@ -129,7 +147,14 @@ export default function GetFreeMonth({ practice }) {
     setBusy('referral'); setError('')
     try {
       const { data, error: e } = await supabase.functions.invoke('refer-friend', {
-        body: { practice_id: practiceId, friend_name: friend.name.trim(), friend_email: friend.email.trim(), app_origin: window.location.origin },
+        body: {
+          practice_id: practiceId,
+          friend_name: friend.name.trim(),
+          friend_email: friend.email.trim(),
+          subject: draft.subject.trim(),
+          message: draft.message.trim(),
+          app_origin: window.location.origin,
+        },
       })
       if (e || data?.error) throw new Error(data?.error || e?.message || 'Could not send the email.')
       await saveFm({ referral_at: new Date().toISOString(), referral_email: friend.email.trim() })
@@ -172,36 +197,43 @@ export default function GetFreeMonth({ practice }) {
 
       {error && <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
 
-      <StepCard n={1} icon={Star} title="Leave a review" done={reviewDone}>
+      <StepCard n={1} icon={Star} title="Leave a quick review" done={reviewDone}>
         {reviewDone ? (
           <p className="text-sm text-slate-400">Thanks for the review!</p>
         ) : (
           <>
-            <p className="text-sm text-slate-400">A quick, honest review helps other practices find CaseLift. It only takes a minute.</p>
+            <p className="text-sm text-slate-400">An honest review takes about a minute and helps other practices find CaseLift.</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <a href={REVIEW_URL} target="_blank" rel="noreferrer" className="btn-ghost"><ExternalLink className="h-4 w-4" /> Open review page</a>
               <button onClick={markReview} disabled={busy === 'review'} className="btn-primary">
                 {busy === 'review' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} I left my review
               </button>
             </div>
+            <p className="mt-2 text-xs text-slate-500">We’ll verify the review was posted before your free month is applied.</p>
           </>
         )}
       </StepCard>
 
-      <StepCard n={2} icon={Video} title="Record a quick video testimonial" done={videoDone}>
+      <StepCard n={2} icon={Video} title="Record a 30-second video testimonial" done={videoDone}>
         {videoDone ? (
           <p className="text-sm text-slate-400">Got it — thank you for the testimonial!</p>
         ) : (
           <>
-            <p className="text-sm text-slate-400">15–30 seconds on how CaseLift has helped your practice. Record right here.</p>
-            <div className="mt-3 overflow-hidden rounded-xl border border-surface-700 bg-black">
+            <p className="text-sm text-slate-400">Hold your phone vertically and keep it to ~30 seconds. Hit on these specifics — real numbers are what make it land:</p>
+            <ul className="mt-2 space-y-1.5 text-sm text-slate-300">
+              <li className="flex gap-2"><span className="text-emerald-400">•</span> How much production or how many cases CaseLift has helped you recover (e.g. “$42k in our first 60 days”).</li>
+              <li className="flex gap-2"><span className="text-emerald-400">•</span> How many hours a week it saves your team on follow-up.</li>
+              <li className="flex gap-2"><span className="text-emerald-400">•</span> What your follow-up looked like before vs. now, and who you’d recommend it to.</li>
+            </ul>
+            {/* Vertical (9:16) frame to match how it will be used. */}
+            <div className="mx-auto mt-4 aspect-[9/16] w-full max-w-[260px] overflow-hidden rounded-xl border border-surface-700 bg-black">
               {blobUrl ? (
-                <video src={blobUrl} controls className="h-56 w-full bg-black" />
+                <video src={blobUrl} controls className="h-full w-full object-cover" />
               ) : (
-                <video ref={liveRef} className="h-56 w-full bg-black" playsInline />
+                <video ref={liveRef} className="h-full w-full object-cover" playsInline />
               )}
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
               {!blobUrl && !recording && (
                 <button onClick={startRecording} className="btn-primary"><Video className="h-4 w-4" /> Start recording</button>
               )}
@@ -226,12 +258,19 @@ export default function GetFreeMonth({ practice }) {
           <p className="text-sm text-slate-400">Invite sent{fm.referral_email ? ` to ${fm.referral_email}` : ''} — thank you for spreading the word!</p>
         ) : (
           <>
-            <p className="text-sm text-slate-400">Know another practice that would benefit? We’ll send them a friendly intro on your behalf.</p>
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-              <input className="input flex-1" value={friend.name} onChange={(e) => setFriend((f) => ({ ...f, name: e.target.value }))} placeholder="Friend’s name (optional)" />
-              <input className="input flex-1" type="email" value={friend.email} onChange={(e) => setFriend((f) => ({ ...f, email: e.target.value }))} placeholder="friend@theirpractice.com" />
-              <button onClick={sendReferral} disabled={busy === 'referral' || !friend.email.trim()} className="btn-primary shrink-0">
-                {busy === 'referral' ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Send
+            <p className="text-sm text-slate-400">Know another practice that would benefit? Edit the note below and we’ll send it from your account with your referral link attached.</p>
+            <div className="mt-3 space-y-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input className="input flex-1" value={friend.name} onChange={(e) => setFriend((f) => ({ ...f, name: e.target.value }))} placeholder="Friend’s name (optional)" />
+                <input className="input flex-1" type="email" value={friend.email} onChange={(e) => setFriend((f) => ({ ...f, email: e.target.value }))} placeholder="friend@theirpractice.com" />
+              </div>
+              <input className="input" value={draft.subject} onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))} placeholder="Subject" />
+              <textarea className="input min-h-[140px] resize-y leading-relaxed" value={draft.message} onChange={(e) => setDraft((d) => ({ ...d, message: e.target.value }))} placeholder="Your note…" />
+              <p className="text-xs text-slate-500">Your CaseLift referral link is added automatically as a button at the bottom of the email.</p>
+            </div>
+            <div className="mt-3 flex justify-end">
+              <button onClick={sendReferral} disabled={busy === 'referral' || !friend.email.trim() || !draft.message.trim()} className="btn-primary">
+                {busy === 'referral' ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Send invite
               </button>
             </div>
           </>
