@@ -35,6 +35,7 @@ import PhoneMessaging from './PhoneMessaging'
 import Integrations from './Integrations'
 import NotificationSettings from './NotificationSettings'
 import ReferralsPanel from './Referrals'
+import GetFreeMonth from '../components/GetFreeMonth'
 import CancellationFlow from '../components/CancellationFlow'
 import InviteModal from '../components/InviteModal'
 import Modal from '../components/Modal'
@@ -59,6 +60,7 @@ const TABS = [
   { key: 'team', label: 'Team', icon: Users },
   { key: 'knowledge-base', label: 'Knowledge Base', icon: BookOpen },
   { key: 'notifications', label: 'Notifications', icon: Bell },
+  { key: 'free-month', label: 'Get a Free Month', icon: Sparkles },
   // Only for direct (non-reseller) practices - filtered out below when agency_id is set.
   { key: 'referrals', label: 'Referrals', icon: Gift, directOnly: true },
   { key: 'billing', label: 'Billing', icon: CreditCard },
@@ -395,6 +397,8 @@ export default function Settings() {
 
           {/* Notifications */}
           {tab === 'notifications' && <NotificationSettings />}
+
+          {tab === 'free-month' && <GetFreeMonth practice={practice} />}
 
           {/* Referrals (direct practices only) */}
           {tab === 'referrals' &&

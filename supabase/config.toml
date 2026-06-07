@@ -409,6 +409,9 @@ verify_jwt = false
 # Daily audio-retention purge — cron-invoked with the service token (requireServiceRole).
 [functions.purge-consult-audio]
 verify_jwt = false
+# Refer-a-friend email — self-authenticates the caller's token + practice inside.
+[functions.refer-friend]
+verify_jwt = false
 # Internal adoption alert — invoked by pg_cron with the service-role bearer.
 [functions.check-unrecorded-streak]
 verify_jwt = false
