@@ -135,6 +135,8 @@ export default function GetFreeMonth({ practice }) {
       const { error: upErr } = await supabase.storage.from('testimonials').upload(path, blob, { contentType: blob.type || 'video/webm', upsert: true })
       if (upErr) throw upErr
       await saveFm({ video_at: new Date().toISOString(), video_path: path })
+      // Push a watch link to the internal #wins Slack channel (non-blocking).
+      supabase.functions.invoke('notify-testimonial', { body: { practice_id: practiceId, video_path: path } }).catch(() => {})
     } catch (e) {
       setError(e?.message || 'Could not upload your video. Please try again.')
     }

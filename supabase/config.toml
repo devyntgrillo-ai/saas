@@ -412,6 +412,9 @@ verify_jwt = false
 # Refer-a-friend email — self-authenticates the caller's token + practice inside.
 [functions.refer-friend]
 verify_jwt = false
+# Video testimonial -> #wins Slack — self-authenticates the caller's token inside.
+[functions.notify-testimonial]
+verify_jwt = false
 # Internal adoption alert — invoked by pg_cron with the service-role bearer.
 [functions.check-unrecorded-streak]
 verify_jwt = false
