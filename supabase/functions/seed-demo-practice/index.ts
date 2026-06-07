@@ -300,6 +300,32 @@ Deno.serve(async (req: Request) => {
       return json({ demoPractices: rows });
     }
 
+    if (body.action === "cleanuptest" && sql) {
+      const delP = await sql`delete from public.practices where email like 'signuptest+%@example.com' returning id`;
+      const delU = await sql`delete from auth.users where email like 'signuptest+%@example.com' returning id`;
+      return json({ deleted_practices: delP.length, deleted_users: delU.length });
+    }
+
+    if (body.action === "fixrls" && sql) {
+      // Drop the self-referential rate-limit on practices_insert that caused
+      // 42P17 infinite recursion and blocked signup.
+      await sql.unsafe(`
+        drop policy if exists "practices_insert" on public.practices;
+        create policy "practices_insert" on public.practices
+          for insert to authenticated
+          with check (auth.uid() is not null);
+      `);
+      const [check] = await sql`select pg_get_expr(polwithcheck, polrelid) as check from pg_policy where polrelid='public.practices'::regclass and polname='practices_insert'`;
+      return json({ ok: true, new_check: check?.check });
+    }
+
+    if (body.debug === "pol" && sql) {
+      const practicesPolicies = await sql`select polname, polcmd, pg_get_expr(polqual, polrelid) as qual, pg_get_expr(polwithcheck, polrelid) as check from pg_policy where polrelid = 'public.practices'::regclass`;
+      const usersPolicies = await sql`select polname, polcmd, pg_get_expr(polqual, polrelid) as qual from pg_policy where polrelid = 'public.users'::regclass`;
+      const fns = await sql`select proname, pg_get_functiondef(oid) as def from pg_proc where pronamespace = 'public'::regnamespace and proname in ('is_super_admin','current_practice_id','user_practice_ids','is_agency_admin','is_platform_super_admin')`;
+      return json({ practicesPolicies, usersPolicies, fns });
+    }
+
     if (body.debug === "find" && sql) {
       const q = `%${body.q || ""}%`;
       const [p] = await sql`select id from public.practices where email = ${DEMO_PRACTICE_EMAIL}`;
