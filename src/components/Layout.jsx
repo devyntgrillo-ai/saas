@@ -104,7 +104,14 @@ export default function Layout() {
     navigate('/login')
   }
 
-  const initials = (user?.email || '?').slice(0, 2).toUpperCase()
+  const displayName = profile?.display_name || user?.user_metadata?.full_name || user?.email || 'Account'
+  const avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url || null
+  const initials = (() => {
+    const s = displayName.trim()
+    const parts = s.split(/\s+/)
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+    return s.slice(0, 2).toUpperCase()
+  })()
 
   // Reseller portal: ANY /agency route, OR a viewer in reseller context with no
   // specific practice selected — an agency user at home, or a super-admin
@@ -191,11 +198,11 @@ export default function Layout() {
 
       <div className="border-t border-white/[0.07] p-3">
         <div className="flex items-center gap-3 px-1 py-1">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-800 text-xs font-medium text-slate-300">
-            {initials}
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-800 text-xs font-medium text-slate-300">
+            {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" /> : initials}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm text-slate-200">{user?.email}</p>
+            <p className="truncate text-sm text-slate-200">{displayName}</p>
             <p className="truncate text-xs capitalize text-slate-500">
               {isSuperAdmin ? 'Super Admin' : isAgencyUser ? `${agencyRole || 'member'} · ${agency?.name || 'Reseller'}` : profile?.role || 'member'}
             </p>

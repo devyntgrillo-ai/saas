@@ -46,7 +46,11 @@ export default function AdminChats() {
   }, [])
 
   const currentUser = useMemo(
-    () => ({ id: user?.id, name: user?.user_metadata?.full_name || profile?.email || user?.email || 'CaseLift Team', avatar: null }),
+    () => ({
+      id: user?.id,
+      name: profile?.display_name || user?.user_metadata?.full_name || user?.email || 'CaseLift Team',
+      avatar: profile?.avatar_url || user?.user_metadata?.avatar_url || null,
+    }),
     [user, profile],
   )
 

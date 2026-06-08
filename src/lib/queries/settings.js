@@ -5,9 +5,7 @@ import { queryKeys } from './keys'
 export async function fetchPracticeTeam(practiceId) {
   if (!practiceId) return { members: [], pending: [] }
   const [{ data: members, error: e1 }, { data: pending, error: e2 }] = await Promise.all([
-    // NOTE: users has no full_name column - selecting it errors, and since this
-    // fn throws if either query fails, that previously blanked BOTH sections.
-    supabase.from('users').select('id, email, role, created_at').eq('practice_id', practiceId).order('created_at'),
+    supabase.from('users').select('id, email, role, created_at, display_name, avatar_url').eq('practice_id', practiceId).order('created_at'),
     supabase
       .from('invitations')
       .select('id, email, role, created_at, token')

@@ -23,6 +23,7 @@ import {
   Moon,
   BookOpen,
   Gift,
+  UserRound,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
@@ -36,6 +37,7 @@ import Integrations from './Integrations'
 import NotificationSettings from './NotificationSettings'
 import ReferralsPanel from './Referrals'
 import GetFreeMonth from '../components/GetFreeMonth'
+import UserProfilePanel from '../components/UserProfilePanel'
 import CancellationFlow from '../components/CancellationFlow'
 import InviteModal from '../components/InviteModal'
 import Modal from '../components/Modal'
@@ -54,6 +56,7 @@ import {
 } from '../lib/billing'
 
 const TABS = [
+  { key: 'account', label: 'Your Profile', icon: UserRound },
   { key: 'profile', label: 'Practice Profile', icon: Building2 },
   { key: 'integrations', label: 'Integrations', icon: Plug },
   { key: 'messaging', label: 'Messaging', icon: MessageSquare },
@@ -409,6 +412,8 @@ export default function Settings() {
             ))}
 
           {/* Team */}
+          {tab === 'account' && <UserProfilePanel />}
+
           {tab === 'team' && <PracticeTeamPanel practice={practice} />}
 
           {/* Billing */}
@@ -909,15 +914,15 @@ function PracticeTeamPanel({ practice }) {
             {members.length === 0 && <li className="py-4 text-sm text-slate-500">No members yet.</li>}
             {members.map((m) => (
               <li key={m.id} className="flex items-center gap-3 py-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-700 text-xs font-semibold text-slate-200">
-                  {teamInitials(m.full_name || m.email)}
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-700 text-xs font-semibold text-slate-200">
+                  {m.avatar_url ? <img src={m.avatar_url} alt="" className="h-full w-full object-cover" /> : teamInitials(m.display_name || m.email)}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-slate-200">
-                    {m.full_name || m.email}
+                    {m.display_name || m.email}
                     {m.id === user?.id && <span className="ml-1.5 text-xs font-normal text-slate-500">(you)</span>}
                   </p>
-                  {m.full_name && <p className="truncate text-xs text-slate-500">{m.email}</p>}
+                  {m.display_name && <p className="truncate text-xs text-slate-500">{m.email}</p>}
                   <p className="text-xs capitalize text-slate-500">{ACCESS_LABELS[`practice_${m.role}`] || m.role}</p>
                 </div>
                 {perms.canInvite && m.id !== user?.id && (

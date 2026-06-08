@@ -32,8 +32,8 @@ export default function Chat() {
   const currentUser = useMemo(
     () => ({
       id: user?.id,
-      name: user?.user_metadata?.full_name || profile?.email || user?.email || 'You',
-      avatar: user?.user_metadata?.avatar_url || null,
+      name: profile?.display_name || user?.user_metadata?.full_name || user?.email || 'You',
+      avatar: profile?.avatar_url || user?.user_metadata?.avatar_url || null,
     }),
     [user, profile],
   )
