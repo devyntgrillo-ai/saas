@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <title>CaseLift · We Do The Heavy Lifting</title>
-<meta name="description" content="CaseLift records dental consultations, analyzes objections, and follows up with every patient automatically. Lift the production you're losing. $997/month. $50k guarantee." />
+<meta name="description" content="CaseLift records dental consultations, analyzes objections, and follows up with every patient automatically. Recover the production you're losing. $997/month. 3X ROI in 90 days, or it's free." />
 <link rel="canonical" href="https://caselift.io/" />
 
 <!-- Open Graph -->
@@ -80,6 +80,8 @@
   .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 22px; letter-spacing: -0.025em; color: #fff; transition: color 0.4s var(--ease); }
   nav.scrolled .logo { color: var(--ink); }
   .logo-mark { width: 36px; height: 36px; flex-shrink: 0; display: block; }
+  .beta { font-size: 9.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brand); background: rgba(37,99,235,0.14); border: 1px solid rgba(37,99,235,0.4); padding: 2px 6px; border-radius: 5px; line-height: 1; align-self: center; }
+  nav.scrolled .beta { color: var(--brand); }
   .nav-links { display: flex; align-items: center; gap: 32px; }
   .nav-links a.link { font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.85); transition: color 0.4s var(--ease), opacity 0.2s; }
   nav.scrolled .nav-links a.link { color: var(--ink); }
@@ -333,6 +335,18 @@
   .proof-callout { max-width: 760px; margin: 18px auto 0; background: rgba(6,182,212,0.10); border: 1px solid rgba(6,182,212,0.28); border-radius: 16px; padding: 22px 28px; }
   .proof-callout p { font-size: 15.5px; line-height: 1.65; color: rgba(255,255,255,0.85); }
   .proof-callout b { color: #fff; font-weight: 700; }
+  .proof-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; max-width: 900px; margin: 22px auto 0; }
+  .proof-stat { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 28px 22px; text-align: center; }
+  .proof-stat .pnum { font-size: clamp(34px, 5vw, 48px); font-weight: 800; letter-spacing: -0.03em; line-height: 1; background: var(--grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .proof-stat .pdesc { font-size: 13.5px; color: rgba(255,255,255,0.72); line-height: 1.55; margin-top: 13px; }
+  .proof-src { font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 18px; letter-spacing: 0.04em; }
+  .leak-foot { text-align: center; max-width: 720px; margin: 42px auto 0; font-size: 19px; font-weight: 600; color: rgba(255,255,255,0.82); line-height: 1.55; }
+  .leak-foot span { background: var(--grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }
+  .foot-nav { display: flex; gap: 56px; flex-wrap: wrap; }
+  .foot-col h4 { font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.42); margin-bottom: 16px; }
+  .foot-col a { display: block; font-size: 14.5px; margin-bottom: 11px; color: rgba(255,255,255,0.66); transition: color 0.2s; }
+  .foot-col a:hover { color: #fff; }
+  @media (max-width: 640px) { .proof-stats { grid-template-columns: 1fr; } .foot-nav { gap: 32px; } }
 
   /* ---------- Stat grid (hidden leak + results) ---------- */
   .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 56px; }
@@ -596,16 +610,15 @@
         <rect width="32" height="32" rx="8" fill="url(#clGrad)"/>
         <path d="M16 6.5 L23.5 15.5 H19 V20.5 H13 V15.5 H8.5 Z" fill="#fff"/>
         <rect x="10.5" y="23" width="11" height="2.6" rx="1.3" fill="#fff" opacity="0.9"/>
-      </svg>CaseLift</a>
+      </svg>CaseLift<span class="beta">Beta</span></a>
     <div class="nav-links">
-      <a href="#how" class="link">How It Works</a>
-      <a href="#how-it-works" class="link">Product Tour</a>
+      <a href="#how-it-works" class="link">How It Works</a>
       <a href="#results" class="link">Results</a>
       <a href="#pricing" class="link">Pricing</a>
       <a href="#faq" class="link">FAQ</a>
     </div>
     <div class="nav-cta-wrap">
-      <a href="/login" class="nav-login">Log In</a>
+      <a href="https://app.caselift.io" class="nav-login">Log In</a>
       <a href="/apply" class="btn btn-brand btn-sm">Schedule A Demo</a>
       <button class="hamburger" id="hamburger" aria-label="Menu"><span></span><span></span><span></span></button>
     </div>
@@ -613,12 +626,10 @@
 </nav>
 
 <div class="mobile-menu" id="mobileMenu">
-  <a href="#how">How It Works</a>
-  <a href="#how-it-works">Product Tour</a>
+  <a href="#how-it-works">How It Works</a>
   <a href="#results">Results</a>
   <a href="#pricing">Pricing</a>
   <a href="#faq">FAQ</a>
-  <a href="/login">Log In</a>
   <a href="/apply" class="btn btn-brand">Schedule A Demo</a>
 </div>
 
@@ -627,11 +638,11 @@
   <div class="hero-bg"></div>
   <div class="wrap">
     <div class="badge hero-anim d1"><span class="dot"></span>DENTISTS LOOKING TO GROW PRODUCTION:</div>
-    <h1 class="hero-title hero-anim d2">We Do The Heavy Lifting To Recover <span class="accent">More High-Value Dental Cases</span></h1>
+    <h1 class="hero-title hero-anim d2">We Do The Heavy Lifting To Help You Close More <span class="accent">High-Value Dental Cases</span></h1>
     <p class="hero-sub hero-anim d3">CaseLift listens to your dental consultations, coaches you on every objection, and automatically follows up to close more cases.</p>
     <div class="hero-ctas hero-anim d4">
       <a href="/apply" class="btn btn-brand">Schedule A Demo</a>
-      <a href="#how" class="btn btn-outline">See how it works</a>
+      <a href="#how-it-works" class="btn btn-outline">See how it works</a>
     </div>
     <div class="hero-rating hero-anim d5"><span class="stars">★★★★★</span><span><b>4.8/5</b> from 150+ practices</span></div>
 
@@ -670,77 +681,49 @@
 <!-- ============ SOCIAL PROOF BAR ============ -->
 <section class="proof">
   <div class="wrap">
-    <div class="pl1">CaseLift is lifting production at dental practices across the country</div>
-    <div class="proof-callout"><p>Research shows that <b>80% of tx plans require 5 to 12 follow-up touchpoints</b> before closing. Despite this, <b>44% of treatment coordinators give up after just ONE attempt</b>, and <b>92% stop after the 4th attempt</b>. (Salesforce)</p></div>
+    <div class="pl1">The follow-up gap costing practices millions</div>
+    <div class="proof-stats">
+      <div class="proof-stat reveal"><div class="pnum">5&ndash;12</div><div class="pdesc">follow-up touchpoints most treatment plans need before they close</div></div>
+      <div class="proof-stat reveal" data-delay="1"><div class="pnum">44%</div><div class="pdesc">of treatment coordinators give up after just one attempt</div></div>
+      <div class="proof-stat reveal" data-delay="2"><div class="pnum">92%</div><div class="pdesc">stop following up entirely by the fourth attempt</div></div>
+    </div>
+    <p class="proof-src">Source: Salesforce</p>
   </div>
 </section>
 
-<!-- ============ PROBLEM ============ -->
-<section class="sec" id="problem">
+<!-- ============ THE HIDDEN LEAK (combined) ============ -->
+<section class="sec sec-dark" id="problem">
   <div class="wrap sec-center">
-    <div class="eyebrow reveal">The leak</div>
-    <h2 class="sec-title reveal" data-delay="1">Your Practice Is Losing Production Every Single Week</h2>
+    <div class="eyebrow reveal">The Hidden Leak</div>
+    <h2 class="sec-title reveal" data-delay="1">Your practice is losing production every single week</h2>
+    <p class="sec-lead reveal" data-delay="2">Patients hear your treatment plan and leave without scheduling. Your TC follows up once or twice, then moves on &mdash; and a $5K&ndash;$60K case quietly disappears.</p>
   </div>
   <div class="wrap">
-    <div class="problem-body">
-      <p class="reveal">Every week, patients sit in your consult room, hear your treatment plan, and leave without scheduling. Your TC follows up once, maybe twice, then moves on.</p>
-      <p class="reveal">That production is gone. But it doesn't have to be.</p>
-      <p class="reveal">The average dental practice loses <span class="money">$30,000–$50,000 every month</span> in unconverted treatment plans. Not because the treatment wasn't right. Not because the patient couldn't afford it.</p>
-      <div class="punch reveal">Because nobody followed up <span>enough.</span></div>
-      <p class="fix reveal">CaseLift fixes that.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ============ HOW IT WORKS ============ -->
-<section class="sec sec-light" id="how">
-  <div class="wrap sec-center">
-    <div class="eyebrow reveal">How it works</div>
-    <h2 class="sec-title reveal" data-delay="1">How CaseLift Recovers Lost Treatment Plans</h2>
-    <p class="sec-lead reveal" data-delay="2">Your TC records the consult. CaseLift does the heavy lifting after.</p>
-  </div>
-  <div class="wrap">
-    <div class="steps">
-      <div class="step reveal">
-        <div class="step-num">1</div>
-        <div class="step-body">
-          <div class="step-ico">🎙️</div>
-          <h3>Record the consult</h3>
-          <p>After any high-value consultation, implants, Invisalign, full arch, cosmetic, sleep apnea, hit record in CaseLift. It listens, transcribes, and remembers everything. Browser-based, no extra hardware needed.</p>
-        </div>
+    <div class="leak-grid">
+      <div class="leak-card reveal" data-delay="1">
+        <div class="leak-ico">🌀</div>
+        <div class="leak-stat">$300K&ndash;$1M</div>
+        <p class="leak-desc">in high-value production walks out unrecovered every year at the average practice. Each consult that leaves without a yes is a $5K&ndash;$60K case you may never see again.</p>
       </div>
-      <div class="step reveal">
-        <div class="step-num">2</div>
-        <div class="step-body">
-          <div class="step-ico">🧠</div>
-          <h3>CaseLift analyzes everything</h3>
-          <p>CaseLift identifies the patient's specific objections, reads their exit intent, notes personal details, and builds a personalized follow-up sequence in seconds. It knows the difference between a price objection and a fear objection, and responds to each differently.</p>
-        </div>
+      <div class="leak-card reveal" data-delay="2">
+        <div class="leak-ico">📋</div>
+        <div class="leak-stat">47%</div>
+        <p class="leak-desc">of high-value consults don't close on the day of the appointment, and almost none ever get a structured second touch built to win them back.</p>
       </div>
-      <div class="step reveal">
-        <div class="step-num">3</div>
-        <div class="step-body">
-          <div class="step-ico">✉️</div>
-          <h3>CaseLift follows up automatically</h3>
-          <p>CaseLift sends 6 personalized touchpoints, SMS and email, on a smart schedule based on how ready each patient is. Every message references their specific situation, treatment, and concerns. It sounds like your TC wrote it.</p>
-        </div>
-      </div>
-      <div class="step reveal">
-        <div class="step-num">4</div>
-        <div class="step-body">
-          <div class="step-ico">🤝</div>
-          <h3>Your TC closes the lifted case</h3>
-          <p>When a patient replies, your TC is notified instantly and takes over. CaseLift shows them the full analysis, coaching insights, and suggested responses. The heavy lifting is done. Your TC just closes.</p>
-        </div>
+      <div class="leak-card reveal" data-delay="3">
+        <div class="leak-ico">⏳</div>
+        <div class="leak-stat">72 hours</div>
+        <p class="leak-desc">is all the follow-up most patients ever get. After that the trail goes cold, the details get forgotten, and your highest-value cases quietly disappear.</p>
       </div>
     </div>
+    <p class="leak-foot reveal">That's <span>$300K&ndash;$1M every year</span> walking out the door. CaseLift fixes that.</p>
   </div>
 </section>
 
 <!-- ============ PRODUCT TOUR ============ -->
 <section class="sec" id="how-it-works">
   <div class="wrap sec-center">
-    <div class="eyebrow reveal">Product Tour</div>
+    <div class="eyebrow reveal">How it works</div>
     <h2 class="sec-title reveal" data-delay="1">From consultation to closed case, automatically</h2>
     <p class="sec-lead reveal" data-delay="2">CaseLift sits between your TC and every patient who didn't schedule, turning unfinished consultations into booked and paid cases.</p>
   </div>
@@ -776,52 +759,18 @@
       </div>
     </div>
 
-    <!-- 2: AI coaching analysis -->
+    <!-- 2: Automated sequence -->
     <div class="showcase flip">
       <div class="showcase-text reveal-right">
-        <h3>AI coaching on every objection</h3>
-        <p>The moment the consult ends, CaseLift surfaces the case value, reads the patient's intent, ranks every objection by close probability, and hands your TC the exact thing to say next.</p>
+        <h3>A follow-up sequence, built around each patient</h3>
+        <p>CaseLift doesn't blast a fixed template. It builds a sequence around each patient's specific objection and intent, SMS and email, with as many touches as it takes and timing tuned to how ready they are. And it's self-optimizing: it learns which messages earn replies, across your practice and every practice on CaseLift, and leads with the winners.</p>
         <ul class="sc-list">
-          <li><span class="ck">✓</span>Treatment type and case value pulled automatically</li>
-          <li><span class="ck">✓</span>Objections ranked by close probability</li>
-          <li><span class="ck">✓</span>A suggested response written for the real objection</li>
-        </ul>
-      </div>
-      <div class="showcase-media reveal-left">
-        <div class="dash">
-          <div class="dash-bar"><i></i><i></i><i></i><span>CaseLift · Consult Analysis</span></div>
-          <div class="dash-body">
-            <div class="kpi-grid">
-              <div class="kpi"><div class="kpi-label">Case Value</div><div class="kpi-val">$26,400</div><div class="kpi-delta up">Full Arch</div></div>
-              <div class="kpi"><div class="kpi-label">Close Probability</div><div class="kpi-val">74%</div><div class="kpi-delta up">↑ High intent</div></div>
-              <div class="kpi"><div class="kpi-label">Primary Objection</div><div class="kpi-val" style="font-size:16px">Financing</div><div class="kpi-delta flat">Monthly payment</div></div>
-              <div class="kpi"><div class="kpi-label">Follow-up Sequence</div><div class="kpi-val" style="font-size:16px">7-touch</div><div class="kpi-delta flat">Launching now</div></div>
-            </div>
-            <div class="mk-section-label">Objection coaching</div>
-            <div class="mk-objection"><div class="mk-ico">💬</div><div class="mk-obj-text"><b>Patient said:</b> "I need to think about the cost."</div></div>
-            <div class="mk-objection"><div class="mk-ico">✅</div><div class="mk-obj-text"><b>Suggested response:</b> "Totally understand — most patients feel that way until they see the monthly breakdown. Would it help to walk through what $410/month actually looks like?"</div></div>
-            <div class="mk-bars">
-              <div class="mk-bar-row"><div class="mk-bar-label">Financing concern</div><div class="mk-bar-track"><div class="mk-bar-fill" style="width:85%"></div></div></div>
-              <div class="mk-bar-row"><div class="mk-bar-label">Timeline hesitation</div><div class="mk-bar-track"><div class="mk-bar-fill" style="width:40%"></div></div></div>
-              <div class="mk-bar-row"><div class="mk-bar-label">Spouse not present</div><div class="mk-bar-track"><div class="mk-bar-fill" style="width:25%"></div></div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 3: Automated sequence -->
-    <div class="showcase">
-      <div class="showcase-text reveal-left">
-        <h3>A follow-up sequence, built automatically</h3>
-        <p>CaseLift assembles a personalized 7-touch sequence, SMS and email, timed to how ready each patient is. And it's self-optimizing: it learns which messages earn replies, across your practice and every practice on CaseLift, and leads with the winners.</p>
-        <ul class="sc-list">
-          <li><span class="ck">✓</span>7 personalized touches, written for their objection</li>
-          <li><span class="ck">✓</span>Smart timing based on each patient's intent</li>
+          <li><span class="ck">✓</span>Fully customized to each patient's objection and intent</li>
+          <li><span class="ck">✓</span>As many personalized touches as the case needs</li>
           <li><span class="ck">✓</span>Self-optimizing toward the messages that convert</li>
         </ul>
       </div>
-      <div class="showcase-media reveal-right">
+      <div class="showcase-media reveal-left">
         <div class="dash">
           <div class="dash-bar"><i></i><i></i><i></i><span>CaseLift · Follow-Up Sequence</span></div>
           <div class="dash-body">
@@ -845,9 +794,9 @@
       </div>
     </div>
 
-    <!-- 4: Conversations -->
-    <div class="showcase flip">
-      <div class="showcase-text reveal-right">
+    <!-- 3: Conversations -->
+    <div class="showcase">
+      <div class="showcase-text reveal-left">
         <h3>Every conversation, with full context</h3>
         <p>When a patient replies, it lands in front of your TC with the entire consult story attached: the case, the objection, the dollar amount. No scrambling, no cold re-introductions.</p>
         <ul class="sc-list">
@@ -856,7 +805,7 @@
           <li><span class="ck">✓</span>Your TC always knows exactly what to say next</li>
         </ul>
       </div>
-      <div class="showcase-media reveal-left">
+      <div class="showcase-media reveal-right">
         <div class="dash">
           <div class="dash-bar"><i></i><i></i><i></i><span>CaseLift · Conversations</span></div>
           <div class="dash-body">
@@ -872,9 +821,9 @@
       </div>
     </div>
 
-    <!-- 5: Training course preview -->
-    <div class="showcase">
-      <div class="showcase-text reveal-left">
+    <!-- 4: Training course preview -->
+    <div class="showcase flip">
+      <div class="showcase-text reveal-right">
         <h3>Built-in training that levels up your TC</h3>
         <p>Every membership includes the TC Certification library, guided video courses and objection-handling playbooks built by a 7-figure treatment coordinator, so your whole team gets better at closing, not just your software.</p>
         <ul class="sc-list">
@@ -883,7 +832,7 @@
           <li><span class="ck">✓</span>Track each team member's progress</li>
         </ul>
       </div>
-      <div class="showcase-media reveal-right">
+      <div class="showcase-media reveal-left">
         <div class="dash">
           <div class="dash-bar"><i></i><i></i><i></i><span>CaseLift · TC Certification</span></div>
           <div class="dash-body">
@@ -902,67 +851,6 @@
       </div>
     </div>
 
-    <!-- 6: Analytics -->
-    <div class="showcase flip">
-      <div class="showcase-text reveal-right">
-        <h3>Know exactly what's working</h3>
-        <p>Watch each stage of recovery from analyzed consult to closed case, and see your close rate climb as CaseLift learns what brings your patients back.</p>
-        <ul class="sc-list">
-          <li><span class="ck">✓</span>Full recovery funnel, consult to won</li>
-          <li><span class="ck">✓</span>Close-rate trend that improves over time</li>
-          <li><span class="ck">✓</span>Clear ROI you can take to the whole team</li>
-        </ul>
-      </div>
-      <div class="showcase-media reveal-left">
-        <div class="dash">
-          <div class="dash-bar"><i></i><i></i><i></i><span>CaseLift · Recovery Analytics</span></div>
-          <div class="dash-body">
-            <div class="funnel">
-              <div class="fn-row"><div class="fn-track"><div class="fn-fill" style="width:100%">Consults analyzed</div></div><div class="fn-val">248</div></div>
-              <div class="fn-row"><div class="fn-track"><div class="fn-fill" style="width:88%">Sequences launched</div></div><div class="fn-val">218</div></div>
-              <div class="fn-row"><div class="fn-track"><div class="fn-fill" style="width:52%">Patients re-engaged</div></div><div class="fn-val">129</div></div>
-              <div class="fn-row"><div class="fn-track"><div class="fn-fill" style="width:31%">Booked back</div></div><div class="fn-val">77</div></div>
-              <div class="fn-row"><div class="fn-track"><div class="fn-fill" style="width:19%">Cases won</div></div><div class="fn-val">47</div></div>
-            </div>
-            <div class="trend-head"><span class="tl">Close rate · last 6 months</span><span class="tr">31% → 58%</span></div>
-            <svg class="trend-svg" viewBox="0 0 320 88" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0EA5E9" stop-opacity="0.38"/><stop offset="1" stop-color="#0EA5E9" stop-opacity="0"/></linearGradient></defs>
-              <path d="M8 70 L66 64 L124 56 L182 46 L240 32 L312 14 L312 88 L8 88 Z" fill="url(#tg)"/>
-              <polyline points="8,70 66,64 124,56 182,46 240,32 312,14" fill="none" stroke="#0EA5E9" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</section>
-
-<!-- ============ THE HIDDEN LEAK ============ -->
-<section class="sec sec-dark" id="leak">
-  <div class="wrap sec-center">
-    <div class="eyebrow reveal">The Hidden Leak</div>
-    <h2 class="sec-title reveal" data-delay="1">The problem no one talks about</h2>
-    <p class="sec-lead reveal" data-delay="2">High-value cases are too valuable to let walk out the door. Yet most never get a second chance.</p>
-  </div>
-  <div class="wrap">
-    <div class="leak-grid">
-      <div class="leak-card reveal" data-delay="1">
-        <div class="leak-ico">🌀</div>
-        <div class="leak-stat">$300K+</div>
-        <p class="leak-desc">in high-value production walks out unrecovered every year at the average practice. Each consult that leaves without a yes is a $5K&ndash;$60K case you may never see again.</p>
-      </div>
-      <div class="leak-card reveal" data-delay="2">
-        <div class="leak-ico">📋</div>
-        <div class="leak-stat">47%</div>
-        <p class="leak-desc">of high-value consults don't close on the day of the appointment, and almost none of them ever get a structured second touch built to win them back.</p>
-      </div>
-      <div class="leak-card reveal" data-delay="3">
-        <div class="leak-ico">⏳</div>
-        <div class="leak-stat">72 hours</div>
-        <p class="leak-desc">is all the follow-up most patients ever get. After that the trail goes cold, the details get forgotten, and your highest-value cases quietly disappear.</p>
-      </div>
-    </div>
   </div>
 </section>
 
@@ -1091,6 +979,36 @@
   </div>
 </section>
 
+<!-- ============ GET A PRICE ============ -->
+<section class="sec sec-light" id="get-price">
+  <div class="wrap sec-center">
+    <div class="eyebrow reveal">Pricing</div>
+    <h2 class="sec-title reveal" data-delay="1">Customized, ROI-based pricing.</h2>
+    <p class="sec-lead reveal" data-delay="2">Your price is built around the production CaseLift recovers for you. Every feature included, no setup fees, no contracts.</p>
+  </div>
+  <div class="wrap">
+    <div class="price-card reveal">
+      <div class="price-tag">What's included</div>
+      <ul class="price-list">
+        <li><span class="ck">✓</span>Consult recording &amp; AI objection analysis</li>
+        <li><span class="ck">✓</span>Automated multi-touch SMS &amp; email follow-up</li>
+        <li><span class="ck">✓</span>Personalized message writing for every patient</li>
+        <li><span class="ck">✓</span>Treatment coordinator coaching on every consult</li>
+        <li><span class="ck">✓</span>Production recovery &amp; ROI attribution tracking</li>
+        <li><span class="ck">✓</span>PMS integration &amp; automatic patient sync</li>
+        <li class="guar"><span class="ck">★</span>3X ROI in 90 days, or it's free</li>
+      </ul>
+      <p class="price-note">Pricing is based on your practice's case volume. We'll build your custom quote on the call.</p>
+      <a href="/apply.html" class="btn btn-brand">Get My Custom Price &rarr;</a>
+    </div>
+    <div class="cancel-row reveal">
+      <span class="cancel-pill"><span class="cp-ck">✓</span>Cancel anytime</span>
+      <span class="cancel-pill"><span class="cp-ck">✓</span>No long-term contract</span>
+      <span class="cancel-pill"><span class="cp-ck">✓</span>Month-to-month, sign up and try it</span>
+    </div>
+  </div>
+</section>
+
 <!-- ============ FEATURES ============ -->
 <section class="sec sec-light" id="features">
   <div class="wrap sec-center">
@@ -1111,10 +1029,10 @@
   <div class="wrap sec-center">
     <div class="eyebrow reveal">Human + AI</div>
     <h2 class="sec-title reveal" data-delay="1">You're never on your own</h2>
-    <p class="sec-lead reveal" data-delay="2">CaseLift isn't just software you're handed and left to figure out. You get real humans in your corner, plus an AI that quietly gets smarter for you every single day.</p>
+    <p class="sec-lead reveal" data-delay="2">CaseLift isn't just software you're handed and left to figure out. You get real people in your corner every step of the way.</p>
   </div>
   <div class="wrap">
-    <div class="human-grid">
+    <div class="human-grid" style="grid-template-columns:repeat(2,1fr); max-width:760px; margin-left:auto; margin-right:auto;">
       <div class="human-card reveal" data-delay="1">
         <div class="hc-ico">🧑‍🏫</div>
         <h3>Monthly 1-on-1 strategy call</h3>
@@ -1127,17 +1045,6 @@
         <p>Real people, not bots, on live chat throughout every business day. A question, a tweak, a tricky patient reply, we're right there with you in minutes.</p>
         <span class="hc-tag"><span class="live-dot"></span>Humans online during business hours</span>
       </div>
-      <div class="human-card ai reveal" data-delay="3">
-        <div class="hc-ico">🧠</div>
-        <h3>An AI that self-optimizes</h3>
-        <p>Behind the scenes, CaseLift learns which follow-up messages get the best response rates, in your practice and across every practice on the platform, and automatically leads with what's converting. It gets sharper every day.</p>
-        <span class="hc-tag">✓ Always learning, always improving</span>
-      </div>
-    </div>
-    <div class="cancel-row reveal">
-      <span class="cancel-pill"><span class="cp-ck">✓</span>Cancel anytime</span>
-      <span class="cancel-pill"><span class="cp-ck">✓</span>No long-term contract</span>
-      <span class="cancel-pill"><span class="cp-ck">✓</span>Month-to-month, sign up and try it</span>
     </div>
   </div>
 </section>
@@ -1156,7 +1063,7 @@
       </details>
       <details class="faq-item reveal">
         <summary>Does CaseLift only work for implants?</summary>
-        <div class="faq-a">No. CaseLift lifts cases for any high-value dental treatment, implants, full arch, Invisalign, cosmetic, sleep apnea, full mouth rehab. If a patient left without scheduling, CaseLift follows up until they do.</div>
+        <div class="faq-a">No. CaseLift recovers cases for any high-value dental treatment, implants, full arch, Invisalign, cosmetic, sleep apnea, full mouth rehab. If a patient left without scheduling, CaseLift follows up until they do.</div>
       </details>
       <details class="faq-item reveal">
         <summary>What if our practice does a mix of treatments?</summary>
@@ -1184,7 +1091,7 @@
       </details>
       <details class="faq-item reveal">
         <summary>How is CaseLift different from other dental software?</summary>
-        <div class="faq-a">Most dental software tracks what happened. CaseLift changes what happens next. It doesn't just show you unconverted patients, it follows up with them, lifts them back into your schedule, and tracks every dollar recovered. No other platform does this.</div>
+        <div class="faq-a">Most dental software tracks what happened. CaseLift changes what happens next. It doesn't just show you unconverted patients, it follows up with them, brings them back into your schedule, and tracks every dollar recovered. No other platform does this.</div>
       </details>
     </div>
   </div>
@@ -1194,10 +1101,10 @@
 <section class="final-cta">
   <div class="glow"></div>
   <div class="wrap">
-    <h2 class="reveal">Ready to lift the cases you're losing?</h2>
+    <h2 class="reveal">Ready to recover the cases you're losing?</h2>
     <p class="reveal" data-delay="1">Your TC records the consult. CaseLift handles everything after, backed by real humans and our 3X-ROI-in-90-days-or-it's-free guarantee.</p>
     <div class="reveal" data-delay="2"><a href="/apply" class="btn btn-brand">Schedule A Demo</a></div>
-    <p class="final-note reveal" data-delay="3">$997/month · Cancel anytime, no contract · Limited spots available</p>
+    <p class="final-note reveal" data-delay="3">Cancel anytime, no contract · Limited spots available</p>
   </div>
 </section>
 
@@ -1224,13 +1131,19 @@
           <div class="ht"><strong>HIPAA</strong><span>Compliant</span></div>
         </div>
       </div>
-      <div class="foot-links">
-        <a href="/apply">Apply</a>
-        <a href="/login">Login</a>
-        <a href="#">Privacy Policy</a>
-        <a href="#">Terms</a>
-        <a href="#">HIPAA Policy</a>
-        <a href="#">BAA</a>
+      <div class="foot-nav">
+        <div class="foot-col">
+          <h4>Product</h4>
+          <a href="/apply">Schedule a Demo</a>
+          <a href="https://app.caselift.io">Log In</a>
+        </div>
+        <div class="foot-col">
+          <h4>Legal</h4>
+          <a href="#">Privacy Policy</a>
+          <a href="#">Terms</a>
+          <a href="#">HIPAA Policy</a>
+          <a href="#">BAA</a>
+        </div>
       </div>
     </div>
     <div class="foot-bottom">
