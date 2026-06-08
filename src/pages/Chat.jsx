@@ -8,7 +8,17 @@ import MessageList from '../components/chat/MessageList'
 import ChatComposer from '../components/chat/ChatComposer'
 import ThreadPanel from '../components/chat/ThreadPanel'
 import PresenceBar from '../components/chat/PresenceBar'
+import ChatSearch from '../components/chat/ChatSearch'
+import PinnedBar from '../components/chat/PinnedBar'
 import { isCoachingOnline } from '../components/chat/chatUtil'
+
+function jumpToMessage(id) {
+  const el = document.getElementById(`msg-${id}`)
+  if (!el) return
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  el.classList.add('ring-2', 'ring-primary/50')
+  setTimeout(() => el.classList.remove('ring-2', 'ring-primary/50'), 1600)
+}
 
 const STARTERS = [
   'Help me review a consult',
@@ -68,6 +78,15 @@ export default function Chat() {
   const threadTyping = liveThread ? chat.typingUsers.filter((t) => t.scope === String(liveThread.id)) : []
   const isEmpty = !chat.loading && chat.messages.length === 0
 
+  // Mentionable names: who's in the channel + everyone who's posted.
+  const mentionNames = useMemo(() => {
+    const set = new Set()
+    chat.presence.forEach((u) => u.name && set.add(u.name))
+    chat.messages.forEach((m) => m.sender_name && set.add(m.sender_name))
+    if (currentUser.name) set.add(currentUser.name)
+    return [...set]
+  }, [chat.presence, chat.messages, currentUser])
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Channel header */}
@@ -92,10 +111,13 @@ export default function Chat() {
               : "We're offline right now — but feel free to send a message and we'll reply soon."}
           </p>
         </div>
-        <div className="ml-auto shrink-0">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           <PresenceBar users={chat.presence} />
+          <ChatSearch chatId={chatId} onJump={jumpToMessage} />
         </div>
       </div>
+
+      <PinnedBar pins={chat.pins} onJump={jumpToMessage} onUnpin={chat.togglePin} />
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 flex-1 flex-col">
@@ -125,17 +147,22 @@ export default function Chat() {
               viewerType="practice"
               typingUsers={mainTyping}
               hasMore={chat.hasMore}
+              reads={chat.reads}
+              previousReadAt={chat.previousReadAt}
+              mentionNames={mentionNames}
               onLoadEarlier={chat.loadEarlier}
               onReact={chat.toggleReaction}
               onEdit={chat.editMessage}
               onDelete={chat.deleteMessage}
               onOpenThread={(m) => setThread(m)}
+              onTogglePin={chat.togglePin}
             />
           )}
 
           {!loadingChat && (
             <ChatComposer
               placeholder="Message your coaching channel…"
+              mentionables={mentionNames}
               onSend={(t, f) => chat.sendMessage(t, null, f)}
               onTyping={() => chat.startTyping()}
               onStopTyping={() => chat.stopTyping()}
@@ -153,6 +180,7 @@ export default function Chat() {
               myId={currentUser.id}
               viewerType="practice"
               typingUsers={threadTyping}
+              mentionNames={mentionNames}
               onClose={() => setThread(null)}
               onReact={chat.toggleReaction}
               onEdit={chat.editMessage}

@@ -13,6 +13,8 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
   const [reactions, setReactions] = useState([]) // flat reaction rows for loaded messages
   const [typing, setTyping] = useState([]) // active typing rows (excluding me)
   const [presence, setPresence] = useState([]) // users currently in the channel
+  const [reads, setReads] = useState([]) // per-user read receipts for this channel
+  const [pins, setPins] = useState([]) // pinned messages in this channel
   const [loading, setLoading] = useState(true)
   const [hasMore, setHasMore] = useState(false)
 
@@ -20,6 +22,8 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
   const channelRef = useRef(null)
   const typingTimerRef = useRef(null)
   const lastTypingSentRef = useRef(0)
+  const [previousReadAt, setPreviousReadAt] = useState(null) // my last_read_at on entry → unread divider
+  const capturedReadRef = useRef(false)
 
   // ── Initial load ────────────────────────────────────────────────────────────
   const fetchMessages = useCallback(async () => {
@@ -73,6 +77,35 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
     fetchMessages()
   }, [fetchMessages])
 
+  const loadPins = useCallback(async () => {
+    if (!chatId) return
+    const { data } = await supabase
+      .from('support_messages')
+      .select('*')
+      .eq('chat_id', chatId)
+      .not('pinned_at', 'is', null)
+      .order('pinned_at', { ascending: false })
+    setPins(data || [])
+  }, [chatId])
+  const loadPinsRef = useRef(null)
+  useEffect(() => { loadPinsRef.current = loadPins }, [loadPins])
+
+  const loadReads = useCallback(async () => {
+    if (!chatId) return
+    const { data } = await supabase.from('support_reads').select('*').eq('chat_id', chatId)
+    setReads(data || [])
+    if (!capturedReadRef.current) {
+      capturedReadRef.current = true
+      const mine = (data || []).find((r) => r.user_id === me)
+      setPreviousReadAt(mine?.last_read_at || '1970-01-01T00:00:00Z')
+    }
+  }, [chatId, me])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadPins(); loadReads()
+  }, [loadPins, loadReads])
+
   // ── Realtime subscriptions ───────────────────────────────────────────────────
   useEffect(() => {
     if (!chatId) return undefined
@@ -91,6 +124,16 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
             return prev.filter((m) => m.id !== payload.old.id)
           }
           return prev
+        })
+        if (payload.eventType !== 'INSERT') loadPinsRef.current?.() // pin/unpin changed
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_reads', filter: `chat_id=eq.${chatId}` }, (payload) => {
+        const row = payload.new || payload.old
+        if (!row) return
+        setReads((prev) => {
+          const without = prev.filter((r) => r.user_id !== row.user_id)
+          if (payload.eventType === 'DELETE') return without
+          return [...without, payload.new]
         })
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_message_reactions' }, (payload) => {
@@ -254,10 +297,22 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
   )
 
   const markAsRead = useCallback(async () => {
-    if (!chatId) return
+    if (!chatId || !me) return
     const patch = senderType === 'caselift_team' ? { unread_count_admin: 0 } : { unread_count_practice: 0 }
     await supabase.from('support_chats').update(patch).eq('id', chatId)
-  }, [chatId, senderType])
+    await supabase.from('support_reads').upsert(
+      {
+        chat_id: chatId, user_id: me, last_read_at: new Date().toISOString(),
+        user_name: currentUser?.name || 'User', user_avatar: currentUser?.avatar || null, sender_type: senderType,
+      },
+      { onConflict: 'chat_id,user_id' },
+    )
+  }, [chatId, me, senderType, currentUser])
+
+  const togglePin = useCallback(async (messageId) => {
+    await supabase.rpc('toggle_pin', { p_message_id: messageId })
+    loadPins()
+  }, [loadPins])
 
   // Active typing users (not me), de-duplicated by user+scope. Staleness is
   // pruned by the TTL interval above, so we avoid an impure Date.now() in render.
@@ -270,6 +325,10 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
     reactions,
     typingUsers,
     presence,
+    reads,
+    pins,
+    previousReadAt,
+    togglePin,
     loading,
     hasMore,
     fetchMessages,

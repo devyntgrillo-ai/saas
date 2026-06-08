@@ -4,13 +4,30 @@ import EmojiPicker from './EmojiPicker'
 
 // Slack-style message input: grows with content, Enter to send / Shift+Enter for
 // newline, emoji inserter, file attachment (with a pending chip), char count.
-export default function ChatComposer({ placeholder = 'Message…', onSend, onTyping, onStopTyping }) {
+export default function ChatComposer({ placeholder = 'Message…', mentionables = [], onSend, onTyping, onStopTyping }) {
   const [text, setText] = useState('')
   const [file, setFile] = useState(null)
   const [showEmoji, setShowEmoji] = useState(false)
   const [sending, setSending] = useState(false)
+  const [mentionQuery, setMentionQuery] = useState(null) // null = not mentioning
   const taRef = useRef(null)
   const fileRef = useRef(null)
+
+  const mentionMatches = mentionQuery == null
+    ? []
+    : mentionables.filter((n) => n && n.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 6)
+
+  function detectMention(value, caret) {
+    const m = value.slice(0, caret).match(/(?:^|\s)@([\w]{0,30})$/)
+    setMentionQuery(m ? m[1] : null)
+  }
+  function applyMention(name) {
+    const caret = taRef.current?.selectionStart ?? text.length
+    const before = text.slice(0, caret).replace(/@([\w]{0,30})$/, `@${name} `)
+    setText(before + text.slice(caret))
+    setMentionQuery(null)
+    requestAnimationFrame(() => { taRef.current?.focus(); autoSize() })
+  }
 
   function autoSize() {
     const el = taRef.current
@@ -55,6 +72,19 @@ export default function ChatComposer({ placeholder = 'Message…', onSend, onTyp
           </button>
         </div>
       )}
+      {mentionMatches.length > 0 && (
+        <div className="mb-2 overflow-hidden rounded-xl border border-surface-700 bg-surface-900 shadow-xl">
+          {mentionMatches.map((n) => (
+            <button
+              key={n}
+              onMouseDown={(e) => { e.preventDefault(); applyMention(n) }}
+              className="block w-full px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-surface-800"
+            >
+              <span className="text-primary-300">@</span>{n}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="relative flex items-end gap-2 rounded-2xl border border-surface-700 bg-surface-800 px-3 py-2 transition focus-within:border-primary">
         <div className="relative">
           <button
@@ -85,8 +115,12 @@ export default function ChatComposer({ placeholder = 'Message…', onSend, onTyp
         <textarea
           ref={taRef}
           value={text}
-          onChange={(e) => { setText(e.target.value); onTyping?.(); autoSize() }}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+          onChange={(e) => { setText(e.target.value); detectMention(e.target.value, e.target.selectionStart); onTyping?.(); autoSize() }}
+          onKeyDown={(e) => {
+            if (mentionMatches.length && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); applyMention(mentionMatches[0]); return }
+            if (e.key === 'Escape' && mentionQuery != null) { setMentionQuery(null); return }
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+          }}
           rows={1}
           placeholder={placeholder}
           className="max-h-40 min-h-[24px] flex-1 resize-none bg-transparent py-1 text-sm text-slate-200 placeholder-slate-500 focus:outline-none"
