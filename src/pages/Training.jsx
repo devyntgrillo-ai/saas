@@ -21,7 +21,7 @@ import {
   Maximize2,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { stripEmDashes } from '../lib/sanitize'
+import { stripEmDashes, stripBrackets } from '../lib/sanitize'
 import { formatDuration } from '../lib/consults'
 import { fetchTrainingRecommendation } from '../lib/insights'
 import { useTrainingCatalog, useMarkTrainingComplete, queryKeys } from '../lib/queries'
@@ -249,16 +249,20 @@ export default function Training() {
           <h1 className="text-2xl font-bold tracking-tight text-white">CaseLift Academy</h1>
         </div>
 
-        {/* AI training recommendation — fills the remaining 2/3, muted background */}
-        <div className="w-full rounded-xl bg-surface-800/60 p-4 lg:w-2/3">
+        {/* AI training recommendation — fills the remaining 2/3, accent-highlighted */}
+        <div className="w-full rounded-xl border border-primary/30 border-l-2 border-l-primary bg-primary/5 p-4 ring-1 ring-primary/10 lg:w-2/3">
           <div className="flex items-start gap-2.5">
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary-400">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary-400">
               <Sparkles className="h-3.5 w-3.5" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-primary-300">
                   AI Recommendation
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+                  </span>
                 </span>
                 <button
                   onClick={refreshRec}
@@ -285,8 +289,8 @@ export default function Training() {
                 </p>
               ) : (
                 <>
-                  <p className="mt-1.5 text-xs leading-relaxed text-slate-300">
-                    {stripEmDashes(rec?.recommendation)}
+                  <p className="mt-1.5 text-xs leading-relaxed text-slate-200">
+                    {stripBrackets(stripEmDashes(rec?.recommendation))}
                   </p>
                   {rec?.focus_area && (
                     <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary-300">

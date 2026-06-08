@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
       .from('training_modules')
       .select('title, category')
       .order('order_index', { ascending: true })
-    const moduleList = (modules || []).map((m) => `- [${m.category}] ${m.title}`).join('\n') || '(no modules listed)'
+    const moduleList = (modules || []).map((m) => `- "${m.title}" (category: ${m.category})`).join('\n') || '(no modules listed)'
 
     const consultSummary = consults
       .map((c, i) => {
@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
 
 These modules teach treatment-coordinator SALES skills (handling objections, financing, rapport, presenting, closing) that apply across ALL treatment types, even when a title references implants. Recommend the module whose underlying SKILL best fixes the team's recurring pattern. Do NOT send a consult to a module that is specific to a different procedure than that consult is about (for example, never point an Invisalign, veneers, or cosmetic consult at an implant-procedure module like "Dental Implants 101" or "Full-Arch Specific Tactics"). If the only close match is procedure-specific to a different treatment, recommend the nearest transferable skill module instead, or give the coaching focus without naming a module.
 
-Write a SHORT, specific, encouraging recommendation the TC reads on their Training page. Hard limit: at most 2 sentences, roughly 45 words. Name the one recurring pattern, then the single action plus the most relevant module to study next. Do NOT enumerate individual consult numbers. Name at most one module (a second only if it is truly complementary), and ONLY use modules that appear verbatim in the AVAILABLE TRAINING MODULES list, never invent one. Be direct. Never use em dashes (-) ; use commas or periods instead.
+Write a SHORT, specific, encouraging recommendation the TC reads on their Training page. Hard limit: at most 2 sentences, roughly 45 words. Name the one recurring pattern, then the single action plus the most relevant module to study next. Do NOT enumerate individual consult numbers. Name at most one module (a second only if it is truly complementary), and ONLY use modules that appear verbatim in the AVAILABLE TRAINING MODULES list, never invent one. Be direct. When you name a module or category, write it in plain prose without square brackets (write the TC Certification module, not [TC Certification]). Never use em dashes (-) ; use commas or periods instead.
 
 AVAILABLE TRAINING MODULES:
 ${moduleList}

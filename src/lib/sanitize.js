@@ -5,3 +5,10 @@ export function stripEmDashes(text) {
   if (typeof text !== 'string') return text
   return text.replace(/—/g, '-').replace(/–/g, '-')
 }
+
+// Unwrap square-bracketed labels the model sometimes echoes from its prompt
+// (e.g. "[TC Certification]"), keeping the inner text: "TC Certification".
+export function stripBrackets(text) {
+  if (typeof text !== 'string') return text
+  return text.replace(/\[([^\]]*)\]/g, '$1')
+}
