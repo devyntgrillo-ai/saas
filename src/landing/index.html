@@ -503,6 +503,86 @@
     .reveal, .reveal-left, .reveal-right, .hero-anim { opacity: 1 !important; transform: none !important; }
     .hero-bg { animation: none !important; }
   }
+
+  /* ========== Added graphics + sections ========== */
+  /* Recording / processing mockup */
+  .rec-stage { display:flex; align-items:center; gap:14px; background: rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:14px; padding:15px 18px; margin-bottom:6px; }
+  .rec-dot { width:11px; height:11px; border-radius:50%; background:#ff5f57; flex-shrink:0; animation: recpulse 1.6s infinite; }
+  @keyframes recpulse { 0%{ box-shadow:0 0 0 0 rgba(255,95,87,0.55);} 70%{ box-shadow:0 0 0 10px rgba(255,95,87,0);} 100%{ box-shadow:0 0 0 0 rgba(255,95,87,0);} }
+  .rec-live { font-size:11px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; color:#ff8a84; }
+  .rec-wave { display:flex; align-items:flex-end; gap:3px; height:28px; flex:1; }
+  .rec-wave i { width:3px; height:14px; border-radius:2px; background:linear-gradient(180deg,#38bdf8,#22d3ee); animation: wave 1.05s ease-in-out infinite; }
+  @keyframes wave { 0%,100%{ height:6px; } 50%{ height:26px; } }
+  .rec-time { font-size:12.5px; font-weight:700; color:rgba(255,255,255,0.6); font-variant-numeric:tabular-nums; flex-shrink:0; }
+  .proc-step { display:flex; align-items:center; gap:13px; padding:9px 0; }
+  .proc-node { width:26px; height:26px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; }
+  .proc-node.done { background:rgba(40,200,64,0.18); color:#4cd964; }
+  .proc-node.active { background:var(--grad); color:#fff; animation: nodepulse 1.4s infinite; }
+  .proc-node.pending { background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.35); }
+  @keyframes nodepulse { 0%,100%{ box-shadow:0 0 0 0 rgba(56,189,248,0.5);} 50%{ box-shadow:0 0 0 8px rgba(56,189,248,0);} }
+  .proc-label { font-size:13.5px; color:rgba(255,255,255,0.85); font-weight:600; }
+  .proc-label span { display:block; font-size:11.5px; font-weight:500; color:rgba(255,255,255,0.45); margin-top:2px; }
+
+  /* Sequence timeline */
+  .tl-row { display:flex; gap:14px; padding-bottom:15px; position:relative; }
+  .tl-row:not(:last-child)::before { content:''; position:absolute; left:13px; top:28px; bottom:-1px; width:2px; background:rgba(255,255,255,0.1); }
+  .tl-dot { width:28px; height:28px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:13px; z-index:1; }
+  .tl-dot.sent { background:rgba(40,200,64,0.16); color:#4cd964; }
+  .tl-dot.next { background:var(--grad); color:#fff; animation: nodepulse 1.5s infinite; }
+  .tl-dot.queued { background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.4); }
+  .tl-card { flex:1; }
+  .tl-top { display:flex; align-items:center; gap:9px; margin-bottom:3px; }
+  .tl-day { font-size:11px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:rgba(255,255,255,0.45); }
+  .tl-msg { font-size:13px; color:rgba(255,255,255,0.78); line-height:1.45; }
+  .tl-stat { font-size:11px; font-weight:700; margin-left:auto; }
+  .tl-stat.ok { color:#4cd964; } .tl-stat.q { color:rgba(255,255,255,0.4); }
+
+  /* Training course card */
+  .course-head { display:flex; gap:14px; align-items:center; margin-bottom:14px; }
+  .course-thumb { width:60px; height:60px; border-radius:14px; background:var(--grad); display:flex; align-items:center; justify-content:center; font-size:27px; flex-shrink:0; }
+  .course-h { font-size:16px; font-weight:800; color:#fff; letter-spacing:-0.01em; }
+  .course-meta { font-size:12.5px; color:rgba(255,255,255,0.5); margin-top:3px; }
+  .course-prog { height:7px; border-radius:999px; background:rgba(255,255,255,0.08); overflow:hidden; margin:0 0 16px; }
+  .course-prog i { display:block; height:100%; background:var(--grad); border-radius:999px; }
+  .lesson { display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid rgba(255,255,255,0.06); }
+  .lesson .lx { width:24px; height:24px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; }
+  .lesson .lx.done { background:rgba(40,200,64,0.18); color:#4cd964; }
+  .lesson .lx.play { background:var(--grad); color:#fff; }
+  .lesson .lx.lock { background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.3); }
+  .lesson .lt { font-size:13.5px; color:rgba(255,255,255,0.85); flex:1; }
+  .lesson .ld { font-size:12px; color:rgba(255,255,255,0.4); flex-shrink:0; }
+
+  /* AI self-optimizing callout (inside dark mockups) */
+  .ai-opt { margin-top:18px; background:rgba(6,182,212,0.07); border:1px solid rgba(6,182,212,0.2); border-radius:14px; padding:15px 16px; }
+  .ai-opt-h { display:flex; align-items:center; gap:9px; font-size:12.5px; font-weight:700; color:#fff; margin-bottom:12px; }
+  .ai-opt-h b { font-size:9.5px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; color:#5fd0e6; background:rgba(6,182,212,0.18); padding:3px 8px; border-radius:6px; }
+
+  /* Guarantee seal */
+  .gtee { margin-top:56px; background:var(--black); border-radius:var(--radius); padding:46px 44px; display:flex; gap:36px; align-items:center; justify-content:center; flex-wrap:wrap; }
+  .seal { width:138px; height:138px; flex-shrink:0; border-radius:50%; background:var(--grad); display:flex; flex-direction:column; align-items:center; justify-content:center; color:#fff; box-shadow:0 18px 44px rgba(37,99,235,0.5); border:3px solid rgba(255,255,255,0.28); text-align:center; }
+  .seal b { font-size:40px; font-weight:900; line-height:1; letter-spacing:-0.02em; }
+  .seal span { font-size:10px; font-weight:800; letter-spacing:0.14em; text-transform:uppercase; margin-top:6px; opacity:0.95; }
+  .gtee-copy { max-width:540px; }
+  .gtee-copy h3 { color:#fff; font-size:clamp(24px,3.4vw,34px); font-weight:900; letter-spacing:-0.03em; line-height:1.12; }
+  .gtee-copy h3 em { font-style:normal; background:linear-gradient(135deg,#38bdf8,#22d3ee); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .gtee-copy p { color:rgba(255,255,255,0.72); font-size:16px; line-height:1.6; margin-top:12px; }
+  .gtee-chip { display:inline-flex; align-items:center; gap:8px; margin-top:16px; font-size:13px; font-weight:700; color:#5fd0e6; background:rgba(6,182,212,0.14); border:1px solid rgba(6,182,212,0.3); border-radius:999px; padding:8px 16px; }
+
+  /* Human + AI section */
+  .human-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:22px; margin-top:52px; }
+  .human-card { background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:30px 28px; transition:transform 0.4s var(--ease), box-shadow 0.4s var(--ease); }
+  .human-card:hover { transform:translateY(-5px); box-shadow:0 22px 48px rgba(15,23,42,0.10); }
+  .human-card .hc-ico { width:56px; height:56px; border-radius:15px; background:linear-gradient(135deg,#eff6ff,#ecfeff); display:flex; align-items:center; justify-content:center; font-size:27px; margin-bottom:18px; }
+  .human-card.live .hc-ico { background:linear-gradient(135deg,#dcfce7,#d1fae5); }
+  .human-card.ai .hc-ico { background:linear-gradient(135deg,#ede9fe,#e0f2fe); }
+  .human-card h3 { font-size:19px; font-weight:800; letter-spacing:-0.02em; margin-bottom:9px; }
+  .human-card p { font-size:15px; color:var(--gray); line-height:1.6; }
+  .hc-tag { display:inline-flex; align-items:center; gap:7px; margin-top:15px; font-size:12.5px; font-weight:700; color:#16a34a; }
+  .live-dot { width:8px; height:8px; border-radius:50%; background:#22c55e; animation: recpulse 1.8s infinite; }
+  .cancel-row { margin-top:36px; display:flex; flex-wrap:wrap; gap:12px; justify-content:center; }
+  .cancel-pill { display:inline-flex; align-items:center; gap:9px; font-size:14.5px; font-weight:700; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:999px; padding:11px 20px; }
+  .cancel-pill .cp-ck { color:#16a34a; font-weight:900; }
+  @media (max-width: 820px) { .human-grid { grid-template-columns:1fr; } .gtee { padding:36px 24px; } }
 </style>
 </head>
 <body>
@@ -666,18 +746,48 @@
   </div>
   <div class="wrap">
 
-    <!-- 1: Analysis -->
+    <!-- 1: Recording / listening -->
     <div class="showcase">
       <div class="showcase-text reveal-left">
-        <h3>Every consult, analyzed in seconds</h3>
-        <p>Your TC records the consultation. CaseLift reads the transcript, identifies the treatment, extracts the case value, and categorizes every objection raised, before the patient reaches their car.</p>
+        <h3>It listens in on the consult</h3>
+        <p>Hit record at the start of any high-value consult. CaseLift listens, transcribes in real time, and analyzes the conversation the moment it ends, no extra hardware, no manual notes.</p>
         <ul class="sc-list">
-          <li><span class="ck">✓</span>Treatment type and case value extracted automatically</li>
-          <li><span class="ck">✓</span>Objections identified and ranked by close probability</li>
-          <li><span class="ck">✓</span>Personalized follow-up sequence built instantly</li>
+          <li><span class="ck">✓</span>Records right in the browser, nothing to install</li>
+          <li><span class="ck">✓</span>Live transcription, automatically de-identified</li>
+          <li><span class="ck">✓</span>Objections and case value extracted as it analyzes</li>
         </ul>
       </div>
       <div class="showcase-media reveal-right">
+        <div class="dash">
+          <div class="dash-bar"><i></i><i></i><i></i><span>CaseLift · Recording Consult</span></div>
+          <div class="dash-body">
+            <div class="rec-stage">
+              <span class="rec-dot"></span><span class="rec-live">● Rec</span>
+              <div class="rec-wave"><i style="animation-delay:0s"></i><i style="animation-delay:.1s"></i><i style="animation-delay:.25s"></i><i style="animation-delay:.4s"></i><i style="animation-delay:.15s"></i><i style="animation-delay:.3s"></i><i style="animation-delay:.05s"></i><i style="animation-delay:.45s"></i><i style="animation-delay:.2s"></i><i style="animation-delay:.35s"></i><i style="animation-delay:.1s"></i><i style="animation-delay:.28s"></i><i style="animation-delay:.42s"></i><i style="animation-delay:.18s"></i></div>
+              <span class="rec-time">12:47</span>
+            </div>
+            <div class="mk-section-label" style="margin-top:18px">Processing</div>
+            <div class="proc-step"><span class="proc-node done">✓</span><div class="proc-label">Listening &amp; transcribing<span>Captured 1,420 words</span></div></div>
+            <div class="proc-step"><span class="proc-node done">✓</span><div class="proc-label">De-identifying transcript<span>PHI removed, HIPAA-safe</span></div></div>
+            <div class="proc-step"><span class="proc-node active">⋯</span><div class="proc-label">Analyzing objections<span>Reading exit intent &amp; case value…</span></div></div>
+            <div class="proc-step"><span class="proc-node pending">4</span><div class="proc-label">Building follow-up sequence<span>Up next</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2: AI coaching analysis -->
+    <div class="showcase flip">
+      <div class="showcase-text reveal-right">
+        <h3>AI coaching on every objection</h3>
+        <p>The moment the consult ends, CaseLift surfaces the case value, reads the patient's intent, ranks every objection by close probability, and hands your TC the exact thing to say next.</p>
+        <ul class="sc-list">
+          <li><span class="ck">✓</span>Treatment type and case value pulled automatically</li>
+          <li><span class="ck">✓</span>Objections ranked by close probability</li>
+          <li><span class="ck">✓</span>A suggested response written for the real objection</li>
+        </ul>
+      </div>
+      <div class="showcase-media reveal-left">
         <div class="dash">
           <div class="dash-bar"><i></i><i></i><i></i><span>CaseLift · Consult Analysis</span></div>
           <div class="dash-body">
@@ -700,7 +810,42 @@
       </div>
     </div>
 
-    <!-- 2: Conversations -->
+    <!-- 3: Automated sequence -->
+    <div class="showcase">
+      <div class="showcase-text reveal-left">
+        <h3>A follow-up sequence, built automatically</h3>
+        <p>CaseLift assembles a personalized 7-touch sequence, SMS and email, timed to how ready each patient is. And it's self-optimizing: it learns which messages earn replies, across your practice and every practice on CaseLift, and leads with the winners.</p>
+        <ul class="sc-list">
+          <li><span class="ck">✓</span>7 personalized touches, written for their objection</li>
+          <li><span class="ck">✓</span>Smart timing based on each patient's intent</li>
+          <li><span class="ck">✓</span>Self-optimizing toward the messages that convert</li>
+        </ul>
+      </div>
+      <div class="showcase-media reveal-right">
+        <div class="dash">
+          <div class="dash-bar"><i></i><i></i><i></i><span>CaseLift · Follow-Up Sequence</span></div>
+          <div class="dash-body">
+            <div class="ctx-chip">🦷 Margaret C. · Full-arch · $26,400 · Objection: spouse</div>
+            <div class="tl" style="margin-top:4px">
+              <div class="tl-row"><span class="tl-dot sent">✓</span><div class="tl-card"><div class="tl-top"><span class="pill sms">SMS</span><span class="tl-day">Day 1</span><span class="tl-stat ok">Sent</span></div><div class="tl-msg">"Hi Margaret, it was great meeting you today. Any questions come up since the consult?"</div></div></div>
+              <div class="tl-row"><span class="tl-dot sent">✓</span><div class="tl-card"><div class="tl-top"><span class="pill">Email</span><span class="tl-day">Day 3</span><span class="tl-stat ok">Opened</span></div><div class="tl-msg">Financing breakdown + a patient story about doing it together as a couple.</div></div></div>
+              <div class="tl-row"><span class="tl-dot next">➤</span><div class="tl-card"><div class="tl-top"><span class="pill sms">SMS</span><span class="tl-day">Day 5</span><span class="tl-stat q">Sending now</span></div><div class="tl-msg">"Would it help to hop on a quick call together with your husband?"</div></div></div>
+              <div class="tl-row"><span class="tl-dot queued">5</span><div class="tl-card"><div class="tl-top"><span class="pill">Email</span><span class="tl-day">Day 9</span><span class="tl-stat q">Queued</span></div><div class="tl-msg">Limited surgical openings + price-lock reminder.</div></div></div>
+            </div>
+            <div class="ai-opt">
+              <div class="ai-opt-h"><b>Self-optimizing</b> CaseLift picked the winning messages</div>
+              <div class="mk-bars">
+                <div class="mk-bar-row"><div class="mk-bar-label">Day 3 financing email</div><div class="mk-bar-track"><div class="mk-bar-fill" style="width:92%"></div></div></div>
+                <div class="mk-bar-row"><div class="mk-bar-label">Day 5 joint-call SMS</div><div class="mk-bar-track"><div class="mk-bar-fill" style="width:71%"></div></div></div>
+                <div class="mk-bar-row"><div class="mk-bar-label">Generic check-in</div><div class="mk-bar-track"><div class="mk-bar-fill" style="width:23%"></div></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4: Conversations -->
     <div class="showcase flip">
       <div class="showcase-text reveal-right">
         <h3>Every conversation, with full context</h3>
@@ -727,9 +872,39 @@
       </div>
     </div>
 
-    <!-- 3: Analytics -->
+    <!-- 5: Training course preview -->
     <div class="showcase">
       <div class="showcase-text reveal-left">
+        <h3>Built-in training that levels up your TC</h3>
+        <p>Every membership includes the TC Certification library, guided video courses and objection-handling playbooks built by a 7-figure treatment coordinator, so your whole team gets better at closing, not just your software.</p>
+        <ul class="sc-list">
+          <li><span class="ck">✓</span>Guided video courses, watch at your own pace</li>
+          <li><span class="ck">✓</span>Real objection-handling scripts and playbooks</li>
+          <li><span class="ck">✓</span>Track each team member's progress</li>
+        </ul>
+      </div>
+      <div class="showcase-media reveal-right">
+        <div class="dash">
+          <div class="dash-bar"><i></i><i></i><i></i><span>CaseLift · TC Certification</span></div>
+          <div class="dash-body">
+            <div class="course-head">
+              <div class="course-thumb">🎓</div>
+              <div><div class="course-h">Objection Handling Mastery</div><div class="course-meta">Module 4 · 12 lessons · 48 min · 66% complete</div></div>
+            </div>
+            <div class="course-prog"><i style="width:66%"></i></div>
+            <div class="lesson"><span class="lx done">✓</span><span class="lt">Reframing the price objection</span><span class="ld">5:12</span></div>
+            <div class="lesson"><span class="lx done">✓</span><span class="lt">The financing conversation that closes</span><span class="ld">7:48</span></div>
+            <div class="lesson"><span class="lx play">▶</span><span class="lt">Looping in the spouse without losing momentum</span><span class="ld">6:03</span></div>
+            <div class="lesson"><span class="lx lock">🔒</span><span class="lt">Handling "I need to think about it"</span><span class="ld">4:55</span></div>
+            <div class="lesson"><span class="lx lock">🔒</span><span class="lt">Turning fear into a same-day yes</span><span class="ld">8:20</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6: Analytics -->
+    <div class="showcase flip">
+      <div class="showcase-text reveal-right">
         <h3>Know exactly what's working</h3>
         <p>Watch each stage of recovery from analyzed consult to closed case, and see your close rate climb as CaseLift learns what brings your patients back.</p>
         <ul class="sc-list">
@@ -738,7 +913,7 @@
           <li><span class="ck">✓</span>Clear ROI you can take to the whole team</li>
         </ul>
       </div>
-      <div class="showcase-media reveal-right">
+      <div class="showcase-media reveal-left">
         <div class="dash">
           <div class="dash-bar"><i></i><i></i><i></i><span>CaseLift · Recovery Analytics</span></div>
           <div class="dash-body">
@@ -800,16 +975,16 @@
   </div>
   <div class="wrap">
     <div class="intg-grid reveal">
-      <div class="intg-card"><img src="https://logo.clearbit.com/dentrix.com" alt="Dentrix" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">Dentrix</span></div>
-      <div class="intg-card"><img src="https://logo.clearbit.com/eaglesoft.com" alt="Eaglesoft" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">Eaglesoft</span></div>
-      <div class="intg-card"><img src="https://logo.clearbit.com/curvedental.com" alt="Curve Dental" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">Curve Dental</span></div>
-      <div class="intg-card"><img src="https://logo.clearbit.com/opendental.com" alt="Open Dental" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">Open Dental</span></div>
-      <div class="intg-card"><img src="https://logo.clearbit.com/carestreamdental.com" alt="Carestream" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">Carestream</span></div>
-      <div class="intg-card"><img src="https://logo.clearbit.com/dolphinimaging.com" alt="Dolphin" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">Dolphin</span></div>
-      <div class="intg-card"><img src="https://logo.clearbit.com/orthotrac.com" alt="Orthotrac" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">Orthotrac</span></div>
-      <div class="intg-card"><img src="https://logo.clearbit.com/lh360.com" alt="Lighthouse 360" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">Lighthouse 360</span></div>
-      <div class="intg-card"><img src="https://logo.clearbit.com/dentimax.com" alt="Dentimax" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">Dentimax</span></div>
-      <div class="intg-card"><img src="https://logo.clearbit.com/macpractice.com" alt="MacPractice" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">MacPractice</span></div>
+      <div class="intg-card"><img src="https://logo.clearbit.com/dentrix.com" alt="Dentrix" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">Dentrix</span></div>
+      <div class="intg-card"><img src="https://logo.clearbit.com/opendental.com" alt="Open Dental" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">Open Dental</span></div>
+      <div class="intg-card"><img src="https://logo.clearbit.com/eaglesoft.net" alt="Eaglesoft" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">Eaglesoft</span></div>
+      <div class="intg-card"><img src="https://logo.clearbit.com/curvedental.com" alt="Curve Dental" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">Curve Dental</span></div>
+      <div class="intg-card"><img src="https://logo.clearbit.com/carestreamdental.com" alt="Carestream Dental" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">Carestream</span></div>
+      <div class="intg-card"><img src="https://logo.clearbit.com/planetdds.com" alt="Denticon" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">Denticon</span></div>
+      <div class="intg-card"><img src="https://logo.clearbit.com/carestack.com" alt="CareStack" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">CareStack</span></div>
+      <div class="intg-card"><img src="https://logo.clearbit.com/nexhealth.com" alt="NexHealth" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">NexHealth</span></div>
+      <div class="intg-card"><img src="https://logo.clearbit.com/getweave.com" alt="Weave" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">Weave</span></div>
+      <div class="intg-card"><img src="https://logo.clearbit.com/tab32.com" alt="tab32" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" /><span class="intg-name">tab32</span></div>
     </div>
     <p class="intg-more reveal">And 20+ more, all synced automatically through our universal integration engine.</p>
   </div>
@@ -901,7 +1076,15 @@
         </div>
       </div>
     </div>
-    <p class="calc-note reveal">CaseLift follows up with every one of those patients, automatically. Our guarantee: <strong>$50,000 in recovered production in 90 days, or we work with you for free until you get there.</strong></p>
+    <p class="calc-note reveal">CaseLift follows up with every one of those patients, automatically, until they schedule or clearly say no.</p>
+    <div class="gtee reveal">
+      <div class="seal"><b>3X</b><span>ROI in 90 days<br>or it's free</span></div>
+      <div class="gtee-copy">
+        <h3>Triple your investment in 90 days, <em>or you don't pay.</em></h3>
+        <p>If CaseLift doesn't return at least 3X what you pay within your first 90 days, your membership is free until it does. No fine print, no games.</p>
+        <span class="gtee-chip">📊 Tracked &amp; verified by real PMS data</span>
+      </div>
+    </div>
     <div class="roi-cta reveal">
       <a href="/apply.html" class="btn btn-red">Schedule A Demo</a>
     </div>
@@ -919,6 +1102,42 @@
       <div class="inside-card reveal" data-delay="1"><div class="inside-ico">🎙️</div><h3>Consult Analysis</h3><p>CaseLift listens to every consult and surfaces each objection automatically.</p></div>
       <div class="inside-card reveal" data-delay="2"><div class="inside-ico">✉️</div><h3>Automated Follow-Up</h3><p>Personalized SMS and email sequences go out on a smart schedule.</p></div>
       <div class="inside-card reveal" data-delay="3"><div class="inside-ico">📈</div><h3>Attribution Tracking</h3><p>Every recovered case is traced back to the dollar, so you see the ROI.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HUMAN + AI ============ -->
+<section class="sec" id="human">
+  <div class="wrap sec-center">
+    <div class="eyebrow reveal">Human + AI</div>
+    <h2 class="sec-title reveal" data-delay="1">You're never on your own</h2>
+    <p class="sec-lead reveal" data-delay="2">CaseLift isn't just software you're handed and left to figure out. You get real humans in your corner, plus an AI that quietly gets smarter for you every single day.</p>
+  </div>
+  <div class="wrap">
+    <div class="human-grid">
+      <div class="human-card reveal" data-delay="1">
+        <div class="hc-ico">🧑‍🏫</div>
+        <h3>Monthly 1-on-1 strategy call</h3>
+        <p>Every month you sit down one-on-one with a 20-year veteran treatment coordinator who has personally closed seven figures in cases. Real coaching on your real patients and pipeline, not a canned webinar.</p>
+        <span class="hc-tag">✓ Included with every membership</span>
+      </div>
+      <div class="human-card live reveal" data-delay="2">
+        <div class="hc-ico">💬</div>
+        <h3>Live chat support</h3>
+        <p>Real people, not bots, on live chat throughout every business day. A question, a tweak, a tricky patient reply, we're right there with you in minutes.</p>
+        <span class="hc-tag"><span class="live-dot"></span>Humans online during business hours</span>
+      </div>
+      <div class="human-card ai reveal" data-delay="3">
+        <div class="hc-ico">🧠</div>
+        <h3>An AI that self-optimizes</h3>
+        <p>Behind the scenes, CaseLift learns which follow-up messages get the best response rates, in your practice and across every practice on the platform, and automatically leads with what's converting. It gets sharper every day.</p>
+        <span class="hc-tag">✓ Always learning, always improving</span>
+      </div>
+    </div>
+    <div class="cancel-row reveal">
+      <span class="cancel-pill"><span class="cp-ck">✓</span>Cancel anytime</span>
+      <span class="cancel-pill"><span class="cp-ck">✓</span>No long-term contract</span>
+      <span class="cancel-pill"><span class="cp-ck">✓</span>Month-to-month, sign up and try it</span>
     </div>
   </div>
 </section>
@@ -961,7 +1180,7 @@
       </details>
       <details class="faq-item reveal">
         <summary>What is the guarantee?</summary>
-        <div class="faq-a">If CaseLift doesn't lift $50,000 in production within 90 days, we work with you for free until you get there.</div>
+        <div class="faq-a">If CaseLift doesn't return at least 3X what you pay within your first 90 days, your membership is free until it does. Recovery is tracked and verified against your real PMS production data, not our word for it. And you can cancel anytime, there's no long-term contract.</div>
       </details>
       <details class="faq-item reveal">
         <summary>How is CaseLift different from other dental software?</summary>
@@ -976,9 +1195,9 @@
   <div class="glow"></div>
   <div class="wrap">
     <h2 class="reveal">Ready to lift the cases you're losing?</h2>
-    <p class="reveal" data-delay="1">Your TC records the consult. CaseLift handles everything after. $50,000 lifted in 90 days, guaranteed.</p>
+    <p class="reveal" data-delay="1">Your TC records the consult. CaseLift handles everything after, backed by real humans and our 3X-ROI-in-90-days-or-it's-free guarantee.</p>
     <div class="reveal" data-delay="2"><a href="/apply" class="btn btn-brand">Schedule A Demo</a></div>
-    <p class="final-note reveal" data-delay="3">$997/month · Cancel anytime · Limited spots available</p>
+    <p class="final-note reveal" data-delay="3">$997/month · Cancel anytime, no contract · Limited spots available</p>
   </div>
 </section>
 
