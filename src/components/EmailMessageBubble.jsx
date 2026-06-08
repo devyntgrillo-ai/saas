@@ -59,7 +59,9 @@ export default function EmailMessageBubble({
   const preview = bodyPreview(body)
 
   return (
-    <article className="w-full max-w-2xl overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+    <article
+      className={`max-w-2xl overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm ${inbound ? '' : 'ml-auto'}`}
+    >
       {/* Card header */}
       <div className="flex items-center gap-2 border-b border-gray-200 bg-gray-100 px-3 py-2.5">
         <Bell className="h-4 w-4 shrink-0 text-amber-500" />

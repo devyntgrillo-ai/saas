@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DollarSign, Stethoscope, Building2, TrendingDown, TrendingUp, Calendar } from 'lucide-react'
 import { useAdmin } from '../../context/AdminContext'
-import { computeOverview, agencyStatusMeta, mrrSeries12, MRR_MILESTONES } from '../../lib/admin'
+import { computeOverview, computeMonthlySignupsChurn, agencyStatusMeta, mrrSeries12, MRR_MILESTONES } from '../../lib/admin'
 import { timeAgo } from '../../lib/consults'
 import { StackedMRRChart, SignupsChurnChart } from '../../components/admin/charts'
 import { StatCard, Table, Badge, Avatar, money, stop } from '../../components/admin/ui'
@@ -22,15 +22,10 @@ export default function Dashboard() {
   const prev = series[series.length - 2]?.total || 0
   const mom = prev ? Math.round(((last - prev) / prev) * 100) : 0
 
-  // Signups vs churn - synthesized monthly series consistent with demo history.
-  const signupsChurn = [
-    { month: 'Dec', signups: 1, churn: 0 },
-    { month: 'Jan', signups: 1, churn: 0 },
-    { month: 'Feb', signups: 1, churn: 1 },
-    { month: 'Mar', signups: 2, churn: 0 },
-    { month: 'Apr', signups: 1, churn: 0 },
-    { month: 'May', signups: 2, churn: o.churnThisMonth },
-  ]
+  const signupsChurn = useMemo(
+    () => computeMonthlySignupsChurn(data.practices, data.cancellations),
+    [data.practices, data.cancellations],
+  )
 
   // CaseLift attribution per practice (production we can defensibly claim).
   const { data: attribution = {} } = useAdminAttribution()
@@ -52,9 +47,10 @@ export default function Dashboard() {
   // status + impersonate.
   const revenueByReseller = data.agencies.map((a) => {
     const monthsActive = Math.max(1, Math.round((Date.now() - new Date(a.created_at).getTime()) / (30 * 86400000)))
+    const locations = a.activePracticeCount ?? a.practiceCount
     return [
       <span className="font-medium text-slate-100">{a.name}</span>,
-      a.practiceCount,
+      locations,
       money(a.perLocationFee),
       money(a.mrrToCaseLift),
       new Date(a.created_at).toLocaleDateString(),
@@ -69,7 +65,7 @@ export default function Dashboard() {
   })
   revenueByReseller.push([
     <span className="font-semibold text-white">Total</span>,
-    data.agencies.reduce((s, a) => s + a.practiceCount, 0),
+    data.agencies.reduce((s, a) => s + (a.activePracticeCount ?? a.practiceCount), 0),
     '-',
     <span className="font-semibold text-emerald-300">{money(o.agencyFees)}</span>,
     '', '', '', '',
@@ -97,7 +93,7 @@ export default function Dashboard() {
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-white">Revenue by reseller</h2>
         <Table
-          head={['Reseller', 'Locations', 'Fee / location', 'Monthly total', 'Since', 'Est. total paid', 'Status', '']}
+          head={['Reseller', 'Active locations', 'Fee / location', 'Monthly total', 'Since', 'Est. total paid', 'Status', '']}
           rows={revenueByReseller}
           empty="No resellers yet."
           icon={Building2}

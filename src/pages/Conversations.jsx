@@ -1337,7 +1337,7 @@ export default function Conversations() {
                             <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-medium text-gray-500">{dayLabel(ts)}</span>
                           </div>
                         )}
-                        <div className="mt-3 flex justify-start">
+                        <div className={`mt-3 flex ${inbound ? 'justify-start' : 'justify-end'}`}>
                           <EmailMessageBubble
                             inbound={inbound}
                             subject={m.meta?.subject || m.subject}

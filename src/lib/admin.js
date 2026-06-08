@@ -1,5 +1,7 @@
 // Admin data layer — loads real agency_accounts / practices; no silent demo blending.
 // Use loadAdminDemoData() or VITE_ADMIN_SHOW_DEMO=true for local previews only.
+import { isAcceptedConsult } from './attribution'
+import { WHOLESALE_PRICE, isActiveSubaccount } from './resellerSaas'
 import { supabase } from './supabase'
 
 export const PRICING = {
@@ -113,26 +115,61 @@ function agencyStatus(row) {
   return 'active'
 }
 
-function shapeRealAgency(row, practices) {
+function computeAgencyLastActivityMap(rawPractices, consults) {
+  const practiceAgency = Object.fromEntries(
+    (rawPractices || []).filter((p) => p.agency_id).map((p) => [p.id, p.agency_id]),
+  )
+  const latest = {}
+  const bump = (agencyId, ts) => {
+    if (!agencyId || !ts) return
+    if (!latest[agencyId] || new Date(ts) > new Date(latest[agencyId])) latest[agencyId] = ts
+  }
+  for (const p of rawPractices || []) bump(p.agency_id, p.created_at)
+  for (const c of consults || []) bump(practiceAgency[c.practice_id], c.created_at)
+  return latest
+}
+
+function shapeRealAgency(row, practices, { lastActivity, ownerEmails } = {}) {
   const mine = practices.filter((p) => p.agency_id === row.id)
-  const fee = Number(row.monthly_fee || row.per_location_fee) || PRICING.agencyPerLocation
-  const clientPrice = Number(row.client_price) || 1497
-  const mrrToCaseLift = mine.length * fee
-  const clientMrr = mine.length * clientPrice
+  const activeList = mine.filter((p) => isActiveSubaccount(p.subscription_status))
+  const active = activeList.length
+  const wholesale = Number(row.reseller_wholesale_price) || Number(row.monthly_fee || row.per_location_fee) || WHOLESALE_PRICE
+  const price = Number(row.reseller_client_price) || 0
+  const configured = row.reseller_client_price != null
+  const clientPrice = configured ? price : Number(row.client_price) || 0
+  const mrrToCaseLift = active * wholesale
+  const clientMrr = active * clientPrice
+  const gross = active * price
+  const ourRevenue = active * wholesale
+  const saasMargin = active * (price - wholesale)
+  const status = agencyStatus(row)
   return {
     id: row.id,
     name: row.company_name || row.brand_name || row.name,
     owner_name: row.owner_name || null,
-    owner_email: row.owner_email || row.owner?.email || null,
-    status: agencyStatus(row),
+    owner_email: row.owner_email || ownerEmails?.[row.owner_user_id] || row.owner?.email || null,
+    status,
     created_at: row.created_at,
-    last_activity: row.last_activity || row.created_at,
-    perLocationFee: fee,
+    last_activity: lastActivity || row.last_activity || row.created_at,
+    perLocationFee: wholesale,
     clientPricePerLocation: clientPrice,
     practiceCount: mine.length,
+    activePracticeCount: active,
     mrrToCaseLift,
     clientMrr,
     margin: clientMrr - mrrToCaseLift,
+    wholesale,
+    price,
+    active,
+    gross,
+    ourRevenue,
+    saasMargin,
+    configured,
+    suspended: status === 'suspended' || row.active === false,
+    reseller_client_price: row.reseller_client_price,
+    reseller_wholesale_price: row.reseller_wholesale_price,
+    reseller_slug: row.reseller_slug || null,
+    white_label_enabled: Boolean(row.white_label_enabled),
     notes: row.admin_notes || row.notes || '',
     white_label:
       row.white_label_enabled || row.brand_name
@@ -175,6 +212,7 @@ function shapeRealPractice(row, consultCount, agencyName) {
     agency_id: row.agency_id || null,
     agency_name: agencyName || null,
     subscription_status: row.subscription_status || 'active',
+    plan_amount: Number(row.plan_amount) || PRICING.directPractice,
     created_at: row.created_at || null,
     days_on_platform: days ?? 0,
     consults_month: consultCount ?? 0,
@@ -205,12 +243,21 @@ export async function loadAdminData() {
   monthStart.setDate(monthStart.getDate() - 30)
   const loadErrors = []
 
-  const [agRes, prRes, coRes, cfRes, leRes] = await Promise.all([
+  const [agRes, prRes, coRes, cfRes, leRes, winRes] = await Promise.all([
     supabase.from('agency_accounts').select('*').limit(500),
     supabase.from('practices').select('*, agency:agency_accounts(name)').is('archived_at', null).limit(500),
-    supabase.from('consults').select('id, practice_id, status, created_at').gte('created_at', monthStart.toISOString()).order('created_at', { ascending: false }),
+    supabase
+      .from('consults')
+      .select('id, practice_id, status, outcome, case_value, patient_name, created_at')
+      .gte('created_at', monthStart.toISOString())
+      .order('created_at', { ascending: false }),
     supabase.from('cancellation_feedback').select('*').order('created_at', { ascending: false }).limit(500),
     supabase.from('ai_learning_events').select('*').order('created_at', { ascending: false }).limit(15),
+    supabase
+      .from('assisted_wins')
+      .select('id, practice_id, patient_name, case_value, won_at, created_at, practice:practices(name)')
+      .order('won_at', { ascending: false })
+      .limit(15),
   ])
 
   if (agRes.error) loadErrors.push({ source: 'agencies', message: agRes.error.message })
@@ -234,28 +281,46 @@ export async function loadAdminData() {
     consultCounts[c.practice_id] = (consultCounts[c.practice_id] || 0) + 1
   })
 
+  const ownerIds = [...new Set(realAgencies.map((a) => a.owner_user_id).filter(Boolean))]
+  let ownerEmails = {}
+  if (ownerIds.length) {
+    const { data: owners } = await supabase.from('users').select('id, email').in('id', ownerIds)
+    ownerEmails = Object.fromEntries((owners || []).map((o) => [o.id, o.email]))
+  }
+
+  const lastActivityByAgency = computeAgencyLastActivityMap(realPractices, coRes.data)
+
   const practices = realPractices.map((p) =>
     shapeRealPractice(p, consultCounts[p.id] || 0, p.agency?.name),
   )
-  const agencies = realAgencies.map((a) => shapeRealAgency(a, practices))
+  const agencies = realAgencies.map((a) =>
+    shapeRealAgency(a, practices, { lastActivity: lastActivityByAgency[a.id], ownerEmails }),
+  )
 
-  const cancellations = (cfRes.data || []).map((c, i) => ({
-    id: c.id || `cancel-${i}`,
-    practice: practices.find((p) => p.id === c.practice_id)?.name || 'Former practice',
-    agency: null,
-    reason: c.reason || 'unknown',
-    reason_label: reasonLabel(c.reason),
-    mrr_lost: Number(c.mrr_at_cancellation) || PRICING.directPractice,
-    date: c.created_at,
-    tenure_days: null,
-  }))
+  const cancellations = (cfRes.data || []).map((c, i) => {
+    const practice = practices.find((p) => p.id === c.practice_id)
+    return {
+      id: c.id || `cancel-${i}`,
+      practice_id: c.practice_id || null,
+      practice: practice?.name || 'Former practice',
+      agency: practice?.agency_name || null,
+      reason: c.reason || 'unknown',
+      reason_label: reasonLabel(c.reason),
+      mrr_lost: Number(c.mrr_at_cancellation) || practice?.plan_amount || PRICING.directPractice,
+      date: c.created_at,
+      tenure_days: null,
+    }
+  })
 
-  const activity = buildActivity(
-    coRes.data,
+  const activity = buildActivity({
+    consults: coRes.data,
     cancellations,
     practices,
-    leRes?.error ? [] : leRes?.data,
-  )
+    learning: leRes?.error ? [] : leRes?.data,
+    wins: winRes?.error ? [] : winRes?.data,
+  })
+
+  const mrrHistory = computeMrrHistory(practices, agencies, cancellations)
 
   return {
     isDemo: false,
@@ -265,28 +330,54 @@ export async function loadAdminData() {
     practices,
     cancellations,
     activity,
-    mrrHistory: [],
+    mrrHistory,
   }
 }
 
-// Merge real consults / cancellations / AI-learning rows into one reverse-chron
+// Merge real consults / wins / signups / cancellations into one reverse-chron
 // activity feed (max 15). Tones drive the dot color in the Overview feed:
 // good = green (consult/conversion), bad = red (cancellation), neutral = blue
-// (AI learning / signup). Returns [] when there's nothing real to show.
-function buildActivity(consults, cancellations, practices, learning) {
-  const nameFor = (pid) => practices.find((p) => p.id === pid)?.name || 'a practice'
+// (AI learning). Returns [] when there's nothing real to show.
+function buildActivity({ consults, cancellations, practices, learning, wins }) {
+  const nameFor = (pid) => practices.find((p) => String(p.id) === String(pid))?.name || 'a practice'
   const events = []
 
+  ;(wins || []).forEach((w, i) => {
+    const practiceName = w.practice?.name || nameFor(w.practice_id)
+    const patient = w.patient_name || 'Patient'
+    const value = Number(w.case_value) || 0
+    events.push({
+      id: `win-${w.id || i}`,
+      type: 'conversion',
+      tone: 'good',
+      ts: w.won_at || w.created_at,
+      text: value
+        ? `${patient} converted — $${value.toLocaleString()} at ${practiceName}`
+        : `${patient} converted at ${practiceName}`,
+    })
+  })
+
   ;(consults || []).forEach((c, i) => {
-    const recovered = c.status === 'recovered'
+    if (isAcceptedConsult(c)) return
     events.push({
       id: `co-${c.id || i}`,
-      type: recovered ? 'conversion' : 'recording',
-      tone: recovered ? 'good' : 'good',
+      type: 'recording',
+      tone: 'neutral',
       ts: c.created_at,
-      text: recovered
-        ? `Consult recovered at ${nameFor(c.practice_id)}`
-        : `New consult recorded at ${nameFor(c.practice_id)}`,
+      text: `New consult recorded at ${nameFor(c.practice_id)}`,
+    })
+  })
+
+  const signupCutoff = Date.now() - 90 * DAY
+  ;(practices || []).forEach((p) => {
+    const ts = p.created_at
+    if (!ts || new Date(ts).getTime() < signupCutoff) return
+    events.push({
+      id: `signup-${p.id}`,
+      type: 'signup',
+      tone: 'good',
+      ts,
+      text: `${p.name} joined${p.agency_name ? ` · via ${p.agency_name}` : ''}`,
     })
   })
 
@@ -296,7 +387,7 @@ function buildActivity(consults, cancellations, practices, learning) {
       type: 'cancellation',
       tone: 'bad',
       ts: c.date,
-      text: `${c.practice} cancelled - ${(c.reason_label || 'unknown').toLowerCase()} ($${Number(c.mrr_lost || 0).toLocaleString()} MRR lost)`,
+      text: `${c.practice} cancelled — ${(c.reason_label || 'unknown').toLowerCase()} ($${Number(c.mrr_lost || 0).toLocaleString()} MRR lost)`,
     })
   })
 
@@ -356,11 +447,16 @@ export function computeOverview(data) {
   const activePractices = practices.filter((p) => p.subscription_status === 'active')
   const directActive = activePractices.filter((p) => !p.agency_id)
   const agencyFees = agencies.reduce((s, a) => s + (a.mrrToCaseLift || 0), 0)
-  const directRevenue = directActive.length * PRICING.directPractice
+  const directRevenue = directActive.reduce(
+    (s, p) => s + (Number(p.plan_amount) || PRICING.directPractice),
+    0,
+  )
   const totalMrr = agencyFees + directRevenue
 
-  const monthAgo = Date.now() - 30 * DAY
-  const churnThisMonth = cancellations.filter((c) => new Date(c.date).getTime() >= monthAgo).length
+  const monthStart = new Date()
+  monthStart.setDate(1)
+  monthStart.setHours(0, 0, 0, 0)
+  const churnThisMonth = cancellations.filter((c) => c.date && new Date(c.date) >= monthStart).length
   const activeAgencies = agencies.filter(
     (a) => a.status !== 'suspended' && practices.some((p) => p.agency_id === a.id && p.subscription_status === 'active'),
   ).length
@@ -374,6 +470,41 @@ export function computeOverview(data) {
     churnThisMonth,
     annualRunRate: totalMrr * 12,
   }
+}
+
+// Reconstruct stacked MRR (reseller vs direct) for the last 12 months from
+// practice created_at + cancellation_feedback dates.
+export function computeMrrHistory(practices, agencies, cancellations = []) {
+  const cancelByPractice = {}
+  for (const c of cancellations) {
+    if (c.practice_id && c.date) cancelByPractice[c.practice_id] = c.date
+  }
+  const agencyFee = Object.fromEntries(agencies.map((a) => [a.id, a.perLocationFee || WHOLESALE_PRICE]))
+
+  const now = new Date()
+  const months = []
+  for (let i = 11; i >= 0; i -= 1) {
+    const start = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999)
+    const label = start.toLocaleString('en-US', { month: 'short' })
+
+    let direct = 0
+    let agency = 0
+    for (const p of practices || []) {
+      const created = p.created_at ? new Date(p.created_at) : null
+      if (!created || created > end) continue
+      const cancelled = cancelByPractice[p.id]
+      if (cancelled && new Date(cancelled) < start) continue
+
+      if (p.agency_id) {
+        agency += agencyFee[p.agency_id] || WHOLESALE_PRICE
+      } else {
+        direct += Number(p.plan_amount) || PRICING.directPractice
+      }
+    }
+    months.push({ month: label, agency, direct, total: agency + direct })
+  }
+  return months
 }
 
 export function estimateCosts(data) {
@@ -434,12 +565,9 @@ export async function logImpersonation({ actorId, targetType, targetId, targetNa
   }
 }
 
-// Build the 12-month stacked MRR series for the Revenue chart, extending the
-// 6-month demo history so the chart always has a full year.
+// Last 12 months of stacked MRR for the dashboard chart.
 export function mrrSeries12(history) {
-  const base = (history || []).filter(Boolean)
-  if (base.length >= 6) return base
-  return base
+  return (history || []).filter(Boolean).slice(-12)
 }
 
 export const MRR_MILESTONES = [
