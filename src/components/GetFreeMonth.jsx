@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
-import { Gift, Star, Video, UserPlus, Check, Loader2, ExternalLink, Square, RefreshCcw, PartyPopper } from 'lucide-react'
+import { Gift, Star, Video, UserPlus, Check, Loader2, ExternalLink, Square, Pause, Play, RefreshCcw, PartyPopper } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 
 // Where the "leave a review" button sends people. Swap for your real review link
 // (Google Business, Capterra, Trustpilot, etc.).
 const REVIEW_URL = 'https://www.trustpilot.com/evaluate/caselift.io'
+
+const MAX_SECONDS = 120 // 2:00 recording ceiling - auto-stops here
+const WARN_AT = 100 // final 20s: show an "ending soon" countdown
+function fmt(s) {
+  const m = Math.floor(s / 60)
+  const x = s % 60
+  return `${m}:${String(x).padStart(2, '0')}`
+}
 
 function StepCard({ n, icon: Icon, title, done, children }) {
   return (
@@ -44,7 +52,11 @@ export default function GetFreeMonth({ practice }) {
   const recRef = useRef(null)
   const chunksRef = useRef([])
   const streamRef = useRef(null)
-  const [recording, setRecording] = useState(false)
+  const maxTimerRef = useRef(null)
+  const [phase, setPhase] = useState('idle') // idle | countdown | recording
+  const [countdown, setCountdown] = useState(3)
+  const [countdownPaused, setCountdownPaused] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
   const [blob, setBlob] = useState(null)
   const [blobUrl, setBlobUrl] = useState(null)
 
@@ -90,7 +102,8 @@ export default function GetFreeMonth({ practice }) {
   }
 
   // ── Step 2: video testimonial ───────────────────────────────────────────────
-  async function startRecording() {
+  // Open the camera and run a pausable 3-2-1 countdown; recording auto-starts at 0.
+  async function beginCountdown() {
     setError('')
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -99,33 +112,69 @@ export default function GetFreeMonth({ practice }) {
       })
       streamRef.current = stream
       if (liveRef.current) { liveRef.current.srcObject = stream; liveRef.current.muted = true; liveRef.current.play().catch(() => {}) }
-      chunksRef.current = []
-      const mr = new MediaRecorder(stream)
-      mr.ondataavailable = (e) => e.data.size > 0 && chunksRef.current.push(e.data)
-      mr.onstop = () => {
-        const b = new Blob(chunksRef.current, { type: mr.mimeType || 'video/webm' })
-        setBlob(b)
-        setBlobUrl(URL.createObjectURL(b))
-        stream.getTracks().forEach((t) => t.stop())
-        streamRef.current = null
-      }
-      mr.start()
-      recRef.current = mr
-      setRecording(true)
+      setCountdown(3)
+      setCountdownPaused(false)
+      setPhase('countdown')
     } catch {
       setError('Could not access your camera and microphone. Check browser permissions and try again.')
     }
   }
+  function beginRecording() {
+    const stream = streamRef.current
+    if (!stream) return
+    chunksRef.current = []
+    const mr = new MediaRecorder(stream)
+    mr.ondataavailable = (e) => e.data.size > 0 && chunksRef.current.push(e.data)
+    mr.onstop = () => {
+      const b = new Blob(chunksRef.current, { type: mr.mimeType || 'video/webm' })
+      setBlob(b)
+      setBlobUrl(URL.createObjectURL(b))
+      stream.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+    }
+    mr.start()
+    recRef.current = mr
+    setElapsed(0)
+    setPhase('recording')
+    // Hard 2:00 ceiling - auto-stop without driving it from a render effect.
+    maxTimerRef.current = setTimeout(() => stopRecording(), MAX_SECONDS * 1000)
+  }
   function stopRecording() {
+    if (maxTimerRef.current) { clearTimeout(maxTimerRef.current); maxTimerRef.current = null }
     try { recRef.current?.stop() } catch { /* noop */ }
-    setRecording(false)
+    setPhase('idle')
+  }
+  function cancelCountdown() {
+    streamRef.current?.getTracks().forEach((t) => t.stop())
+    streamRef.current = null
+    setPhase('idle')
   }
   function resetVideo() {
     setBlob(null)
     if (blobUrl) URL.revokeObjectURL(blobUrl)
     setBlobUrl(null)
+    setElapsed(0)
+    setPhase('idle')
   }
-  useEffect(() => () => { streamRef.current?.getTracks().forEach((t) => t.stop()); if (blobUrl) URL.revokeObjectURL(blobUrl) }, [blobUrl])
+
+  // Pausable 3-2-1 countdown - ticks while in the countdown phase and not paused.
+  useEffect(() => {
+    if (phase !== 'countdown' || countdownPaused) return undefined
+    if (countdown <= 0) { beginRecording(); return undefined }
+    const t = setTimeout(() => setCountdown((c) => c - 1), 1000)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, countdown, countdownPaused])
+
+  // Recording timer - drives the on-screen elapsed clock (display only; the hard
+  // stop is the setTimeout scheduled in beginRecording).
+  useEffect(() => {
+    if (phase !== 'recording') return undefined
+    const t = setInterval(() => setElapsed((s) => Math.min(s + 1, MAX_SECONDS)), 1000)
+    return () => clearInterval(t)
+  }, [phase])
+
+  useEffect(() => () => { if (maxTimerRef.current) clearTimeout(maxTimerRef.current); streamRef.current?.getTracks().forEach((t) => t.stop()); if (blobUrl) URL.revokeObjectURL(blobUrl) }, [blobUrl])
 
   async function submitVideo() {
     if (!blob) return
@@ -216,30 +265,57 @@ export default function GetFreeMonth({ practice }) {
         )}
       </StepCard>
 
-      <StepCard n={2} icon={Video} title="Record a 30-second video testimonial" done={videoDone}>
+      <StepCard n={2} icon={Video} title="Record a video testimonial" done={videoDone}>
         {videoDone ? (
           <p className="text-sm text-slate-400">Got it — thank you for the testimonial!</p>
         ) : (
           <>
-            <p className="text-sm text-slate-400">Hold your phone vertically and keep it to ~30 seconds. Hit on these specifics — real numbers are what make it land:</p>
+            <p className="text-sm text-slate-400">Hold your phone vertically. Take up to 2 minutes — we’ll give you a 20-second heads-up before it ends. Hit on these specifics — real numbers are what make it land:</p>
             <ul className="mt-2 space-y-1.5 text-sm text-slate-300">
               <li className="flex gap-2"><span className="text-emerald-400">•</span> How much production or how many cases CaseLift has helped you recover (e.g. “$42k in our first 60 days”).</li>
               <li className="flex gap-2"><span className="text-emerald-400">•</span> How many hours a week it saves your team on follow-up.</li>
               <li className="flex gap-2"><span className="text-emerald-400">•</span> What your follow-up looked like before vs. now, and who you’d recommend it to.</li>
             </ul>
             {/* Vertical (9:16) frame to match how it will be used. */}
-            <div className="mx-auto mt-4 aspect-[9/16] w-full max-w-[260px] overflow-hidden rounded-xl border border-surface-700 bg-black">
+            <div className="relative mx-auto mt-4 aspect-[9/16] w-full max-w-[260px] overflow-hidden rounded-xl border border-surface-700 bg-black">
               {blobUrl ? (
                 <video src={blobUrl} controls className="h-full w-full object-cover" />
               ) : (
                 <video ref={liveRef} className="h-full w-full object-cover" playsInline />
               )}
+              {phase === 'countdown' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40">
+                  <span className="text-6xl font-bold tabular-nums text-white drop-shadow-lg">{countdownPaused ? '❚❚' : countdown}</span>
+                  <span className="mt-1 text-xs font-medium text-white/80">{countdownPaused ? 'Paused' : 'Get ready…'}</span>
+                </div>
+              )}
+              {phase === 'recording' && (
+                <>
+                  <div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-xs font-semibold text-white">
+                    <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-500/70" /><span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500" /></span>
+                    {fmt(elapsed)}
+                  </div>
+                  {elapsed >= WARN_AT && (
+                    <div className="absolute right-2 top-2 animate-pulse rounded-full bg-amber-500/90 px-2.5 py-1 text-xs font-bold text-black">Ending in {MAX_SECONDS - elapsed}s</div>
+                  )}
+                </>
+              )}
             </div>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
-              {!blobUrl && !recording && (
-                <button onClick={startRecording} className="btn-primary"><Video className="h-4 w-4" /> Start recording</button>
+              {!blobUrl && phase === 'idle' && (
+                <button onClick={beginCountdown} className="btn-primary"><Video className="h-4 w-4" /> Start recording</button>
               )}
-              {recording && (
+              {phase === 'countdown' && (
+                <>
+                  {countdownPaused ? (
+                    <button onClick={() => setCountdownPaused(false)} className="btn-primary"><Play className="h-4 w-4" /> Resume</button>
+                  ) : (
+                    <button onClick={() => setCountdownPaused(true)} className="btn-ghost"><Pause className="h-4 w-4" /> Pause</button>
+                  )}
+                  <button onClick={cancelCountdown} className="btn-ghost">Cancel</button>
+                </>
+              )}
+              {phase === 'recording' && (
                 <button onClick={stopRecording} className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold !text-white transition hover:bg-rose-500"><Square className="h-4 w-4 fill-current" /> Stop</button>
               )}
               {blobUrl && (

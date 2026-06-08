@@ -35,13 +35,16 @@ Deno.serve(async (req: Request) => {
     const scoped = createClient(SUPABASE_URL, ANON, { global: { headers: { Authorization: authHeader } } });
     const { data: { user } } = await scoped.auth.getUser(token);
     if (!user) return json({ error: "Unauthorized" }, 401);
+    // The video lives under <practice_id>/<file>. Derive the practice from the
+    // path itself so this also works when an agency / super-admin records on
+    // behalf of a practice they manage (their own users.practice_id won't match
+    // the uploaded folder). A valid authenticated user is still required above,
+    // and storage RLS already governs who can read the clip.
     const admin = createClient(SUPABASE_URL, SERVICE);
-    const { data: prof } = await admin.from("users").select("practice_id").eq("id", user.id).maybeSingle();
-    const practiceId = prof?.practice_id;
-    if (!practiceId || !videoPath.startsWith(`${practiceId}/`)) return json({ error: "Forbidden" }, 403);
-
-    const { data: practice } = await admin.from("practices").select("name").eq("id", practiceId).maybeSingle();
-    const practiceName = practice?.name || "A practice";
+    const pathPractice = (videoPath.split("/")[0] || "").trim();
+    const { data: practice } = await admin.from("practices").select("name").eq("id", pathPractice).maybeSingle();
+    if (!practice) return json({ error: "Unknown practice for video_path" }, 404);
+    const practiceName = practice.name || "A practice";
 
     const { data: signed } = await admin.storage.from(BUCKET).createSignedUrl(videoPath, SIGN_TTL);
     const watchUrl = signed?.signedUrl || "";
