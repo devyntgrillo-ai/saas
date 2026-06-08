@@ -272,19 +272,20 @@ export default function Training() {
           <h1 className="text-2xl font-bold tracking-tight text-white">CaseLift Academy</h1>
         </div>
 
-        {/* AI training recommendation — fills the remaining 2/3, accent-highlighted */}
-        <div className="w-full rounded-xl border border-primary/30 border-l-2 border-l-primary bg-primary/5 p-4 ring-1 ring-primary/10 lg:w-2/3">
+        {/* AI training recommendation — green so it reads as a distinct AI feature
+            rather than matching the sub-account's white-label accent. */}
+        <div className="w-full rounded-xl border border-emerald-500/30 border-l-2 border-l-emerald-500 bg-emerald-500/10 p-4 ring-1 ring-emerald-500/10 lg:w-2/3">
           <div className="flex items-start gap-2.5">
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary-400">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-500/15 text-emerald-400">
               <Sparkles className="h-3.5 w-3.5" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-primary-300">
+                <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
                   AI Recommendation
                   <span className="relative flex h-1.5 w-1.5">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
-                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500/60" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
                   </span>
                 </span>
                 <button
@@ -318,13 +319,13 @@ export default function Training() {
                   {recommendedModule ? (
                     <button
                       onClick={() => openModule(recommendedModule)}
-                      className="btn-primary mt-2.5 gap-1.5 rounded-full px-3 py-1 text-[11px]"
+                      className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold !text-white transition hover:bg-emerald-500"
                     >
                       <Play className="h-3 w-3" /> Watch: {recommendedModule.title}
                     </button>
                   ) : (
                     rec?.focus_area && (
-                      <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary-300">
+                      <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
                         <GraduationCap className="h-3 w-3" /> {rec.focus_area}
                       </span>
                     )
