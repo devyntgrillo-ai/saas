@@ -45,7 +45,17 @@ export default function AdminChats() {
   const [filter, setFilter] = useState('all') // all | unread | resolved
   const [thread, setThread] = useState(null)
   const [now, setNow] = useState(0)
+  const [members, setMembers] = useState([])
   const searchRef = useRef(null)
+
+  // Selected practice's member roster → mentionable names.
+  useEffect(() => {
+    if (!selectedId) return undefined
+    let on = true
+    supabase.from('users').select('display_name, email').eq('practice_id', selectedId)
+      .then(({ data }) => { if (on) setMembers(data || []) })
+    return () => { on = false }
+  }, [selectedId])
 
   // Ticking clock (state, not Date.now() in render) for the "online" dots.
   useEffect(() => {
@@ -162,12 +172,13 @@ export default function AdminChats() {
   const mainTyping = chat.typingUsers.filter((t) => t.scope === 'main')
   const threadTyping = liveThread ? chat.typingUsers.filter((t) => t.scope === String(liveThread.id)) : []
   const mentionNames = useMemo(() => {
-    const set = new Set()
+    const set = new Set(['CaseLift Team'])
+    members.forEach((m) => set.add(m.display_name || m.email))
     chat.presence.forEach((u) => u.name && set.add(u.name))
     chat.messages.forEach((m) => m.sender_name && set.add(m.sender_name))
     if (currentUser.name) set.add(currentUser.name)
-    return [...set]
-  }, [chat.presence, chat.messages, currentUser])
+    return [...set].filter(Boolean)
+  }, [members, chat.presence, chat.messages, currentUser])
 
   return (
     <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-xl border border-surface-700 bg-surface-900">
@@ -308,7 +319,7 @@ export default function AdminChats() {
                 <ChatComposer
                   placeholder={`Reply to ${practiceName(selectedChat)}…`}
                   mentionables={mentionNames}
-                  onSend={(t, f) => chat.sendMessage(t, null, f)}
+                  onSend={(t, f, meta) => chat.sendMessage(t, null, f, meta)}
                   onTyping={() => chat.startTyping()}
                   onStopTyping={() => chat.stopTyping()}
                 />

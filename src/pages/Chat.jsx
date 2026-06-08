@@ -31,6 +31,7 @@ export default function Chat() {
   const [chatId, setChatId] = useState(null)
   const [loadingChat, setLoadingChat] = useState(true)
   const [thread, setThread] = useState(null)
+  const [members, setMembers] = useState([])
   const [, setTick] = useState(0) // minute ticker so the online/offline status flips on time
 
   useEffect(() => {
@@ -65,6 +66,13 @@ export default function Chat() {
     return () => { cancelled = true }
   }, [practiceId])
 
+  // Practice member roster → mentionable names.
+  useEffect(() => {
+    if (!practiceId) return
+    supabase.from('users').select('display_name, email').eq('practice_id', practiceId)
+      .then(({ data }) => setMembers(data || []))
+  }, [practiceId])
+
   const chat = useSupportChat({ chatId, practiceId, senderType: 'practice', currentUser })
 
   // Mark read whenever the channel updates while open.
@@ -78,43 +86,39 @@ export default function Chat() {
   const threadTyping = liveThread ? chat.typingUsers.filter((t) => t.scope === String(liveThread.id)) : []
   const isEmpty = !chat.loading && chat.messages.length === 0
 
-  // Mentionable names: who's in the channel + everyone who's posted.
+  // Mentionable names: the practice roster + coaching team + anyone present/posted.
   const mentionNames = useMemo(() => {
-    const set = new Set()
+    const set = new Set(['CaseLift Team'])
+    members.forEach((m) => set.add(m.display_name || m.email))
     chat.presence.forEach((u) => u.name && set.add(u.name))
     chat.messages.forEach((m) => m.sender_name && set.add(m.sender_name))
     if (currentUser.name) set.add(currentUser.name)
-    return [...set]
-  }, [chat.presence, chat.messages, currentUser])
+    return [...set].filter(Boolean)
+  }, [members, chat.presence, chat.messages, currentUser])
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Channel header */}
-      <div className="flex items-center gap-3 border-b border-surface-700 px-5 py-3">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-sm font-bold !text-white">C</span>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="text-sm font-bold text-white">Private 7-Figure Coaching Channel</h1>
-            {online ? (
-              <span className="flex items-center gap-1 text-[11px] text-emerald-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Online
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 text-[11px] text-slate-500">
-                <span className="h-1.5 w-1.5 rounded-full bg-slate-500" /> Offline
-              </span>
-            )}
+      {/* Channel header (Slack-style # channel + icon row) */}
+      <div className="border-b border-surface-700 px-4 py-2">
+        <div className="flex items-center gap-2">
+          <h1 className="flex items-center gap-1 text-[15px] font-bold text-white">
+            <span className="text-slate-500">#</span> coaching
+          </h1>
+          {online ? (
+            <span className="flex items-center gap-1 text-[11px] text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Online</span>
+          ) : (
+            <span className="flex items-center gap-1 text-[11px] text-slate-500"><span className="h-1.5 w-1.5 rounded-full bg-slate-500" /> Offline</span>
+          )}
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            <PresenceBar users={chat.presence} />
+            <ChatSearch chatId={chatId} onJump={jumpToMessage} />
           </div>
-          <p className="truncate text-xs text-slate-400">
-            {online
-              ? 'Your direct line to the coaching team. Ask us anything.'
-              : "We're offline right now — but feel free to send a message and we'll reply soon."}
-          </p>
         </div>
-        <div className="ml-auto flex shrink-0 items-center gap-1">
-          <PresenceBar users={chat.presence} />
-          <ChatSearch chatId={chatId} onJump={jumpToMessage} />
-        </div>
+        <p className="mt-0.5 truncate text-xs text-slate-400">
+          {online
+            ? 'Your private 7-figure coaching channel — ask us anything.'
+            : "We're offline right now — send a message and we'll reply soon."}
+        </p>
       </div>
 
       <PinnedBar pins={chat.pins} onJump={jumpToMessage} onUnpin={chat.togglePin} />
@@ -163,7 +167,7 @@ export default function Chat() {
             <ChatComposer
               placeholder="Message your coaching channel…"
               mentionables={mentionNames}
-              onSend={(t, f) => chat.sendMessage(t, null, f)}
+              onSend={(t, f, meta) => chat.sendMessage(t, null, f, meta)}
               onTyping={() => chat.startTyping()}
               onStopTyping={() => chat.stopTyping()}
             />

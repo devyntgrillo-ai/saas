@@ -38,6 +38,7 @@ export function renderRich(text, mentionNames = []) {
     <code key={`c${k}`} className="rounded bg-surface-700 px-1 py-0.5 text-[0.85em]">{m[1]}</code>
   ))
   nodes = applyRule(nodes, /\*\*([^*]+)\*\*/g, (m, k) => <strong key={`b${k}`}>{m[1]}</strong>)
+  nodes = applyRule(nodes, /~~([^~]+)~~/g, (m, k) => <s key={`s${k}`}>{m[1]}</s>)
   nodes = applyRule(nodes, /\*([^*\n]+)\*/g, (m, k) => <em key={`i${k}`}>{m[1]}</em>)
   nodes = applyRule(nodes, /(https?:\/\/[^\s]+)/g, (m, k) => (
     <a key={`l${k}`} href={m[1]} target="_blank" rel="noreferrer" className="text-primary-300 underline underline-offset-2 hover:text-primary-200">{m[1]}</a>
@@ -46,7 +47,7 @@ export function renderRich(text, mentionNames = []) {
   if (names.length) {
     const re = new RegExp(`@(${names.map(escapeRe).join('|')})`, 'g')
     nodes = applyRule(nodes, re, (m, k) => (
-      <span key={`m${k}`} className="rounded bg-primary/20 px-1 font-medium text-primary-200">@{m[1]}</span>
+      <span key={`m${k}`} className="rounded bg-[color:var(--accent-subtle)] px-1 font-medium text-[color:var(--accent)]">@{m[1]}</span>
     ))
   }
   return nodes

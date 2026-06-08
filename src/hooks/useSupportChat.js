@@ -184,11 +184,12 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
 
   // ── Actions ──────────────────────────────────────────────────────────────────
   const sendMessage = useCallback(
-    async (text, threadParentId = null, file = null) => {
+    async (text, threadParentId = null, file = null, opts = {}) => {
       const body = (text || '').trim()
       if ((!body && !file) || !chatId) return null
       let attachment = null
       if (file) attachment = await uploadChatAttachment(chatId, file)
+      const isAudio = attachment?.type?.startsWith('audio/')
       const row = {
         chat_id: chatId,
         practice_id: practiceId,
@@ -201,9 +202,11 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
         attachment_url: attachment?.url || null,
         attachment_name: attachment?.name || null,
         attachment_type: attachment?.type || null,
+        audio_duration: isAudio ? (opts.audioDuration ?? null) : null,
       }
       const { data, error } = await supabase.from('support_messages').insert(row).select('*').single()
       if (error) throw error
+      if (isAudio) supabase.functions.invoke('transcribe-chat-audio', { body: { message_id: data.id } }).catch(() => {})
       // Optimistically show the message immediately (don't wait on the realtime
       // echo, which the INSERT handler de-dupes by id).
       setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data]))
