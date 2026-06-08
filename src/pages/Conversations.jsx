@@ -941,11 +941,11 @@ export default function Conversations() {
     taRef.current?.focus()
   }
 
-  // Default compose channel to match the conversation type.
+  // Default compose channel to SMS on load, regardless of conversation type.
   useEffect(() => {
     if (!activeConv) return
-    setChannel(isEmailConversation(activeConv) ? 'email' : 'sms')
-  }, [activeConv?.id, activeConv?.last_channel])
+    setChannel('sms')
+  }, [activeConv?.id])
 
   function suggestReply() {
     setSuggesting(true)
