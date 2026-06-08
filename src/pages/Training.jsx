@@ -241,16 +241,16 @@ export default function Training() {
   return (
     <div className="space-y-6">
       {/* Hero: page label + title on the left, AI recommendation card on the right */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
+        <div className="flex flex-col gap-1 lg:w-1/3 lg:shrink-0">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
             Training
           </span>
           <h1 className="text-2xl font-bold tracking-tight text-white">CaseLift Academy</h1>
         </div>
 
-        {/* AI training recommendation — compact card, muted background */}
-        <div className="w-full rounded-xl bg-surface-800/60 p-3.5 lg:max-w-sm">
+        {/* AI training recommendation — fills the remaining 2/3, muted background */}
+        <div className="w-full rounded-xl bg-surface-800/60 p-4 lg:w-2/3">
           <div className="flex items-start gap-2.5">
             <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary-400">
               <Sparkles className="h-3.5 w-3.5" />
