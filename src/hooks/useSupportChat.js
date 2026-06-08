@@ -11,6 +11,7 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
   const [messages, setMessages] = useState([]) // all messages (top-level + replies)
   const [reactions, setReactions] = useState([]) // flat reaction rows for loaded messages
   const [typing, setTyping] = useState([]) // active typing rows (excluding me)
+  const [presence, setPresence] = useState([]) // users currently in the channel
   const [loading, setLoading] = useState(true)
   const [hasMore, setHasMore] = useState(false)
 
@@ -74,7 +75,7 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
   useEffect(() => {
     if (!chatId) return undefined
     const channel = supabase
-      .channel(`support:${chatId}`)
+      .channel(`support:${chatId}`, { config: { presence: { key: me || 'anon' } } })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_messages', filter: `chat_id=eq.${chatId}` }, (payload) => {
         setMessages((prev) => {
           if (payload.eventType === 'INSERT') {
@@ -106,11 +107,25 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
           return [...without, payload.new]
         })
       })
-      .subscribe()
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState()
+        const seen = new Set()
+        const users = []
+        for (const entry of Object.values(state).flat()) {
+          if (entry?.user_id && !seen.has(entry.user_id)) { seen.add(entry.user_id); users.push(entry) }
+        }
+        setPresence(users)
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED' && me) {
+          channel.track({ user_id: me, name: currentUser?.name || 'User', avatar: currentUser?.avatar || null, sender_type: senderType })
+        }
+      })
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [chatId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId, me, senderType])
 
   // Expire stale typing rows every couple seconds (covers missed DELETE events).
   useEffect(() => {
@@ -249,6 +264,7 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
     messages,
     reactions,
     typingUsers,
+    presence,
     loading,
     hasMore,
     fetchMessages,

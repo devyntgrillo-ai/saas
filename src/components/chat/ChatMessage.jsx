@@ -5,16 +5,14 @@ import EmojiPicker from './EmojiPicker'
 import { groupReactions } from '../../hooks/useSupportChat'
 import { initials, avatarColor, timeLabel, shortRelative } from './chatUtil'
 
-function TeamAvatar() {
+// One avatar for everyone: a real profile photo when we have one, otherwise
+// deterministic colored initials. Coaches (team) get the brand-accent circle.
+export function Avatar({ name, url, team, size = 'h-9 w-9' }) {
+  if (url) {
+    return <img src={url} alt={name || ''} className={`${size} shrink-0 rounded-lg object-cover`} />
+  }
   return (
-    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-bold !text-white shadow-sm">
-      C
-    </span>
-  )
-}
-function PersonAvatar({ name }) {
-  return (
-    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold !text-white ${avatarColor(name)}`}>
+    <span className={`${size} flex shrink-0 items-center justify-center rounded-lg text-xs font-semibold !text-white ${team ? 'bg-primary' : avatarColor(name)}`}>
       {initials(name)}
     </span>
   )
@@ -64,15 +62,20 @@ export default function ChatMessage({
     <div className={`group relative flex gap-2.5 px-4 py-0.5 hover:bg-surface-800/40 ${rightAlign ? 'flex-row-reverse' : ''}`}>
       {/* Avatar column (kept for spacing when grouped) */}
       <div className="w-9 shrink-0">
-        {showHeader && (isTeam ? <TeamAvatar /> : <PersonAvatar name={message.sender_name} />)}
+        {showHeader && <Avatar name={message.sender_name} url={message.sender_avatar} team={isTeam} />}
       </div>
 
       <div className={`min-w-0 flex-1 ${rightAlign ? 'flex flex-col items-end' : ''}`}>
         {showHeader && (
           <div className={`flex items-baseline gap-2 ${rightAlign ? 'flex-row-reverse' : ''}`}>
             <span className={`text-[13px] font-bold ${isTeam ? 'text-primary-300' : 'text-white'}`}>
-              {isTeam ? 'CaseLift Team' : message.sender_name}
+              {message.sender_name}
             </span>
+            {isTeam && (
+              <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-300">
+                Coach
+              </span>
+            )}
             <span className="text-[11px] text-slate-500">{timeLabel(message.created_at)}</span>
           </div>
         )}

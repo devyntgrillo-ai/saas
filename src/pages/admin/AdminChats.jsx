@@ -8,6 +8,8 @@ import { useSupportChat } from '../../hooks/useSupportChat'
 import MessageList from '../../components/chat/MessageList'
 import ChatComposer from '../../components/chat/ChatComposer'
 import ThreadPanel from '../../components/chat/ThreadPanel'
+import PresenceBar from '../../components/chat/PresenceBar'
+import { Avatar } from '../../components/chat/ChatMessage'
 import { initials, avatarColor, shortRelative } from '../../components/chat/chatUtil'
 
 const ONLINE_MS = 5 * 60 * 1000
@@ -238,7 +240,8 @@ export default function AdminChats() {
                   <p className="truncate text-xs text-slate-400">{doctorLine(selectedChat) || 'Practice'}</p>
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 items-center gap-3">
+                <PresenceBar users={chat.presence} />
                 <Link to={`/admin/practices/${selectedChat.practice_id}`} className="flex items-center gap-1 text-xs text-primary-300 hover:underline">
                   View practice <ExternalLink className="h-3.5 w-3.5" />
                 </Link>
@@ -270,9 +273,9 @@ export default function AdminChats() {
                     onOpenThread={(m) => setThread(m)}
                   />
                 )}
-                <div className="flex items-center gap-2 px-5 pt-1 text-[11px] text-slate-500">
-                  <span className="flex h-4 w-4 items-center justify-center rounded bg-primary text-[9px] font-bold !text-white">C</span>
-                  Replying as CaseLift Team
+                <div className="flex items-center gap-1.5 px-5 pt-1 text-[11px] text-slate-500">
+                  <Avatar name={currentUser.name} url={currentUser.avatar} team size="h-5 w-5" />
+                  Replying as {currentUser.name}
                 </div>
                 <ChatComposer
                   placeholder={`Reply to ${practiceName(selectedChat)}…`}

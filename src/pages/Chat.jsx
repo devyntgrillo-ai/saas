@@ -7,6 +7,7 @@ import { useSupportChat } from '../hooks/useSupportChat'
 import MessageList from '../components/chat/MessageList'
 import ChatComposer from '../components/chat/ChatComposer'
 import ThreadPanel from '../components/chat/ThreadPanel'
+import PresenceBar from '../components/chat/PresenceBar'
 import { isCoachingOnline } from '../components/chat/chatUtil'
 
 const STARTERS = [
@@ -90,6 +91,9 @@ export default function Chat() {
               ? 'Your direct line to the coaching team. Ask us anything.'
               : "We're offline right now — but feel free to send a message and we'll reply soon."}
           </p>
+        </div>
+        <div className="ml-auto shrink-0">
+          <PresenceBar users={chat.presence} />
         </div>
       </div>
 
