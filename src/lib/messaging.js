@@ -19,6 +19,11 @@ export function smsProvisioningStatus(practice) {
   if (brand === 'approved' && campaign === 'approved') return 'active'
   if (brand === 'failed' || campaign === 'failed') return 'failed'
   if (brand === 'pending' || campaign === 'pending') return 'pending'
+  // Brand approved at the API level but no campaign on the messaging service yet.
+  if (brand === 'approved' && campaign !== 'approved') {
+    if (practice?.twilio_campaign_sid) return 'pending'
+    return 'campaign_needed'
+  }
   return 'number_only'
 }
 

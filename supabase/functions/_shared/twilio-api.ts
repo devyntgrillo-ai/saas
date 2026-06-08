@@ -75,7 +75,9 @@ export function mapA2pStatus(raw: string | undefined): "pending" | "approved" | 
   const s = String(raw || "").toUpperCase();
   if (["APPROVED", "VERIFIED", "ACTIVE"].includes(s)) return "approved";
   if (["FAILED", "REJECTED", "SUSPENDED", "DELETED"].includes(s)) return "failed";
-  if (["PENDING", "IN_REVIEW", "REVIEWING", "SUBMITTED", "REGISTERED"].includes(s)) return "pending";
+  if (["PENDING", "IN_REVIEW", "IN_PROGRESS", "REVIEWING", "SUBMITTED", "REGISTERED", "PENDING_REVIEW"].includes(s)) {
+    return "pending";
+  }
   return "unregistered";
 }
 

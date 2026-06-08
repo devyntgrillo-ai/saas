@@ -32,6 +32,16 @@ const DEFAULT_SAMPLES = [
   "Hi [name], following up on your implant consult. Any questions about your treatment plan? Reply STOP to opt out.",
   "Hi [name], just checking in after your visit. Happy to help schedule your next step. Reply STOP to opt out.",
 ];
+// Twilio requires at least two samples for CUSTOMER_CARE campaigns.
+function campaignSamples(biz: A2PBusiness): string[] {
+  const fromBiz = (biz.message_samples || []).map((s) => String(s).trim()).filter(Boolean);
+  const merged = [...fromBiz];
+  for (const s of DEFAULT_SAMPLES) {
+    if (merged.length >= 2) break;
+    if (!merged.includes(s)) merged.push(s);
+  }
+  return merged.slice(0, 5);
+}
 
 function trustHubFromConfig(a2pConfig: unknown): TrustHubStored {
   const cfg = (a2pConfig && typeof a2pConfig === "object" ? a2pConfig : {}) as Record<string, unknown>;
@@ -47,11 +57,25 @@ function mergeA2pConfig(existing: unknown, biz: A2PBusiness, trustHub: TrustHubS
   return { ...base, ...biz, trust_hub: trustHub };
 }
 
-async function verifyAccess(req: Request, practiceId: string, admin: ReturnType<typeof createClient>) {
-  const authHeader = req.headers.get("Authorization") || "";
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  if (authHeader.replace(/^Bearer\s+/i, "") === serviceKey) return { ok: true as const };
+function bearerToken(req: Request): string {
+  return (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+}
 
+function isServiceRoleJwt(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload?.role === "service_role";
+  } catch {
+    return false;
+  }
+}
+
+async function verifyAccess(req: Request, practiceId: string, admin: ReturnType<typeof createClient>) {
+  const token = bearerToken(req);
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  if (token && (token === serviceKey || isServiceRoleJwt(token))) return { ok: true as const };
+
+  const authHeader = req.headers.get("Authorization") || "";
   if (!authHeader) return { ok: false as const, status: 401, error: "Unauthorized" };
 
   const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
@@ -144,7 +168,7 @@ async function submitCampaign(
   brandSid: string,
   biz: A2PBusiness,
 ): Promise<{ campaignSid: string | null; skipped: boolean; reason?: string }> {
-  const samples = (biz.message_samples?.length ? biz.message_samples : DEFAULT_SAMPLES).slice(0, 5);
+  const samples = campaignSamples(biz);
   const form = new URLSearchParams();
   form.set("BrandRegistrationSid", brandSid);
   form.set("Description", biz.use_case || "Post-consult dental implant treatment plan follow-up messages.");
@@ -270,6 +294,9 @@ Deno.serve(async (req: Request) => {
 
       const hadFailure = practice.a2p_brand_status === "failed" ||
         practice.a2p_campaign_status === "failed";
+      const brandAlreadyApproved = practice.a2p_brand_status === "approved" &&
+        Boolean(practice.twilio_brand_sid);
+      const campaignOnly = brandAlreadyApproved && !practice.twilio_campaign_sid;
       const trustHubExisting = trustHubForResubmit(
         trustHubFromConfig(practice.a2p_config),
         practice.a2p_brand_status,
@@ -279,7 +306,7 @@ Deno.serve(async (req: Request) => {
 
       const regPatch: Record<string, unknown> = {
         a2p_submitted_at: nowIso,
-        a2p_brand_status: "pending",
+        a2p_brand_status: campaignOnly ? "approved" : "pending",
         a2p_campaign_status: "pending",
         a2p_failure_reason: null,
         sms_enabled: false,
@@ -299,6 +326,35 @@ Deno.serve(async (req: Request) => {
       );
 
       const notes: string[] = [];
+
+      // Brand already approved — only attach a campaign to the messaging service.
+      if (campaignOnly && practice.twilio_brand_sid) {
+        await admin.from("practices").update({
+          a2p_config: mergeA2pConfig(practice.a2p_config, biz, trustHubExisting),
+        }).eq("id", practiceId);
+
+        const campResult = await submitCampaign(cfg, mgSid!, practice.twilio_brand_sid, biz);
+        if (campResult.campaignSid) {
+          await admin.from("practices").update({ twilio_campaign_sid: campResult.campaignSid }).eq("id", practiceId);
+        } else if (campResult.reason) {
+          notes.push(`Campaign: ${campResult.reason}`);
+          await admin.from("practices").update({
+            a2p_failure_reason: campResult.reason,
+            a2p_campaign_status: "unregistered",
+          }).eq("id", practiceId);
+        }
+
+        const polled = await pollAndUpdate(cfg, admin, practiceId);
+        return json({
+          ok: !campResult.reason,
+          campaign_only: true,
+          messaging_service_sid: mgSid,
+          brand_sid: practice.twilio_brand_sid,
+          campaign_sid: campResult.campaignSid,
+          notes,
+          status: polled,
+        });
+      }
 
       if (a2pDevAutoApprove()) {
         await admin.from("practices").update({
@@ -347,7 +403,8 @@ Deno.serve(async (req: Request) => {
         biz,
       );
 
-      let brandSid = brandResult.brandSid;
+      let brandSid = brandResult.brandSid ||
+        (practice.a2p_brand_status === "approved" ? practice.twilio_brand_sid : null);
       if (brandResult.skipped && brandResult.reason) notes.push(`Brand: ${brandResult.reason}`);
 
       if (brandSid) {

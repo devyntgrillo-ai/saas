@@ -16,6 +16,7 @@ import { searchNumbers, purchaseNumber, registerA2P, pollA2PStatus } from '../li
 
 const DEFAULT_SAMPLES = [
   'Hi [name], following up on your implant consult. Any questions about your treatment plan? Reply STOP to opt out.',
+  'Hi [name], just checking in after your visit. Happy to help schedule your next step. Reply STOP to opt out.',
 ]
 
 /**
@@ -24,6 +25,7 @@ const DEFAULT_SAMPLES = [
  */
 export default function PhoneSetupWizard({ practiceId, practiceName, onClose, onComplete, embedded = false }) {
   const [step, setStep] = useState(1)
+  const [brandApproved, setBrandApproved] = useState(false)
   const [areaCode, setAreaCode] = useState('')
   const [numbers, setNumbers] = useState([])
   const [searched, setSearched] = useState(false)
@@ -54,16 +56,20 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
     supabase
       .from('practices')
       .select(
-        'name, address, doctor_first, doctor_last, email, phone, twilio_phone_number, a2p_brand_status, a2p_campaign_status',
+        'name, address, doctor_first, doctor_last, email, phone, twilio_phone_number, a2p_brand_status, a2p_campaign_status, a2p_config',
       )
       .eq('id', practiceId)
       .maybeSingle()
       .then(({ data }) => {
         if (!data) return
-        const addr = String(data.address || '')
+        const cfg = data.a2p_config && typeof data.a2p_config === 'object' ? data.a2p_config : {}
+        const addr = String(data.address || cfg.address_street || '')
         const zipMatch = addr.match(/\b(\d{5})(?:-\d{4})?\b/)
         if (zipMatch) setAreaCode(zipMatch[1].slice(0, 3))
-        if (data.twilio_phone_number && data.a2p_brand_status === 'approved') {
+        const brandOk = data.a2p_brand_status === 'approved'
+        const campaignOk = data.a2p_campaign_status === 'approved'
+        setBrandApproved(brandOk)
+        if (data.twilio_phone_number && brandOk && campaignOk) {
           setStep(5)
         } else if (
           data.twilio_phone_number &&
@@ -71,20 +77,28 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
         ) {
           setStep(4)
         } else if (data.twilio_phone_number) {
-          // number_only, failed, or partial — business info + resubmit
+          // number_only, campaign_needed, failed, or partial — business info + register/resubmit
           setStep(3)
         }
         const stateMatch = addr.match(/\b([A-Z]{2})\s+\d{5}\b/)
+        const cityMatch = addr.match(/,\s*([^,]+),\s*[A-Z]{2}\s+\d{5}/)
         setBiz((b) => ({
           ...b,
-          legal_name: data.name || b.legal_name,
-          contact_first: data.doctor_first || '',
-          contact_last: data.doctor_last || '',
-          contact_email: data.email || '',
-          contact_phone: data.phone || '',
-          address_street: data.address || b.address_street,
-          address_postal: zipMatch?.[1] || b.address_postal,
-          address_region: stateMatch?.[1] || b.address_region,
+          legal_name: cfg.legal_name || data.name || b.legal_name,
+          business_type: cfg.business_type || b.business_type,
+          ein: cfg.ein || b.ein,
+          website: cfg.website || b.website,
+          contact_first: cfg.contact_first || data.doctor_first || '',
+          contact_last: cfg.contact_last || data.doctor_last || '',
+          contact_email: cfg.contact_email || data.email || '',
+          contact_phone: cfg.contact_phone || data.phone || '',
+          address_street: cfg.address_street || addr.split(',')[0]?.trim() || b.address_street,
+          address_city: cfg.address_city || cityMatch?.[1]?.trim() || b.address_city,
+          address_postal: cfg.address_postal || zipMatch?.[1] || b.address_postal,
+          address_region: cfg.address_region || stateMatch?.[1] || b.address_region,
+          use_case: cfg.use_case || b.use_case,
+          opt_in_description: cfg.opt_in_description || b.opt_in_description,
+          message_samples: cfg.message_samples?.length ? cfg.message_samples : b.message_samples,
         }))
       })
   }, [practiceId])
@@ -266,8 +280,14 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
 
         {step === 3 && (
           <div>
-            <h3 className="text-base font-semibold text-white">Business information (A2P 10DLC)</h3>
-            <p className="mt-1 text-sm text-slate-400">US carriers require this to send business SMS. Pre-filled from your practice profile.</p>
+            <h3 className="text-base font-semibold text-white">
+              {brandApproved ? 'Campaign registration (A2P 10DLC)' : 'Business information (A2P 10DLC)'}
+            </h3>
+            <p className="mt-1 text-sm text-slate-400">
+              {brandApproved
+                ? 'Your brand is already approved. Confirm business details and register the messaging campaign for your practice number.'
+                : 'US carriers require this to send business SMS. Pre-filled from your practice profile.'}
+            </p>
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <label className="label">Legal business name</label>
@@ -353,9 +373,13 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
               </div>
             </div>
             <div className="mt-6 flex items-center justify-between">
-              <button type="button" onClick={() => setStep(2)} className="btn-ghost">
-                <ArrowLeft className="h-4 w-4" /> Back
-              </button>
+              {brandApproved ? (
+                <span />
+              ) : (
+                <button type="button" onClick={() => setStep(2)} className="btn-ghost">
+                  <ArrowLeft className="h-4 w-4" /> Back
+                </button>
+              )}
               <button
                 type="button"
                 onClick={submitA2P}
@@ -370,7 +394,8 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
                 }
                 className="btn-primary"
               >
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Submit registration
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{' '}
+                {brandApproved ? 'Register campaign' : 'Submit registration'}
               </button>
             </div>
           </div>

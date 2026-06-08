@@ -144,7 +144,7 @@ export default function PhoneMessaging() {
   const smsFullyActive = provStatus === 'active'
 
   useEffect(() => {
-    if (!practiceId || provStatus !== 'pending') return
+    if (!practiceId || (provStatus !== 'pending' && provStatus !== 'campaign_needed')) return
     let active = true
     const tick = async () => {
       try {
@@ -182,6 +182,17 @@ export default function PhoneMessaging() {
         </p>
       </div>
 
+      {provStatus === 'campaign_needed' && (
+        <div className="flex items-start gap-3 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" />
+          <div>
+            <p className="font-semibold text-sky-300">Campaign registration required</p>
+            <p className="mt-0.5 leading-relaxed text-sky-200/90">
+              Your A2P brand is approved, but outbound SMS still needs a campaign linked to your messaging service. Use Continue setup below.
+            </p>
+          </div>
+        </div>
+      )}
       {provStatus === 'pending' && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
           <Clock className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
@@ -558,7 +569,11 @@ function PhoneNumberCard({ phoneNumber, hasNumber, provStatus, practice, onSetup
                       provStatus === 'active' ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'
                     }`}
                   />
-                  {provStatus === 'active' ? 'Active — SMS enabled' : 'Number active — registration pending'}
+                  {provStatus === 'active'
+                    ? 'Active — SMS enabled'
+                    : provStatus === 'campaign_needed'
+                      ? 'Brand approved — finish campaign setup'
+                      : 'Number active — registration pending'}
                 </span>
               </div>
             </div>
@@ -577,10 +592,9 @@ function PhoneNumberCard({ phoneNumber, hasNumber, provStatus, practice, onSetup
               <p className={`mt-0.5 font-medium ${campaignMeta.text}`}>{campaignMeta.label}</p>
             </div>
           </div>
-          {/* Only when A2P hasn't been submitted yet — not while carriers are reviewing. */}
-          {provStatus === 'number_only' && (
+          {(provStatus === 'number_only' || provStatus === 'campaign_needed') && (
             <button type="button" onClick={onSetup} className="btn-secondary">
-              Continue setup
+              {provStatus === 'campaign_needed' ? 'Continue setup — register campaign' : 'Continue setup'}
             </button>
           )}
         </div>
