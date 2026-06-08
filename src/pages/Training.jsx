@@ -145,6 +145,21 @@ export default function Training() {
   // Overall progress across every module (all groups).
   const overallPct = modules.length ? Math.round((completedCount / modules.length) * 100) : 0
 
+  // The module the AI recommendation points at, so the card can deep-link to it.
+  // The prompt forces the model to name a module verbatim, so we match the longest
+  // module title that appears in the recommendation text (falling back to an exact
+  // focus_area title match). Brackets are ignored to mirror what the user reads.
+  const recommendedModule = useMemo(() => {
+    if (!modules.length) return null
+    const text = stripBrackets(rec?.recommendation || '').toLowerCase()
+    const inText = modules
+      .filter((m) => m.title && text.includes(m.title.toLowerCase()))
+      .sort((a, b) => b.title.length - a.title.length)
+    if (inText[0]) return inText[0]
+    const fa = rec?.focus_area?.trim().toLowerCase()
+    return (fa && modules.find((m) => m.title?.toLowerCase() === fa)) || null
+  }, [rec, modules])
+
   // ── Custom video player (presentational; wraps the existing <video> ref) ──
   // Bind player chrome to the native media events. Re-runs whenever a new
   // lesson mounts the <video> element.
@@ -173,6 +188,14 @@ export default function Training() {
     setDur(0)
     setIsPlaying(false)
     setPlaying(m)
+  }
+
+  // Open a module that may live under a different tab (e.g. the AI rec deep-link):
+  // switch to its tab first so the modal's progress strip and prev/next stay correct.
+  function openModule(m) {
+    if (!m) return
+    if (m.module_group && m.module_group !== activeGroup) setActiveGroup(m.module_group)
+    openLesson(m)
   }
 
   function togglePlay() {
@@ -292,10 +315,19 @@ export default function Training() {
                   <p className="mt-1.5 text-xs leading-relaxed text-slate-200">
                     {stripBrackets(stripEmDashes(rec?.recommendation))}
                   </p>
-                  {rec?.focus_area && (
-                    <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary-300">
-                      <GraduationCap className="h-3 w-3" /> {rec.focus_area}
-                    </span>
+                  {recommendedModule ? (
+                    <button
+                      onClick={() => openModule(recommendedModule)}
+                      className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-primary-700"
+                    >
+                      <Play className="h-3 w-3" /> Watch: {recommendedModule.title}
+                    </button>
+                  ) : (
+                    rec?.focus_area && (
+                      <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary-300">
+                        <GraduationCap className="h-3 w-3" /> {rec.focus_area}
+                      </span>
+                    )
                   )}
                 </>
               )}
