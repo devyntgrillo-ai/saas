@@ -46,11 +46,11 @@ export default function ThreadPanel({
 
   return (
     <motion.div
-      initial={{ x: 420 }}
+      initial={{ x: '100%' }}
       animate={{ x: 0 }}
-      exit={{ x: 420 }}
-      transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-      className="flex h-full w-full max-w-[420px] shrink-0 flex-col border-l border-surface-700 bg-surface-900"
+      exit={{ x: '100%' }}
+      transition={{ type: 'tween', duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+      className="absolute right-0 top-0 z-20 flex h-full w-full max-w-[420px] flex-col border-l border-surface-700 bg-surface-900 shadow-2xl"
     >
       <div className="flex items-center justify-between border-b border-surface-700 px-4 py-3">
         <h3 className="text-sm font-semibold text-white">Thread</h3>

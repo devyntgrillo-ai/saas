@@ -59,7 +59,7 @@ export default function ChatMessage({
   }
 
   return (
-    <div className={`group relative flex gap-2.5 px-4 py-0.5 hover:bg-surface-800/40 ${rightAlign ? 'flex-row-reverse' : ''}`}>
+    <div className={`group relative flex gap-2.5 px-4 py-1 hover:bg-surface-800/40 ${showHeader ? 'mt-2.5' : ''} ${rightAlign ? 'flex-row-reverse' : ''}`}>
       {/* Avatar column (kept for spacing when grouped) */}
       <div className="w-9 shrink-0">
         {showHeader && <Avatar name={message.sender_name} url={message.sender_avatar} team={isTeam} />}
@@ -124,8 +124,8 @@ export default function ChatMessage({
                   onClick={() => onReact?.(message.id, g.emoji)}
                   className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition ${
                     g.mine
-                      ? 'border-primary/50 bg-primary/15 text-primary-200'
-                      : 'border-surface-700 bg-surface-800 text-slate-300 hover:border-surface-600'
+                      ? 'border-[color:var(--accent-border)] bg-[color:var(--accent-subtle)] text-[color:var(--accent)]'
+                      : 'border-[color:var(--border)] bg-[color:var(--bg-elevated)] text-[color:var(--text-secondary)] hover:border-[color:var(--border-strong)]'
                   }`}
                 >
                   <span className="text-sm leading-none">{g.emoji}</span>

@@ -13,9 +13,9 @@ import { Avatar } from '../../components/chat/ChatMessage'
 import { initials, avatarColor, shortRelative } from '../../components/chat/chatUtil'
 
 const ONLINE_MS = 5 * 60 * 1000
-// Churned / dead subaccounts are hidden from the inbox — only active + trialing
-// (live) clients show.
-const CHURNED = new Set(['cancelled', 'canceled', 'expired', 'unpaid', 'inactive', 'churned'])
+// Only currently-subscribed subaccounts appear in the inbox — not trials or
+// churned accounts.
+const ACTIVE_STATUSES = new Set(['active', 'past_due'])
 
 function practiceName(c) { return c.practice?.name || 'Unknown practice' }
 function doctorLine(c) {
@@ -56,7 +56,7 @@ export default function AdminChats() {
       .select('*, practice:practices(id,name,doctor_first,doctor_last,city,state,subscription_status)')
       .order('last_message_at', { ascending: false })
     setChats((data || []).filter(
-      (c) => c.practice_id && !CHURNED.has((c.practice?.subscription_status || '').toLowerCase()),
+      (c) => c.practice_id && ACTIVE_STATUSES.has((c.practice?.subscription_status || '').toLowerCase()),
     ))
     setLoading(false)
   }, [])
@@ -253,7 +253,7 @@ export default function AdminChats() {
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-1">
+            <div className="relative flex min-h-0 flex-1 overflow-hidden">
               <div className="flex min-w-0 flex-1 flex-col">
                 {chat.loading ? (
                   <div className="flex flex-1 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div>

@@ -5,7 +5,6 @@ import {
   LayoutDashboard,
   CalendarCheck,
   MessageSquare,
-  MessageCircle,
   GitBranch,
   GraduationCap,
   Users,
@@ -43,7 +42,7 @@ const practiceNav = [
   { to: '/conversations', label: 'Conversations', icon: MessageSquare },
   { to: '/sequences', label: 'Sequences', icon: GitBranch },
   { to: '/training', label: 'Training', icon: GraduationCap },
-  { to: '/chat', label: 'Coaching', icon: MessageCircle },
+  { to: '/chat', label: 'Coaching', icon: Rocket },
   { to: '/community', label: 'Community', icon: Users, locked: true },
 ]
 
