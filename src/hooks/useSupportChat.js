@@ -138,6 +138,9 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
       }
       const { data, error } = await supabase.from('support_messages').insert(row).select('*').single()
       if (error) throw error
+      // Optimistically show the message immediately (don't wait on the realtime
+      // echo, which the INSERT handler de-dupes by id).
+      setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data]))
       // Fire notifications + Slack ping (non-blocking). Typing auto-expires and
       // the composer calls stopTyping on send.
       supabase.functions.invoke('chat-notify', { body: { message_id: data.id } }).catch(() => {})

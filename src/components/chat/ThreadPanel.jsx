@@ -37,7 +37,11 @@ export default function ThreadPanel({
     if (!v) return
     setText('')
     onStopTyping?.()
-    await onSendReply?.(v)
+    try {
+      await onSendReply?.(v)
+    } catch {
+      setText(v) // restore on failure so the reply isn't lost
+    }
   }
 
   return (

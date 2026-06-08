@@ -22,7 +22,12 @@ export default function ChatComposer({ placeholder = 'Message…', onSend, onTyp
     setText('')
     onStopTyping?.()
     requestAnimationFrame(() => { if (taRef.current) taRef.current.style.height = 'auto' })
-    await onSend?.(v)
+    try {
+      await onSend?.(v)
+    } catch {
+      // Send failed (e.g. transient) — restore the text so it isn't lost.
+      setText(v)
+    }
   }
 
   return (
