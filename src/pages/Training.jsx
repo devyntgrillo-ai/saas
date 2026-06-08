@@ -318,7 +318,7 @@ export default function Training() {
                   {recommendedModule ? (
                     <button
                       onClick={() => openModule(recommendedModule)}
-                      className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-primary-700"
+                      className="btn-primary mt-2.5 gap-1.5 rounded-full px-3 py-1 text-[11px]"
                     >
                       <Play className="h-3 w-3" /> Watch: {recommendedModule.title}
                     </button>
