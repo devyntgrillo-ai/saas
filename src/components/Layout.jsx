@@ -97,6 +97,7 @@ export default function Layout() {
   // the list (/consults) and processing screen (/consults/:id/processing) do not.
   const fullBleed =
     location.pathname === '/conversations' ||
+    location.pathname === '/chat' ||
     /^\/consults\/[^/]+$/.test(location.pathname)
 
   const handleSignOut = async () => {

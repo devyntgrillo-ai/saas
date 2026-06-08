@@ -60,7 +60,7 @@ export default function Chat() {
   const isEmpty = !chat.loading && chat.messages.length === 0
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] flex-col lg:h-[calc(100vh-1rem)]">
+    <div className="flex h-full min-h-0 flex-col">
       {/* Channel header */}
       <div className="flex items-center gap-3 border-b border-surface-700 px-5 py-3">
         <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-sm font-bold !text-white">C</span>
