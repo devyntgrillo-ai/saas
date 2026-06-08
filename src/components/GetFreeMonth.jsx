@@ -70,8 +70,9 @@ export default function GetFreeMonth({ practice }) {
     draftSeeded.current = true
     setDraft({
       subject: `${practiceName} recommends CaseLift`,
+      // No greeting here — the edge function prepends a personalized "Hi {friend},"
+      // at send time, since the friend's name isn't known when this draft is seeded.
       message:
-        `Hi,\n\n` +
         `I wanted to share a tool we have been using at ${practiceName}, called CaseLift. It records our treatment consults and automatically follows up with patients by text and email, and it has helped us recover cases that used to slip through the cracks.\n\n` +
         `I think it could do the same for your practice. Worth a quick look.`,
     })

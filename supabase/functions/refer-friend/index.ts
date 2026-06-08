@@ -54,12 +54,18 @@ Deno.serve(async (req: Request) => {
     const fromPractice = practice?.name || "A colleague";
     const brand = await resolveBrand(admin, practice);
 
+    // Personalized greeting, built from the friend's name at send time. This is
+    // generated here (not baked into the sender's draft) because the frontend
+    // seeds the draft before the friend's name is entered.
+    const greeting = `Hi${friendName ? ` ${friendName}` : ""},`;
     // Use the sender's edited template when provided; otherwise a sensible default.
-    const defaultMessage =
-      `Hi${friendName ? ` ${friendName}` : ""},\n\n` +
+    const defaultBody =
       `${fromPractice} uses ${brand.brandName} to automatically follow up with patients after consults and recover cases that would otherwise slip away. They thought your practice would benefit too.\n\n` +
       `Take a look:`;
-    const messageText = customMessage || defaultMessage;
+    const bodyMessage = customMessage || defaultBody;
+    // Prepend the personalized greeting unless the sender already wrote their own.
+    const hasOwnGreeting = /^\s*(hi|hello|hey|dear)\b/i.test(bodyMessage);
+    const messageText = hasOwnGreeting ? bodyMessage : `${greeting}\n\n${bodyMessage}`;
     const bodyHtml = messageText
       .split(/\n{2,}/)
       .map((para) => `<p>${escapeHtml(para).replace(/\n/g, "<br>")}</p>`)
