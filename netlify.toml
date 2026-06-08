@@ -7,6 +7,12 @@
   command = "npm run build"
   publish = "dist"
 
+# Pin Node so the build matches the version the lockfile was generated with.
+# Without this, Netlify's default Node can differ from local and npm errors
+# out parsing versions ("npm error Invalid Version:") during install.
+[build.environment]
+  NODE_VERSION = "20"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
