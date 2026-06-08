@@ -134,8 +134,13 @@ export function AuthProvider({ children }) {
     return data
   }, [])
 
+  // Reload profile/agency only when the signed-in *user* changes — not on every
+  // session object update. Supabase fires onAuthStateChange (TOKEN_REFRESHED)
+  // when the tab regains focus; depending on `session` remounted the whole app
+  // behind LoadingScreen on every tab switch.
+  const sessionUserId = session?.user?.id ?? null
   useEffect(() => {
-    if (!session?.user) {
+    if (!sessionUserId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setProfile(null)
       setAgency(null)
@@ -148,9 +153,9 @@ export function AuthProvider({ children }) {
       return
     }
     setProfileResolvedUserId(null)
-    loadProfile(session.user.id)
-    loadAgency(session.user.id)
-  }, [session, loading, loadProfile, loadAgency])
+    loadProfile(sessionUserId)
+    loadAgency(sessionUserId)
+  }, [sessionUserId, loading, loadProfile, loadAgency])
 
   // Email-confirmed signups often land with practice_name metadata but no practice_id yet.
   useEffect(() => {

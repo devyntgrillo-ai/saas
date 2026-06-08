@@ -1,0 +1,2 @@
+[functions.twilio-trusthub-status]
+verify_jwt = false
