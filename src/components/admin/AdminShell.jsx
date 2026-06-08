@@ -13,6 +13,7 @@ const TABS = [
   { to: '/admin', label: 'Dashboard', end: true },
   { to: '/admin/agencies', label: 'Resellers' },
   { to: '/admin/practices', label: 'Subaccounts' },
+  { to: '/admin/chats', label: 'Chats' },
   { to: '/admin/team', label: 'Users' },
   { to: '/admin/billing', label: 'Billing' },
   { to: '/admin/training', label: 'Training' },

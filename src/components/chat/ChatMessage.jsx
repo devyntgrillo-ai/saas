@@ -1,0 +1,183 @@
+import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Smile, MessageSquare, Pencil, Trash2, X, Check } from 'lucide-react'
+import EmojiPicker from './EmojiPicker'
+import { groupReactions } from '../../hooks/useSupportChat'
+import { initials, avatarColor, timeLabel, shortRelative } from './chatUtil'
+
+function TeamAvatar() {
+  return (
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-bold !text-white shadow-sm">
+      C
+    </span>
+  )
+}
+function PersonAvatar({ name }) {
+  return (
+    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold !text-white ${avatarColor(name)}`}>
+      {initials(name)}
+    </span>
+  )
+}
+
+function reactionTitle(g) {
+  if (g.mine && g.count === 1) return 'You reacted'
+  if (g.mine) return `You and ${g.count - 1} other${g.count - 1 > 1 ? 's' : ''}`
+  return `${g.count} ${g.count > 1 ? 'people' : 'person'} reacted`
+}
+
+export default function ChatMessage({
+  message,
+  reactions,
+  myId,
+  viewerType, // 'practice' | 'caselift_team' (the current user's side)
+  canModerate = false,
+  showHeader = true,
+  replyCount = 0,
+  lastReplyAt = null,
+  inThread = false,
+  onReact,
+  onReply,
+  onEdit,
+  onDelete,
+  onOpenThread,
+}) {
+  const [showPicker, setShowPicker] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(message.message || '')
+
+  const isTeam = message.sender_type === 'caselift_team'
+  const mine = message.sender_id && message.sender_id === myId
+  const rightAlign = viewerType === 'caselift_team' && isTeam
+  const deleted = Boolean(message.deleted_at)
+  const groups = groupReactions(reactions, message.id, myId)
+  const canEdit = mine && !deleted
+  const canDelete = (mine || canModerate) && !deleted
+
+  async function saveEdit() {
+    const v = draft.trim()
+    if (v && v !== message.message) await onEdit?.(message.id, v)
+    setEditing(false)
+  }
+
+  return (
+    <div className={`group relative flex gap-2.5 px-4 py-0.5 hover:bg-surface-800/40 ${rightAlign ? 'flex-row-reverse' : ''}`}>
+      {/* Avatar column (kept for spacing when grouped) */}
+      <div className="w-9 shrink-0">
+        {showHeader && (isTeam ? <TeamAvatar /> : <PersonAvatar name={message.sender_name} />)}
+      </div>
+
+      <div className={`min-w-0 flex-1 ${rightAlign ? 'flex flex-col items-end' : ''}`}>
+        {showHeader && (
+          <div className={`flex items-baseline gap-2 ${rightAlign ? 'flex-row-reverse' : ''}`}>
+            <span className={`text-[13px] font-bold ${isTeam ? 'text-primary-300' : 'text-white'}`}>
+              {isTeam ? 'CaseLift Team' : message.sender_name}
+            </span>
+            <span className="text-[11px] text-slate-500">{timeLabel(message.created_at)}</span>
+          </div>
+        )}
+
+        {/* Message body */}
+        <div className={`mt-0.5 max-w-[680px] ${isTeam && !rightAlign ? 'border-l-2 border-primary/40 pl-2.5' : ''}`}>
+          {deleted ? (
+            <p className="text-sm italic text-slate-500">This message was deleted</p>
+          ) : editing ? (
+            <div className="w-full">
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit() }
+                  if (e.key === 'Escape') setEditing(false)
+                }}
+                autoFocus
+                className="input min-h-[64px] w-full resize-y text-sm"
+              />
+              <div className="mt-1.5 flex gap-2">
+                <button onClick={() => setEditing(false)} className="btn-ghost text-xs"><X className="h-3.5 w-3.5" /> Cancel</button>
+                <button onClick={saveEdit} className="btn-primary text-xs"><Check className="h-3.5 w-3.5" /> Save</button>
+              </div>
+            </div>
+          ) : (
+            <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-200 ${rightAlign ? 'rounded-2xl rounded-tr-sm bg-primary/15 px-3 py-2' : ''}`}>
+              {message.message}
+              {message.edited_at && <span className="ml-1.5 text-[11px] text-slate-500">(edited)</span>}
+            </p>
+          )}
+        </div>
+
+        {/* Reactions bar */}
+        {groups.length > 0 && !deleted && (
+          <div className={`mt-1 flex flex-wrap gap-1 ${rightAlign ? 'justify-end' : ''}`}>
+            <AnimatePresence>
+              {groups.map((g) => (
+                <motion.button
+                  key={g.emoji}
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.5, opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+                  title={reactionTitle(g)}
+                  onClick={() => onReact?.(message.id, g.emoji)}
+                  className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition ${
+                    g.mine
+                      ? 'border-primary/50 bg-primary/15 text-primary-200'
+                      : 'border-surface-700 bg-surface-800 text-slate-300 hover:border-surface-600'
+                  }`}
+                >
+                  <span className="text-sm leading-none">{g.emoji}</span>
+                  <span className="font-medium tabular-nums">{g.count}</span>
+                </motion.button>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* Thread indicator */}
+        {!inThread && replyCount > 0 && (
+          <button
+            onClick={() => onOpenThread?.(message)}
+            className={`mt-1 flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs font-medium text-primary-300 transition hover:bg-surface-800 ${rightAlign ? 'self-end' : 'self-start'}`}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            {replyCount} {replyCount > 1 ? 'replies' : 'reply'}
+            {lastReplyAt && <span className="font-normal text-slate-500">· Last reply {shortRelative(lastReplyAt)} ago</span>}
+          </button>
+        )}
+      </div>
+
+      {/* Hover action bar */}
+      {!deleted && !editing && (
+        <div className={`absolute -top-3 z-10 flex items-center gap-0.5 rounded-lg border border-surface-700 bg-surface-900 p-0.5 opacity-0 shadow-lg transition group-hover:opacity-100 ${rightAlign ? 'left-4' : 'right-4'}`}>
+          <div className="relative">
+            <button onClick={() => setShowPicker((v) => !v)} className="flex h-7 w-7 items-center justify-center rounded text-slate-400 transition hover:bg-surface-800 hover:text-white" title="Add reaction">
+              <Smile className="h-4 w-4" />
+            </button>
+            {showPicker && (
+              <EmojiPicker
+                align={rightAlign ? 'left' : 'right'}
+                onSelect={(emoji) => onReact?.(message.id, emoji)}
+                onClose={() => setShowPicker(false)}
+              />
+            )}
+          </div>
+          {!inThread && (
+            <button onClick={() => onReply?.(message)} className="flex h-7 w-7 items-center justify-center rounded text-slate-400 transition hover:bg-surface-800 hover:text-white" title="Reply in thread">
+              <MessageSquare className="h-4 w-4" />
+            </button>
+          )}
+          {canEdit && (
+            <button onClick={() => { setDraft(message.message || ''); setEditing(true) }} className="flex h-7 w-7 items-center justify-center rounded text-slate-400 transition hover:bg-surface-800 hover:text-white" title="Edit">
+              <Pencil className="h-4 w-4" />
+            </button>
+          )}
+          {canDelete && (
+            <button onClick={() => onDelete?.(message.id)} className="flex h-7 w-7 items-center justify-center rounded text-slate-400 transition hover:bg-surface-800 hover:text-rose-400" title="Delete">
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

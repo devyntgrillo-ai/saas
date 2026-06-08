@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   CalendarCheck,
   MessageSquare,
+  MessageCircle,
   GitBranch,
   GraduationCap,
   Users,
@@ -30,6 +31,7 @@ import { VoiceProvider } from '../context/VoiceContext'
 import VoiceCallBar from './VoiceCallBar'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
+import { useChatUnread } from '../hooks/useChatUnread'
 import { usePermissions } from '../lib/permissions'
 import { needsPaywall } from '../lib/billing'
 
@@ -39,6 +41,7 @@ const practiceNav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/consults', label: 'Consults', icon: CalendarCheck },
   { to: '/conversations', label: 'Conversations', icon: MessageSquare },
+  { to: '/chat', label: 'Chat', icon: MessageCircle },
   { to: '/sequences', label: 'Sequences', icon: GitBranch },
   { to: '/training', label: 'Training', icon: GraduationCap },
   { to: '/community', label: 'Community', icon: Users, locked: true },
@@ -117,6 +120,7 @@ export default function Layout() {
   const showPracticeNav = Boolean(practiceId) && !inResellerPortal
   const nav = showPracticeNav ? practiceNav : []
   const showSettings = showPracticeNav && perms.canViewSettings
+  const chatUnread = useChatUnread(practiceId)
   const agencyActive =
     location.pathname.startsWith('/agency/saas-mode') ? 'saas-mode'
     : location.pathname.startsWith('/agency/analytics') ? 'analytics'
@@ -163,6 +167,12 @@ export default function Layout() {
                     brand accent when active. Size 16px, 10px gap (gap-2.5 above). */}
                 {Icon && <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />}
                 <span className="flex-1">{label}</span>
+                {/* Live unread badge for the Chat channel. */}
+                {to === '/chat' && chatUnread > 0 && (
+                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold !text-white">
+                    {chatUnread > 9 ? '9+' : chatUnread}
+                  </span>
+                )}
                 {/* Locked tabs (e.g. Community) show a small lock - viewable as a teaser. */}
                 {locked && <Lock className="h-3 w-3 shrink-0 text-slate-500" strokeWidth={2} />}
               </NavLink>

@@ -55,6 +55,8 @@ const AdminBilling = lazy(() => import('./pages/admin/Billing'))
 const AdminTraining = lazy(() => import('./pages/admin/TrainingAdmin'))
 const AdminWins = lazy(() => import('./pages/admin/Wins'))
 const AdminReferrals = lazy(() => import('./pages/admin/Referrals'))
+const AdminChats = lazy(() => import('./pages/admin/AdminChats'))
+const Chat = lazy(() => import('./pages/Chat'))
 
 // get.caselift.io is a signup landing host: visiting its root sends people
 // straight into the signup funnel. Hostname is stable per page load, so this is
@@ -150,6 +152,7 @@ function AppContent() {
                   <Route path="training" element={<AdminTraining />} />
                   <Route path="wins" element={<AdminWins />} />
                   <Route path="referrals" element={<AdminReferrals />} />
+                  <Route path="chats" element={<AdminChats />} />
                 </Route>
 
                 {/* App shell - gated behind BAA acceptance + onboarding completion */}
@@ -178,6 +181,7 @@ function AppContent() {
                     <Route path="/consults/:id" element={<ConsultDetail />} />
                     <Route path="/conversations" element={<Conversations />} />
                     <Route path="/conversations/dialer" element={<PowerDialer />} />
+                    <Route path="/chat" element={<Chat />} />
                     {/* Sequence editing is desktop-only for now; the native app
                         shows a gate instead of the management/settings view. */}
                     <Route path="/sequences" element={isNative() ? <SequencesMobileGate /> : <Sequences />} />
