@@ -51,6 +51,19 @@ export function shortRelative(ts) {
   try { return format(new Date(ts), 'MMM d') } catch { return '' }
 }
 
+// Coaching team availability: Mon–Fri, 9am–5pm US Eastern. Computed in ET so it's
+// correct regardless of where the viewer is.
+export function isCoachingOnline(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', hour12: false,
+  }).formatToParts(date)
+  const wd = parts.find((p) => p.type === 'weekday')?.value
+  let hour = Number(parts.find((p) => p.type === 'hour')?.value)
+  if (hour === 24) hour = 0
+  const weekday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(wd)
+  return weekday && hour >= 9 && hour < 17
+}
+
 // Build the "Devyn, Laura, and 1 other" tooltip for a reaction group.
 export function reactorTooltip(names) {
   const list = names.filter(Boolean)

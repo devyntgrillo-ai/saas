@@ -7,6 +7,7 @@ import { useSupportChat } from '../hooks/useSupportChat'
 import MessageList from '../components/chat/MessageList'
 import ChatComposer from '../components/chat/ChatComposer'
 import ThreadPanel from '../components/chat/ThreadPanel'
+import { isCoachingOnline } from '../components/chat/chatUtil'
 
 const STARTERS = [
   'Help me review a consult',
@@ -19,6 +20,13 @@ export default function Chat() {
   const [chatId, setChatId] = useState(null)
   const [loadingChat, setLoadingChat] = useState(true)
   const [thread, setThread] = useState(null)
+  const [, setTick] = useState(0) // minute ticker so the online/offline status flips on time
+
+  useEffect(() => {
+    const iv = setInterval(() => setTick((t) => t + 1), 60000)
+    return () => clearInterval(iv)
+  }, [])
+  const online = isCoachingOnline()
 
   const currentUser = useMemo(
     () => ({
@@ -66,12 +74,22 @@ export default function Chat() {
         <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-sm font-bold !text-white">C</span>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="text-sm font-bold text-white">CaseLift Team</h1>
-            <span className="flex items-center gap-1 text-[11px] text-emerald-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Online
-            </span>
+            <h1 className="text-sm font-bold text-white">Private 7-Figure Coaching Channel</h1>
+            {online ? (
+              <span className="flex items-center gap-1 text-[11px] text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Online
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-[11px] text-slate-500">
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-500" /> Offline
+              </span>
+            )}
           </div>
-          <p className="truncate text-xs text-slate-400">Your direct line to the CaseLift team. Ask us anything.</p>
+          <p className="truncate text-xs text-slate-400">
+            {online
+              ? 'Your direct line to the coaching team. Ask us anything.'
+              : "We're offline right now — but feel free to send a message and we'll reply soon."}
+          </p>
         </div>
       </div>
 

@@ -41,9 +41,9 @@ const practiceNav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/consults', label: 'Consults', icon: CalendarCheck },
   { to: '/conversations', label: 'Conversations', icon: MessageSquare },
-  { to: '/chat', label: 'Chat', icon: MessageCircle },
   { to: '/sequences', label: 'Sequences', icon: GitBranch },
   { to: '/training', label: 'Training', icon: GraduationCap },
+  { to: '/chat', label: 'Coaching', icon: MessageCircle },
   { to: '/community', label: 'Community', icon: Users, locked: true },
 ]
 
