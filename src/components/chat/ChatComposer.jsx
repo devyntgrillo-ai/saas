@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import EmojiPicker from './EmojiPicker'
 import AudioRecorder from './AudioRecorder'
+import { renderEditorHighlight } from './editorHighlight'
 
 // Slack-style composer: formatting toolbar, growing text area, a row of action
 // icons (attach / emoji / mention / voice memo) and a send arrow. onSend(text,
@@ -18,6 +19,7 @@ export default function ChatComposer({ placeholder = 'Message…', mentionables 
   const [mentionQuery, setMentionQuery] = useState(null)
   const taRef = useRef(null)
   const fileRef = useRef(null)
+  const overlayRef = useRef(null)
 
   const mentionMatches = mentionQuery == null
     ? []
@@ -129,19 +131,27 @@ export default function ChatComposer({ placeholder = 'Message…', mentionables 
             </div>
           )}
 
-          <textarea
-            ref={taRef}
-            value={text}
-            onChange={(e) => { setText(e.target.value); detectMention(e.target.value, e.target.selectionStart); onTyping?.(); autoSize() }}
-            onKeyDown={(e) => {
-              if (mentionMatches.length && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); applyMention(mentionMatches[0]); return }
-              if (e.key === 'Escape' && mentionQuery != null) { setMentionQuery(null); return }
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
-            }}
-            rows={1}
-            placeholder={placeholder}
-            className="block max-h-36 min-h-[40px] w-full resize-none bg-transparent px-3 py-2 text-[15px] text-slate-200 placeholder-slate-500 focus:outline-none"
-          />
+          <div className="relative">
+            {/* Live formatting layer (bold shows bold, markers dimmed), aligned
+                char-for-char behind the transparent-text textarea. */}
+            <div ref={overlayRef} aria-hidden className="pointer-events-none absolute inset-0 max-h-36 overflow-hidden whitespace-pre-wrap break-words px-3 py-2 text-[15px] leading-6 text-slate-200">
+              {renderEditorHighlight(text, mentionables)}
+            </div>
+            <textarea
+              ref={taRef}
+              value={text}
+              onChange={(e) => { setText(e.target.value); detectMention(e.target.value, e.target.selectionStart); onTyping?.(); autoSize() }}
+              onScroll={(e) => { if (overlayRef.current) overlayRef.current.scrollTop = e.currentTarget.scrollTop }}
+              onKeyDown={(e) => {
+                if (mentionMatches.length && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); applyMention(mentionMatches[0]); return }
+                if (e.key === 'Escape' && mentionQuery != null) { setMentionQuery(null); return }
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+              }}
+              rows={1}
+              placeholder={placeholder}
+              className="relative block max-h-36 min-h-[40px] w-full resize-none bg-transparent px-3 py-2 text-[15px] leading-6 text-transparent caret-slate-200 placeholder-slate-500 focus:outline-none"
+            />
+          </div>
 
           {/* Bottom action row */}
           <div className="flex items-center gap-0.5 px-2 py-1.5">
