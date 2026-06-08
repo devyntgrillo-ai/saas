@@ -144,7 +144,10 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
         }
       })
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
-        if (!payload || payload.user_id === me) return
+        // Broadcast never echoes to the same client (self:false), so anything we
+        // receive is from someone else — no need to filter by user id (that broke
+        // the case where the same person is in the practice + admin view).
+        if (!payload) return
         setTyping((prev) => {
           const without = prev.filter((t) => !(t.user_id === payload.user_id && t.scope === payload.scope))
           if (!payload.typing) return without
@@ -320,7 +323,6 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
   // Active typing users (not me), de-duplicated by user+scope. Staleness is
   // pruned by the TTL interval above, so we avoid an impure Date.now() in render.
   const typingUsers = typing
-    .filter((t) => t.user_id !== me)
     .filter((t, i, arr) => arr.findIndex((x) => x.user_id === t.user_id && x.scope === t.scope) === i)
 
   return {
