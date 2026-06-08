@@ -111,7 +111,8 @@ export default function GetFreeMonth({ practice }) {
         audio: true,
       })
       streamRef.current = stream
-      if (liveRef.current) { liveRef.current.srcObject = stream; liveRef.current.muted = true; liveRef.current.play().catch(() => {}) }
+      // The preview frame is hidden until now, so it isn't mounted yet - the
+      // attach effect below wires the stream once the frame renders.
       setCountdown(3)
       setCountdownPaused(false)
       setPhase('countdown')
@@ -156,6 +157,16 @@ export default function GetFreeMonth({ practice }) {
     setElapsed(0)
     setPhase('idle')
   }
+
+  // Attach the live camera stream to the preview once the frame is on screen
+  // (it stays hidden until the user clicks Record, so we can't attach earlier).
+  useEffect(() => {
+    if ((phase === 'countdown' || phase === 'recording') && !blobUrl && liveRef.current && streamRef.current) {
+      liveRef.current.srcObject = streamRef.current
+      liveRef.current.muted = true
+      liveRef.current.play().catch(() => {})
+    }
+  }, [phase, blobUrl])
 
   // Pausable 3-2-1 countdown - ticks while in the countdown phase and not paused.
   useEffect(() => {
@@ -277,6 +288,7 @@ export default function GetFreeMonth({ practice }) {
               <li className="flex gap-2"><span className="text-emerald-400">•</span> What your follow-up looked like before vs. now, and who you’d recommend it to.</li>
             </ul>
             {/* Vertical (9:16) frame to match how it will be used. */}
+            {(phase !== 'idle' || blobUrl) && (
             <div className="relative mx-auto mt-4 aspect-[9/16] w-full max-w-[260px] overflow-hidden rounded-xl border border-surface-700 bg-black">
               {blobUrl ? (
                 <video src={blobUrl} controls className="h-full w-full object-cover" />
@@ -301,6 +313,7 @@ export default function GetFreeMonth({ practice }) {
                 </>
               )}
             </div>
+            )}
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               {!blobUrl && phase === 'idle' && (
                 <button onClick={beginCountdown} className="btn-primary"><Video className="h-4 w-4" /> Start recording</button>
