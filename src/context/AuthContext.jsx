@@ -59,32 +59,48 @@ export function AuthProvider({ children }) {
   // Resellers (agencies) a super-admin can jump into. Empty for everyone else.
   const [accessibleResellers, setAccessibleResellers] = useState([])
 
-  // --- session ---
-  useEffect(() => {
-    let active = true
-    supabase.auth
-      .getSession()
-      .then(({ data }) => {
-        if (!active) return
-        setSession(data.session)
-      })
-      .catch(() => {
-        if (!active) return
-        setSession(null)
-      })
-      .finally(() => {
-        if (!active) return
-        setLoading(false)
-      })
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
-      setSession(sess)
-      setLoading(false)
-    })
-    return () => {
-      active = false
-      sub.subscription.unsubscribe()
-    }
+  const clearUserState = useCallback(() => {
+    setProfile(null)
+    setAgency(null)
+    setAgencyRole(null)
+    setProfileResolvedUserId(null)
+    setProfileLoading(false)
+    setAgencyLoading(false)
   }, [])
+
+  // Bootstrap via onAuthStateChange only (INITIAL_SESSION replaces getSession).
+  // Never call auth APIs inside this callback — use the provided session.
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
+      if (event === 'TOKEN_REFRESHED') {
+        setSession(sess)
+        return
+      }
+
+      if (event === 'SIGNED_OUT') {
+        setSession(null)
+        clearUserState()
+        setLoading(false)
+        return
+      }
+
+      if (event === 'INITIAL_SESSION') {
+        setSession(sess)
+        if (!sess?.user) clearUserState()
+        setLoading(false)
+        return
+      }
+
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'PASSWORD_RECOVERY') {
+        setSession(sess)
+        setLoading(false)
+        return
+      }
+
+      if (sess) setSession(sess)
+    })
+    return () => sub.subscription.unsubscribe()
+  }, [clearUserState])
 
   // --- profile (+ practice + that practice's agency) ---
   const loadProfile = useCallback(async (userId, { silent = false } = {}) => {
@@ -134,32 +150,19 @@ export function AuthProvider({ children }) {
     return data
   }, [])
 
-  // Reload profile/agency only when the signed-in *user* changes — not on every
-  // session object update. Supabase fires onAuthStateChange (TOKEN_REFRESHED)
-  // when the tab regains focus; depending on `session` remounted the whole app
-  // behind LoadingScreen on every tab switch.
+  // Load profile/agency when the signed-in user changes. TOKEN_REFRESHED only
+  // updates the session token above — this effect does not re-run for that.
   const sessionUserId = session?.user?.id ?? null
   useEffect(() => {
-    if (!sessionUserId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setProfile(null)
-      setAgency(null)
-      setAgencyRole(null)
-      setProfileResolvedUserId(null)
-      if (!loading) {
-        setProfileLoading(false)
-        setAgencyLoading(false)
-      }
-      return
-    }
-    setProfileResolvedUserId(null)
+    if (!sessionUserId) return
+    if (profileResolvedUserId === sessionUserId) return
     loadProfile(sessionUserId)
     loadAgency(sessionUserId)
-  }, [sessionUserId, loading, loadProfile, loadAgency])
+  }, [sessionUserId, profileResolvedUserId, loadProfile, loadAgency])
 
   // Email-confirmed signups often land with practice_name metadata but no practice_id yet.
   useEffect(() => {
-    if (!session?.user || profileLoading || profile?.practice_id) return
+    if (!sessionUserId || !session?.user || profileLoading || profile?.practice_id) return
     let active = true
     ;(async () => {
       const { practiceId, error } = await ensurePracticeLinked(supabase, session.user)
@@ -168,12 +171,12 @@ export function AuthProvider({ children }) {
         console.warn('[Hope AI] Could not link practice:', error.message)
         return
       }
-      await loadProfile(session.user.id, { silent: true })
+      await loadProfile(sessionUserId, { silent: true })
     })()
     return () => {
       active = false
     }
-  }, [session, profile?.practice_id, profileLoading, loadProfile])
+  }, [sessionUserId, session?.user, profile?.practice_id, profileLoading, loadProfile])
 
   const isAgencyUser = Boolean(agency)
 
@@ -374,6 +377,10 @@ export function AuthProvider({ children }) {
   const profileResolved =
     !session?.user?.id || profileResolvedUserId === session.user.id
 
+  // Full-app loader (App.jsx): first auth bootstrap or a different user signed in.
+  // Does not flip on TOKEN_REFRESHED or impersonation context loads.
+  const appShellLoading = loading || (Boolean(sessionUserId) && !profileResolved)
+
   const viewPractice = useCallback((id) => {
     localStorage.setItem(VIEW_KEY, id)
     setViewingPracticeId(id)
@@ -450,13 +457,15 @@ export function AuthProvider({ children }) {
     viewAgency,
     exitAgency,
     getResellerId,
+    // Route guards (BAA, onboarding, admin): wait for profile + impersonation targets.
     contextLoading:
-      loading ||
-      !profileResolved ||
+      appShellLoading ||
       profileLoading ||
       agencyLoading ||
       practiceContextPending ||
       agencyContextPending,
+    // App shell only — avoids unmounting the tree on token refresh / impersonation fetch.
+    appShellLoading,
 
     // access
     accessLevel,

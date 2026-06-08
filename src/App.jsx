@@ -79,18 +79,17 @@ export default function App() {
 }
 
 // Rendered inside the providers so it can read auth state. Shows the branded
-// loading screen while auth/profile/practice context resolves (initial load and
-// when switching or impersonating a practice), with a 1.2s minimum so it never
-// flashes (pages load fast enough that a shorter minimum was imperceptible).
-// Then renders the router (lazy routes fall back to it too).
+// loading screen on first boot or when a different user signs in (appShellLoading),
+// with a 1.2s minimum so it never flashes. Impersonation / route guards use
+// contextLoading locally without unmounting the whole tree.
 function AppContent() {
-  const { contextLoading } = useAuth()
+  const { appShellLoading } = useAuth()
   const [minDone, setMinDone] = useState(false)
   useEffect(() => {
     const t = setTimeout(() => setMinDone(true), 1200)
     return () => clearTimeout(t)
   }, [])
-  if (contextLoading || !minDone) return <LoadingScreen />
+  if (appShellLoading || !minDone) return <LoadingScreen />
   return (
     <Suspense fallback={<LoadingScreen />}>
             <Routes>
