@@ -1,13 +1,17 @@
 import { useRef, useState } from 'react'
 import { Loader2, Check, Camera } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { uploadAvatar, updateMyProfile } from '../lib/profile'
+import { uploadAvatar, updateMyProfile, ROLE_OPTIONS } from '../lib/profile'
 import { Avatar } from './chat/ChatMessage'
 
-// Settings → Your Profile: set the display name + avatar shown across the app.
+// Settings → Your Profile: set the display name + avatar + role shown across the app.
 export default function UserProfilePanel() {
   const { user, profile, refreshProfile } = useAuth()
   const [name, setName] = useState(profile?.display_name || user?.user_metadata?.full_name || '')
+  const initialRole = profile?.job_title || ''
+  const initialIsPreset = ROLE_OPTIONS.includes(initialRole)
+  const [roleSel, setRoleSel] = useState(initialIsPreset ? initialRole : initialRole ? '__other' : '')
+  const [roleOther, setRoleOther] = useState(initialIsPreset ? '' : initialRole)
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -32,7 +36,8 @@ export default function UserProfilePanel() {
     try {
       let avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url || null
       if (file) avatarUrl = await uploadAvatar(user.id, file)
-      await updateMyProfile({ displayName: name.trim(), avatarUrl })
+      const jobTitle = roleSel === '__other' ? roleOther.trim() : roleSel
+      await updateMyProfile({ displayName: name.trim(), avatarUrl, jobTitle })
       await refreshProfile()
       setFile(null)
       setSaved(true)
@@ -74,6 +79,25 @@ export default function UserProfilePanel() {
           />
           <p className="mt-1 truncate text-xs text-slate-500">{user?.email}</p>
         </div>
+      </div>
+
+      <div className="mt-5 max-w-sm">
+        <label className="label">Your role</label>
+        <select value={roleSel} onChange={(e) => setRoleSel(e.target.value)} className="input">
+          <option value="">Select your role…</option>
+          {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+          <option value="__other">Other…</option>
+        </select>
+        {roleSel === '__other' && (
+          <input
+            value={roleOther}
+            onChange={(e) => setRoleOther(e.target.value)}
+            placeholder="e.g. Dental Hygienist"
+            className="input mt-2"
+            maxLength={60}
+          />
+        )}
+        <p className="mt-1 text-xs text-slate-500">Helps your team see who's who in CaseLift.</p>
       </div>
 
       <div className="mt-5">

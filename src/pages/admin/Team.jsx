@@ -127,7 +127,12 @@ export default function AdminTeam() {
           rows={rows.map(({ u, meta }) => {
             const busy = busyId === u.id
             return [
-              <span className="font-medium text-slate-100">{u.email}</span>,
+              <div className="leading-tight">
+                <div className="font-medium text-slate-100">{u.display_name || u.email}</div>
+                <div className="text-xs text-slate-500">
+                  {u.job_title ? `${u.job_title}${u.display_name ? ` · ${u.email}` : ''}` : u.display_name ? u.email : ''}
+                </div>
+              </div>,
               <Badge className={meta.cls}>{meta.label}</Badge>,
               <span className="text-slate-300">{meta.scope}</span>,
               u.created_at ? new Date(u.created_at).toLocaleDateString() : '-',

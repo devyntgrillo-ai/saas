@@ -1,5 +1,8 @@
-// Current-user profile: display name + avatar, shown app-wide.
+// Current-user profile: display name + avatar + role, shown app-wide.
 import { supabase } from './supabase'
+
+// Preset "Your Role" options. Anything else is stored as free text via "Other".
+export const ROLE_OPTIONS = ['Dentist', 'Office Manager', 'Treatment Coordinator', 'Marketing Personnel']
 
 // Upload an avatar to the public `avatars` bucket (under the user's own folder)
 // and return its public URL.
@@ -17,10 +20,11 @@ export async function uploadAvatar(userId, file) {
 // Persist the display name + avatar. Writes the public.users row via a safe RPC
 // (only these two fields) and mirrors to auth user_metadata so anything reading
 // user_metadata (chat sender/presence, etc.) stays in sync.
-export async function updateMyProfile({ displayName, avatarUrl }) {
+export async function updateMyProfile({ displayName, avatarUrl, jobTitle }) {
   const { error } = await supabase.rpc('update_my_profile', {
     p_display_name: displayName ?? null,
     p_avatar_url: avatarUrl ?? null,
+    p_job_title: jobTitle ?? null,
   })
   if (error) throw error
   await supabase.auth

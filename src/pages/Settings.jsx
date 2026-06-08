@@ -56,8 +56,8 @@ import {
 } from '../lib/billing'
 
 const TABS = [
-  { key: 'account', label: 'Your Profile', icon: UserRound },
   { key: 'profile', label: 'Practice Profile', icon: Building2 },
+  { key: 'account', label: 'Your Profile', icon: UserRound },
   { key: 'integrations', label: 'Integrations', icon: Plug },
   { key: 'messaging', label: 'Messaging', icon: MessageSquare },
   { key: 'team', label: 'Team', icon: Users },
@@ -922,6 +922,7 @@ function PracticeTeamPanel({ practice }) {
                     {m.display_name || m.email}
                     {m.id === user?.id && <span className="ml-1.5 text-xs font-normal text-slate-500">(you)</span>}
                   </p>
+                  {m.job_title && <p className="truncate text-xs font-medium text-slate-400">{m.job_title}</p>}
                   {m.display_name && <p className="truncate text-xs text-slate-500">{m.email}</p>}
                   <p className="text-xs capitalize text-slate-500">{ACCESS_LABELS[`practice_${m.role}`] || m.role}</p>
                 </div>
