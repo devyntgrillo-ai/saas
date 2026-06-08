@@ -135,8 +135,8 @@ export default function Chat() {
 
           {!loadingChat && (
             <ChatComposer
-              placeholder="Message CaseLift Team…"
-              onSend={(t) => chat.sendMessage(t)}
+              placeholder="Message your coaching channel…"
+              onSend={(t, f) => chat.sendMessage(t, null, f)}
               onTyping={() => chat.startTyping()}
               onStopTyping={() => chat.stopTyping()}
             />

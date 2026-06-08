@@ -3,9 +3,10 @@
 // indicators for a single channel, with live Supabase Realtime subscriptions.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { uploadChatAttachment } from '../lib/chat'
 
 const PAGE = 50
-const TYPING_TTL_MS = 5000 // a typing row older than this is ignored / cleared
+const TYPING_TTL_MS = 4000 // a typing signal older than this is cleared
 
 export function useSupportChat({ chatId, practiceId, senderType, currentUser }) {
   const [messages, setMessages] = useState([]) // all messages (top-level + replies)
@@ -16,6 +17,7 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
   const [hasMore, setHasMore] = useState(false)
 
   const me = currentUser?.id
+  const channelRef = useRef(null)
   const typingTimerRef = useRef(null)
   const lastTypingSentRef = useRef(0)
 
@@ -98,13 +100,12 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
           setReactions((prev) => prev.filter((r) => r.id !== payload.old.id))
         }
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_typing_indicators', filter: `chat_id=eq.${chatId}` }, (payload) => {
-        const row = payload.new || payload.old
-        if (!row) return
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        if (!payload || payload.user_id === me) return
         setTyping((prev) => {
-          const without = prev.filter((t) => t.id !== row.id)
-          if (payload.eventType === 'DELETE') return without
-          return [...without, payload.new]
+          const without = prev.filter((t) => !(t.user_id === payload.user_id && t.scope === payload.scope))
+          if (!payload.typing) return without
+          return [...without, { user_id: payload.user_id, name: payload.name, scope: payload.scope, at: Date.now() }]
         })
       })
       .on('presence', { event: 'sync' }, () => {
@@ -121,26 +122,30 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
           channel.track({ user_id: me, name: currentUser?.name || 'User', avatar: currentUser?.avatar || null, sender_type: senderType })
         }
       })
+    channelRef.current = channel
     return () => {
+      channelRef.current = null
       supabase.removeChannel(channel)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, me, senderType])
 
-  // Expire stale typing rows every couple seconds (covers missed DELETE events).
+  // Expire stale typing signals (covers a missed "stop" broadcast).
   useEffect(() => {
     const iv = setInterval(() => {
       const cutoff = Date.now() - TYPING_TTL_MS
-      setTyping((prev) => prev.filter((t) => new Date(t.last_typed_at).getTime() > cutoff))
-    }, 2000)
+      setTyping((prev) => prev.filter((t) => (t.at || 0) > cutoff))
+    }, 1500)
     return () => clearInterval(iv)
   }, [])
 
   // ── Actions ──────────────────────────────────────────────────────────────────
   const sendMessage = useCallback(
-    async (text, threadParentId = null) => {
+    async (text, threadParentId = null, file = null) => {
       const body = (text || '').trim()
-      if (!body || !chatId) return null
+      if ((!body && !file) || !chatId) return null
+      let attachment = null
+      if (file) attachment = await uploadChatAttachment(chatId, file)
       const row = {
         chat_id: chatId,
         practice_id: practiceId,
@@ -148,8 +153,11 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
         sender_type: senderType,
         sender_name: currentUser?.name || 'User',
         sender_avatar: currentUser?.avatar || null,
-        message: body,
+        message: body || null,
         thread_parent_id: threadParentId,
+        attachment_url: attachment?.url || null,
+        attachment_name: attachment?.name || null,
+        attachment_type: attachment?.type || null,
       }
       const { data, error } = await supabase.from('support_messages').insert(row).select('*').single()
       if (error) throw error
@@ -214,38 +222,35 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
     [reactions, me, addReaction, removeReaction],
   )
 
+  // Ephemeral typing over Realtime Broadcast (Slack-style — no DB rows / RLS).
   const stopTyping = useCallback(
     (threadParentId = null) => {
-      if (!chatId || !me) return
+      if (!me) return
       const scope = threadParentId ? String(threadParentId) : 'main'
       lastTypingSentRef.current = 0
-      supabase.from('support_typing_indicators').delete().match({ chat_id: chatId, user_id: me, scope }).then(() => {})
+      channelRef.current?.send({ type: 'broadcast', event: 'typing', payload: { user_id: me, scope, typing: false } })
     },
-    [chatId, me],
+    [me],
   )
 
   const startTyping = useCallback(
     (threadParentId = null) => {
-      if (!chatId || !me) return
+      if (!me) return
       const now = Date.now()
       const scope = threadParentId ? String(threadParentId) : 'main'
-      // Throttle network writes to ~once per 2s.
-      if (now - lastTypingSentRef.current > 2000) {
+      if (now - lastTypingSentRef.current > 1500) {
         lastTypingSentRef.current = now
-        supabase
-          .from('support_typing_indicators')
-          .upsert(
-            { chat_id: chatId, user_id: me, sender_type: senderType, sender_name: currentUser?.name || 'User', scope, last_typed_at: new Date().toISOString() },
-            { onConflict: 'chat_id,user_id,scope' },
-          )
-          .then(() => {})
+        channelRef.current?.send({
+          type: 'broadcast',
+          event: 'typing',
+          payload: { user_id: me, name: currentUser?.name || 'User', scope, typing: true },
+        })
       }
-      // Clear after 3s of inactivity.
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
-      typingTimerRef.current = setTimeout(() => stopTyping(threadParentId), 3000)
+      typingTimerRef.current = setTimeout(() => stopTyping(threadParentId), 2500)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [chatId, me, senderType, currentUser],
+    [me, currentUser],
   )
 
   const markAsRead = useCallback(async () => {

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Smile, MessageSquare, Pencil, Trash2, X, Check } from 'lucide-react'
+import { Smile, MessageSquare, Pencil, Trash2, X, Check, Paperclip } from 'lucide-react'
 import EmojiPicker from './EmojiPicker'
 import { groupReactions } from '../../hooks/useSupportChat'
 import { initials, avatarColor, timeLabel, shortRelative } from './chatUtil'
@@ -102,10 +102,26 @@ export default function ChatMessage({
               </div>
             </div>
           ) : (
-            <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-200 ${rightAlign ? 'rounded-2xl rounded-tr-sm bg-primary/15 px-3 py-2' : ''}`}>
-              {message.message}
-              {message.edited_at && <span className="ml-1.5 text-[11px] text-slate-500">(edited)</span>}
-            </p>
+            <>
+              {message.message && (
+                <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-200 ${rightAlign ? 'rounded-2xl rounded-tr-sm bg-primary/15 px-3 py-2' : ''}`}>
+                  {message.message}
+                  {message.edited_at && <span className="ml-1.5 text-[11px] text-slate-500">(edited)</span>}
+                </p>
+              )}
+              {message.attachment_url && (
+                message.attachment_type?.startsWith('image/') ? (
+                  <a href={message.attachment_url} target="_blank" rel="noreferrer" className="mt-1 block w-fit">
+                    <img src={message.attachment_url} alt={message.attachment_name || ''} className="max-h-72 max-w-xs rounded-lg border border-surface-700 object-cover" />
+                  </a>
+                ) : (
+                  <a href={message.attachment_url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-2 rounded-lg border border-surface-700 bg-surface-800 px-3 py-2 text-sm text-slate-200 transition hover:border-surface-600">
+                    <Paperclip className="h-4 w-4 shrink-0 text-slate-400" />
+                    <span className="max-w-[220px] truncate">{message.attachment_name || 'Attachment'}</span>
+                  </a>
+                )
+              )}
+            </>
           )}
         </div>
 

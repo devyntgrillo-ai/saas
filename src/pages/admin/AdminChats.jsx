@@ -283,7 +283,7 @@ export default function AdminChats() {
                 </div>
                 <ChatComposer
                   placeholder={`Reply to ${practiceName(selectedChat)}…`}
-                  onSend={(t) => chat.sendMessage(t)}
+                  onSend={(t, f) => chat.sendMessage(t, null, f)}
                   onTyping={() => chat.startTyping()}
                   onStopTyping={() => chat.stopTyping()}
                 />
