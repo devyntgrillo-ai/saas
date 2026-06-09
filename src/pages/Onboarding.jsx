@@ -238,21 +238,27 @@ export default function Onboarding() {
   }
 
   async function sendInvite() {
-    const email = inviteEmail.trim()
-    if (!email) return
+    // Allow inviting several people at once — split on commas / spaces /
+    // semicolons / newlines, keep valid + not-already-invited emails.
+    const isEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)
+    const candidates = inviteEmail.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean)
+    const fresh = [...new Set(candidates.filter(isEmail))].filter((e) => !invited.includes(e))
+    if (!fresh.length) return
     setInviting(true)
-    try {
-      await supabase.functions.invoke('invite-team-member', {
-        body: {
-          practice_id: practiceId,
-          email,
-          role: inviteRole,
-          access_level: inviteRole === 'admin' ? 'practice_admin' : 'practice_member',
-          app_origin: window.location.origin,
-        },
-      })
-    } catch { /* treat as queued */ }
-    setInvited((prev) => [...prev, email])
+    for (const email of fresh) {
+      try {
+        await supabase.functions.invoke('invite-team-member', {
+          body: {
+            practice_id: practiceId,
+            email,
+            role: inviteRole,
+            access_level: inviteRole === 'admin' ? 'practice_admin' : 'practice_member',
+            app_origin: window.location.origin,
+          },
+        })
+      } catch { /* treat as queued */ }
+    }
+    setInvited((prev) => [...prev, ...fresh])
     setInviteEmail('')
     setInviting(false)
   }
@@ -492,16 +498,16 @@ export default function Onboarding() {
           {stepKey === 'team' && (
             <section>
               <h1 className="text-2xl font-bold tracking-tight text-white">Invite your team</h1>
-              <p className="mt-1.5 text-sm text-slate-400">Add your treatment coordinators and front desk. They’ll get an email to join your account.</p>
+              <p className="mt-1.5 text-sm text-slate-400">Add your treatment coordinators and front desk. They’ll get an email to join your account. Invite as many as you like — separate multiple emails with commas.</p>
 
               <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-                <input className="input flex-1" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="teammate@yourpractice.com" />
+                <input className="input flex-1" type="text" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="alex@yourpractice.com, sam@yourpractice.com" />
                 <select className="input sm:w-36" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
                   <option value="member">Team member</option>
                   <option value="admin">Admin</option>
                 </select>
                 <button onClick={sendInvite} disabled={inviting || !inviteEmail.trim()} className="btn-primary shrink-0">
-                  {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Send invite
+                  {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Send invites
                 </button>
               </div>
 

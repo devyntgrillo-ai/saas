@@ -268,38 +268,52 @@
    so darken them to ~700 shades that pass WCAG AA on their pale /15 fills.
    Light mode only - dark mode keeps the original brighter shades.
    --------------------------------------------------------------------------- */
+:root:not(.dark) .text-emerald-200,
 :root:not(.dark) .text-emerald-300,
 :root:not(.dark) .text-emerald-400,
+:root:not(.dark) .text-green-200,
 :root:not(.dark) .text-green-300,
 :root:not(.dark) .text-green-400 {
   color: #047857; /* emerald-700 */
 }
+:root:not(.dark) .text-amber-200,
 :root:not(.dark) .text-amber-300,
 :root:not(.dark) .text-amber-400,
+:root:not(.dark) .text-yellow-200,
 :root:not(.dark) .text-yellow-300,
 :root:not(.dark) .text-yellow-400 {
   color: #b45309; /* amber-700 */
 }
+:root:not(.dark) .text-sky-200,
 :root:not(.dark) .text-sky-300,
 :root:not(.dark) .text-sky-400,
+:root:not(.dark) .text-blue-200,
 :root:not(.dark) .text-blue-300,
 :root:not(.dark) .text-blue-400 {
   color: #0369a1; /* sky-700 */
 }
+:root:not(.dark) .text-rose-200,
 :root:not(.dark) .text-rose-300,
 :root:not(.dark) .text-rose-400,
+:root:not(.dark) .text-red-200,
 :root:not(.dark) .text-red-300,
 :root:not(.dark) .text-red-400 {
   color: #be123c; /* rose-700 */
 }
+:root:not(.dark) .text-purple-200,
 :root:not(.dark) .text-purple-300,
 :root:not(.dark) .text-purple-400,
+:root:not(.dark) .text-violet-200,
 :root:not(.dark) .text-violet-300,
 :root:not(.dark) .text-violet-400 {
   color: #6d28d9; /* violet-700 */
 }
-:root:not(.dark) .text-primary-300 {
-  color: var(--accent); /* brand accent, AA on light */
+:root:not(.dark) .text-primary-200,
+:root:not(.dark) .text-primary-300,
+:root:not(.dark) .text-primary-400 {
+  /* var(--accent) (sky-500) fails AA on white/pale tints; use a darker brand
+     shade (white-label aware) that passes AA on light backgrounds. */
+  color: rgb(var(--primary-800));
 }
 /* Arbitrary hex text colors used by the shared badge config (lib/consults.js). */
 :root:not(.dark) .text-\[\#10b981\] {
