@@ -55,3 +55,22 @@ export function annualPrice(monthly) {
 }
 
 export const money = (n) => `$${Math.round(Number(n) || 0).toLocaleString()}`
+
+// ---- Referral commission model ---------------------------------------------
+// New model: every practice bills CaseLift $997/mo directly. An agency earns a
+// flat monthly commission per ACTIVE referred practice. commission_rate on the
+// agency record is the single source of truth (admin payout tally + the "new
+// referral" email both read it, so they can't drift). Default $200.
+
+export const COMMISSION_DEFAULT = 200
+
+// Resolve an agency's monthly commission rate (per active referred practice).
+export function commissionRate(agency) {
+  const r = Number(agency?.commission_rate)
+  return Number.isFinite(r) && r >= 0 ? r : COMMISSION_DEFAULT
+}
+
+// Monthly commission owed to an agency = rate × active referred practices.
+export function commissionOwed({ rate, activeCount = 0 }) {
+  return (Number(rate) || 0) * (Number(activeCount) || 0)
+}

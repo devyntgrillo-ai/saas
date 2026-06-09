@@ -1,7 +1,7 @@
 // Admin data layer — loads real agency_accounts / practices; no silent demo blending.
 // Use loadAdminDemoData() or VITE_ADMIN_SHOW_DEMO=true for local previews only.
 import { isAcceptedConsult } from './attribution'
-import { WHOLESALE_PRICE, isActiveSubaccount } from './resellerSaas'
+import { WHOLESALE_PRICE, isActiveSubaccount, commissionRate, commissionOwed } from './resellerSaas'
 import { supabase } from './supabase'
 
 export const PRICING = {
@@ -143,9 +143,13 @@ function shapeRealAgency(row, practices, { lastActivity, ownerEmails } = {}) {
   const ourRevenue = active * wholesale
   const saasMargin = active * (price - wholesale)
   const status = agencyStatus(row)
+  const rate = commissionRate(row)
   return {
     id: row.id,
     name: row.company_name || row.brand_name || row.name,
+    // Referral-commission model: flat rate per active referred practice.
+    commission_rate: rate,
+    commissionOwed: commissionOwed({ rate, activeCount: active }),
     owner_name: row.owner_name || null,
     owner_email: row.owner_email || ownerEmails?.[row.owner_user_id] || row.owner?.email || null,
     status,
