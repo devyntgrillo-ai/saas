@@ -53,6 +53,7 @@ import {
   useConversationsRealtime,
   queryKeys,
 } from '../lib/queries'
+import { invokeEdgeFunction } from '../lib/messaging'
 import { stripEmDashes } from '../lib/sanitize'
 import { timeAgo, formatDate, formatDuration } from '../lib/consults'
 import { auditConversationViewed, auditPatientAccessed, auditMessageSent } from '../lib/audit'
@@ -819,7 +820,19 @@ export default function Conversations() {
       refetchConv()
       if (channel === 'sms') {
         const target = activeConv?.patient_phone
-        if (target) supabase.functions.invoke('twilio-send', { body: { practice_id: practiceId, to: target, body: file.name, media_url: pub.publicUrl, conversation_message_id: data?.id } }).catch(() => {})
+        if (target) {
+          try {
+            await invokeEdgeFunction('twilio-send', {
+              practice_id: practiceId,
+              to: target,
+              body: file.name,
+              media_url: pub.publicUrl,
+              conversation_message_id: data?.id,
+            })
+          } catch (e) {
+            showToast(e?.message || 'Could not send attachment — check messaging settings.')
+          }
+        }
       }
     } catch (e) {
       showToast(/bucket|not found/i.test(e?.message || '') ? 'Attachments need the conversation-attachments bucket - apply the migration.' : 'Upload failed')
@@ -912,16 +925,28 @@ export default function Conversations() {
       const fn = isEmail ? 'mailgun-send' : 'twilio-send'
       const target = isEmail ? activeConv?.patient_email : activeConv?.patient_phone
       if (target) {
-        supabase.functions.invoke(fn, {
-          body: {
+        try {
+          await invokeEdgeFunction(fn, {
             practice_id: practiceId,
             to: target,
             body,
             subject,
             conversation_message_id: data.id,
             consult_id: activeConv?.consult_id,
-          },
-        }).catch(() => showToast('Could not send — check messaging settings.'))
+          })
+        } catch (e) {
+          showToast(e?.message || 'Could not send — check messaging settings.')
+          await supabase
+            .from('conversation_messages')
+            .update({
+              meta: {
+                ...meta,
+                delivery_status: 'failed',
+                send_error: e?.message || 'send failed',
+              },
+            })
+            .eq('id', data.id)
+        }
       }
       bumpConversation(nowIso)
       refetchConv()

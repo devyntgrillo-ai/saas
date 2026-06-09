@@ -110,6 +110,61 @@ export async function resolveAuth(
  *
  * Returns an error Response when unauthorized, or undefined to continue.
  */
+function jwtRole(token: string): string | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(b64));
+    return typeof payload.role === "string" ? payload.role : null;
+  } catch {
+    return null;
+  }
+}
+
+/** True when Authorization carries the service-role key (cron / internal calls). */
+export function isServiceRoleBearer(authHeader: string): boolean {
+  const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!bearer) return false;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  return bearer === serviceKey || jwtRole(bearer) === "service_role";
+}
+
+export type PracticeAccessResult =
+  | { ok: true }
+  | { ok: false; status: number; error: string };
+
+/**
+ * Impersonation-aware practice gate for edge functions (mailgun-send, twilio-send).
+ * Service-role callers are trusted. User JWT callers must pass RLS on practices
+ * (own practice, multi-location member, agency reseller, or super-admin).
+ */
+export async function checkPracticeAccess(
+  req: Request,
+  practiceId: string,
+): Promise<PracticeAccessResult> {
+  const authHeader = req.headers.get("Authorization") || "";
+  if (isServiceRoleBearer(authHeader)) return { ok: true };
+  if (!authHeader) return { ok: false, status: 401, error: "Unauthorized" };
+
+  const userClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+  const { data: { user } } = await userClient.auth.getUser();
+  if (!user) return { ok: false, status: 401, error: "Unauthorized" };
+
+  const { data: practice } = await userClient
+    .from("practices")
+    .select("id")
+    .eq("id", practiceId)
+    .maybeSingle();
+  if (!practice?.id) return { ok: false, status: 403, error: "Forbidden" };
+
+  return { ok: true };
+}
+
 export function requireServiceRole(req: Request): Response | undefined {
   const authHeader = req.headers.get("Authorization") || "";
   const token = authHeader.replace(/^Bearer\s+/i, "");

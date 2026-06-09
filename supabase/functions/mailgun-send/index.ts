@@ -8,6 +8,7 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
+import { checkPracticeAccess } from "../_shared/auth.ts";
 import { resolveBrand } from "../_shared/brand.ts";
 import {
   isPatientMailConfigured,
@@ -74,19 +75,8 @@ Deno.serve(async (req: Request) => {
     }
     if (!practiceId) return json({ error: "Could not resolve practice." }, 400);
 
-    const authHeader = req.headers.get("Authorization") || "";
-    const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    const isServiceRole = Boolean(bearer && (bearer === serviceKey || jwtRole(bearer) === "service_role"));
-    if (!isServiceRole && authHeader) {
-      const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: { user } } = await userClient.auth.getUser();
-      if (!user) return json({ error: "Unauthorized" }, 401);
-      const { data: prof } = await userClient.from("users").select("practice_id").eq("id", user.id).maybeSingle();
-      if (prof?.practice_id !== practiceId) return json({ error: "Forbidden" }, 403);
-    }
+    const access = await checkPracticeAccess(req, practiceId);
+    if (!access.ok) return json({ error: access.error }, access.status);
 
     const { data: pr } = await admin
       .from("practices")
@@ -251,14 +241,3 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function jwtRole(token: string): string | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const payload = JSON.parse(atob(b64));
-    return typeof payload.role === "string" ? payload.role : null;
-  } catch {
-    return null;
-  }
-}

@@ -11,8 +11,9 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
+import { checkPracticeAccess } from "../_shared/auth.ts";
 import { getTwilioConfig, phonesMatch, sendSms, toE164 } from "../_shared/twilio.ts";
-import { isServiceRoleRequest, resolveTwilioSmsContext } from "../_shared/twilio-sms-context.ts";
+import { resolveTwilioSmsContext } from "../_shared/twilio-sms-context.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -69,17 +70,8 @@ Deno.serve(async (req: Request) => {
     }
     if (!practiceId) return json({ error: "Could not resolve practice." }, 400);
 
-    const authHeader = req.headers.get("Authorization") || "";
-    const isServiceRole = isServiceRoleRequest(authHeader);
-    if (!isServiceRole && authHeader) {
-      const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: { user } } = await userClient.auth.getUser();
-      if (!user) return json({ error: "Unauthorized" }, 401);
-      const { data: prof } = await userClient.from("users").select("practice_id").eq("id", user.id).maybeSingle();
-      if (prof?.practice_id !== practiceId) return json({ error: "Forbidden" }, 403);
-    }
+    const access = await checkPracticeAccess(req, practiceId);
+    if (!access.ok) return json({ error: access.error }, access.status);
 
     const { data: practice } = await admin
       .from("practices")
