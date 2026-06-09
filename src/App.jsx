@@ -53,6 +53,7 @@ const AdminBilling = lazy(() => import('./pages/admin/Billing'))
 const AdminTraining = lazy(() => import('./pages/admin/TrainingAdmin'))
 const AdminWins = lazy(() => import('./pages/admin/Wins'))
 const AdminReferrals = lazy(() => import('./pages/admin/Referrals'))
+const AdminCommissions = lazy(() => import('./pages/admin/Commissions'))
 const AdminChats = lazy(() => import('./pages/admin/AdminChats'))
 const Chat = lazy(() => import('./pages/Chat'))
 
@@ -148,6 +149,7 @@ function AppContent() {
                   <Route path="training" element={<AdminTraining />} />
                   <Route path="wins" element={<AdminWins />} />
                   <Route path="referrals" element={<AdminReferrals />} />
+                  <Route path="commissions" element={<AdminCommissions />} />
                   <Route path="chats" element={<AdminChats />} />
                 </Route>
 

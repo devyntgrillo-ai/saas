@@ -12,6 +12,7 @@ import { AdminProvider, useAdmin } from '../../context/AdminContext'
 const TABS = [
   { to: '/admin', label: 'Dashboard', end: true },
   { to: '/admin/agencies', label: 'Resellers' },
+  { to: '/admin/commissions', label: 'Commissions' },
   { to: '/admin/practices', label: 'Subaccounts' },
   { to: '/admin/chats', label: 'Chats' },
   { to: '/admin/team', label: 'Users' },
