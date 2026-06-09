@@ -42,3 +42,16 @@ export function useAuditLog(range, enabled = true) {
     enabled,
   })
 }
+
+// On-demand HIPAA breach investigation (platform admin only). Calls the
+// SECURITY DEFINER RPC that joins audit_logs -> practices -> consults for every
+// PHI-access event in [startISO, endISO]. Bypasses the per-practice RLS via the
+// function's is_platform_admin() guard; non-admins get a "not authorized" error.
+export async function runBreachInvestigation(startISO, endISO) {
+  const { data, error } = await supabase.rpc('breach_investigation', {
+    window_start: startISO,
+    window_end: endISO,
+  })
+  if (error) throw error
+  return data || []
+}
