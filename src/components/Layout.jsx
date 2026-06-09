@@ -24,6 +24,7 @@ import Logo from './Logo'
 import NotificationBell from './NotificationBell'
 import GlobalSearch from './GlobalSearch'
 import RecordConsultButton from './RecordConsultButton'
+import TeamMemberWelcome from './TeamMemberWelcome'
 import AccountSwitcher from './AccountSwitcher'
 import ImpersonationBanner from './ImpersonationBanner'
 import { RecorderProvider } from '../context/RecorderContext'
@@ -361,6 +362,8 @@ export default function Layout() {
       </div>
       </div>
       <VoiceCallBar />
+      {/* One-time welcome for invited recorders (gates itself by role). */}
+      {showPracticeNav && <TeamMemberWelcome />}
       </VoiceProvider>
     </RecorderProvider>
   )
