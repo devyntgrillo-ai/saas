@@ -106,6 +106,46 @@ export async function createPortalSession(practiceId) {
   return data.url
 }
 
+// ============================================================================
+// Helcim (native card processing via Helcim.js + helcim-checkout edge function)
+// ============================================================================
+
+// Plan prices a signup URL may request (?plan=797). Anything else → 997.
+export const ALLOWED_PLAN_AMOUNTS = [497, 597, 697, 797, 897, 997, 1497]
+export function planAmountFromUrl(search = window.location.search) {
+  const raw = Number(new URLSearchParams(search).get('plan'))
+  return ALLOWED_PLAN_AMOUNTS.includes(raw) ? raw : PLAN_PRICE_NUMERIC
+}
+
+// Persist a successful Helcim charge onto the practice (called after Helcim.js
+// returns an approved result client-side).
+export async function recordHelcimPayment({ practiceId, transactionId, customerCode, invoiceNumber } = {}) {
+  const patch = { subscription_status: 'active' }
+  if (transactionId) patch.helcim_transaction_id = transactionId
+  if (customerCode) patch.helcim_customer_code = customerCode
+  if (invoiceNumber) patch.helcim_invoice_number = invoiceNumber
+  const { error } = await supabase.from('practices').update(patch).eq('id', practiceId)
+  if (error) throw error
+}
+
+// Create (or upsert) a Helcim customer record via the edge function.
+export async function createHelcimCustomer({ email, name, practiceName, phone } = {}) {
+  const { data, error } = await supabase.functions.invoke('helcim-checkout', {
+    body: { action: 'create_customer', email, name, practice_name: practiceName, phone },
+  })
+  if (error) throw new Error(await edgeErrorMessage(error))
+  return data
+}
+
+// Super-admin only (enforced server-side): refund a transaction.
+export async function helcimRefund({ transactionId, amount } = {}) {
+  const { data, error } = await supabase.functions.invoke('helcim-checkout', {
+    body: { action: 'refund', transaction_id: transactionId, amount },
+  })
+  if (error) throw new Error(await edgeErrorMessage(error))
+  return data
+}
+
 // Statuses that should hard-block access to the core app (paywall overlay).
 const BLOCKING_STATUSES = new Set(['past_due', 'unpaid', 'cancelled', 'canceled', 'expired'])
 export function isBillingBlocked(practice) {
