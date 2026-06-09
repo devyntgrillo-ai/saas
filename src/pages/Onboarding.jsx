@@ -17,7 +17,8 @@ import {
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { createCheckout } from '../lib/billing'
+import { recordHelcimPayment, createHelcimCustomer } from '../lib/billing'
+import HelcimCardForm from '../components/HelcimCardForm'
 import PhoneSetupWizard from '../components/PhoneSetupWizard'
 import { REF_STORAGE_KEY } from '../components/ReferralRedirect'
 
@@ -215,20 +216,25 @@ export default function Onboarding() {
     if (ok) nextStep()
   }
 
-  async function startCheckout() {
+  // Helcim.js charged the card client-side and returned an approved result.
+  // Persist it to the practice (status → active) and advance.
+  async function handleCardApproved(res) {
     setSaving(true); setSaveError('')
     try {
-      const { url } = await createCheckout({
-        practiceId,
+      await recordHelcimPayment({ practiceId, transactionId: res.transactionId, customerCode: res.customerCode })
+      // Best-effort: also create a Helcim customer record for future billing.
+      createHelcimCustomer({
         email: practice?.email,
-        planAmount: practice?.plan_amount,
-        redirectPath: '/onboarding?success=true',
-      })
-      window.location.href = url
+        name: [practice?.doctor_first, practice?.doctor_last].filter(Boolean).join(' ') || practice?.name,
+        practiceName: practice?.name,
+        phone: practice?.phone,
+      }).catch(() => {})
+      await refreshProfile()
+      nextStep()
     } catch (e) {
-      setSaveError(e?.message || 'Could not start checkout. Please try again.')
-      setSaving(false)
+      setSaveError(e?.message || 'Your card was charged but we could not update your account — please contact support.')
     }
+    setSaving(false)
   }
 
   async function acceptBaa() {
@@ -433,10 +439,16 @@ export default function Onboarding() {
                       <li key={f} className="flex items-center gap-2"><Check className="h-4 w-4 shrink-0 text-emerald-400" /> {f}</li>
                     ))}
                   </ul>
-                  <button onClick={startCheckout} disabled={saving} className="btn-primary mt-6 w-full justify-center">
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Activate — secure checkout
-                  </button>
-                  <p className="mt-2 text-center text-[11px] text-slate-500">Powered by Chargebee. Cancel anytime.</p>
+                  <div className="mt-6">
+                    <HelcimCardForm
+                      amount={planPrice}
+                      submitLabel="Activate plan"
+                      onApproved={handleCardApproved}
+                      onDeclined={(r) => setSaveError(r?.message || 'Your card was declined. Please try another card.')}
+                      onError={(m) => setSaveError(m)}
+                    />
+                  </div>
+                  <p className="mt-2 text-center text-[11px] text-slate-500">Cancel anytime · no contract.</p>
                 </div>
               )}
 
