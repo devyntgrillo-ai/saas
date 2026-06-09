@@ -57,6 +57,11 @@ begin
   perform cron.unschedule('demo-today-refresh');
 exception when others then null;
 end $$;
+do $$
+begin
+  perform cron.unschedule('purge-consult-audio');
+exception when others then null;
+end $$;
 
 -- PMS appointment sync - every 15 minutes.
 select cron.schedule(
@@ -151,6 +156,25 @@ select cron.schedule(
     when 'demo-today-2' then (current_date + time '14:00') at time zone 'America/Phoenix'
   end
   where pms_appointment_id in ('demo-today-0','demo-today-1','demo-today-2');
+  $$
+);
+
+-- HIPAA: delete raw consult audio (PHI) from the private consult-recordings
+-- bucket once older than the owning practice's retention window (default 30
+-- days). Nulls audio_storage_path, stamps audio_deleted_at, and writes a
+-- recording.purged row to audit_logs. Runs once daily at 08:00 UTC.
+select cron.schedule(
+  'purge-consult-audio',
+  '0 8 * * *',
+  $$
+  select net.http_post(
+    url     := 'https://eymgqjeudrmeofytnwgs.supabase.co' || '/functions/v1/purge-consult-audio',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
+    ),
+    body    := jsonb_build_object('tick', true)
+  );
   $$
 );
 
