@@ -59,7 +59,7 @@ export function verifySupabaseRegion(url = import.meta.env.VITE_SUPABASE_URL) {
     console.warn(
       '[CaseLift] Supabase region: UNKNOWN — cloud project URLs do not encode the region. ' +
         'Set VITE_SUPABASE_REGION to the value shown in the Supabase dashboard ' +
-        '(Project Settings → General → Region), e.g. "us-east-1", to enable the data-residency check.',
+        '(Project Settings → General → Region), e.g. "us-west-2", to enable the data-residency check.',
     )
     return result
   }

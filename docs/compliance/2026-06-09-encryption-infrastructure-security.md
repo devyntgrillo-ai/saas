@@ -23,8 +23,9 @@ the value is recorded in the `VITE_SUPABASE_REGION` environment variable (set in
 locally and **must also be set in Netlify env for production**).
 
 **Action required (dashboard):** Confirm Supabase Dashboard → Project Settings → General →
-Region. Set `VITE_SUPABASE_REGION` to match (e.g. `us-east-1`). Current configured value:
-`us-east-1` (US East — **pending dashboard confirmation**). US regions recognized:
+Region. Set `VITE_SUPABASE_REGION` to match (e.g. `us-west-2`). Current configured value:
+`us-west-2` (**US West — Oregon**), confirmed from the project's pooler host
+`aws-1-us-west-2.pooler.supabase.com`. US regions recognized:
 `us-east-1`, `us-east-2`, `us-west-1`, `us-west-2`.
 
 ## 2. Force HTTPS Everywhere — Transmission Security (§164.312(e)(1))
