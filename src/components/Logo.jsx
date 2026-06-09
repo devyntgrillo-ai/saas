@@ -1,8 +1,13 @@
 import { useBranding } from '../context/BrandingContext'
 import { useTheme } from '../context/ThemeContext'
 
-export default function Logo({ collapsed = false, size = 'md', showBeta = true }) {
-  const { brandName, logoUrl, logoDarkUrl, logoLightUrl, isWhiteLabeled } = useBranding()
+// forceDefault: ignore any white-label branding and always render CaseLift.
+// Used on billing / BAA / contract screens, which must always be CaseLift.
+export default function Logo({ collapsed = false, size = 'md', showBeta = true, forceDefault = false }) {
+  const branding = useBranding()
+  const { logoUrl, logoDarkUrl, logoLightUrl } = branding
+  const isWhiteLabeled = forceDefault ? false : branding.isWhiteLabeled
+  const brandName = forceDefault ? 'CaseLift' : branding.brandName
   const { theme } = useTheme()
 
   const lg = size === 'lg'

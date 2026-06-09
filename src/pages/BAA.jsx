@@ -70,8 +70,10 @@ export default function BAA() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface px-4 py-10">
       <div className="w-full max-w-2xl">
+        {/* The BAA is a legal agreement with CaseLift, Inc. — always CaseLift
+            branding, never the referring agency's white-label. */}
         <div className="mb-6 flex justify-center">
-          <Logo />
+          <Logo forceDefault />
         </div>
 
         <div className="card overflow-hidden">

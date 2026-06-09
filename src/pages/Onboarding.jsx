@@ -269,7 +269,8 @@ export default function Onboarding() {
     <div className="flex min-h-screen flex-col bg-surface lg:flex-row">
       {/* ── Sidebar: brand + stage list (no "step N of 5" anywhere) ─────────── */}
       <aside className="shrink-0 border-b border-surface-700 bg-surface-900 px-6 py-6 lg:w-80 lg:border-b-0 lg:border-r lg:py-8">
-        <Logo />
+        {/* Onboarding (incl. activate-plan + BAA) is always CaseLift-branded. */}
+        <Logo forceDefault />
         <p className="mt-6 hidden text-sm font-medium text-slate-300 lg:block">Welcome to CaseLift</p>
         <p className="mt-0.5 hidden text-xs text-slate-500 lg:block">Let’s get your practice set up. You can leave and pick up right where you left off.</p>
 

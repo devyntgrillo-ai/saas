@@ -197,7 +197,7 @@ export default function Signup() {
     <div className="flex min-h-screen items-center justify-center bg-surface px-4 py-10">
       <div className="w-full max-w-md">
         <div className="mb-8 flex justify-center">
-          <Logo />
+          <Logo forceDefault />
         </div>
 
         {/* Progress indicator */}
