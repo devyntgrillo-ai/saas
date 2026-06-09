@@ -385,6 +385,10 @@ deno_version = 2
 # Twilio / external webhooks — no Supabase JWT on the request.
 [functions.twilio-inbound]
 verify_jwt = false
+[functions.mailgun-inbound]
+verify_jwt = false
+[functions.mailgun-webhook]
+verify_jwt = false
 [functions.twilio-status]
 verify_jwt = false
 [functions.twilio-recording-callback]

@@ -52,6 +52,20 @@ if [[ "$DB_ONLY" != true ]]; then
     if [[ -f "$dir/config.toml" ]] && grep -qE 'verify_jwt\s*=\s*false' "$dir/config.toml" 2>/dev/null; then
       extra+=(--no-verify-jwt)
     fi
+    # mailgun-webhook/index.ts may be root-owned after `functions download`; deploy from -new.
+    if [[ "$name" == "mailgun-webhook" && -f "$dir/index.ts" && ! -w "$dir/index.ts" && -f "$ROOT/supabase/functions/mailgun-webhook-new/index.ts" ]]; then
+      tmp="$(mktemp -d)"
+      mkdir -p "$tmp/supabase/functions/mailgun-webhook"
+      cp "$ROOT/supabase/functions/mailgun-webhook-new/index.ts" "$tmp/supabase/functions/mailgun-webhook/"
+      cp "$ROOT/supabase/functions/mailgun-webhook-new/deno.json" "$tmp/supabase/functions/mailgun-webhook/" 2>/dev/null || true
+      cp -r "$ROOT/supabase/functions/_shared" "$tmp/supabase/functions/"
+      printf '[functions.mailgun-webhook]\nverify_jwt = false\n' > "$tmp/supabase/functions/mailgun-webhook/config.toml"
+      printf 'project_id = "tii-platform"\n' > "$tmp/supabase/config.toml"
+      echo "  · $name (via mailgun-webhook-new) ${extra[*]}"
+      SB functions deploy "$name" "${extra[@]}" --workdir "$tmp"
+      rm -rf "$tmp"
+      continue
+    fi
     echo "  · $name ${extra[*]}"
     SB functions deploy "$name" "${extra[@]}"
   done

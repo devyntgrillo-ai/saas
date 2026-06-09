@@ -109,13 +109,12 @@ Deno.serve(async (req: Request) => {
       conversationId = await resolveConversationForEmail(admin, practiceId, payload.consult_id, to);
     }
 
-    // Reply-To must land on a host with MX (usually MAILGUN_DOMAIN root).
-    // From can be office@{sub}.mysmileinbox.com (Mailgun wildcard send) without MX on that host.
+    // Reply-To must land on a Mailgun-receiving host (MAILGUN_INBOUND_DOMAIN / patient mail root).
+    // From can be office@{sub}.mysmileinbox.com (send-only) without MX on that host.
     const receiveHost = mailgunInboundReceiveDomain();
-    const inboundReply =
-      conversationId && receiveHost
-        ? conversationReplyOnPracticeHost(conversationId, receiveHost)
-        : null;
+    const threadReplyTo = (host: string | null) =>
+      conversationId && host ? conversationReplyOnPracticeHost(conversationId, host) : null;
+    const inboundReply = threadReplyTo(receiveHost);
     const replyTo = inboundReply || pr.email_reply_to || brand.supportEmail || null;
 
     const text = body;
@@ -161,9 +160,7 @@ Deno.serve(async (req: Request) => {
       });
 
     if (forcePlatformOnly && platformFrom && platformDomain) {
-      const platformReply = conversationId
-        ? conversationReplyOnPracticeHost(conversationId, platformDomain)
-        : replyTo;
+      const platformReply = threadReplyTo(receiveHost) || replyTo;
       sentReplyTo = platformReply;
       sentFromAddress = platformFrom;
       result = await sendPlatform(platformReply);
@@ -179,9 +176,7 @@ Deno.serve(async (req: Request) => {
           result.reason === "mailgun_404")
       ) {
         console.warn(`mailgun-send: patient domain failed (${result.reason}); trying ${platformDomain}`);
-        const platformReply = conversationId
-          ? conversationReplyOnPracticeHost(conversationId, platformDomain)
-          : replyTo;
+        const platformReply = threadReplyTo(receiveHost) || replyTo;
         sentReplyTo = platformReply;
         sentFromAddress = platformFrom;
         result = await sendPlatform(platformReply);

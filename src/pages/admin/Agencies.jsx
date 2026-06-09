@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Building2, Plus, Search, Eye, Loader2, Ban, RotateCcw, Pencil } from 'lucide-react'
 import Modal from '../../components/Modal'
 import { useAdmin } from '../../context/AdminContext'
-import { agencyStatusMeta } from '../../lib/admin'
+import { agencyStatusMeta, insertAgencyAccount } from '../../lib/admin'
 import { supabase } from '../../lib/supabase'
 import { StatCard, Table, Badge, Avatar, money, stop } from '../../components/admin/ui'
 import { COMMISSION_DEFAULT } from '../../lib/resellerSaas'
@@ -224,19 +224,9 @@ function AddAgencyModal({ onClose, onSaved }) {
         commission_rate: Number.isFinite(commission) && commission >= 0 ? commission : COMMISSION_DEFAULT,
         active: true,
         status: 'active',
-        admin_notes: form.notes.trim() || null,
       }
-      let { error: ae } = await supabase.from('agency_accounts').insert(payload)
-      if (ae && /column .* does not exist/i.test(ae.message)) {
-        ae = (
-          await supabase.from('agency_accounts').insert({
-            name: payload.name,
-            owner_user_id: owner,
-            active: true,
-          })
-        ).error
-      }
-      if (ae) throw ae
+      if (form.notes.trim()) payload.admin_notes = form.notes.trim()
+      await insertAgencyAccount(payload)
       if (form.invite && form.email.trim()) {
         try {
           await supabase.functions.invoke('invite-practice-user', {

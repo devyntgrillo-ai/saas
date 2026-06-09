@@ -531,6 +531,30 @@ export function smsStatusMeta(s) {
   return SMS_STATUS[s] || SMS_STATUS.none
 }
 
+/** PostgREST column name from "Could not find the 'foo' column …" errors. */
+function missingColumnFromError(message) {
+  if (!message) return null
+  const m = message.match(/'([^']+)'\s+column/i) || message.match(/find the '([^']+)' column/i)
+  return m?.[1] || null
+}
+
+// Insert agency_accounts, dropping optional columns the connected DB may lack.
+export async function insertAgencyAccount(payload) {
+  let body = { ...payload }
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const { error } = await supabase.from('agency_accounts').insert(body)
+    if (!error) return
+    const col = missingColumnFromError(error.message)
+    if (col && Object.prototype.hasOwnProperty.call(body, col)) {
+      const { [col]: _drop, ...next } = body
+      body = next
+      continue
+    }
+    throw error
+  }
+  throw new Error('Could not create reseller.')
+}
+
 // Best-effort audit log of an impersonation event. Never throws.
 export async function logImpersonation({ actorId, targetType, targetId, targetName }) {
   try {

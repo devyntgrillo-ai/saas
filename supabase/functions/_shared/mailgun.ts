@@ -31,16 +31,16 @@ export function mailgunPatientApiDomain(): string {
 }
 
 /**
- * Domain that receives patient replies (must have MX in DNS).
- * Defaults to MAILGUN_DOMAIN (e.g. mysmileinbox.com). Per-practice From hosts
- * like gold-dental.mysmileinbox.com are send-only unless you add wildcard MX.
+ * Domain that receives patient replies (must have MX in DNS → Mailgun).
+ * Prefer MAILGUN_INBOUND_DOMAIN, then the patient mail root (e.g. mysmileinbox.com).
+ * Do not default to MAILGUN_DOMAIN when that host is send-only (e.g. caselift.io → Google Workspace).
  */
 export function mailgunInboundReceiveDomain(): string | null {
   const explicit = Deno.env.get("MAILGUN_INBOUND_DOMAIN");
   if (explicit?.trim()) {
-    return mailgunHostEnv("MAILGUN_INBOUND_DOMAIN", mailgunPlatformDomain() || "mail.heyhope.ai");
+    return mailgunHostEnv("MAILGUN_INBOUND_DOMAIN", mailgunPatientMailRoot());
   }
-  return mailgunPlatformDomain() || mailgunPatientApiDomain() || null;
+  return mailgunPatientMailRoot() || mailgunPatientApiDomain() || mailgunPlatformDomain() || null;
 }
 
 export function practiceMailHostname(subdomain: string): string {
