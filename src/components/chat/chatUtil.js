@@ -51,7 +51,7 @@ export function shortRelative(ts) {
   try { return format(new Date(ts), 'MMM d') } catch { return '' }
 }
 
-// Coaching team availability: Mon–Fri, 9am–5pm US Eastern. Computed in ET so it's
+// Coaching team availability: Mon–Sat, 9am–8pm US Eastern. Computed in ET so it's
 // correct regardless of where the viewer is.
 export function isCoachingOnline(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -60,8 +60,8 @@ export function isCoachingOnline(date = new Date()) {
   const wd = parts.find((p) => p.type === 'weekday')?.value
   let hour = Number(parts.find((p) => p.type === 'hour')?.value)
   if (hour === 24) hour = 0
-  const weekday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(wd)
-  return weekday && hour >= 9 && hour < 17
+  const open = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].includes(wd) // Mon–Sat
+  return open && hour >= 9 && hour < 20 // 9am–8pm ET
 }
 
 // Build the "Devyn, Laura, and 1 other" tooltip for a reaction group.
