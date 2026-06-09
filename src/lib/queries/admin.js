@@ -18,7 +18,7 @@ export async function fetchAdminUsers() {
   const [{ data: users, error: ue }, { data: members }] = await Promise.all([
     supabase
       .from('users')
-      .select('id, email, role, access_level, created_at, display_name, job_title, practice:practices(id, name, agency_id)')
+      .select('*, practice:practices(id, name, agency_id)')
       .order('created_at', { ascending: false }),
     supabase.from('agency_members').select('user_id, role, agency:agency_accounts(id, name)'),
   ])

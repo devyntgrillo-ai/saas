@@ -49,9 +49,11 @@ Deno.serve(async (req: Request) => {
     const agencyId = String(body.agency_id || "");
     if (!practiceId || !agencyId) return json({ error: "practice_id and agency_id are required" }, 400);
 
+    // select * so a not-yet-applied commission_rate column doesn't error; the
+    // amount falls back to COMMISSION_DEFAULT until the migration runs.
     const { data: agency } = await admin
       .from("agency_accounts")
-      .select("id, name, owner_email, commission_rate")
+      .select("*")
       .eq("id", agencyId)
       .maybeSingle();
     if (!agency) return json({ error: "Agency not found" }, 404);

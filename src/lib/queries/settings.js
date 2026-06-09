@@ -5,7 +5,7 @@ import { queryKeys } from './keys'
 export async function fetchPracticeTeam(practiceId) {
   if (!practiceId) return { members: [], pending: [] }
   const [{ data: members, error: e1 }, { data: pending, error: e2 }] = await Promise.all([
-    supabase.from('users').select('id, email, role, created_at, display_name, avatar_url, job_title').eq('practice_id', practiceId).order('created_at'),
+    supabase.from('users').select('*').eq('practice_id', practiceId).order('created_at'),
     supabase
       .from('invitations')
       .select('id, email, role, created_at, token')
