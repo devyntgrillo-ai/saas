@@ -398,6 +398,12 @@ function SequenceDrawer({ row, practice, onClose, onChanged, onReload }) {
     onReload?.()
   }
 
+  async function logOutcome(m, outcome) {
+    const next = m.call_outcome === outcome ? null : outcome
+    await supabase.from('messages').update({ call_outcome: next }).eq('id', m.id)
+    setLocalMsgs((prev) => prev.map((x) => (x.id === m.id ? { ...x, call_outcome: next } : x)))
+  }
+
   async function regenerate() {
     setRegenerating(true)
     setRegenError(null)
@@ -408,7 +414,7 @@ function SequenceDrawer({ row, practice, onClose, onChanged, onReload }) {
     // Reload this consult's messages from the DB.
     const { data } = await supabase
       .from('messages')
-      .select('id, status, channel, type, subject, body, scheduled_for, send_day, sent_at, created_at')
+      .select('id, status, channel, type, subject, body, scheduled_for, send_day, sent_at, created_at, call_script, purpose, call_outcome, sequence_position')
       .eq('consult_id', c.id)
     if (data) setLocalMsgs(data)
     setRegenerating(false)
@@ -421,12 +427,6 @@ function SequenceDrawer({ row, practice, onClose, onChanged, onReload }) {
   const doctorLast = practice?.doctor_last || 'Smith'
   const tcName = practice?.tc_name || 'Sara'
 
-  function daysSince() {
-    if (!c.recording_date && !c.created_at) return 'a few days'
-    const d = new Date(c.recording_date || c.created_at)
-    const n = Math.round((Date.now() - d.getTime()) / 86400000)
-    return `${Math.max(0, n)} day${n === 1 ? '' : 's'}`
-  }
   const objResponse = {
     price: 'I hear you on cost. We have financing that breaks this into a comfortable monthly payment, and I can lock in your plan pricing.',
     fear: 'It is completely normal to feel nervous. Many of our patients did too. We offer sedation and go at your pace.',
@@ -518,13 +518,31 @@ function SequenceDrawer({ row, practice, onClose, onChanged, onReload }) {
                       {open && (
                         <div className="border-t border-surface-700 px-3 py-3 text-sm">
                           {call ? (
-                            <div className="space-y-1.5 text-slate-300">
-                              <p className="text-xs font-semibold uppercase text-amber-400">Manual call action</p>
-                              <p><span className="text-slate-500">Opening:</span> “Hi {row.name?.split(' ')[0] || 'there'}, this is {tcName} from Dr. {doctorLast}'s office...”</p>
-                              <p><span className="text-slate-500">Context:</span> {daysSince()} since their consult about {row.serviceType.toLowerCase()}.</p>
-                              {c.personal_detail && <p><span className="text-slate-500">Reference:</span> {stripEmDashes(c.personal_detail)}</p>}
-                              {c.tc_action && <p><span className="text-slate-500">CaseLift&apos;s recommended next step:</span> {stripEmDashes(c.tc_action)}</p>}
-                              <p><span className="text-slate-500">If they object:</span> {objResponse}</p>
+                            <div className="space-y-2 text-slate-300">
+                              <p className="text-xs font-semibold uppercase text-amber-400">Call script</p>
+                              {Array.isArray(m.call_script) && m.call_script.length ? (
+                                <ul className="space-y-1">
+                                  {m.call_script.map((b, bi) => (
+                                    <li key={bi} className="flex gap-1.5"><span className="text-amber-400">•</span><span>{stripEmDashes(b)}</span></li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <>
+                                  <p><span className="text-slate-500">Opening:</span> “Hi {row.name?.split(' ')[0] || 'there'}, this is {tcName} from Dr. {doctorLast}'s office...”</p>
+                                  {c.personal_detail && <p><span className="text-slate-500">Reference:</span> {stripEmDashes(c.personal_detail)}</p>}
+                                  {c.tc_action && <p><span className="text-slate-500">Next step:</span> {stripEmDashes(c.tc_action)}</p>}
+                                  <p><span className="text-slate-500">If they object:</span> {objResponse}</p>
+                                </>
+                              )}
+                              {m.purpose && <p className="text-xs text-slate-500">Goal: {stripEmDashes(m.purpose)}</p>}
+                              <div className="pt-1">
+                                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Log call outcome</p>
+                                <div className="mt-1 flex flex-wrap gap-1.5">
+                                  {['Left voicemail', 'Spoke with patient', 'No answer', 'Call back requested'].map((o) => (
+                                    <button key={o} onClick={() => logOutcome(m, o)} className={`rounded-md border px-2 py-1 text-xs transition ${m.call_outcome === o ? 'border-amber-500 bg-amber-500/15 text-amber-300' : 'border-surface-700 text-slate-300 hover:bg-surface-800'}`}>{o}</button>
+                                  ))}
+                                </div>
+                              </div>
                             </div>
                           ) : editingMsg === m.id ? (
                             <div className="space-y-2">

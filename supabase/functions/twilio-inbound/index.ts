@@ -207,6 +207,19 @@ Deno.serve(async (req: Request) => {
       },
     });
 
+    // Opt-out (STOP/UNSUBSCRIBE) → hard-cancel the patient's follow-up sequence,
+    // not just pause it (Part 8). Cancels any not-yet-sent messages.
+    if (optOut) {
+      const linkedConsultId = (conversation as any)?.consult_id ?? consult?.id ?? null;
+      if (linkedConsultId) {
+        await admin.from("messages").update({ status: "cancelled" })
+          .eq("consult_id", linkedConsultId).in("status", ["draft", "scheduled", "pending"]).then(() => {}, () => {});
+        await admin.from("consults").update({
+          sequence_status: "cancelled", sequence_cancelled_at: nowIso, sequence_cancelled_reason: "opt_out",
+        }).eq("id", linkedConsultId).then(() => {}, () => {});
+      }
+    }
+
     // Notify staff of the patient reply (best-effort; never alert on opt-outs).
     if (!optOut) {
       // deno-lint-ignore no-explicit-any

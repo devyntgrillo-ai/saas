@@ -16,7 +16,7 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
-import { holdHoursFor } from "../_shared/sequence.ts";
+import { holdHoursFor, computeScheduledFor, rulesFrom } from "../_shared/sequence.ts";
 
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
 
@@ -33,21 +33,23 @@ Deno.serve(async (req: Request) => {
     });
 
     // Per-practice activation hold.
-    const { data: practices } = await admin.from("practices").select("id, sequence_config, auto_start_followup");
+    const { data: practices } = await admin.from("practices").select("id, sequence_config, auto_start_followup, timezone");
     const holdByPractice: Record<string, number> = {};
     const autoStartByPractice: Record<string, boolean> = {};
+    const prById: Record<string, any> = {};
     (practices || []).forEach((p) => {
       holdByPractice[p.id] = holdHoursFor(p.sequence_config);
       autoStartByPractice[p.id] = p.auto_start_followup === true;
+      prById[p.id] = p;
     });
 
     // Consults still "in flight" (sequence not yet cancelled).
     const { data: consults } = await admin
       .from("consults")
-      .select("id, practice_id, outcome, created_at, sequence_activated_at, sequence_cancelled_at, sequence_status, followup_approved_at")
+      .select("id, practice_id, outcome, created_at, sequence_activated_at, sequence_cancelled_at, sequence_status, followup_approved_at, consecutive_no_reply")
       .is("sequence_cancelled_at", null);
 
-    let activated = 0, cancelled = 0, rescheduledTrimmed = 0;
+    let activated = 0, cancelled = 0, rescheduledTrimmed = 0, adapted = 0;
     const nowMs = Date.now();
 
     for (const c of consults || []) {
@@ -90,10 +92,43 @@ Deno.serve(async (req: Request) => {
           await admin.from("consults").update({ sequence_activated_at: new Date().toISOString() }).eq("id", c.id);
           activated++;
         }
+        continue;
+      }
+
+      // No-response adaptation (Part 2): an active sequence is only un-paused while
+      // the patient has NOT replied (a reply pauses it), so sent-count == consecutive
+      // unanswered. On crossing 3 → stretch pending touches to weekly; crossing 6 →
+      // monthly maintenance. Never tightens cadence. Idempotent via consecutive_no_reply.
+      if (outcome === "pending" && c.sequence_activated_at) {
+        const { count } = await admin.from("messages")
+          .select("id", { count: "exact", head: true }).eq("consult_id", c.id).eq("status", "sent");
+        const sc = count || 0;
+        const prev = c.consecutive_no_reply || 0;
+        if (sc !== prev) await admin.from("consults").update({ consecutive_no_reply: sc }).eq("id", c.id);
+        const cross6 = prev < 6 && sc >= 6;
+        const cross3 = prev < 3 && sc >= 3 && sc < 6;
+        if (cross6 || cross3) {
+          const { data: pend } = await admin.from("messages")
+            .select("id").eq("consult_id", c.id).in("status", ["draft", "scheduled", "pending"])
+            .order("scheduled_for", { ascending: true });
+          if (pend && pend.length) {
+            const rules = rulesFrom(prById[c.practice_id]?.sequence_config, prById[c.practice_id]?.timezone);
+            const gap = cross6 ? 30 : 7;
+            const startDay = cross6 ? 7 : 3;
+            const nowIso = new Date().toISOString();
+            for (let i = 0; i < pend.length; i++) {
+              const day = startDay + i * gap;
+              await admin.from("messages").update({
+                scheduled_for: computeScheduledFor(nowIso, day, rules), send_day: Math.round(day),
+              }).eq("id", pend[i].id);
+            }
+            adapted++;
+          }
+        }
       }
     }
 
-    return json({ ok: true, activated, cancelled, rescheduled_trimmed: rescheduledTrimmed });
+    return json({ ok: true, activated, cancelled, rescheduled_trimmed: rescheduledTrimmed, adapted });
   } catch (e) {
     await reportEdgeError("process-sequences", e);
     console.error("process-sequences error:", e);
