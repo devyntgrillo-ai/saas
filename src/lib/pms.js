@@ -1,6 +1,80 @@
 // PMS (Sikka) integration helpers. All Sikka API calls are mocked until we have
 // credentials - the data structures and UI are real and wire to Sikka later.
 import { supabase } from './supabase'
+import { normalizeTreatment, treatmentLabel } from './treatments'
+
+const CDT_LABELS = {
+  D9310: 'Consultation',
+  D0140: 'Limited Oral Evaluation',
+  D0150: 'Comprehensive Oral Evaluation',
+  D0180: 'Periodontal Evaluation',
+  D1110: 'Prophylaxis (Cleaning)',
+  D1120: 'Child Prophylaxis',
+  D0210: 'Full Mouth X-Rays',
+  D0220: 'Periapical X-Ray',
+  D0274: 'Bitewing X-Rays',
+  D4910: 'Periodontal Maintenance',
+}
+
+const CONSULT_LABEL_RULES = [
+  [/implant/i, 'Implant Consult'],
+  [/invisalign|aligner|ortho/i, 'Invisalign Consult'],
+  [/veneer|cosmetic|smile/i, 'Cosmetic Consult'],
+  [/sleep|apnea|cpap/i, 'Sleep Apnea Consult'],
+  [/new patient/i, 'New Patient Consult'],
+  [/consult/i, 'Consultation'],
+]
+
+function cdtLabel(code) {
+  return CDT_LABELS[(code || '').toUpperCase().trim()] || null
+}
+
+function isCodeOnlyLabel(s) {
+  const t = (s || '').trim()
+  return /^procedure\s+d\d{4}$/i.test(t) || /^d\d{4}$/i.test(t) ||
+    /^[A-Z0-9]{3,8}(,\s*[A-Z0-9]{3,8})+$/i.test(t)
+}
+
+function inferConsultLabel(blob) {
+  for (const [re, label] of CONSULT_LABEL_RULES) {
+    if (re.test(blob)) return label
+  }
+  return null
+}
+
+/** Human-readable label for schedule / consult list (not raw CDT codes). */
+export function formatAppointmentType(appt, practice = null) {
+  const raw = (appt?.appointment_type || '').trim()
+
+  if (raw && !isCodeOnlyLabel(raw)) {
+    return inferConsultLabel(raw) || raw
+  }
+
+  const cluster = practice?.pms_sync_rules?.clusters?.find((c) => c.id === appt?.pms_match_rule)
+  if (cluster) {
+    const label = (cluster.label || '').trim()
+    if (label && !isCodeOnlyLabel(label) && /[a-z]/i.test(label)) return inferConsultLabel(label) || label
+    for (const code of cluster.procedure_codes || []) {
+      const mapped = cdtLabel(code)
+      if (mapped) return mapped
+    }
+    const fromReason = inferConsultLabel(`${label} ${cluster.ai_reason || ''}`)
+    if (fromReason) return fromReason
+  }
+
+  const code = raw.match(/D\d{4}/i)?.[0] || cluster?.procedure_codes?.[0]
+  if (code) {
+    const mapped = cdtLabel(code)
+    if (mapped) return mapped
+  }
+
+  if (appt?.treatment_type) return treatmentLabel(appt.treatment_type)
+
+  const inferred = inferConsultLabel(raw)
+  if (inferred) return inferred
+
+  return raw || 'Consult'
+}
 
 // Sikka-supported systems. `cloud: true` skips the local bridge install step.
 export const SIKKA_SYSTEMS = [
@@ -59,6 +133,18 @@ export function pmsStatusMeta(practice) {
   if (practice.pms_status === 'syncing') return { key: 'syncing', label: 'Syncing…', dot: 'bg-sky-400 animate-pulse' }
   if (practice.pms_status === 'error') return { key: 'error', label: 'Connection error - reconnect', dot: 'bg-rose-500' }
   return { key: 'connected', label: `Connected to ${pmsLabel(practice.pms_type)}`, dot: 'bg-emerald-400' }
+}
+
+// supabase-js surfaces non-2xx edge responses as a generic message — pull the
+// real `error` field from the response body when present.
+async function edgeErrorMessage(error) {
+  try {
+    const body = await error?.context?.json?.()
+    if (body?.error) return body.detail ? `${body.error} (${body.detail})` : body.error
+  } catch {
+    /* body wasn't JSON or already consumed */
+  }
+  return error?.message || 'Request failed'
 }
 
 // --- Mocked Sikka calls -----------------------------------------------------
@@ -125,6 +211,31 @@ export async function testSyncForPractice(practiceId) {
   if (error) throw new Error(error.message || 'Sync failed')
   if (data?.error) throw new Error(data.error)
   return data // { synced, practices, errors }
+}
+
+/** Scan PMS appointments, cluster types, classify with AI, save draft rules. */
+export async function discoverPmsConsults(practiceId, { historyYears = 1, forwardYears = 1 } = {}) {
+  const { data, error } = await supabase.functions.invoke('discover-pms-consults', {
+    body: { practice_id: practiceId, history_years: historyYears, forward_years: forwardYears },
+  })
+  if (error) throw new Error(await edgeErrorMessage(error))
+  if (data?.error) throw new Error(data.detail ? `${data.error} (${data.detail})` : data.error)
+  return data
+}
+
+/** Practice admin approves consult sync rules and triggers backfill. */
+export async function approvePmsSync(practiceId, { historyYears, forwardYears, clusters } = {}) {
+  const { data, error } = await supabase.functions.invoke('approve-pms-sync', {
+    body: {
+      practice_id: practiceId,
+      history_years: historyYears,
+      forward_years: forwardYears,
+      clusters,
+    },
+  })
+  if (error) throw new Error(await edgeErrorMessage(error))
+  if (data?.error) throw new Error(data.error)
+  return data
 }
 
 export async function fetchUnlinkedRegistrations() {

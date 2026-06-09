@@ -68,7 +68,62 @@ export function useUpdateSequenceMessage() {
     mutationFn: async ({ messageId, patch, practiceId }) => {
       const { error } = await supabase.from('messages').update(patch).eq('id', messageId)
       if (error) throw error
+      return { practiceId, messageId }
+    },
+    onSuccess: ({ practiceId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.sequences(practiceId) })
+    },
+  })
+}
+
+export function useSaveSequenceTiming() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ updates, practiceId }) => {
+      for (const u of updates) {
+        const { error } = await supabase.from('messages').update(u.patch).eq('id', u.messageId)
+        if (error) throw error
+      }
       return { practiceId }
+    },
+    onSuccess: ({ practiceId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.sequences(practiceId) })
+    },
+  })
+}
+
+const MESSAGE_SELECT =
+  'id, status, channel, type, subject, body, scheduled_for, send_day, sent_at, created_at, call_script, purpose, call_outcome, sequence_position'
+
+export function useRegenerateSequence() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ consultId, practiceId, note }) => {
+      const { error } = await supabase.functions.invoke('analyze-consult', {
+        body: { consult_id: consultId, regenerate: true, note: note || '' },
+      })
+      if (error) throw error
+      const { data, error: me } = await supabase
+        .from('messages')
+        .select(MESSAGE_SELECT)
+        .eq('consult_id', consultId)
+      if (me) throw me
+      return { consultId, practiceId, messages: data || [] }
+    },
+    onSuccess: ({ practiceId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.sequences(practiceId) })
+    },
+  })
+}
+
+export function useLogCallOutcome() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ messageId, outcome, practiceId, currentOutcome }) => {
+      const next = currentOutcome === outcome ? null : outcome
+      const { error } = await supabase.from('messages').update({ call_outcome: next }).eq('id', messageId)
+      if (error) throw error
+      return { messageId, practiceId, call_outcome: next }
     },
     onSuccess: ({ practiceId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.sequences(practiceId) })

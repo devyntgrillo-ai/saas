@@ -28,8 +28,7 @@ import { applyPrimaryColor, resetPrimaryColor } from '../lib/whitelabel'
 import { supabase } from '../lib/supabase'
 import { timeAgo } from '../lib/consults'
 import { rateColor } from '../lib/pms'
-import { useAgencyOverview } from '../lib/queries'
-import { auditPracticeArchived } from '../lib/audit'
+import { useAgencyOverview, useArchivePractice, useSaveResellerBrand, useUploadAgencyAsset, isMutating } from '../lib/queries'
 
 function AddPracticeModal({ agencyId, onClose, onAdded }) {
   const [form, setForm] = useState({ practice_name: '', doctor_first: '', doctor_last: '', email: '' })
@@ -289,36 +288,31 @@ export default function Agency() {
     : practices
   const [showAdd, setShowAdd] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
-  const [busyId, setBusyId] = useState(null)
+  const archiveMutation = useArchivePractice()
+  const saveBrandMutation = useSaveResellerBrand()
+  const uploadAssetMutation = useUploadAgencyAsset()
 
-  async function archivePractice(e, p) {
+  function archivePractice(e, p) {
     e.stopPropagation()
     if (!confirm(`Archive ${p.name}? It will be hidden from your subaccounts but can be restored later.`)) return
-    setBusyId(p.id)
-    const { error } = await supabase
-      .from('practices')
-      .update({ archived_at: new Date().toISOString(), archived_by: user?.id ?? null })
-      .eq('id', p.id)
-    setBusyId(null)
-    if (error) return alert(error.message)
-    auditPracticeArchived(p.id, { name: p.name })
-    refetchOverview()
+    archiveMutation.mutate(
+      { practiceId: p.id, agencyId: agency?.id, archive: true, userId: user?.id },
+      { onError: (err) => alert(err.message), onSuccess: () => refetchOverview() },
+    )
   }
 
-  async function restorePractice(e, p) {
+  function restorePractice(e, p) {
     e.stopPropagation()
-    setBusyId(p.id)
-    const { error } = await supabase.from('practices').update({ archived_at: null, archived_by: null }).eq('id', p.id)
-    setBusyId(null)
-    if (error) return alert(error.message)
-    refetchOverview()
+    archiveMutation.mutate(
+      { practiceId: p.id, agencyId: agency?.id, archive: false },
+      { onError: (err) => alert(err.message), onSuccess: () => refetchOverview() },
+    )
   }
 
   // Agency settings form
   const [settings, setSettings] = useState({})
-  const [savingSettings, setSavingSettings] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
-  const [uploading, setUploading] = useState(null) // 'logo' | 'favicon' | null
+  const uploading = uploadAssetMutation.isPending ? uploadAssetMutation.variables?.kind : null
   const [uploadError, setUploadError] = useState('')
   const [saveError, setSaveError] = useState('')
   const [previewing, setPreviewing] = useState(false)
@@ -357,23 +351,13 @@ export default function Agency() {
   // edit is ever lost to navigating away or forgetting a Save button. Each field
   // calls this on change/blur.
   async function saveBrand(patch) {
-    if (!agency?.id) return false
+    if (!agency?.id || saveBrandMutation.isPending) return false
     setSettings((s) => ({ ...s, ...patch })) // optimistic
-    setSavingSettings(true)
     setSaveError('')
-    // Persist via the service-role edge function so a super-admin editing brand
-    // while impersonating (or an agency owner/admin) always saves, regardless of
-    // agency_accounts RLS.
-    const { data: res, error } = await supabase.functions.invoke('save-reseller-brand', {
-      body: { agency_id: agency.id, patch },
-    })
-    if (error || res?.error) {
-      let msg = res?.error
-      if (!msg) {
-        try { msg = (await error?.context?.json?.())?.error } catch { /* not json */ }
-      }
-      setSaveError(`Save failed: ${msg || error?.message || 'unknown error'}`)
-      setSavingSettings(false)
+    try {
+      await saveBrandMutation.mutateAsync({ agencyId: agency.id, patch })
+    } catch (e) {
+      setSaveError(`Save failed: ${e.message || 'unknown error'}`)
       return false
     }
     if ('primary_color' in patch) {
@@ -381,7 +365,6 @@ export default function Agency() {
     }
     invalidateBrand() // drop the cached theme so it re-resolves from fresh data
     refreshAgency() // updates `agency` so the brand re-applies app-wide (seed effect keys on id, so this won't clobber edits)
-    setSavingSettings(false)
     setSavedFlash(true)
     setTimeout(() => setSavedFlash(false), 1500)
     return true
@@ -436,25 +419,11 @@ export default function Agency() {
       setUploadError('File must be under 2MB.')
       return
     }
-    setUploading(kind)
     try {
-      const ext = (file.name.split('.').pop() || 'png').toLowerCase()
-      // A stable per-kind path keeps one asset per reseller (upsert overwrites).
-      const path = `${agency.id}/${kind}.${ext}`
-      const { error } = await supabase.storage
-        .from('reseller-assets')
-        .upload(path, file, { contentType: file.type, upsert: true })
-      if (error) throw error
-      const { data } = supabase.storage.from('reseller-assets').getPublicUrl(path)
-      // Cache-bust so a re-upload to the same path shows immediately.
-      const url = `${data.publicUrl}?v=${file.size}`
-      // Persist immediately (auto-save) - no separate Save click needed.
-      const COLUMN = { logo_dark: 'logo_url_dark', logo_light: 'logo_url_light', favicon: 'favicon_url' }
-      await saveBrand({ [COLUMN[kind] || 'logo_url']: url, white_label_enabled: true })
+      const { url, column } = await uploadAssetMutation.mutateAsync({ agencyId: agency.id, kind, file })
+      await saveBrand({ [column]: url, white_label_enabled: true })
     } catch (err) {
       setUploadError(err.message || 'Upload failed.')
-    } finally {
-      setUploading(null)
     }
   }
 
@@ -541,11 +510,11 @@ export default function Agency() {
                       <button
                         type="button"
                         onClick={(e) => archivePractice(e, p)}
-                        disabled={busyId === p.id}
+                        disabled={isMutating(archiveMutation, (v) => v.practiceId === p.id)}
                         title="Archive subaccount"
                         className="rounded-md p-1 text-slate-500 opacity-0 transition hover:bg-surface-700 hover:text-rose-300 group-hover:opacity-100 disabled:opacity-40"
                       >
-                        {busyId === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+                        {isMutating(archiveMutation, (v) => v.practiceId === p.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
                       </button>
                       <ChevronRight className="h-5 w-5 text-slate-600 transition group-hover:text-primary-400" />
                     </div>
@@ -609,10 +578,10 @@ export default function Agency() {
                         <button
                           type="button"
                           onClick={(e) => restorePractice(e, p)}
-                          disabled={busyId === p.id}
+                          disabled={isMutating(archiveMutation, (v) => v.practiceId === p.id)}
                           className="btn-ghost mt-4 w-full justify-center disabled:opacity-40"
                         >
-                          {busyId === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Restore
+                          {isMutating(archiveMutation, (v) => v.practiceId === p.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Restore
                         </button>
                       </div>
                     )
@@ -636,7 +605,7 @@ export default function Agency() {
               </p>
             </div>
             <span className="flex h-5 shrink-0 items-center text-xs">
-              {savingSettings ? (
+              {saveBrandMutation.isPending ? (
                 <span className="inline-flex items-center gap-1.5 text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…</span>
               ) : savedFlash ? (
                 <span className="inline-flex items-center gap-1.5 text-emerald-300"><Check className="h-3.5 w-3.5" /> Saved</span>

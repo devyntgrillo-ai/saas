@@ -5,6 +5,12 @@ import Modal from '../../components/Modal'
 import { useAdmin } from '../../context/AdminContext'
 import { agencyStatusMeta } from '../../lib/admin'
 import { supabase } from '../../lib/supabase'
+import {
+  useToggleAgencySuspended,
+  useCreateAgencyAccount,
+  useUpdateAgencyCommission,
+  isMutating,
+} from '../../lib/queries'
 import { StatCard, Table, Badge, Avatar, money, stop } from '../../components/admin/ui'
 import { COMMISSION_DEFAULT } from '../../lib/resellerSaas'
 
@@ -25,7 +31,7 @@ export default function Agencies() {
   const [sort, setSort] = useState('commission')
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState(null)
-  const [busyId, setBusyId] = useState(null)
+  const toggleSuspendMutation = useToggleAgencySuspended()
 
   const rows = useMemo(() => {
     let list = [...agencies]
@@ -58,12 +64,11 @@ export default function Agencies() {
     [agencies],
   )
 
-  async function toggleSuspend(a) {
-    setBusyId(a.id)
-    const next = a.suspended ? { status: 'active', active: true } : { status: 'suspended', active: false }
-    await supabase.from('agency_accounts').update(next).eq('id', a.id)
-    setBusyId(null)
-    await refresh()
+  function toggleSuspend(a) {
+    toggleSuspendMutation.mutate(
+      { agencyId: a.id, currentlySuspended: a.suspended },
+      { onSuccess: () => refresh() },
+    )
   }
 
   return (
@@ -156,11 +161,11 @@ export default function Agencies() {
               </button>
               <button
                 onClick={() => toggleSuspend(a)}
-                disabled={busyId === a.id}
+                disabled={isMutating(toggleSuspendMutation, (v) => v.agencyId === a.id)}
                 className={`rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs transition hover:bg-surface-700 disabled:opacity-40 ${a.suspended ? 'text-emerald-300' : 'text-rose-300'}`}
                 title={a.suspended ? 'Reactivate' : 'Suspend'}
               >
-                {a.suspended ? <RotateCcw className="h-3.5 w-3.5" /> : <Ban className="h-3.5 w-3.5" />}
+                {isMutating(toggleSuspendMutation, (v) => v.agencyId === a.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : a.suspended ? <RotateCcw className="h-3.5 w-3.5" /> : <Ban className="h-3.5 w-3.5" />}
               </button>
             </div>,
           ])}
@@ -194,6 +199,7 @@ export default function Agencies() {
 }
 
 function AddAgencyModal({ onClose, onSaved }) {
+  const createAgencyMutation = useCreateAgencyAccount()
   const [form, setForm] = useState({
     name: '',
     firstName: '',
@@ -203,56 +209,58 @@ function AddAgencyModal({ onClose, onSaved }) {
     invite: true,
     notes: '',
   })
-  const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [inviteLink, setInviteLink] = useState('')
+  const [copied, setCopied] = useState(false)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
 
-  async function save() {
-    if (!form.name.trim()) return
-    setBusy(true)
-    setError('')
+  async function copyInviteLink() {
     try {
-      const owner = form.email.trim()
-        ? (await supabase.from('users').select('id').eq('email', form.email.trim().toLowerCase()).maybeSingle()).data?.id || null
+      await navigator.clipboard.writeText(inviteLink)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      /* noop */
+    }
+  }
+
+  async function save() {
+    if (!form.name.trim() || createAgencyMutation.isPending) return
+    setError('')
+    setInviteLink('')
+    try {
+      const ownerEmail = form.email.trim().toLowerCase()
+      const owner = ownerEmail
+        ? (await supabase.from('users').select('id').eq('email', ownerEmail).maybeSingle()).data?.id || null
         : null
       const commission = Number(form.commission)
       const payload = {
         name: form.name.trim(),
         owner_user_id: owner,
-        owner_email: form.email.trim().toLowerCase() || null,
+        owner_email: ownerEmail || null,
         owner_name: [form.firstName.trim(), form.lastName.trim()].filter(Boolean).join(' ') || null,
         commission_rate: Number.isFinite(commission) && commission >= 0 ? commission : COMMISSION_DEFAULT,
         active: true,
         status: 'active',
-        admin_notes: form.notes.trim() || null,
       }
-      let { error: ae } = await supabase.from('agency_accounts').insert(payload)
-      if (ae && /column .* does not exist/i.test(ae.message)) {
-        ae = (
-          await supabase.from('agency_accounts').insert({
-            name: payload.name,
-            owner_user_id: owner,
-            active: true,
-          })
-        ).error
-      }
-      if (ae) throw ae
-      if (form.invite && form.email.trim()) {
-        try {
-          await supabase.functions.invoke('invite-practice-user', {
-            body: { email: form.email.trim().toLowerCase(), role: 'agency_owner', agency_name: form.name.trim() },
-          })
-        } catch {
-          /* noop */
-        }
+      if (form.notes.trim()) payload.admin_notes = form.notes.trim()
+      const result = await createAgencyMutation.mutateAsync({
+        payload,
+        invite: form.invite && ownerEmail
+          ? { email: ownerEmail, appOrigin: window.location.origin }
+          : null,
+      })
+      if (result.inviteLink) {
+        setInviteLink(result.inviteLink)
+        return
       }
       onSaved()
     } catch (e) {
       setError(e.message || 'Could not create reseller.')
-    } finally {
-      setBusy(false)
     }
   }
+
+  const busy = createAgencyMutation.isPending
 
   return (
     <Modal
@@ -260,17 +268,35 @@ function AddAgencyModal({ onClose, onSaved }) {
       onClose={onClose}
       maxWidth="max-w-lg"
       footer={
-        <>
-          <button onClick={onClose} className="btn-ghost">
-            Cancel
+        inviteLink ? (
+          <button onClick={onSaved} className="btn-primary">
+            Done
           </button>
-          <button onClick={save} disabled={busy || !form.name.trim()} className="btn-primary">
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />} Create reseller
-          </button>
-        </>
+        ) : (
+          <>
+            <button onClick={onClose} className="btn-ghost">
+              Cancel
+            </button>
+            <button onClick={save} disabled={busy || !form.name.trim()} className="btn-primary">
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Create reseller
+            </button>
+          </>
+        )
       }
     >
       <div className="space-y-4">
+        {inviteLink && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-200">
+            <p className="font-medium">Reseller created, but the invite email could not be sent.</p>
+            <p className="mt-1 text-amber-200/80">Share this link with the owner so they can set up their account:</p>
+            <div className="mt-2 flex gap-2">
+              <input className="input flex-1 text-xs" readOnly value={inviteLink} />
+              <button type="button" onClick={copyInviteLink} className="btn-ghost shrink-0 text-xs">
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        )}
         <div>
           <label className="label">Reseller name</label>
           <input className="input" value={form.name} onChange={set('name')} placeholder="Northwest Implant Group" />
@@ -314,29 +340,27 @@ function AddAgencyModal({ onClose, onSaved }) {
 }
 
 function EditRateModal({ agency, onClose, onSaved }) {
+  const updateCommissionMutation = useUpdateAgencyCommission()
   const [rate, setRate] = useState(String(agency.commission_rate ?? COMMISSION_DEFAULT))
-  const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  async function save() {
+  function save() {
     const value = Number(rate)
     if (!Number.isFinite(value) || value < 0) {
       setError('Enter a valid rate.')
       return
     }
-    setBusy(true)
     setError('')
-    const { error: err } = await supabase
-      .from('agency_accounts')
-      .update({ commission_rate: value })
-      .eq('id', agency.id)
-    if (err) {
-      setError(err.message)
-      setBusy(false)
-      return
-    }
-    onSaved()
+    updateCommissionMutation.mutate(
+      { agencyId: agency.id, commissionRate: value },
+      {
+        onSuccess: () => onSaved(),
+        onError: (e) => setError(e.message || 'Save failed.'),
+      },
+    )
   }
+
+  const busy = updateCommissionMutation.isPending
 
   return (
     <Modal

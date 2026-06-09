@@ -4,6 +4,7 @@ import { AnimatePresence } from 'framer-motion'
 import { Search, Loader2, CheckCircle2, ExternalLink, MessageSquareText } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
+import { useMarkSupportChatResolved } from '../../lib/queries'
 import { useSupportChat } from '../../hooks/useSupportChat'
 import MessageList from '../../components/chat/MessageList'
 import ChatComposer from '../../components/chat/ChatComposer'
@@ -46,6 +47,7 @@ export default function AdminChats() {
   const [thread, setThread] = useState(null)
   const [now, setNow] = useState(0)
   const [members, setMembers] = useState([])
+  const resolveMutation = useMarkSupportChatResolved()
   const searchRef = useRef(null)
 
   // Selected practice's member roster → mentionable names.
@@ -162,11 +164,15 @@ export default function AdminChats() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list, selectedId, thread])
 
-  async function markResolved() {
-    if (!chatId) return
-    await supabase.from('support_chats').update({ resolved_at: new Date().toISOString() }).eq('id', chatId)
-    loadChats()
+  function markResolved() {
+    if (!chatId || resolveMutation.isPending) return
+    resolveMutation.mutate(
+      { chatId, resolved: true },
+      { onSuccess: () => loadChats() },
+    )
   }
+
+  const resolving = resolveMutation.isPending
 
   const liveThread = thread ? chat.messages.find((m) => m.id === thread.id) || thread : null
   const mainTyping = chat.typingUsers.filter((t) => t.scope === 'main')
@@ -279,8 +285,9 @@ export default function AdminChats() {
                   View practice <ExternalLink className="h-3.5 w-3.5" />
                 </Link>
                 {!selectedChat.resolved_at && (
-                  <button onClick={markResolved} className="flex items-center gap-1 rounded-lg border border-surface-700 px-2.5 py-1 text-xs text-slate-300 transition hover:bg-surface-800">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Mark resolved
+                  <button onClick={markResolved} disabled={resolving} className="flex items-center gap-1 rounded-lg border border-surface-700 px-2.5 py-1 text-xs text-slate-300 transition hover:bg-surface-800 disabled:opacity-50">
+                    {resolving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                    Mark resolved
                   </button>
                 )}
               </div>
@@ -319,6 +326,7 @@ export default function AdminChats() {
                 <ChatComposer
                   placeholder={`Reply to ${practiceName(selectedChat)}…`}
                   mentionables={mentionNames}
+                  isSending={chat.isSending}
                   onSend={(t, f, meta) => chat.sendMessage(t, null, f, meta)}
                   onTyping={() => chat.startTyping()}
                   onStopTyping={() => chat.stopTyping()}

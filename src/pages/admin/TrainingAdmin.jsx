@@ -8,7 +8,15 @@ import Modal from '../../components/Modal'
 import { Badge } from '../../components/admin/ui'
 import { supabase } from '../../lib/supabase'
 import { useAuth, SUPER_ADMIN_EMAIL } from '../../context/AuthContext'
-import { useAdminTrainingPage, queryKeys } from '../../lib/queries'
+import {
+  useAdminTrainingPage,
+  useReorderTrainingLessons,
+  useDeleteTrainingLesson,
+  useSaveTrainingLesson,
+  usePushTrainingLessons,
+  isMutating,
+  queryKeys,
+} from '../../lib/queries'
 
 // Lessons live in the single shared training_modules table. status drives the
 // publish model: 'draft' (never live), 'published' ('Live'), 'updated' (edited
@@ -39,8 +47,10 @@ export default function TrainingAdmin() {
   const [showModules, setShowModules] = useState(false)
   const [editing, setEditing] = useState(null) // lesson object, or {} for new
   const [confirmPush, setConfirmPush] = useState(false)
-  const [pushing, setPushing] = useState(false)
-  const [busyId, setBusyId] = useState(null)
+  const reorderMutation = useReorderTrainingLessons()
+  const deleteMutation = useDeleteTrainingLesson()
+  const saveLessonMutation = useSaveTrainingLesson()
+  const pushMutation = usePushTrainingLessons()
 
   useEffect(() => {
     if (!data) return
@@ -90,26 +100,28 @@ export default function TrainingAdmin() {
     const idx = rows.findIndex((r) => r.id === l.id)
     const swapWith = rows[idx + dir]
     if (!swapWith) return
-    setBusyId(l.id)
     const a = l.order_index ?? 0
     const b = swapWith.order_index ?? 0
     setLessons((ls) => ls.map((x) =>
       x.id === l.id ? { ...x, order_index: b } : x.id === swapWith.id ? { ...x, order_index: a } : x))
-    await Promise.all([
-      supabase.from('training_modules').update({ order_index: b }).eq('id', l.id),
-      supabase.from('training_modules').update({ order_index: a }).eq('id', swapWith.id),
-    ])
-    setBusyId(null)
+    try {
+      await reorderMutation.mutateAsync({ lessonId: l.id, swapLessonId: swapWith.id, orderA: a, orderB: b })
+    } catch (e) {
+      setError(e?.message || 'Could not reorder.')
+      invalidate()
+    }
   }
 
   async function removeLesson(l) {
     if (!window.confirm(`Delete "${l.title}"? This cannot be undone.`)) return
-    setBusyId(l.id)
     const prev = lessons
     setLessons((ls) => ls.filter((x) => x.id !== l.id))
-    const { error: e } = await supabase.from('training_modules').delete().eq('id', l.id)
-    if (e) { setError(e.message); setLessons(prev) }
-    setBusyId(null)
+    try {
+      await deleteMutation.mutateAsync({ id: l.id })
+    } catch (e) {
+      setError(e?.message || 'Could not delete.')
+      setLessons(prev)
+    }
   }
 
   async function publishAll() {
@@ -124,46 +136,48 @@ export default function TrainingAdmin() {
   }
 
   async function doPush() {
-    setPushing(true)
     const toPush = lessons.filter((l) => l.status === 'draft' || l.status === 'updated')
     const count = toPush.length
-    const { error: e1 } = await supabase
-      .from('training_modules')
-      .update({ status: 'published' })
-      .in('status', ['draft', 'updated'])
-    if (e1) { setError(e1.message); setPushing(false); return }
-    await supabase.from('training_push_log').insert({
-      pushed_by: user?.email || SUPER_ADMIN_EMAIL,
-      lessons_pushed: count,
-      notes: null,
-    })
-    setPushing(false)
-    setConfirmPush(false)
-    invalidate()
+    try {
+      await pushMutation.mutateAsync({ pushedBy: user?.email || SUPER_ADMIN_EMAIL, count })
+      setConfirmPush(false)
+      invalidate()
+    } catch (e) {
+      setError(e?.message || 'Push failed.')
+    }
   }
 
   async function saveLesson(form) {
-    const payload = {
-      title: form.title.trim(),
-      module_group: form.module_group,
-      description: form.description,
-      duration: (Number(form.durationMin) || 0) * 60,
-      video_url: form.video_url.trim() || null,
-      category: form.category,
-      status: form.status,
-      order_index: Number(form.order_index) || 0,
-    }
     if (form.id) {
+      const payload = {
+        title: form.title.trim(),
+        module_group: form.module_group,
+        description: form.description,
+        duration: (Number(form.durationMin) || 0) * 60,
+        video_url: form.video_url.trim() || null,
+        category: form.category,
+        status: form.status,
+        order_index: Number(form.order_index) || 0,
+      }
       const prev = lessons
       setLessons((ls) => ls.map((l) => (l.id === form.id ? { ...l, ...payload } : l)))
-      const { error: e } = await supabase.from('training_modules').update(payload).eq('id', form.id)
-      if (e) { setError(e.message); setLessons(prev); return false }
-    } else {
-      const { data, error: e } = await supabase.from('training_modules').insert(payload).select().single()
-      if (e) { setError(e.message); return false }
-      setLessons((ls) => [...ls, data])
+      try {
+        await saveLessonMutation.mutateAsync({ form })
+        return true
+      } catch (e) {
+        setError(e?.message || 'Save failed.')
+        setLessons(prev)
+        return false
+      }
     }
-    return true
+    try {
+      const result = await saveLessonMutation.mutateAsync({ form })
+      if (result.created && result.row) setLessons((ls) => [...ls, result.row])
+      return true
+    } catch (e) {
+      setError(e?.message || 'Save failed.')
+      return false
+    }
   }
 
   // ── Module tabs (training_module_groups) ──────────────────────────────────
@@ -312,8 +326,8 @@ export default function TrainingAdmin() {
                         <div className="flex items-center gap-1">
                           <span className="w-5 text-slate-500">{l.order_index}</span>
                           <div className="flex flex-col">
-                            <button onClick={() => reorder(l, -1)} disabled={i === 0 || busyId === l.id} className="text-slate-500 hover:text-slate-200 disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
-                            <button onClick={() => reorder(l, 1)} disabled={i === rows.length - 1 || busyId === l.id} className="text-slate-500 hover:text-slate-200 disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
+                            <button onClick={() => reorder(l, -1)} disabled={i === 0 || isMutating(reorderMutation, (v) => v.lessonId === l.id)} className="text-slate-500 hover:text-slate-200 disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
+                            <button onClick={() => reorder(l, 1)} disabled={i === rows.length - 1 || isMutating(reorderMutation, (v) => v.lessonId === l.id)} className="text-slate-500 hover:text-slate-200 disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
                           </div>
                         </div>
                       </td>
@@ -344,7 +358,7 @@ export default function TrainingAdmin() {
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => setEditing(l)} className="rounded-md border border-surface-700 bg-surface-800 p-1.5 text-slate-300 hover:bg-surface-700" title="Edit"><Pencil className="h-3.5 w-3.5" /></button>
-                          <button onClick={() => removeLesson(l)} disabled={busyId === l.id} className="rounded-md border border-surface-700 bg-surface-800 p-1.5 text-rose-300 hover:bg-surface-700 disabled:opacity-40" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
+                          <button onClick={() => removeLesson(l)} disabled={isMutating(deleteMutation, (v) => v.id === l.id)} className="rounded-md border border-surface-700 bg-surface-800 p-1.5 text-rose-300 hover:bg-surface-700 disabled:opacity-40" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
                         </div>
                       </td>
                     </tr>
@@ -363,6 +377,7 @@ export default function TrainingAdmin() {
         <LessonModal
           lesson={editing}
           groups={groups}
+          saving={saveLessonMutation.isPending}
           onClose={() => setEditing(null)}
           onSave={async (form) => { const ok = await saveLesson(form); if (ok) setEditing(null) }}
         />
@@ -372,8 +387,8 @@ export default function TrainingAdmin() {
         <Modal title="Push updates" onClose={() => setConfirmPush(false)} maxWidth="max-w-md" footer={
           <>
             <button onClick={() => setConfirmPush(false)} className="btn-ghost">Cancel</button>
-            <button onClick={doPush} disabled={pushing} className="btn-primary">
-              {pushing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Confirm Push
+            <button onClick={doPush} disabled={pushMutation.isPending} className="btn-primary">
+              {pushMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Confirm Push
             </button>
           </>
         }>
@@ -418,7 +433,7 @@ function InlineEdit({ value, onSave, className = '', placeholder = '', textarea 
   )
 }
 
-function LessonModal({ lesson, groups = [], onClose, onSave }) {
+function LessonModal({ lesson, groups = [], onClose, onSave, saving = false }) {
   const isNew = !lesson?.id
   const [form, setForm] = useState({
     id: lesson?.id,
@@ -431,22 +446,19 @@ function LessonModal({ lesson, groups = [], onClose, onSave }) {
     status: lesson?.status === 'published' ? 'published' : 'draft',
     order_index: lesson?.order_index ?? 0,
   })
-  const [busy, setBusy] = useState(false)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   async function submit() {
-    if (!form.title.trim()) return
-    setBusy(true)
+    if (!form.title.trim() || saving) return
     await onSave(form)
-    setBusy(false)
   }
 
   return (
     <Modal title={isNew ? 'Add Lesson' : 'Edit Lesson'} onClose={onClose} maxWidth="max-w-lg" footer={
       <>
         <button onClick={onClose} className="btn-ghost">Cancel</button>
-        <button onClick={submit} disabled={busy || !form.title.trim()} className="btn-primary">
-          {busy && <Loader2 className="h-4 w-4 animate-spin" />} Save
+        <button onClick={submit} disabled={saving || !form.title.trim()} className="btn-primary">
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />} Save
         </button>
       </>
     }>

@@ -1,6 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Plus, Trash2, Loader2, Check } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import {
+  usePracticeKbItems,
+  useAddPracticeKbItem,
+  useRemovePracticeKbItem,
+  useTogglePracticeKbItem,
+  isMutating,
+} from '../lib/queries'
 
 // Structured KB the sequence engine reads (practice_knowledge_base). Practices add
 // USPs, financing options, testimonials, protocols, guarantees, team facts — the
@@ -16,51 +22,39 @@ const CATEGORIES = [
 const labelFor = (k) => CATEGORIES.find((c) => c.key === k)?.label || k
 
 export default function StructuredKnowledgeBase({ practiceId }) {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { data: items = [], isLoading: loading } = usePracticeKbItems(practiceId)
+  const addMutation = useAddPracticeKbItem()
+  const removeMutation = useRemovePracticeKbItem()
+  const toggleMutation = useTogglePracticeKbItem()
   const [category, setCategory] = useState('USP')
   const [content, setContent] = useState('')
-  const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  async function load() {
-    const { data } = await supabase
-      .from('practice_knowledge_base')
-      .select('*')
-      .eq('practice_id', practiceId)
-      .order('created_at', { ascending: false })
-    setItems(data || [])
-    setLoading(false)
-  }
-  useEffect(() => {
-    let on = true
-    supabase
-      .from('practice_knowledge_base')
-      .select('*')
-      .eq('practice_id', practiceId)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => { if (on) { setItems(data || []); setLoading(false) } })
-    return () => { on = false }
-  }, [practiceId])
-
-  async function add() {
+  function add() {
     const c = content.trim()
-    if (!c) return
-    setSaving(true)
-    const { error } = await supabase.from('practice_knowledge_base').insert({ practice_id: practiceId, category, content: c })
-    if (!error) { setContent(''); setSaved(true); setTimeout(() => setSaved(false), 1800); await load() }
-    setSaving(false)
+    if (!c || addMutation.isPending) return
+    addMutation.mutate(
+      { practiceId, category, content: c },
+      {
+        onSuccess: () => {
+          setContent('')
+          setSaved(true)
+          setTimeout(() => setSaved(false), 1800)
+        },
+      },
+    )
   }
-  async function remove(id) {
-    await supabase.from('practice_knowledge_base').delete().eq('id', id)
-    setItems((prev) => prev.filter((i) => i.id !== id))
+
+  function remove(id) {
+    removeMutation.mutate({ id, practiceId })
   }
-  async function toggle(it) {
-    await supabase.from('practice_knowledge_base').update({ is_active: !it.is_active }).eq('id', it.id)
-    setItems((prev) => prev.map((i) => (i.id === it.id ? { ...i, is_active: !i.is_active } : i)))
+
+  function toggle(it) {
+    toggleMutation.mutate({ id: it.id, practiceId, isActive: it.is_active })
   }
 
   const hint = CATEGORIES.find((c) => c.key === category)?.hint
+  const adding = addMutation.isPending
 
   return (
     <div className="card p-6">
@@ -81,8 +75,8 @@ export default function StructuredKnowledgeBase({ practiceId }) {
           className="input"
           maxLength={400}
         />
-        <button onClick={add} disabled={saving || !content.trim()} className="btn-primary whitespace-nowrap">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />} Add
+        <button onClick={add} disabled={adding || !content.trim()} className="btn-primary whitespace-nowrap">
+          {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />} Add
         </button>
       </div>
 
@@ -92,18 +86,23 @@ export default function StructuredKnowledgeBase({ practiceId }) {
         ) : items.length === 0 ? (
           <p className="text-sm text-slate-500">Nothing yet. Add your first selling point above.</p>
         ) : (
-          items.map((it) => (
-            <div key={it.id} className={`flex items-start gap-3 rounded-lg border border-surface-700 p-3 ${it.is_active ? '' : 'opacity-50'}`}>
-              <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary-300">{labelFor(it.category)}</span>
-              <p className="min-w-0 flex-1 text-sm text-slate-200">{it.content}</p>
-              <button onClick={() => toggle(it)} className="shrink-0 text-xs text-slate-500 hover:text-slate-300" title={it.is_active ? 'Disable' : 'Enable'}>
-                {it.is_active ? 'On' : 'Off'}
-              </button>
-              <button onClick={() => remove(it.id)} className="shrink-0 text-slate-500 transition hover:text-rose-400" title="Delete">
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          ))
+          items.map((it) => {
+            const toggling = isMutating(toggleMutation, (v) => v.id === it.id)
+            const removing = isMutating(removeMutation, (v) => v.id === it.id)
+            return (
+              <div key={it.id} className={`flex items-start gap-3 rounded-lg border border-surface-700 p-3 ${it.is_active ? '' : 'opacity-50'}`}>
+                <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary-300">{labelFor(it.category)}</span>
+                <p className="min-w-0 flex-1 text-sm text-slate-200">{it.content}</p>
+                <button onClick={() => toggle(it)} disabled={toggling} className="inline-flex shrink-0 items-center gap-1 text-xs text-slate-500 hover:text-slate-300 disabled:opacity-50" title={it.is_active ? 'Disable' : 'Enable'}>
+                  {toggling ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                  {it.is_active ? 'On' : 'Off'}
+                </button>
+                <button onClick={() => remove(it.id)} disabled={removing} className="shrink-0 text-slate-500 transition hover:text-rose-400 disabled:opacity-50" title="Delete">
+                  {removing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                </button>
+              </div>
+            )
+          })
         )}
       </div>
     </div>

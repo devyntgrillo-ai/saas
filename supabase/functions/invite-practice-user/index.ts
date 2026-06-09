@@ -19,6 +19,7 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
+import { acceptInviteRedirectUrl } from "../_shared/invite.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
 import { recordAuditFromReq } from "../_shared/audit.ts";
 import { safeRedirect } from "../_shared/appUrl.ts";

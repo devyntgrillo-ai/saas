@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
 import { Loader2, Check, Camera } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { uploadAvatar, updateMyProfile, ROLE_OPTIONS } from '../lib/profile'
+import { ROLE_OPTIONS } from '../lib/profile'
+import { useUpdateMyProfile } from '../lib/queries'
 import { Avatar } from './chat/ChatMessage'
 import MfaSetup from './MfaSetup'
 
@@ -15,7 +16,7 @@ export default function UserProfilePanel() {
   const [roleOther, setRoleOther] = useState(initialIsPreset ? '' : initialRole)
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
-  const [saving, setSaving] = useState(false)
+  const updateProfile = useUpdateMyProfile()
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
   const fileRef = useRef(null)
@@ -32,22 +33,32 @@ export default function UserProfilePanel() {
     setPreview(URL.createObjectURL(f))
   }
 
-  async function save() {
-    setSaving(true); setError(''); setSaved(false)
-    try {
-      let avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url || null
-      if (file) avatarUrl = await uploadAvatar(user.id, file)
-      const jobTitle = roleSel === '__other' ? roleOther.trim() : roleSel
-      await updateMyProfile({ displayName: name.trim(), avatarUrl, jobTitle })
-      await refreshProfile()
-      setFile(null)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2500)
-    } catch (e) {
-      setError(e?.message || 'Could not save your profile. Please try again.')
-    }
-    setSaving(false)
+  function save() {
+    if (updateProfile.isPending) return
+    setError('')
+    setSaved(false)
+    const jobTitle = roleSel === '__other' ? roleOther.trim() : roleSel
+    updateProfile.mutate(
+      {
+        userId: user.id,
+        displayName: name.trim(),
+        avatarUrl: profile?.avatar_url || user?.user_metadata?.avatar_url || null,
+        jobTitle,
+        file,
+      },
+      {
+        onSuccess: async () => {
+          await refreshProfile()
+          setFile(null)
+          setSaved(true)
+          setTimeout(() => setSaved(false), 2500)
+        },
+        onError: (e) => setError(e?.message || 'Could not save your profile. Please try again.'),
+      },
+    )
   }
+
+  const saving = updateProfile.isPending
 
   return (
     <div className="space-y-6">

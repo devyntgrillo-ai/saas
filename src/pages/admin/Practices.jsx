@@ -4,6 +4,7 @@ import { Stethoscope, Search, Eye, UserCog, Archive, RotateCcw, Loader2, Chevron
 import { useAuth } from '../../context/AuthContext'
 import { useAdmin } from '../../context/AdminContext'
 import { supabase } from '../../lib/supabase'
+import { useArchivePractice, isMutating } from '../../lib/queries'
 import { smsStatusMeta } from '../../lib/admin'
 import { statusMeta as subStatusMeta } from '../../lib/billing'
 import { Table, Badge, money, stop } from '../../components/admin/ui'
@@ -17,7 +18,7 @@ export default function Practices() {
   const [q, setQ] = useState('')
   const [agencyId, setAgencyId] = useState('all')
   const [sub, setSub] = useState('all')
-  const [busyId, setBusyId] = useState(null)
+  const archiveMutation = useArchivePractice()
 
   // Archived (soft-deleted) subaccounts - lazy-loaded the first time revealed.
   const [showArchived, setShowArchived] = useState(false)
@@ -62,25 +63,28 @@ export default function Practices() {
     if (next && archived === null) await loadArchived()
   }
 
-  async function archive(p) {
+  function archive(p) {
     if (!confirm(`Archive ${p.name}? It will be hidden from all list views but can be restored later.`)) return
-    setBusyId(p.id)
-    const { error } = await supabase
-      .from('practices')
-      .update({ archived_at: new Date().toISOString(), archived_by: user?.id ?? null })
-      .eq('id', p.id)
-    setBusyId(null)
-    if (error) return alert(error.message)
-    await refresh()
-    if (archived !== null) await loadArchived()
+    archiveMutation.mutate(
+      { practiceId: p.id, agencyId: p.agency_id, archive: true, userId: user?.id },
+      {
+        onError: (e) => alert(e.message),
+        onSuccess: async () => {
+          await refresh()
+          if (archived !== null) await loadArchived()
+        },
+      },
+    )
   }
 
-  async function restore(p) {
-    setBusyId(p.id)
-    const { error } = await supabase.from('practices').update({ archived_at: null, archived_by: null }).eq('id', p.id)
-    setBusyId(null)
-    if (error) return alert(error.message)
-    await Promise.all([refresh(), loadArchived()])
+  function restore(p) {
+    archiveMutation.mutate(
+      { practiceId: p.id, agencyId: p.agency_id, archive: false },
+      {
+        onError: (e) => alert(e.message),
+        onSuccess: () => Promise.all([refresh(), loadArchived()]),
+      },
+    )
   }
 
   return (
@@ -115,7 +119,7 @@ export default function Practices() {
         head={['Practice', 'Doctor', 'Reseller', 'Location', 'Subscription', 'Consults/mo', 'Recovered', 'Last recording', 'SMS', '']}
         rows={rows.map((p) => {
           const sms = smsStatusMeta(p.sms_status)
-          const busy = busyId === p.id
+          const busy = isMutating(archiveMutation, (v) => v.practiceId === p.id)
           return [
             <span className="font-medium text-slate-100">{p.name}</span>,
             p.doctor ? `Dr. ${p.doctor}` : '-',
@@ -158,7 +162,7 @@ export default function Practices() {
               <Table
                 head={['Practice', 'Doctor', 'Reseller', 'Archived', '']}
                 rows={(archived || []).map((p) => {
-                  const busy = busyId === p.id
+                  const busy = isMutating(archiveMutation, (v) => v.practiceId === p.id)
                   return [
                     <span className="font-medium text-slate-300">{p.name}</span>,
                     archivedName(p) ? `Dr. ${archivedName(p)}` : '-',

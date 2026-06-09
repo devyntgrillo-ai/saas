@@ -11,11 +11,10 @@ function fmt(s) {
 // Inline voice-memo recorder. Records with a live waveform, then drops into a
 // review state (replay / re-record / send) — nothing sends until the user hits
 // Send. onSend(blob, durationSec).
-export default function AudioRecorder({ onSend, onCancel }) {
+export default function AudioRecorder({ onSend, onCancel, isSending = false }) {
   const [phase, setPhase] = useState('recording') // recording | review
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState('')
-  const [sending, setSending] = useState(false)
   const [blob, setBlob] = useState(null)
   const [blobUrl, setBlobUrl] = useState(null)
   const [dur, setDur] = useState(0)
@@ -114,8 +113,7 @@ export default function AudioRecorder({ onSend, onCancel }) {
   }
 
   async function sendIt() {
-    if (!blob || sending) return
-    setSending(true)
+    if (!blob || isSending) return
     await onSend?.(blob, dur)
   }
 
@@ -139,14 +137,14 @@ export default function AudioRecorder({ onSend, onCancel }) {
       <div className="rounded-2xl border border-surface-700 bg-surface-800 p-2">
         <AudioClip url={blobUrl} durationSec={dur} seed="preview" />
         <div className="mt-2 flex items-center gap-2">
-          <button onClick={cancel} disabled={sending} className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-surface-700 hover:text-white" title="Discard">
+          <button onClick={cancel} disabled={isSending} className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-surface-700 hover:text-white" title="Discard">
             <X className="h-4 w-4" />
           </button>
-          <button onClick={reRecord} disabled={sending} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs text-slate-300 transition hover:bg-surface-700">
+          <button onClick={reRecord} disabled={isSending} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs text-slate-300 transition hover:bg-surface-700">
             <RefreshCcw className="h-3.5 w-3.5" /> Re-record
           </button>
-          <button onClick={sendIt} disabled={sending} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold !text-white transition hover:bg-primary-700">
-            {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Send
+          <button onClick={sendIt} disabled={isSending} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold !text-white transition hover:bg-primary-700">
+            {isSending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Send
           </button>
         </div>
       </div>

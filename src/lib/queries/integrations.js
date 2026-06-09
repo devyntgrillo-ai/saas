@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../supabase'
-import { fetchOptOutCount } from '../messaging'
+import { fetchOptOutCount, purchaseNumber, registerA2P } from '../messaging'
+import { disconnectPms } from '../pms'
 import { queryKeys } from './keys'
 
 export async function fetchPlaudLastSync(practiceId) {
@@ -28,5 +29,44 @@ export function useMessagingOptOuts(practiceId) {
     queryKey: queryKeys.messagingOptOuts(practiceId),
     queryFn: () => fetchOptOutCount(practiceId),
     enabled: Boolean(practiceId),
+  })
+}
+
+export function useDisconnectPms() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ practiceId }) => {
+      await disconnectPms(practiceId)
+      return { practiceId }
+    },
+    onSuccess: ({ practiceId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.practice(practiceId) })
+    },
+  })
+}
+
+export function usePurchasePhoneNumber() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ practiceId, phoneNumber }) => {
+      await purchaseNumber(practiceId, phoneNumber)
+      return { practiceId }
+    },
+    onSuccess: ({ practiceId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.practice(practiceId) })
+    },
+  })
+}
+
+export function useRegisterA2P() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ practiceId, business }) => {
+      await registerA2P(practiceId, business)
+      return { practiceId }
+    },
+    onSuccess: ({ practiceId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.practice(practiceId) })
+    },
   })
 }

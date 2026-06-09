@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Loader2, Check, Mail, MessageSquare, Send, Info } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { useUpdatePractice, useSendTestDigest } from '../lib/queries'
 
 const EVENTS = [
   { key: 'patient_replied', label: 'Patient Replied', tip: 'Get notified when a patient responds to a CaseLift follow-up sequence', def: { email: true, sms: true, slack: true } },
@@ -58,9 +58,9 @@ export default function NotificationSettings() {
   const { practice, refreshProfile } = useAuth()
   const [prefs, setPrefs] = useState(defaultPrefs())
   const [form, setForm] = useState({})
-  const [saving, setSaving] = useState(false)
+  const updatePractice = useUpdatePractice()
   const [flash, setFlash] = useState('')
-  const [testing, setTesting] = useState(false)
+  const testDigestMutation = useSendTestDigest()
 
   useEffect(() => {
     if (!practice) return
@@ -81,14 +81,21 @@ export default function NotificationSettings() {
     })
   }, [practice])
 
-  async function save(patch, msg = 'Saved') {
-    if (!practice?.id) return
-    setSaving(true)
-    await supabase.from('practices').update(patch).eq('id', practice.id)
-    await refreshProfile()
-    setSaving(false)
-    setFlash(msg); setTimeout(() => setFlash(''), 2000)
+  function save(patch, msg = 'Saved') {
+    if (!practice?.id || updatePractice.isPending) return
+    updatePractice.mutate(
+      { practiceId: practice.id, patch },
+      {
+        onSuccess: async () => {
+          await refreshProfile()
+          setFlash(msg)
+          setTimeout(() => setFlash(''), 2000)
+        },
+      },
+    )
   }
+
+  const saving = updatePractice.isPending
   const setF = (k, v) => { setForm((f) => ({ ...f, [k]: v })); save({ [k]: v }) }
 
   function toggleCell(eventKey, channel) {
@@ -97,13 +104,22 @@ export default function NotificationSettings() {
     save({ notification_prefs: next }, 'Preferences updated')
   }
 
-  async function sendTestDigest() {
-    if (!practice?.id) return
-    setTesting(true)
-    try { await supabase.functions.invoke('send-weekly-digest', { body: { practice_id: practice.id } }) } catch { /* noop */ }
-    setTesting(false)
-    setFlash('Test digest sent'); setTimeout(() => setFlash(''), 2500)
+  function sendTestDigest() {
+    if (!practice?.id || testDigestMutation.isPending) return
+    testDigestMutation.mutate(
+      { practiceId: practice.id },
+      {
+        onSuccess: () => {
+          setFlash('Test digest sent')
+          setTimeout(() => setFlash(''), 2500)
+        },
+      },
+    )
   }
+
+  const testing = testDigestMutation.isPending
+
+  const slackConnected = Boolean(practice?.slack_webhook_url)
 
   return (
     <div className="space-y-4">

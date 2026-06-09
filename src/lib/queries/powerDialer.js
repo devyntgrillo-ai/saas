@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../supabase'
 import { fetchRecentCalls } from '../voice'
 import { queryKeys } from './keys'
@@ -34,5 +34,92 @@ export function useRecentCalls(practiceId) {
     queryKey: queryKeys.powerDialer.recentCalls(practiceId),
     queryFn: () => fetchRecentCalls(practiceId),
     enabled: Boolean(practiceId),
+  })
+}
+
+export function useCompletePowerDialerLead() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      practiceId, lead, consult, dispo, noteText, callSid, durationSec, tcName,
+    }) => {
+      const d = dispo || { key: 'no_answer', log: 'No answer' }
+
+      let convId = null
+      const { data: existing } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('practice_id', practiceId)
+        .eq('consult_id', consult.id)
+        .maybeSingle()
+      if (existing) convId = existing.id
+      else {
+        const [first, ...rest] = (consult.patient_name || 'Patient').split(' ')
+        const { data: created } = await supabase
+          .from('conversations')
+          .insert({
+            practice_id: practiceId,
+            consult_id: consult.id,
+            patient_first: first,
+            patient_last: rest.join(' '),
+            patient_phone: consult.patient_phone,
+            patient_email: consult.patient_email,
+            last_message_at: new Date().toISOString(),
+          })
+          .select('id')
+          .single()
+        convId = created?.id
+      }
+
+      const nowIso = new Date().toISOString()
+      const dateLabel = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+      const durLabel = callSid && durationSec > 0 ? ` · ${Math.floor(durationSec / 60)}:${String(durationSec % 60).padStart(2, '0')}` : ''
+      const body = `📞 Called ${dateLabel} · ${d.log}${durLabel}${noteText ? ` · ${noteText}` : ''}`
+
+      let callLogId = null
+      if (callSid) {
+        const { data: cl } = await supabase.from('call_logs').select('id').eq('twilio_call_sid', callSid).maybeSingle()
+        callLogId = cl?.id || null
+      }
+      const meta = {
+        outcome: d.log,
+        duration_sec: callSid ? (durationSec || 0) : null,
+        note: noteText || null,
+        actor: tcName || 'You',
+      }
+
+      if (convId) {
+        await supabase.from('conversation_messages').insert({
+          conversation_id: convId,
+          direction: 'outbound',
+          channel: 'call',
+          body,
+          sent_at: nowIso,
+          meta,
+          call_log_id: callLogId,
+        })
+        await supabase.from('conversations').update({ last_message_at: nowIso, last_message_preview: body }).eq('id', convId)
+      }
+      if (callSid) {
+        await supabase.from('call_logs').update({
+          disposition: d.key,
+          notes: noteText || null,
+          duration_seconds: durationSec || null,
+          conversation_id: convId,
+        }).eq('twilio_call_sid', callSid)
+      }
+
+      await supabase.from('messages').update({ status: 'sent', sent_at: nowIso }).eq('id', lead.id)
+      if (d.key === 'dnc') {
+        await supabase.from('consults').update({ outcome: 'not_converting' }).eq('id', consult.id)
+      }
+
+      return { leadId: lead.id, consultId: consult.id }
+    },
+    onSuccess: (_, { practiceId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.powerDialer.queue(practiceId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.powerDialer.recentCalls(practiceId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations(practiceId) })
+    },
   })
 }

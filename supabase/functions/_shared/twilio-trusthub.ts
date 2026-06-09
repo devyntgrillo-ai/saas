@@ -83,12 +83,55 @@ export function trustHubForResubmit(
   existing: TrustHubStored,
   brandStatus: string | null | undefined,
   campaignStatus: string | null | undefined,
+  brandCriticalChanged = false,
 ): TrustHubStored {
   const th = sanitizeTrustHubStored(existing);
-  if (brandStatus === "failed" || campaignStatus === "failed") {
+  if (brandStatus === "failed" || campaignStatus === "failed" || brandCriticalChanged) {
     delete th.trust_product_sid;
   }
   return th;
+}
+
+/** Brand-level fields that require Trust Hub refresh + new brand registration when changed. */
+export function brandCriticalFieldsChanged(prev: A2PBusiness, next: A2PBusiness): boolean {
+  const norm = (v: string | undefined) => String(v || "").trim().toLowerCase().replace(/\/$/, "");
+  return norm(prev.website) !== norm(next.website) ||
+    norm(prev.legal_name) !== norm(next.legal_name) ||
+    String(prev.ein || "").replace(/\D/g, "") !== String(next.ein || "").replace(/\D/g, "");
+}
+
+/** Assign an updated business end user (e.g. corrected website) to an existing customer profile. */
+export async function refreshTrustHubBusinessInfo(
+  cfg: TwilioConfig,
+  customerProfileSid: string,
+  biz: A2PBusiness,
+  practiceName: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (!biz.legal_name?.trim() || !biz.ein?.trim()) {
+    return { ok: false, reason: "Legal name and EIN are required to update brand business info." };
+  }
+  const label = (practiceName || biz.legal_name || "Practice").slice(0, 40);
+  try {
+    const businessEndUser = await createEndUser(
+      cfg,
+      `${label} Business Info`,
+      "customer_profile_business_information",
+      {
+        business_name: biz.legal_name!.trim(),
+        website_url: (biz.website || "https://example.com").trim(),
+        business_regions_of_operation: "USA_AND_CANADA",
+        business_type: mapTwilioBusinessType(biz.business_type || ""),
+        business_registration_identifier: "EIN",
+        business_identity: "direct_customer",
+        business_industry: "HEALTHCARE",
+        business_registration_number: biz.ein!.replace(/\D/g, "").slice(0, 21),
+      },
+    );
+    await assignToCustomerProfile(cfg, customerProfileSid, businessEndUser);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: String((e as Error).message ?? e) };
+  }
 }
 
 function mapTwilioBusinessType(raw: string): string {

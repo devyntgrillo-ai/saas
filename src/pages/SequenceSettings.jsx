@@ -39,7 +39,6 @@ export default function SequenceSettings() {
   // saving delivery/sequence rules doesn't wipe them.
   const [touchpoints, setTouchpoints] = useState(() => DEFAULT_TOUCHPOINTS.map((t) => ({ ...t })))
   const [rules, setRules] = useState({ ...DEFAULT_RULES })
-  const [saving, setSaving] = useState(false)
   const [flash, setFlash] = useState('')
   const { data: activeCount = 0 } = useSequenceActiveCount(practice?.id)
   const updatePractice = useUpdatePractice()
@@ -54,21 +53,21 @@ export default function SequenceSettings() {
 
   const setRule = (k, v) => setRules((r) => ({ ...r, [k]: v }))
 
-  async function save() {
-    if (!practice?.id) return
-    setSaving(true)
-    try {
-      await updatePractice.mutateAsync({
-        practiceId: practice.id,
-        patch: { sequence_config: buildSequenceConfig(touchpoints, rules) },
-      })
-      setFlash('Settings saved')
-      setTimeout(() => setFlash(''), 2500)
-      await refreshProfile()
-    } finally {
-      setSaving(false)
-    }
+  function save() {
+    if (!practice?.id || updatePractice.isPending) return
+    updatePractice.mutate(
+      { practiceId: practice.id, patch: { sequence_config: buildSequenceConfig(touchpoints, rules) } },
+      {
+        onSuccess: async () => {
+          setFlash('Settings saved')
+          setTimeout(() => setFlash(''), 2500)
+          await refreshProfile()
+        },
+      },
+    )
   }
+
+  const saving = updatePractice.isPending
 
   return (
     <div className="space-y-6">

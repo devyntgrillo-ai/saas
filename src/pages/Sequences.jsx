@@ -17,7 +17,18 @@ import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../lib/permissions'
 import { displayPatientName, maskedPatientLabel } from '../lib/phi'
 import { supabase } from '../lib/supabase'
-import { useSequences, useToggleSequenceStatus, useUpdateSequenceMessage, useSequencesRealtime, useProcessingConsults, useConsultsRealtime, queryKeys } from '../lib/queries'
+import {
+  useSequences,
+  useToggleSequenceStatus,
+  useUpdateSequenceMessage,
+  useSaveSequenceTiming,
+  useLogCallOutcome,
+  useRegenerateSequence,
+  useSequencesRealtime,
+  useProcessingConsults,
+  useConsultsRealtime,
+  queryKeys,
+} from '../lib/queries'
 import { useRecentRecordings } from '../lib/recentRecordings'
 import { stripEmDashes } from '../lib/sanitize'
 import {
@@ -261,6 +272,7 @@ const titleCaseObj = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '')
 // an inline "Day" number input. Saving re-stamps send_day + scheduled_for on the
 // messages table. Already-sent touchpoints are read-only and grayed.
 function TimingEditorModal({ row, practice, onClose, onSaved }) {
+  const saveTimingMutation = useSaveSequenceTiming()
   const c = row.raw
   const baseMs = new Date(c.created_at).getTime()
   const rules = rulesFromConfig(practice?.sequence_config, practice?.timezone)
@@ -272,22 +284,29 @@ function TimingEditorModal({ row, practice, onClose, onSaved }) {
     [c.messages]
   )
   const [days, setDays] = useState(() => Object.fromEntries(msgs.map((m) => [m.id, String(dayOf(m, baseMs))])))
-  const [busy, setBusy] = useState(false)
 
-  async function save() {
-    setBusy(true)
-    for (const m of msgs) {
-      if (SENT_MSG.includes(m.status)) continue // can't reschedule a sent message
-      const day = Math.max(0, Math.round(Number(days[m.id]) || 0))
-      const scheduled_for = computeScheduledFor(c.created_at, day, rules)
-      await supabase
-        .from('messages')
-        .update({ send_day: day, scheduled_for, status: m.status === 'draft' ? 'scheduled' : m.status })
-        .eq('id', m.id)
-    }
-    setBusy(false)
-    onSaved?.()
+  function save() {
+    if (saveTimingMutation.isPending) return
+    const updates = msgs
+      .filter((m) => !SENT_MSG.includes(m.status))
+      .map((m) => {
+        const day = Math.max(0, Math.round(Number(days[m.id]) || 0))
+        return {
+          messageId: m.id,
+          patch: {
+            send_day: day,
+            scheduled_for: computeScheduledFor(c.created_at, day, rules),
+            status: m.status === 'draft' ? 'scheduled' : m.status,
+          },
+        }
+      })
+    saveTimingMutation.mutate(
+      { updates, practiceId: practice?.id },
+      { onSuccess: () => onSaved?.() },
+    )
   }
+
+  const busy = saveTimingMutation.isPending
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -352,7 +371,11 @@ function TimingEditorModal({ row, practice, onClose, onSaved }) {
 // Patient detail modal: consult summary + workflow editor (touchpoints).
 // Centered modal (replaces the old right slide-over that covered the page).
 function SequenceDrawer({ row, practice, onClose, onChanged, onReload }) {
+  const updateMsgMutation = useUpdateSequenceMessage()
+  const logOutcomeMutation = useLogCallOutcome()
+  const regenerateMutation = useRegenerateSequence()
   const c = row?.raw
+  const practiceId = practice?.id
   const [expanded, setExpanded] = useState(null)
   const [editingTiming, setEditingTiming] = useState(false)
   // Local copy of messages so inline edits / regenerate reflect immediately.
@@ -367,11 +390,8 @@ function SequenceDrawer({ row, practice, onClose, onChanged, onReload }) {
   // Inline message editing state.
   const [editingMsg, setEditingMsg] = useState(null) // message id
   const [draft, setDraft] = useState({ subject: '', body: '' })
-  const [savingMsg, setSavingMsg] = useState(false)
   const [msgError, setMsgError] = useState(null)
-  // Regenerate state.
   const [regenNote, setRegenNote] = useState('')
-  const [regenerating, setRegenerating] = useState(false)
   const [regenError, setRegenError] = useState(null)
   if (!row) return null
 
@@ -386,44 +406,56 @@ function SequenceDrawer({ row, practice, onClose, onChanged, onReload }) {
     setDraft({ subject: stripEmDashes(m.subject || ''), body: stripEmDashes(m.body || '') })
   }
 
-  async function saveMsg(m) {
-    setSavingMsg(true)
+  function saveMsg(m) {
+    if (updateMsgMutation.isPending) return
     setMsgError(null)
     const patch = m.channel === 'email'
       ? { subject: draft.subject, body: draft.body }
       : { body: draft.body }
-    const { error } = await supabase.from('messages').update(patch).eq('id', m.id)
-    setSavingMsg(false)
-    if (error) { setMsgError('Could not save. Please try again.'); return }
-    setLocalMsgs((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...patch } : x)))
-    setEditingMsg(null)
-    onReload?.()
+    updateMsgMutation.mutate(
+      { messageId: m.id, patch, practiceId },
+      {
+        onSuccess: () => {
+          setLocalMsgs((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...patch } : x)))
+          setEditingMsg(null)
+          onReload?.()
+        },
+        onError: () => setMsgError('Could not save. Please try again.'),
+      },
+    )
   }
 
-  async function logOutcome(m, outcome) {
-    const next = m.call_outcome === outcome ? null : outcome
-    await supabase.from('messages').update({ call_outcome: next }).eq('id', m.id)
-    setLocalMsgs((prev) => prev.map((x) => (x.id === m.id ? { ...x, call_outcome: next } : x)))
+  function logOutcome(m, outcome) {
+    if (logOutcomeMutation.isPending && logOutcomeMutation.variables?.messageId === m.id) return
+    logOutcomeMutation.mutate(
+      { messageId: m.id, outcome, practiceId, currentOutcome: m.call_outcome },
+      {
+        onSuccess: ({ call_outcome: next }) => {
+          setLocalMsgs((prev) => prev.map((x) => (x.id === m.id ? { ...x, call_outcome: next } : x)))
+        },
+      },
+    )
   }
 
-  async function regenerate() {
-    setRegenerating(true)
+  function regenerate() {
+    if (regenerateMutation.isPending) return
     setRegenError(null)
-    const { error } = await supabase.functions.invoke('analyze-consult', {
-      body: { consult_id: c.id, regenerate: true, note: regenNote || '' },
-    })
-    if (error) { setRegenerating(false); setRegenError('Regeneration failed. Please try again.'); return }
-    // Reload this consult's messages from the DB.
-    const { data } = await supabase
-      .from('messages')
-      .select('id, status, channel, type, subject, body, scheduled_for, send_day, sent_at, created_at, call_script, purpose, call_outcome, sequence_position')
-      .eq('consult_id', c.id)
-    if (data) setLocalMsgs(data)
-    setRegenerating(false)
-    setRegenNote('')
-    setExpanded(null)
-    onReload?.()
+    regenerateMutation.mutate(
+      { consultId: c.id, practiceId, note: regenNote },
+      {
+        onSuccess: ({ messages }) => {
+          if (messages) setLocalMsgs(messages)
+          setRegenNote('')
+          setExpanded(null)
+          onReload?.()
+        },
+        onError: () => setRegenError('Regeneration failed. Please try again.'),
+      },
+    )
   }
+
+  const savingMsg = updateMsgMutation.isPending
+  const regenerating = regenerateMutation.isPending
   const preset = c.sequence_timing_preset || c.exit_intent_level || 'warm'
   const presetMeta = TIMING_PRESETS[preset] || TIMING_PRESETS.warm
   const doctorLast = practice?.doctor_last || 'Smith'
@@ -541,7 +573,10 @@ function SequenceDrawer({ row, practice, onClose, onChanged, onReload }) {
                                 <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Log call outcome</p>
                                 <div className="mt-1 flex flex-wrap gap-1.5">
                                   {['Left voicemail', 'Spoke with patient', 'No answer', 'Call back requested'].map((o) => (
-                                    <button key={o} onClick={() => logOutcome(m, o)} className={`rounded-md border px-2 py-1 text-xs transition ${m.call_outcome === o ? 'border-amber-500 bg-amber-500/15 text-amber-300' : 'border-surface-700 text-slate-300 hover:bg-surface-800'}`}>{o}</button>
+                                    <button key={o} onClick={() => logOutcome(m, o)} disabled={logOutcomeMutation.isPending && logOutcomeMutation.variables?.messageId === m.id} className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition disabled:opacity-50 ${m.call_outcome === o ? 'border-amber-500 bg-amber-500/15 text-amber-300' : 'border-surface-700 text-slate-300 hover:bg-surface-800'}`}>
+                                      {logOutcomeMutation.isPending && logOutcomeMutation.variables?.messageId === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                                      {o}
+                                    </button>
                                   ))}
                                 </div>
                               </div>
@@ -682,7 +717,6 @@ export default function Sequences() {
   const sort = 'next'
   const dir = 'asc'
   const [shown, setShown] = useState(PAGE)
-  const [busyId, setBusyId] = useState(null)
   const [flash, setFlash] = useState(null) // { id, text } transient toggle confirmation
   const [now, setNow] = useState(() => Date.now())
 
@@ -747,18 +781,21 @@ export default function Sequences() {
   // ── On/off toggle ─────────────────────────────────────────────────────────
   // ON = active (sending), OFF = paused (pending messages stay pending but won't
   // send). Sent messages are never touched. Disabled once a sequence has ended.
-  async function toggleSeq(r) {
-    if (r.toggleDisabled || busyId === r.id) return
-    setBusyId(r.id)
+  function toggleSeq(r) {
+    if (r.toggleDisabled || (toggleSeqMutation.isPending && toggleSeqMutation.variables?.consultId === r.id)) return
     const goActive = !r.toggleOn
     const patch = goActive
-      // Clear the legacy cancellation too so the sender treats it as live again.
       ? { sequence_status: 'active', sequence_paused_reason: null, sequence_cancelled_at: null, sequence_cancelled_reason: null }
       : { sequence_status: 'paused', sequence_paused_reason: 'manual' }
-    await toggleSeqMutation.mutateAsync({ consultId: r.id, patch, practiceId })
-    setBusyId(null)
-    setFlash({ id: r.id, text: goActive ? 'Sequence resumed' : 'Sequence paused' })
-    setTimeout(() => setFlash((f) => (f && f.id === r.id ? null : f)), 2000)
+    toggleSeqMutation.mutate(
+      { consultId: r.id, patch, practiceId },
+      {
+        onSuccess: () => {
+          setFlash({ id: r.id, text: goActive ? 'Sequence resumed' : 'Sequence paused' })
+          setTimeout(() => setFlash((f) => (f && f.id === r.id ? null : f)), 2000)
+        },
+      },
+    )
   }
 
   const FILTERS = [
@@ -924,7 +961,7 @@ export default function Sequences() {
 
                 {/* Toggle */}
                 <div className="flex items-center gap-1.5 lg:col-span-1 lg:justify-end" onClick={(e) => e.stopPropagation()}>
-                  <RowToggle on={r.toggleOn} disabled={r.toggleDisabled} busy={busyId === r.id} onClick={() => toggleSeq(r)} />
+                  <RowToggle on={r.toggleOn} disabled={r.toggleDisabled} busy={toggleSeqMutation.isPending && toggleSeqMutation.variables?.consultId === r.id} onClick={() => toggleSeq(r)} />
                   <Link
                     to={`/consults/${r.id}`}
                     title="View consult"

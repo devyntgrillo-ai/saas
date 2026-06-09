@@ -12,6 +12,7 @@ import { useConsultsDay, useNextConsults, useProcessingConsults, useRecentConsul
 import { statusMeta } from '../lib/consults'
 import { useRecentRecordings } from '../lib/recentRecordings'
 import { supabase } from '../lib/supabase'
+import { formatAppointmentType } from '../lib/pms'
 
 const todayStr = () => new Date().toLocaleDateString('en-CA')
 
@@ -252,15 +253,15 @@ export default function Consults() {
       ) : rows.length === 0 ? (
         <EmptyCard icon={Calendar} title="No appointments match your filters" />
       ) : counts.recorded === counts.all ? (
-        <RecordedTable rows={rows} navigate={navigate} openRecorder={openRecorder} consultStatus={consultStatus} caughtUp />
+        <RecordedTable rows={rows} navigate={navigate} openRecorder={openRecorder} consultStatus={consultStatus} practice={practice} caughtUp />
       ) : (
-        <RecordedTable rows={rows} navigate={navigate} openRecorder={openRecorder} consultStatus={consultStatus} />
+        <RecordedTable rows={rows} navigate={navigate} openRecorder={openRecorder} consultStatus={consultStatus} practice={practice} />
       )}
 
       {/* ── Next 5 upcoming consults ─ always shown so there's a forward view of
           what's coming, with date + time columns sorted earliest to latest. ── */}
       {nextConsults.length > 0 && (
-        <NextConsults rows={nextConsults} navigate={navigate} openRecorder={openRecorder} />
+        <NextConsults rows={nextConsults} navigate={navigate} openRecorder={openRecorder} practice={practice} />
       )}
       </>
       )}
@@ -347,6 +348,7 @@ function CompleteCard({ c, onOpen }) {
 
 // The persistent, searchable, paginated archive of every recorded consult.
 function ConsultArchive({ practiceId, navigate }) {
+  const canPHI = usePermissions().canViewPHI
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useState('')
   const [page, setPage] = useState(0)
@@ -436,7 +438,7 @@ function ConsultArchive({ practiceId, navigate }) {
   )
 }
 
-function RecordedTable({ rows, navigate, openRecorder, caughtUp, consultStatus = {} }) {
+function RecordedTable({ rows, navigate, openRecorder, practice, caughtUp, consultStatus = {} }) {
   const canPHI = usePermissions().canViewPHI
   return (
     <div className="card overflow-hidden">
@@ -499,7 +501,7 @@ function RecordedTable({ rows, navigate, openRecorder, caughtUp, consultStatus =
                   <p className="truncate text-sm font-medium text-slate-100">{displayPatientName(a, canPHI)}</p>
                 )}
                 <p className="truncate text-xs text-slate-500">
-                  {a.appointment_type || 'Consult'}{a.provider ? ` · ${a.provider}` : ''}
+                  {formatAppointmentType(a, practice)}{a.provider ? ` · ${a.provider}` : ''}
                   <span className="sm:hidden"> · {fmtTime(a.appointment_time)}</span>
                 </p>
                 <span className={`mt-1.5 inline-flex items-center gap-1 text-xs font-medium sm:hidden ${bText}`}>
@@ -540,7 +542,7 @@ function fmtDate(ts) {
 
 // The next few upcoming consults regardless of day, with Date + Time columns,
 // earliest first. Used so the Schedule tab is never an empty page.
-function NextConsults({ rows, navigate, openRecorder }) {
+function NextConsults({ rows, navigate, openRecorder, practice }) {
   const canPHI = usePermissions().canViewPHI
   return (
     <section className="space-y-2">
@@ -562,7 +564,7 @@ function NextConsults({ rows, navigate, openRecorder }) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-slate-100">{displayPatientName(a, canPHI)}</p>
                   <p className="truncate text-xs text-slate-500">
-                    {a.appointment_type || 'Consult'}{a.provider ? ` · ${a.provider}` : ''}
+                    {formatAppointmentType(a, practice)}{a.provider ? ` · ${a.provider}` : ''}
                   </p>
                 </div>
                 {recorded ? (

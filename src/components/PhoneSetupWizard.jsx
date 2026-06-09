@@ -12,7 +12,8 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { searchNumbers, purchaseNumber, registerA2P, pollA2PStatus } from '../lib/messaging'
+import { searchNumbers, pollA2PStatus } from '../lib/messaging'
+import { usePurchasePhoneNumber, useRegisterA2P } from '../lib/queries'
 
 const DEFAULT_SAMPLES = [
   'Hi [name], following up on your implant consult. Any questions about your treatment plan? Reply STOP to opt out.',
@@ -26,12 +27,15 @@ const DEFAULT_SAMPLES = [
 export default function PhoneSetupWizard({ practiceId, practiceName, onClose, onComplete, embedded = false }) {
   const [step, setStep] = useState(1)
   const [brandApproved, setBrandApproved] = useState(false)
+  const [resubmitMode, setResubmitMode] = useState(false)
+  const [failureReason, setFailureReason] = useState('')
   const [areaCode, setAreaCode] = useState('')
   const [numbers, setNumbers] = useState([])
   const [searched, setSearched] = useState(false)
   const [searching, setSearching] = useState(false)
   const [selected, setSelected] = useState(null)
-  const [busy, setBusy] = useState(false)
+  const purchaseMutation = usePurchasePhoneNumber()
+  const registerA2PMutation = useRegisterA2P()
   const [error, setError] = useState('')
   const [biz, setBiz] = useState({
     legal_name: practiceName || '',
@@ -56,7 +60,7 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
     supabase
       .from('practices')
       .select(
-        'name, address, doctor_first, doctor_last, email, phone, twilio_phone_number, a2p_brand_status, a2p_campaign_status, a2p_config',
+        'name, address, doctor_first, doctor_last, email, phone, twilio_phone_number, a2p_brand_status, a2p_campaign_status, a2p_failure_reason, a2p_config',
       )
       .eq('id', practiceId)
       .maybeSingle()
@@ -68,7 +72,10 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
         if (zipMatch) setAreaCode(zipMatch[1].slice(0, 3))
         const brandOk = data.a2p_brand_status === 'approved'
         const campaignOk = data.a2p_campaign_status === 'approved'
+        const failed = data.a2p_brand_status === 'failed' || data.a2p_campaign_status === 'failed'
         setBrandApproved(brandOk)
+        setResubmitMode(failed)
+        setFailureReason(data.a2p_failure_reason || '')
         if (data.twilio_phone_number && brandOk && campaignOk) {
           setStep(5)
         } else if (
@@ -143,30 +150,26 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
   }
 
   async function confirmPurchase() {
-    setBusy(true)
     setError('')
     try {
-      await purchaseNumber(practiceId, selected.phone_number)
+      await purchaseMutation.mutateAsync({ practiceId, phoneNumber: selected.phone_number })
       setStep(3)
     } catch (e) {
       setError(e.message || 'Purchase failed')
-    } finally {
-      setBusy(false)
     }
   }
 
   async function submitA2P() {
-    setBusy(true)
     setError('')
     try {
-      await registerA2P(practiceId, biz)
+      await registerA2PMutation.mutateAsync({ practiceId, business: biz })
       setStep(4)
     } catch (e) {
       setError(e.message || 'Registration failed')
-    } finally {
-      setBusy(false)
     }
   }
+
+  const busy = purchaseMutation.isPending || registerA2PMutation.isPending
 
   const stepLabels = ['Search', 'Confirm', 'Business info', 'Pending', 'Active']
   const panel = (
@@ -281,13 +284,27 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
         {step === 3 && (
           <div>
             <h3 className="text-base font-semibold text-white">
-              {brandApproved ? 'Campaign registration (A2P 10DLC)' : 'Business information (A2P 10DLC)'}
+              {resubmitMode
+                ? brandApproved
+                  ? 'Correct campaign registration'
+                  : 'Correct registration details'
+                : brandApproved
+                  ? 'Campaign registration (A2P 10DLC)'
+                  : 'Business information (A2P 10DLC)'}
             </h3>
             <p className="mt-1 text-sm text-slate-400">
-              {brandApproved
-                ? 'Your brand is already approved. Confirm business details and register the messaging campaign for your practice number.'
-                : 'US carriers require this to send business SMS. Pre-filled from your practice profile.'}
+              {resubmitMode
+                ? 'Review and update the details below to fix the rejection, then resubmit for carrier review.'
+                : brandApproved
+                  ? 'Your brand is already approved. Confirm business details and register the messaging campaign for your practice number.'
+                  : 'US carriers require this to send business SMS. Pre-filled from your practice profile.'}
             </p>
+            {resubmitMode && failureReason && (
+              <div className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2.5 text-sm text-rose-200">
+                <p className="font-medium text-rose-300">Rejection reason</p>
+                <p className="mt-1 leading-relaxed">{failureReason}</p>
+              </div>
+            )}
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <label className="label">Legal business name</label>
@@ -308,7 +325,10 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
               </div>
               <div className="sm:col-span-2">
                 <label className="label">Website</label>
-                <input className="input" value={biz.website} onChange={(e) => setBiz({ ...biz, website: e.target.value })} placeholder="https://" />
+                <input className="input" value={biz.website} onChange={(e) => setBiz({ ...biz, website: e.target.value })} placeholder="https://yourpractice.com" />
+                <p className="mt-1 text-xs text-slate-500">
+                  Must match your registered brand and appear in your campaign opt-in description. Use your practice&apos;s live business site.
+                </p>
               </div>
               <div className="sm:col-span-2">
                 <label className="label">Business street address</label>
@@ -363,6 +383,17 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
                 <input className="input" value={biz.contact_phone} onChange={(e) => setBiz({ ...biz, contact_phone: e.target.value })} />
               </div>
               <div className="sm:col-span-2">
+                <label className="label">Campaign description</label>
+                <textarea
+                  className="input min-h-[72px]"
+                  rows={2}
+                  value={biz.use_case}
+                  onChange={(e) => setBiz({ ...biz, use_case: e.target.value })}
+                  placeholder="Post-consult dental implant treatment plan follow-up and scheduling reminders."
+                />
+                <p className="mt-1 text-xs text-slate-500">Describe who receives messages and why (min 40 characters).</p>
+              </div>
+              <div className="sm:col-span-2">
                 <label className="label">How patients opt in</label>
                 <textarea
                   className="input min-h-[72px]"
@@ -370,6 +401,35 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
                   value={biz.opt_in_description}
                   onChange={(e) => setBiz({ ...biz, opt_in_description: e.target.value })}
                 />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label">Sample message 1</label>
+                <textarea
+                  className="input min-h-[64px]"
+                  rows={2}
+                  value={biz.message_samples?.[0] || ''}
+                  onChange={(e) => {
+                    const samples = [...(biz.message_samples || DEFAULT_SAMPLES)]
+                    samples[0] = e.target.value
+                    setBiz({ ...biz, message_samples: samples })
+                  }}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label">Sample message 2</label>
+                <textarea
+                  className="input min-h-[64px]"
+                  rows={2}
+                  value={biz.message_samples?.[1] || ''}
+                  onChange={(e) => {
+                    const samples = [...(biz.message_samples || DEFAULT_SAMPLES)]
+                    samples[1] = e.target.value
+                    setBiz({ ...biz, message_samples: samples })
+                  }}
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Include your practice name and &quot;Reply STOP to opt out&quot; in each sample.
+                </p>
               </div>
             </div>
             <div className="mt-6 flex items-center justify-between">
@@ -387,15 +447,21 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
                   busy ||
                   !biz.legal_name ||
                   !biz.ein ||
+                  !biz.website ||
                   !biz.address_street ||
                   !biz.address_city ||
                   !biz.address_region ||
-                  !biz.address_postal
+                  !biz.address_postal ||
+                  !(biz.message_samples?.[0]?.trim() && biz.message_samples?.[1]?.trim())
                 }
                 className="btn-primary"
               >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{' '}
-                {brandApproved ? 'Register campaign' : 'Submit registration'}
+                {resubmitMode
+                  ? 'Resubmit registration'
+                  : brandApproved
+                    ? 'Register campaign'
+                    : 'Submit registration'}
               </button>
             </div>
           </div>

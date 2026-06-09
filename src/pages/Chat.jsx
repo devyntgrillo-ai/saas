@@ -167,6 +167,7 @@ export default function Chat() {
             <ChatComposer
               placeholder="Message your coaching channel…"
               mentionables={mentionNames}
+              isSending={chat.isSending}
               onSend={(t, f, meta) => chat.sendMessage(t, null, f, meta)}
               onTyping={() => chat.startTyping()}
               onStopTyping={() => chat.stopTyping()}

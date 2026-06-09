@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Search, X, Calendar, AlertTriangle, User, Mic, Loader2, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { fetchTodaysAppointments, searchPmsPatients } from '../lib/pms'
+import { fetchTodaysAppointments, formatAppointmentType, searchPmsPatients } from '../lib/pms'
 import { DEFAULT_TREATMENT, normalizeTreatment, treatmentLabel } from '../lib/treatments'
 
 const isEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((e || '').trim())
@@ -214,7 +214,7 @@ export default function AssignmentModal({ presetAppointment = null, onCancel, on
                         <span className="w-16 shrink-0 text-xs text-slate-400">{fmtTime(a.appointment_time)}</span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium text-slate-100">{fullName(a)}</span>
-                          <span className="block truncate text-xs text-slate-500">{a.appointment_type || '-'}</span>
+                          <span className="block truncate text-xs text-slate-500">{formatAppointmentType(a, practice) || '-'}</span>
                         </span>
                       </button>
                     ))}
@@ -269,7 +269,7 @@ export default function AssignmentModal({ presetAppointment = null, onCancel, on
                   <User className="h-4 w-4 text-slate-400" />
                   {[patient.firstName, patient.lastName].filter(Boolean).join(' ') || 'New patient'}
                 </p>
-                {selected?.appointment_type && <p className="mt-0.5 text-xs text-slate-500">{selected.appointment_type} · {fmtTime(selected.appointment_time)}</p>}
+                {selected && <p className="mt-0.5 text-xs text-slate-500">{formatAppointmentType(selected, practice)} · {fmtTime(selected.appointment_time)}</p>}
                 <p className="mt-2 text-xs text-slate-500">
                   Treatment: <span className="text-slate-300">{treatmentLabel(treatmentType)}</span>
                   {hasPmsTx && <span className="text-slate-400"> · ${pmsTx.toLocaleString()}</span>}

@@ -1,4 +1,5 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { transcribeRecording } from '../recording'
 import { auditConsultViewed, auditPatientAccessed } from '../audit'
 import { fetchConsultAttribution } from '../attribution'
 import { supabase } from '../supabase'
@@ -74,4 +75,68 @@ export function useInvalidateConsult() {
       queryClient.invalidateQueries({ queryKey: queryKeys.sequences(practiceId) })
     }
   }
+}
+
+export function useMarkConsultWon() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ consultId, patch, caseValue, treatmentType }) => {
+      const { error } = await supabase.from('consults').update(patch).eq('id', consultId)
+      if (error) throw error
+      try {
+        await supabase.functions.invoke('record-win', {
+          body: { consult_id: consultId, source: 'manual', case_value: caseValue, treatment_type: treatmentType },
+        })
+      } catch { /* best-effort */ }
+      return { consultId, patch }
+    },
+    onSuccess: ({ consultId }, { practiceId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.consult(consultId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.consultAttribution(consultId) })
+      if (practiceId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(practiceId) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.sequences(practiceId) })
+      }
+    },
+  })
+}
+
+export function useRetryTranscription() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ consult, practiceId }) => {
+      const consultId = consult.id
+      try {
+        if (consult.audio_storage_path) {
+          await transcribeRecording({
+            consultId,
+            audioPath: consult.audio_storage_path,
+            durationSec: consult.duration,
+            patient: {
+              firstName: consult.patient_first,
+              lastName: consult.patient_last,
+              phone: consult.patient_phone,
+              email: consult.patient_email,
+            },
+          })
+          return { consultId, patch: null, practiceId }
+        }
+        const patch = { status: 'analyzing', transcript_error: null }
+        const { error } = await supabase.from('consults').update(patch).eq('id', consultId)
+        if (error) throw error
+        return { consultId, patch, practiceId }
+      } catch (e) {
+        const patch = { status: 'transcription_error', transcript_error: e?.message || 'Transcription failed' }
+        const { error } = await supabase.from('consults').update(patch).eq('id', consultId)
+        if (error) throw error
+        return { consultId, patch, practiceId, failed: true }
+      }
+    },
+    onSuccess: ({ consultId }, { practiceId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.consult(consultId) })
+      if (practiceId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(practiceId) })
+      }
+    },
+  })
 }

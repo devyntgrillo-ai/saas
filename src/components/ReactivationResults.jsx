@@ -1,11 +1,16 @@
 import { useMemo, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { Megaphone, ArrowLeft, Download, Loader2, RotateCcw, Trash2, Check, X, Clock, Pencil } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
 import { formatMoney } from '../lib/analytics'
 import { treatmentLabel } from '../lib/treatments'
-import { useReactivationCampaigns, useCampaignEnrollments, queryKeys } from '../lib/queries'
+import {
+  useReactivationCampaigns,
+  useCampaignEnrollments,
+  useUpdateEnrollmentNote,
+  useToggleEnrollmentReopened,
+  useRemoveEnrollment,
+  isMutating,
+} from '../lib/queries'
 
 const STATUS_PILL = {
   draft: 'bg-slate-500/15 text-slate-400', scheduled: 'bg-sky-500/15 text-sky-300',
@@ -84,11 +89,12 @@ function MsgStatus({ status, sentAt, scheduledAt }) {
 }
 
 function CampaignDetail({ campaign, onBack }) {
-  const queryClient = useQueryClient()
-  const { data: rows = [], isLoading, refetch } = useCampaignEnrollments(campaign.id)
+  const { data: rows = [], isLoading } = useCampaignEnrollments(campaign.id)
+  const updateNoteMutation = useUpdateEnrollmentNote()
+  const toggleReopenedMutation = useToggleEnrollmentReopened()
+  const removeMutation = useRemoveEnrollment()
   const [editingNote, setEditingNote] = useState(null)
   const [noteDraft, setNoteDraft] = useState('')
-  const [busyId, setBusyId] = useState(null)
 
   const launched = campaign.launched_at || campaign.started_at
   const schedFor = (i) => (launched ? new Date(new Date(launched).getTime() + (STEP_DAYS[i] - 1) * 86400000) : null)
@@ -101,30 +107,18 @@ function CampaignDetail({ campaign, onBack }) {
     return { patients: rows.length, sent, total: rows.length * 3, replies, reopened, recovered }
   }, [rows])
 
-  async function saveNote(r) {
-    setBusyId(r.id)
-    await supabase.from('reactivation_enrollments').update({ notes: noteDraft || null }).eq('id', r.id)
-    setEditingNote(null); setBusyId(null); refetch()
+  function saveNote(r) {
+    updateNoteMutation.mutate(
+      { enrollmentId: r.id, campaignId: campaign.id, practiceId: campaign.practice_id, notes: noteDraft },
+      { onSuccess: () => setEditingNote(null) },
+    )
   }
-  async function toggleReopened(r) {
-    setBusyId(r.id)
-    const reopened = !r.reopened
-    await supabase.from('reactivation_enrollments').update({ reopened, reopened_at: reopened ? new Date().toISOString() : null }).eq('id', r.id)
-    // Keep campaign rollups in sync for the card view.
-    const delta = reopened ? 1 : -1
-    const val = Number(r.case_value ?? r.consult?.case_value) || 0
-    await supabase.from('reactivation_campaigns').update({
-      cases_reopened: Math.max(0, (campaign.cases_reopened || 0) + delta),
-      recovered_estimate: Math.max(0, (campaign.recovered_estimate || 0) + delta * val),
-    }).eq('id', campaign.id)
-    setBusyId(null); refetch(); queryClient.invalidateQueries({ queryKey: queryKeys.reactivation(campaign.practice_id) })
+  function toggleReopened(r) {
+    toggleReopenedMutation.mutate({ enrollment: r, campaign })
   }
-  async function remove(r) {
+  function remove(r) {
     if (!confirm(`Remove ${r.patient_first} ${r.patient_last} from this campaign? They'll stop receiving messages.`)) return
-    setBusyId(r.id)
-    await supabase.from('reactivation_enrollments').delete().eq('id', r.id)
-    await supabase.from('reactivation_campaigns').update({ total_recipients: Math.max(0, (campaign.total_recipients || 1) - 1) }).eq('id', campaign.id)
-    setBusyId(null); refetch(); queryClient.invalidateQueries({ queryKey: queryKeys.reactivation(campaign.practice_id) })
+    removeMutation.mutate({ enrollmentId: r.id, campaign })
   }
 
   function exportCsv() {
@@ -174,7 +168,11 @@ function CampaignDetail({ campaign, onBack }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {rows.map((r) => (
+              {rows.map((r) => {
+                const rowBusy = isMutating(toggleReopenedMutation, (v) => v.enrollment?.id === r.id)
+                  || isMutating(removeMutation, (v) => v.enrollmentId === r.id)
+                  || isMutating(updateNoteMutation, (v) => v.enrollmentId === r.id)
+                return (
                 <tr key={r.id} className={r.reopened ? 'bg-emerald-50/50' : ''}>
                   <td className="px-3 py-2">
                     <p className="font-medium text-gray-900">{r.patient_first} {r.patient_last}</p>
@@ -199,17 +197,17 @@ function CampaignDetail({ campaign, onBack }) {
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-end gap-1" >
-                      <button onClick={() => toggleReopened(r)} disabled={busyId === r.id} title={r.reopened ? 'Unmark reopened' : 'Mark as reopened'}
+                      <button onClick={() => toggleReopened(r)} disabled={rowBusy} title={r.reopened ? 'Unmark reopened' : 'Mark as reopened'}
                         className={`rounded-md border px-2 py-1 text-xs transition ${r.reopened ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-                        {busyId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                        {rowBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                       </button>
-                      <button onClick={() => remove(r)} disabled={busyId === r.id} title="Remove from campaign" className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-500 transition hover:bg-gray-50 hover:text-rose-600">
+                      <button onClick={() => remove(r)} disabled={rowBusy} title="Remove from campaign" className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-500 transition hover:bg-gray-50 hover:text-rose-600">
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </td>
                 </tr>
-              ))}
+              )})}
               {rows.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-500">No patients in this campaign.</td></tr>}
             </tbody>
           </table>

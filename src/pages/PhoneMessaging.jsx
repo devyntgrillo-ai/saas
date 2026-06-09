@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Phone,
   Copy,
@@ -24,7 +24,7 @@ import {
   a2pMeta,
 } from '../lib/messaging'
 import { practiceFromAddress, PATIENT_MAIL_ROOT } from '../lib/practiceMail'
-import { useMessagingOptOuts } from '../lib/queries'
+import { useMessagingOptOuts, useUpdatePractice } from '../lib/queries'
 import PhoneSetupWizard from '../components/PhoneSetupWizard'
 
 // Format a stored phone number for display: +1 (509) 555-0100.
@@ -74,13 +74,10 @@ function Toggle({ checked, onChange, label, description }) {
 
 // Per-section save button: owns its own busy + "Saved" flash so each card
 // saves independently. onSave returns a truthy error to suppress the flash.
-function SaveBar({ onSave, label = 'Save changes' }) {
-  const [busy, setBusy] = useState(false)
+function SaveBar({ onSave, label = 'Save changes', isSaving = false }) {
   const [saved, setSaved] = useState(false)
   async function click() {
-    setBusy(true)
     const err = await onSave()
-    setBusy(false)
     if (!err) {
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
@@ -93,8 +90,8 @@ function SaveBar({ onSave, label = 'Save changes' }) {
           <Check className="h-3.5 w-3.5" /> Saved
         </span>
       )}
-      <button onClick={click} disabled={busy} className="btn-primary">
-        {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+      <button onClick={click} disabled={isSaving} className="btn-primary">
+        {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
         {label}
       </button>
     </div>
@@ -104,7 +101,14 @@ function SaveBar({ onSave, label = 'Save changes' }) {
 // Settings → Phone & Messaging. Self-serve number purchase + A2P registration.
 export default function PhoneMessaging() {
   const { practice, practiceId, refreshProfile } = useAuth()
+  const updatePractice = useUpdatePractice()
   const [setupOpen, setSetupOpen] = useState(false)
+  const setupRef = useRef(null)
+
+  useEffect(() => {
+    if (!setupOpen || !setupRef.current) return
+    setupRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [setupOpen])
 
   // ---- form state, seeded from the practice record --------------------------
   const [smsEnabled, setSmsEnabled] = useState(true)
@@ -164,9 +168,13 @@ export default function PhoneMessaging() {
 
   async function update(patch) {
     if (!practiceId) return 'No practice'
-    const { error } = await supabase.from('practices').update(patch).eq('id', practiceId)
-    if (!error) await refreshProfile()
-    return error
+    try {
+      await updatePractice.mutateAsync({ practiceId, patch })
+      await refreshProfile()
+      return null
+    } catch (e) {
+      return e?.message || 'Save failed'
+    }
   }
 
   // SMS sender shown to patients - fall back to a sensible default in the preview.
@@ -265,6 +273,7 @@ export default function PhoneMessaging() {
           </div>
 
           <SaveBar
+            isSaving={updatePractice.isPending}
             onSave={() =>
               update({
                 inbound_call_ring_browser: inboundRingBrowser,
@@ -276,16 +285,18 @@ export default function PhoneMessaging() {
       )}
 
       {setupOpen && (
-        <PhoneSetupWizard
-          embedded
-          practiceId={practiceId}
-          practiceName={practice?.name}
-          onClose={() => setSetupOpen(false)}
-          onComplete={async () => {
-            await refreshProfile()
-            setSetupOpen(false)
-          }}
-        />
+        <div ref={setupRef} className="scroll-mt-6">
+          <PhoneSetupWizard
+            embedded
+            practiceId={practiceId}
+            practiceName={practice?.name}
+            onClose={() => setSetupOpen(false)}
+            onComplete={async () => {
+              await refreshProfile()
+              setSetupOpen(false)
+            }}
+          />
+        </div>
       )}
 
       {/* ── SMS follow-up settings ───────────────────────────────────── */}
@@ -386,6 +397,7 @@ export default function PhoneMessaging() {
         )}
 
         <SaveBar
+          isSaving={updatePractice.isPending}
           onSave={() => update({ sms_enabled: smsEnabled, sms_sender_name: smsSender || null })}
         />
       </div>
@@ -488,6 +500,7 @@ export default function PhoneMessaging() {
         </div>
 
         <SaveBar
+          isSaving={updatePractice.isPending}
           onSave={() =>
             update({
               email_enabled: emailEnabled,

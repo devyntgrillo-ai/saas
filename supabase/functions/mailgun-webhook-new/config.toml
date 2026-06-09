@@ -1,0 +1,2 @@
+[functions.mailgun-webhook-new]
+verify_jwt = false

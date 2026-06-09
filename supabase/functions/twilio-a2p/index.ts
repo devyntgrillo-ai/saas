@@ -15,8 +15,10 @@ import {
 import {
   type A2PBusiness,
   type TrustHubStored,
+  brandCriticalFieldsChanged,
   ensureA2pTrustHubBundles,
   preconfiguredA2pBundles,
+  refreshTrustHubBusinessInfo,
   trustHubForResubmit,
 } from "../_shared/twilio-trusthub.ts";
 
@@ -41,6 +43,50 @@ function campaignSamples(biz: A2PBusiness): string[] {
     if (!merged.includes(s)) merged.push(s);
   }
   return merged.slice(0, 5);
+}
+
+function normalizeWebsite(raw: string | undefined): string | null {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s.replace(/\/$/, "");
+  return `https://${s.replace(/\/$/, "")}`;
+}
+
+function policyUrls(biz: A2PBusiness): { privacy: string | null; terms: string | null } {
+  const site = normalizeWebsite(biz.website);
+  if (!site) return { privacy: null, terms: null };
+  return { privacy: `${site}/privacy`, terms: `${site}/terms` };
+}
+
+/** Message flow with website + policy links — required for campaign vetting (error 30907). */
+function buildMessageFlow(biz: A2PBusiness): string {
+  const base = biz.opt_in_description?.trim() ||
+    "Patients provide their mobile number during the in-office consult and consent to follow-up texts about their treatment plan.";
+  const site = normalizeWebsite(biz.website);
+  if (!site) return base;
+  const { privacy, terms } = policyUrls(biz);
+  const parts = [base, `Business website: ${site}.`];
+  if (privacy) parts.push(`Privacy policy: ${privacy}.`);
+  if (terms) parts.push(`Terms: ${terms}.`);
+  return parts.join(" ");
+}
+
+function buildCampaignForm(biz: A2PBusiness, brandSid?: string): URLSearchParams {
+  const samples = campaignSamples(biz);
+  const form = new URLSearchParams();
+  if (brandSid) form.set("BrandRegistrationSid", brandSid);
+  form.set("Description", biz.use_case || "Post-consult dental implant treatment plan follow-up messages.");
+  form.set("MessageFlow", buildMessageFlow(biz));
+  form.set("UsAppToPersonUsecase", "CUSTOMER_CARE");
+  form.set("HasEmbeddedLinks", "false");
+  form.set("HasEmbeddedPhone", "false");
+  form.set("DirectLending", "false");
+  form.set("AgeGated", "false");
+  for (const s of samples) form.append("MessageSamples", s);
+  const { privacy, terms } = policyUrls(biz);
+  if (privacy) form.set("PrivacyPolicyUrl", privacy);
+  if (terms) form.set("TermsAndConditionsUrl", terms);
+  return form;
 }
 
 function trustHubFromConfig(a2pConfig: unknown): TrustHubStored {
@@ -168,20 +214,7 @@ async function submitCampaign(
   brandSid: string,
   biz: A2PBusiness,
 ): Promise<{ campaignSid: string | null; skipped: boolean; reason?: string }> {
-  const samples = campaignSamples(biz);
-  const form = new URLSearchParams();
-  form.set("BrandRegistrationSid", brandSid);
-  form.set("Description", biz.use_case || "Post-consult dental implant treatment plan follow-up messages.");
-  form.set(
-    "MessageFlow",
-    biz.opt_in_description ||
-      "Patients provide their mobile number during the in-office consult and consent to follow-up texts about their treatment plan.",
-  );
-  form.set("UsAppToPersonUsecase", "CUSTOMER_CARE");
-  form.set("HasEmbeddedLinks", "false");
-  form.set("HasEmbeddedPhone", "false");
-  for (const s of samples) form.append("MessageSamples", s);
-
+  const form = buildCampaignForm(biz, brandSid);
   try {
     const camp = await twilioRequest<{ sid: string }>(
       cfg,
@@ -192,6 +225,47 @@ async function submitCampaign(
     return { campaignSid: camp.sid, skipped: false };
   } catch (e) {
     return { campaignSid: null, skipped: true, reason: String((e as Error).message) };
+  }
+}
+
+async function deleteFailedCampaign(
+  cfg: ReturnType<typeof cfgOrThrow>,
+  mgSid: string,
+  campaignSid: string,
+): Promise<void> {
+  try {
+    await twilioRequest(
+      cfg,
+      "messaging",
+      `/v1/Services/${mgSid}/Compliance/Usa2p/${campaignSid}`,
+      { method: "DELETE" },
+    );
+  } catch (e) {
+    const msg = String((e as Error).message || "");
+    if (!msg.includes("204") && !msg.toLowerCase().includes("not found")) {
+      console.warn("delete campaign:", msg);
+    }
+  }
+}
+
+/** PATCH a failed campaign in place (Twilio Campaign Edit API). */
+async function updateFailedCampaign(
+  cfg: ReturnType<typeof cfgOrThrow>,
+  mgSid: string,
+  campaignSid: string,
+  biz: A2PBusiness,
+): Promise<{ ok: boolean; reason?: string }> {
+  const form = buildCampaignForm(biz);
+  try {
+    await twilioRequest(
+      cfg,
+      "messaging",
+      `/v1/Services/${mgSid}/Compliance/Usa2p/${campaignSid}`,
+      { method: "POST", body: form.toString() },
+    );
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: String((e as Error).message) };
   }
 }
 
@@ -280,39 +354,45 @@ Deno.serve(async (req: Request) => {
         return json({ error: "Purchase a phone number before A2P registration." }, 400);
       }
 
+      const prevCfg = (practice.a2p_config && typeof practice.a2p_config === "object"
+        ? practice.a2p_config
+        : {}) as A2PBusiness;
       const biz: A2PBusiness = {
-        ...(practice.a2p_config as A2PBusiness || {}),
+        ...prevCfg,
         ...(body.business || {}),
-        legal_name: body.business?.legal_name || (practice.a2p_config as A2PBusiness)?.legal_name || practice.name,
-        contact_email: body.business?.contact_email || (practice.a2p_config as A2PBusiness)?.contact_email ||
-          practice.email,
-        contact_phone: body.business?.contact_phone || (practice.a2p_config as A2PBusiness)?.contact_phone ||
-          practice.phone,
-        address_street: body.business?.address_street || (practice.a2p_config as A2PBusiness)?.address_street ||
-          practice.address,
+        legal_name: body.business?.legal_name || prevCfg.legal_name || practice.name,
+        contact_email: body.business?.contact_email || prevCfg.contact_email || practice.email,
+        contact_phone: body.business?.contact_phone || prevCfg.contact_phone || practice.phone,
+        address_street: body.business?.address_street || prevCfg.address_street || practice.address,
       };
 
-      const hadFailure = practice.a2p_brand_status === "failed" ||
-        practice.a2p_campaign_status === "failed";
+      const brandFailed = practice.a2p_brand_status === "failed";
+      const campaignFailed = practice.a2p_campaign_status === "failed";
       const brandAlreadyApproved = practice.a2p_brand_status === "approved" &&
         Boolean(practice.twilio_brand_sid);
-      const campaignOnly = brandAlreadyApproved && !practice.twilio_campaign_sid;
+      const campaignResubmit = brandAlreadyApproved && campaignFailed;
+      const brandCriticalChanged = brandCriticalFieldsChanged(prevCfg, biz);
+      const campaignOnly = brandAlreadyApproved && !practice.twilio_campaign_sid && !campaignFailed;
       const trustHubExisting = trustHubForResubmit(
         trustHubFromConfig(practice.a2p_config),
         practice.a2p_brand_status,
         practice.a2p_campaign_status,
+        campaignResubmit && brandCriticalChanged,
       );
       const nowIso = new Date().toISOString();
 
       const regPatch: Record<string, unknown> = {
         a2p_submitted_at: nowIso,
-        a2p_brand_status: campaignOnly ? "approved" : "pending",
+        a2p_brand_status: (campaignOnly || campaignResubmit) ? "approved" : "pending",
         a2p_campaign_status: "pending",
         a2p_failure_reason: null,
         sms_enabled: false,
       };
-      if (hadFailure) {
+      // Only reset brand SID when the brand itself failed or brand-critical info changed.
+      if (brandFailed || (campaignResubmit && brandCriticalChanged)) {
         regPatch.twilio_brand_sid = null;
+      }
+      if (brandFailed || campaignFailed) {
         regPatch.twilio_campaign_sid = null;
       }
       await admin.from("practices").update(regPatch).eq("id", practiceId);
@@ -326,6 +406,103 @@ Deno.serve(async (req: Request) => {
       );
 
       const notes: string[] = [];
+
+      // Brand approved + campaign failed — resubmit with corrected details.
+      if (campaignResubmit && practice.twilio_brand_sid) {
+        await admin.from("practices").update({
+          a2p_config: mergeA2pConfig(practice.a2p_config, biz, trustHubExisting),
+        }).eq("id", practiceId);
+
+        let brandSid = practice.twilio_brand_sid as string;
+        let campaignSid: string | null = null;
+        const failedCampaignSid = practice.twilio_campaign_sid as string | null;
+
+        if (brandCriticalChanged) {
+          // Website / legal name / EIN changed — delete failed campaign, refresh Trust Hub, new brand + campaign.
+          if (failedCampaignSid && mgSid) {
+            await deleteFailedCampaign(cfg, mgSid, failedCampaignSid);
+          }
+          const customerProfileSid = trustHubExisting.customer_profile_sid;
+          if (customerProfileSid) {
+            const refresh = await refreshTrustHubBusinessInfo(
+              cfg,
+              customerProfileSid,
+              biz,
+              practice.name || "Practice",
+            );
+            if (!refresh.ok) notes.push(`Trust Hub: ${refresh.reason}`);
+          }
+
+          const bundles = await ensureA2pTrustHubBundles(
+            cfg,
+            practiceId,
+            practice.name || "Practice",
+            biz,
+            practice.address,
+            trustHubExisting,
+          );
+          if (bundles.ok) {
+            await admin.from("practices").update({
+              a2p_config: mergeA2pConfig(practice.a2p_config, biz, bundles.trustHub),
+            }).eq("id", practiceId);
+            const brandResult = await submitBrand(
+              cfg,
+              bundles.customerProfileBundleSid,
+              bundles.a2pProfileBundleSid,
+              biz,
+            );
+            if (brandResult.brandSid) {
+              brandSid = brandResult.brandSid;
+              await admin.from("practices").update({
+                twilio_brand_sid: brandSid,
+                a2p_brand_status: "pending",
+              }).eq("id", practiceId);
+            } else if (brandResult.reason) {
+              notes.push(`Brand: ${brandResult.reason}`);
+            }
+          } else {
+            notes.push(`Trust Hub: ${bundles.reason}`);
+          }
+
+          const campResult = await submitCampaign(cfg, mgSid!, brandSid, biz);
+          campaignSid = campResult.campaignSid;
+          if (campResult.reason) notes.push(`Campaign: ${campResult.reason}`);
+        } else if (failedCampaignSid && mgSid) {
+          // Campaign-only fix — PATCH the failed campaign in place (preferred by Twilio).
+          const updated = await updateFailedCampaign(cfg, mgSid, failedCampaignSid, biz);
+          if (updated.ok) {
+            campaignSid = failedCampaignSid;
+          } else {
+            notes.push(`Campaign update: ${updated.reason}`);
+            await deleteFailedCampaign(cfg, mgSid, failedCampaignSid);
+            const campResult = await submitCampaign(cfg, mgSid, brandSid, biz);
+            campaignSid = campResult.campaignSid;
+            if (campResult.reason) notes.push(`Campaign: ${campResult.reason}`);
+          }
+        } else {
+          const campResult = await submitCampaign(cfg, mgSid!, brandSid, biz);
+          campaignSid = campResult.campaignSid;
+          if (campResult.reason) notes.push(`Campaign: ${campResult.reason}`);
+        }
+
+        if (campaignSid) {
+          await admin.from("practices").update({ twilio_campaign_sid: campaignSid }).eq("id", practiceId);
+        }
+        if (notes.length) {
+          await admin.from("practices").update({ a2p_failure_reason: notes.join(" | ") }).eq("id", practiceId);
+        }
+
+        const polled = await pollAndUpdate(cfg, admin, practiceId);
+        return json({
+          ok: !notes.length,
+          resubmit: true,
+          messaging_service_sid: mgSid,
+          brand_sid: brandSid,
+          campaign_sid: campaignSid,
+          notes,
+          status: polled,
+        });
+      }
 
       // Brand already approved — only attach a campaign to the messaging service.
       if (campaignOnly && practice.twilio_brand_sid) {

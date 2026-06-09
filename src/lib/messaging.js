@@ -40,7 +40,8 @@ export function deliveryMeta(s) {
   return DELIVERY[s] || DELIVERY.sent
 }
 
-async function invokeFunction(name, body) {
+/** Invoke an edge function; throws with the server's error message on failure. */
+export async function invokeEdgeFunction(name, body) {
   const { data, error, response } = await supabase.functions.invoke(name, { body })
   if (error) {
     let message = error.message
@@ -59,7 +60,7 @@ async function invokeFunction(name, body) {
 }
 
 export async function searchNumbers(practiceId, areaCode) {
-  const data = await invokeFunction('twilio-provision', {
+  const data = await invokeEdgeFunction('twilio-provision', {
     action: 'search-numbers',
     practice_id: practiceId,
     area_code: areaCode,
@@ -68,7 +69,7 @@ export async function searchNumbers(practiceId, areaCode) {
 }
 
 export async function purchaseNumber(practiceId, phoneNumber) {
-  return invokeFunction('twilio-provision', {
+  return invokeEdgeFunction('twilio-provision', {
     action: 'purchase-number',
     practice_id: practiceId,
     phone_number: phoneNumber,
@@ -76,7 +77,7 @@ export async function purchaseNumber(practiceId, phoneNumber) {
 }
 
 export async function registerA2P(practiceId, business = {}) {
-  return invokeFunction('twilio-a2p', {
+  return invokeEdgeFunction('twilio-a2p', {
     action: 'register',
     practice_id: practiceId,
     business,
@@ -84,7 +85,7 @@ export async function registerA2P(practiceId, business = {}) {
 }
 
 export async function pollA2PStatus(practiceId) {
-  return invokeFunction('twilio-a2p', {
+  return invokeEdgeFunction('twilio-a2p', {
     action: 'poll-status',
     practice_id: practiceId,
   })
@@ -102,7 +103,7 @@ export async function fetchOptOutCount(practiceId) {
 
 /** Send a test SMS through twilio-send (requires practice number + A2P approved). */
 export async function sendTestSms(practiceId, to, { body } = {}) {
-  return invokeFunction('twilio-send', {
+  return invokeEdgeFunction('twilio-send', {
     practice_id: practiceId,
     to: to.trim(),
     body:
@@ -113,7 +114,7 @@ export async function sendTestSms(practiceId, to, { body } = {}) {
 
 /** Send a test email through production mailgun-send (logged-in user JWT). */
 export async function sendTestEmail(practiceId, to, { subject, body } = {}) {
-  return invokeFunction('mailgun-send', {
+  return invokeEdgeFunction('mailgun-send', {
     practice_id: practiceId,
     to: to.trim(),
     subject: subject || 'Hope AI — test email',

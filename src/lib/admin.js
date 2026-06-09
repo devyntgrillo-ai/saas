@@ -536,6 +536,30 @@ export function smsStatusMeta(s) {
 // The previous direct-insert logImpersonation() targeted columns that don't exist
 // and had no INSERT policy, so it silently failed; it has been removed.
 
+/** PostgREST column name from "Could not find the 'foo' column …" errors. */
+function missingColumnFromError(message) {
+  if (!message) return null
+  const m = message.match(/'([^']+)'\s+column/i) || message.match(/find the '([^']+)' column/i)
+  return m?.[1] || null
+}
+
+// Insert agency_accounts, dropping optional columns the connected DB may lack.
+export async function insertAgencyAccount(payload) {
+  let body = { ...payload }
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const { data, error } = await supabase.from('agency_accounts').insert(body).select('id').single()
+    if (!error) return data
+    const col = missingColumnFromError(error.message)
+    if (col && Object.prototype.hasOwnProperty.call(body, col)) {
+      const { [col]: _drop, ...next } = body
+      body = next
+      continue
+    }
+    throw error
+  }
+  throw new Error('Could not create reseller.')
+}
+
 // Last 12 months of stacked MRR for the dashboard chart.
 export function mrrSeries12(history) {
   return (history || []).filter(Boolean).slice(-12)

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { updateMyProfile, uploadAvatar } from '../profile'
 import { supabase } from '../supabase'
 import { queryKeys } from './keys'
 
@@ -58,12 +59,35 @@ export function useRevokeInvitation() {
 // surface whether the email actually went out vs. needs the share link.
 export function useResendInvitation() {
   return useMutation({
-    mutationFn: async ({ token }) => {
+    mutationFn: async ({ token, invitationId }) => {
       const { data, error } = await supabase.functions.invoke('invite-team-member', {
         body: { invitation_token: token, app_origin: window.location.origin },
       })
       if (error) throw error
-      return data
+      return { ...data, invitationId }
+    },
+  })
+}
+
+export function useSendTestDigest() {
+  return useMutation({
+    mutationFn: async ({ practiceId }) => {
+      const { error } = await supabase.functions.invoke('send-weekly-digest', {
+        body: { practice_id: practiceId },
+      })
+      if (error) throw error
+      return { practiceId }
+    },
+  })
+}
+
+export function useUpdateMyProfile() {
+  return useMutation({
+    mutationFn: async ({ userId, displayName, avatarUrl, jobTitle, file }) => {
+      let url = avatarUrl
+      if (file) url = await uploadAvatar(userId, file)
+      await updateMyProfile({ displayName, avatarUrl: url, jobTitle })
+      return { displayName, avatarUrl: url, jobTitle }
     },
   })
 }

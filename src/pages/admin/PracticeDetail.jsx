@@ -7,10 +7,16 @@ import { useAdmin } from '../../context/AdminContext'
 import { smsStatusMeta } from '../../lib/admin'
 import { statusMeta as subStatusMeta } from '../../lib/billing'
 import { timeAgo } from '../../lib/consults'
-import { supabase } from '../../lib/supabase'
-import { useAdminPracticeConsults, useAdminPracticePms, queryKeys } from '../../lib/queries'
 import {
-  searchSikkaPractice, saveSikkaConfig, testSyncForPractice, fetchUnlinkedRegistrations, linkRegistration,
+  useAdminPracticeConsults,
+  useAdminPracticePms,
+  useForceCancelPractice,
+  useSaveSikkaConfig,
+  useUpdatePracticeAdminNotes,
+  queryKeys,
+} from '../../lib/queries'
+import {
+  searchSikkaPractice, testSyncForPractice, fetchUnlinkedRegistrations, linkRegistration,
 } from '../../lib/pms'
 import { StatCard, Table, Badge, money } from '../../components/admin/ui'
 
@@ -19,12 +25,12 @@ const ADMIN_PMS_TYPES = ['dentrix', 'eaglesoft', 'curve', 'open_dental', 'carest
 // Admin-only Sikka linking for a practice (practices never see this).
 function PmsConfigSection({ practiceId }) {
   const queryClient = useQueryClient()
+  const saveSikka = useSaveSikkaConfig()
   const { data, refetch } = useAdminPracticePms(practiceId)
   const [row, setRow] = useState(null)
   const [results, setResults] = useState(null)
   const [searching, setSearching] = useState(false)
   const [testing, setTesting] = useState(false)
-  const [saving, setSaving] = useState(false)
   const [flash, setFlash] = useState('')
   const regs = data?.regs || []
 
@@ -41,13 +47,10 @@ function PmsConfigSection({ practiceId }) {
   const set = (k, v) => setRow((r) => ({ ...r, [k]: v }))
 
   async function save() {
-    setSaving(true)
     try {
-      await saveSikkaConfig(practiceId, {
-        sikkaPracticeId: row.sikka_practice_id, pmsType: row.pms_type, sikkaConnected: row.sikka_connected,
-      })
+      await saveSikka.mutateAsync({ practiceId, config: row })
       note('PMS configuration saved.')
-    } catch (e) { note(e.message || 'Save failed.') } finally { setSaving(false) }
+    } catch (e) { note(e.message || 'Save failed.') }
   }
   // OAuth model: list the offices this practice's Sikka token is authorized for.
   async function search() {
@@ -99,8 +102,8 @@ function PmsConfigSection({ practiceId }) {
         <button onClick={testSync} disabled={testing} className="btn-ghost">
           {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Test Sync
         </button>
-        <button onClick={save} disabled={saving} className="btn-primary">
-          {saving && <Loader2 className="h-4 w-4 animate-spin" />} Save
+        <button onClick={save} disabled={saveSikka.isPending} className="btn-primary">
+          {saveSikka.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save
         </button>
       </div>
 
@@ -153,6 +156,7 @@ export default function PracticeDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { data, refresh, impersonatePractice } = useAdmin()
+  const forceCancel = useForceCancelPractice()
   const [confirmCancel, setConfirmCancel] = useState(false)
 
   const practice = data.practices.find((p) => String(p.id) === String(id))
@@ -172,12 +176,14 @@ export default function PracticeDetail() {
   // Recording rate = consults this month vs. ~22 working days (rough proxy).
   const recordingRate = Math.min(100, Math.round(((practice.consults_month || 0) / 22) * 100))
 
-  async function forceCancel() {
-    if (!String(practice.id).startsWith('demo-')) {
-      try { await supabase.from('practices').update({ subscription_status: 'cancelled' }).eq('id', practice.id) } catch { /* noop */ }
-      await refresh()
-    }
-    setConfirmCancel(false)
+  async function handleForceCancel() {
+    try {
+      if (!String(practice.id).startsWith('demo-')) {
+        await forceCancel.mutateAsync({ practiceId: practice.id })
+        await refresh()
+      }
+      setConfirmCancel(false)
+    } catch { /* noop */ }
   }
 
   return (
@@ -248,7 +254,9 @@ export default function PracticeDetail() {
         <Modal title="Force cancel subscription?" onClose={() => setConfirmCancel(false)} footer={
           <>
             <button onClick={() => setConfirmCancel(false)} className="btn-ghost">Cancel</button>
-            <button onClick={forceCancel} className="btn-primary bg-rose-600 hover:bg-rose-500">Force cancel</button>
+            <button onClick={handleForceCancel} disabled={forceCancel.isPending} className="btn-primary inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-70">
+              {forceCancel.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Force cancel
+            </button>
           </>
         }>
           <p className="text-sm text-slate-300">This immediately cancels {practice.name}'s subscription and revokes access. This cannot be undone from here.</p>
@@ -269,23 +277,22 @@ function demoConsults(practice) {
 }
 
 function InternalNotes({ practice, onSaved }) {
+  const updateNotes = useUpdatePracticeAdminNotes()
   const [value, setValue] = useState(practice.notes || '')
   const [savedAt, setSavedAt] = useState(null)
-  const [saving, setSaving] = useState(false)
   const timer = useRef(null)
   useEffect(() => () => clearTimeout(timer.current), [])
 
   function onChange(e) {
     setValue(e.target.value)
     clearTimeout(timer.current)
-    timer.current = setTimeout(async () => {
-      setSaving(true)
+    timer.current = setTimeout(() => {
       if (!String(practice.id).startsWith('demo-')) {
-        try { await supabase.from('practices').update({ admin_notes: e.target.value }).eq('id', practice.id) } catch { /* noop */ }
+        updateNotes.mutate(
+          { practiceId: practice.id, notes: e.target.value },
+          { onSuccess: () => { setSavedAt(new Date()); onSaved?.() } },
+        )
       }
-      setSaving(false)
-      setSavedAt(new Date())
-      onSaved?.()
     }, 900)
   }
 
@@ -294,7 +301,7 @@ function InternalNotes({ practice, onSaved }) {
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-white">Internal notes</h2>
         <span className="text-xs text-slate-500">
-          {saving ? 'Saving…' : savedAt ? <span className="inline-flex items-center gap-1 text-emerald-300"><Check className="h-3 w-3" /> Saved {timeAgo(savedAt.toISOString())}</span> : 'Admin only'}
+          {updateNotes.isPending ? 'Saving…' : savedAt ? <span className="inline-flex items-center gap-1 text-emerald-300"><Check className="h-3 w-3" /> Saved {timeAgo(savedAt.toISOString())}</span> : 'Admin only'}
         </span>
       </div>
       <textarea value={value} onChange={onChange} placeholder="Private notes about this practice - auto-saves." className="input mt-3 min-h-[100px]" />

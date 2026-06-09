@@ -18,9 +18,15 @@ import Logo from '../components/Logo'
 import PasswordField from '../components/PasswordField'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { createCheckout } from '../lib/billing'
 import { validatePassword } from '../lib/passwordPolicy'
 import { recordBaaAcceptance } from '../lib/baa'
+import {
+  useSaveOnboardingPatch,
+  usePersistOnboardingStep,
+  useCreateOnboardingAccount,
+  useOnboardingTeamInvite,
+  useStartCheckout,
+} from '../lib/queries'
 import PhoneSetupWizard from '../components/PhoneSetupWizard'
 import { REF_STORAGE_KEY } from '../components/ReferralRedirect'
 
@@ -30,11 +36,6 @@ function parsePlanAmount(searchParams) {
   const raw = Number(searchParams.get('plan'))
   return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 997
 }
-function splitContactName(full) {
-  const parts = (full || '').trim().split(/\s+/)
-  return { doctor_first: parts[0] || '', doctor_last: parts.slice(1).join(' ') || '' }
-}
-
 // Steps are intentionally NOT labeled "Step 1 of 5" anywhere — the sidebar just
 // lists the named stages with quiet completion ticks (Asana/ClickUp feel). Each
 // stage saves independently so a practice can leave and resume any time.
@@ -63,7 +64,12 @@ export default function Onboarding() {
 
   const [active, setActive] = useState(0)
   const [seeded, setSeeded] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const savePatchMutation = useSaveOnboardingPatch()
+  const persistStepMutation = usePersistOnboardingStep()
+  const createAccountMutation = useCreateOnboardingAccount()
+  const teamInviteMutation = useOnboardingTeamInvite()
+  const checkoutMutation = useStartCheckout()
+  const saving = savePatchMutation.isPending || createAccountMutation.isPending || checkoutMutation.isPending
   const [saveError, setSaveError] = useState('')
 
   // Step 1 (pre-auth): create the account. Carries referral / multi-location /
@@ -94,7 +100,6 @@ export default function Onboarding() {
   const [baaAgree, setBaaAgree] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('member')
-  const [inviting, setInviting] = useState(false)
   const [invited, setInvited] = useState([])
 
   // Agency users manage clients elsewhere — they never see practice onboarding.
@@ -145,9 +150,9 @@ export default function Onboarding() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [practice, seeded])
 
-  async function persistStep(idx) {
+  function persistStep(idx) {
     if (!practiceId) return
-    await supabase.from('practices').update({ onboarding_step: idx }).eq('id', practiceId).then(() => {}, () => {})
+    persistStepMutation.mutate({ practiceId, step: idx })
   }
 
   function goTo(idx) {
@@ -162,12 +167,15 @@ export default function Onboarding() {
 
   async function savePatch(patch, { refresh = true } = {}) {
     if (!practiceId) { setSaveError('Your account is not linked to a practice yet. Sign out and back in, or contact support.'); return false }
-    setSaving(true); setSaveError('')
-    const { error } = await supabase.from('practices').update(patch).eq('id', practiceId)
-    setSaving(false)
-    if (error) { setSaveError(error.message || 'Could not save. Please try again.'); return false }
-    if (refresh) await refreshProfile()
-    return true
+    setSaveError('')
+    try {
+      await savePatchMutation.mutateAsync({ practiceId, patch })
+      if (refresh) await refreshProfile()
+      return true
+    } catch (e) {
+      setSaveError(e?.message || 'Could not save. Please try again.')
+      return false
+    }
   }
 
   async function createAccount(e) {
@@ -176,44 +184,27 @@ export default function Onboarding() {
     // Enforce the HIPAA password policy before creating the account.
     const pwCheck = validatePassword(acct.password)
     if (!pwCheck.valid) { setSaveError(pwCheck.errors[0]); return }
-    setSaving(true)
-    const { data, error: signUpError } = await signUp(acct.email, acct.password, { practice_name: acct.practiceName })
-    if (signUpError) { setSaving(false); setSaveError(signUpError.message); return }
-    if (!data.session || !data.user) {
-      setSaving(false)
-      setSaveError('Please confirm your email, then sign in to continue. (Email confirmation is enabled on this project.)')
-      return
-    }
-    const { doctor_first, doctor_last } = splitContactName(acct.contactName)
-    const { data: created, error: practiceError } = await supabase
-      .from('practices')
-      .insert({
-        name: acct.practiceName,
+    try {
+      await createAccountMutation.mutateAsync({
+        signUp,
         email: acct.email,
+        password: acct.password,
+        practiceName: acct.practiceName,
         phone: acct.phone,
-        doctor_first,
-        doctor_last,
-        heard_from: acct.heardFrom || null,
-        plan_amount: planAmount,
-        ...(refCode ? { referred_by_code: refCode } : {}),
-        ...(referrer?.practice_id ? { referred_by_practice_id: referrer.practice_id } : {}),
+        contactName: acct.contactName,
+        heardFrom: acct.heardFrom,
+        planAmount,
+        refCode,
+        referrerPracticeId: referrer?.practice_id,
+        parentPracticeId,
       })
-      .select('id')
-      .single()
-    if (practiceError) { setSaving(false); setSaveError(practiceError.message || 'Could not create your practice.'); return }
-    try { localStorage.removeItem(REF_STORAGE_KEY) } catch { /* noop */ }
-    const { error: linkError } = await supabase.from('users').update({ practice_id: created.id }).eq('id', data.user.id)
-    if (linkError) { setSaving(false); setSaveError(linkError.message || 'Practice created but could not link it to your account.'); return }
-    if (parentPracticeId) {
-      try {
-        await supabase.functions.invoke('link-location', { body: { parent_practice_id: parentPracticeId, new_practice_id: created.id } })
-      } catch { /* non-blocking */ }
+      try { localStorage.removeItem(REF_STORAGE_KEY) } catch { /* noop */ }
+      await refreshProfile()
+      setActive(1)
+      navigate('/onboarding', { replace: true })
+    } catch (e) {
+      setSaveError(e?.message || 'Could not create your account.')
     }
-    await refreshProfile()
-    setSaving(false)
-    // Move into the protected onboarding route; the stepper continues at "Practice details".
-    setActive(1)
-    navigate('/onboarding', { replace: true })
   }
 
   async function saveProfile() {
@@ -222,9 +213,9 @@ export default function Onboarding() {
   }
 
   async function startCheckout() {
-    setSaving(true); setSaveError('')
+    setSaveError('')
     try {
-      const { url } = await createCheckout({
+      const { url } = await checkoutMutation.mutateAsync({
         practiceId,
         email: practice?.email,
         planAmount: practice?.plan_amount,
@@ -233,7 +224,6 @@ export default function Onboarding() {
       window.location.href = url
     } catch (e) {
       setSaveError(e?.message || 'Could not start checkout. Please try again.')
-      setSaving(false)
     }
   }
 
@@ -250,23 +240,13 @@ export default function Onboarding() {
     const candidates = inviteEmail.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean)
     const fresh = [...new Set(candidates.filter(isEmail))].filter((e) => !invited.includes(e))
     if (!fresh.length) return
-    setInviting(true)
     for (const email of fresh) {
       try {
-        await supabase.functions.invoke('invite-team-member', {
-          body: {
-            practice_id: practiceId,
-            email,
-            role: inviteRole,
-            access_level: inviteRole === 'admin' ? 'practice_admin' : 'practice_member',
-            app_origin: window.location.origin,
-          },
-        })
+        await teamInviteMutation.mutateAsync({ practiceId, email, role: inviteRole })
       } catch { /* treat as queued */ }
     }
     setInvited((prev) => [...prev, ...fresh])
     setInviteEmail('')
-    setInviting(false)
   }
 
   async function finish() {
@@ -512,8 +492,8 @@ export default function Onboarding() {
                   <option value="member">Team member</option>
                   <option value="admin">Admin</option>
                 </select>
-                <button onClick={sendInvite} disabled={inviting || !inviteEmail.trim()} className="btn-primary shrink-0">
-                  {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Send invites
+                <button onClick={sendInvite} disabled={teamInviteMutation.isPending || !inviteEmail.trim()} className="btn-primary shrink-0">
+                  {teamInviteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Send invites
                 </button>
               </div>
 

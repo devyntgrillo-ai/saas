@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Gift, Star, Video, UserPlus, Check, Loader2, ExternalLink, Square, Pause, Play, RefreshCcw, PartyPopper } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import {
+  useUpdateFreeMonth,
+  useUploadTestimonial,
+  useReferFriend,
+  isMutating,
+} from '../lib/queries'
 
 // Where the "leave a review" button sends people. Swap for your real review link
 // (Google Business, Capterra, Trustpilot, etc.).
@@ -44,7 +49,9 @@ export default function GetFreeMonth({ practice }) {
   const allDone = reviewDone && videoDone && referralDone
   const granted = Boolean(fm.granted_at)
 
-  const [busy, setBusy] = useState('')
+  const updateFreeMonth = useUpdateFreeMonth()
+  const uploadTestimonial = useUploadTestimonial()
+  const referFriend = useReferFriend()
   const [error, setError] = useState('')
 
   // Video recorder state
@@ -80,11 +87,14 @@ export default function GetFreeMonth({ practice }) {
   }, [practice])
 
   async function saveFm(patch) {
-    const next = { ...(practice?.free_month || {}), ...patch }
-    const { error: e } = await supabase.from('practices').update({ free_month: next }).eq('id', practiceId)
-    if (e) { setError(e.message); return false }
-    await refreshProfile()
-    return true
+    try {
+      await updateFreeMonth.mutateAsync({ practiceId, patch, current: practice?.free_month })
+      await refreshProfile()
+      return true
+    } catch (e) {
+      setError(e?.message || 'Could not save.')
+      return false
+    }
   }
 
   // Auto-grant the free month once all three are checked off.
@@ -97,9 +107,8 @@ export default function GetFreeMonth({ practice }) {
 
   // ── Step 1: review ────────────────────────────────────────────────────────
   async function markReview() {
-    setBusy('review'); setError('')
+    setError('')
     await saveFm({ review_at: new Date().toISOString() })
-    setBusy('')
   }
 
   // ── Step 2: video testimonial ───────────────────────────────────────────────
@@ -190,42 +199,36 @@ export default function GetFreeMonth({ practice }) {
 
   async function submitVideo() {
     if (!blob) return
-    setBusy('video'); setError('')
+    setError('')
     try {
-      const path = `${practiceId}/${Date.now()}.webm`
-      const { error: upErr } = await supabase.storage.from('testimonials').upload(path, blob, { contentType: blob.type || 'video/webm', upsert: true })
-      if (upErr) throw upErr
+      const { path } = await uploadTestimonial.mutateAsync({ practiceId, blob })
       await saveFm({ video_at: new Date().toISOString(), video_path: path })
-      // Push a watch link to the internal #wins Slack channel (non-blocking).
-      supabase.functions.invoke('notify-testimonial', { body: { practice_id: practiceId, video_path: path } }).catch(() => {})
     } catch (e) {
       setError(e?.message || 'Could not upload your video. Please try again.')
     }
-    setBusy('')
   }
 
   // ── Step 3: refer a friend ──────────────────────────────────────────────────
   async function sendReferral() {
     if (!friend.email.trim()) return
-    setBusy('referral'); setError('')
+    setError('')
     try {
-      const { data, error: e } = await supabase.functions.invoke('refer-friend', {
-        body: {
-          practice_id: practiceId,
-          friend_name: friend.name.trim(),
-          friend_email: friend.email.trim(),
-          subject: draft.subject.trim(),
-          message: draft.message.trim(),
-          app_origin: window.location.origin,
-        },
+      await referFriend.mutateAsync({
+        practiceId,
+        friendName: friend.name.trim(),
+        friendEmail: friend.email.trim(),
+        subject: draft.subject.trim(),
+        message: draft.message.trim(),
       })
-      if (e || data?.error) throw new Error(data?.error || e?.message || 'Could not send the email.')
       await saveFm({ referral_at: new Date().toISOString(), referral_email: friend.email.trim() })
     } catch (err) {
       setError(err?.message || 'Could not send the email. Please try again.')
     }
-    setBusy('')
   }
+
+  const reviewBusy = isMutating(updateFreeMonth, (v) => v.patch?.review_at)
+  const videoBusy = uploadTestimonial.isPending || isMutating(updateFreeMonth, (v) => v.patch?.video_at)
+  const referralBusy = referFriend.isPending || isMutating(updateFreeMonth, (v) => v.patch?.referral_at)
 
   const completedCount = [reviewDone, videoDone, referralDone].filter(Boolean).length
 
@@ -268,8 +271,8 @@ export default function GetFreeMonth({ practice }) {
             <p className="text-sm text-slate-400">An honest review takes about a minute and helps other practices find CaseLift.</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <a href={REVIEW_URL} target="_blank" rel="noreferrer" className="btn-ghost"><ExternalLink className="h-4 w-4" /> Open review page</a>
-              <button onClick={markReview} disabled={busy === 'review'} className="btn-primary">
-                {busy === 'review' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} I left my review
+              <button onClick={markReview} disabled={reviewBusy} className="btn-primary">
+                {reviewBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} I left my review
               </button>
             </div>
             <p className="mt-2 text-xs text-slate-500">We’ll verify the review was posted before your free month is applied.</p>
@@ -335,8 +338,8 @@ export default function GetFreeMonth({ practice }) {
               {blobUrl && (
                 <>
                   <button onClick={resetVideo} className="btn-ghost"><RefreshCcw className="h-4 w-4" /> Re-record</button>
-                  <button onClick={submitVideo} disabled={busy === 'video'} className="btn-primary">
-                    {busy === 'video' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Use this testimonial
+                  <button onClick={submitVideo} disabled={videoBusy} className="btn-primary">
+                    {videoBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Use this testimonial
                   </button>
                 </>
               )}
@@ -361,8 +364,8 @@ export default function GetFreeMonth({ practice }) {
               <p className="text-xs text-slate-500">Your CaseLift referral link is added automatically as a button at the bottom of the email.</p>
             </div>
             <div className="mt-3 flex justify-end">
-              <button onClick={sendReferral} disabled={busy === 'referral' || !friend.email.trim() || !draft.message.trim()} className="btn-primary">
-                {busy === 'referral' ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Send invite
+              <button onClick={sendReferral} disabled={referralBusy || !friend.email.trim() || !draft.message.trim()} className="btn-primary">
+                {referralBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Send invite
               </button>
             </div>
           </>

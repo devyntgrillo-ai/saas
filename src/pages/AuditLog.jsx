@@ -7,6 +7,7 @@ import { useAuditLog } from '../lib/queries'
 import { SkeletonTable } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
 import ErrorState, { friendlyError } from '../components/ErrorState'
+import BreachInvestigation from '../components/BreachInvestigation'
 
 // Human labels for the canonical action names recorded by lib/audit.js +
 // _shared/audit.ts. Grouped for the filter dropdown.
@@ -171,6 +172,9 @@ export default function AuditLog() {
           {isSuperAdmin && ' You are viewing activity across all practices.'}
         </p>
       </div>
+
+      {/* Platform-admin only: breach-window PHI access investigation + CSV export. */}
+      {isSuperAdmin && <BreachInvestigation />}
 
       {/* Filters */}
       <div className="flex flex-col gap-3 rounded-xl border border-surface-700 bg-surface-900 px-4 py-3">

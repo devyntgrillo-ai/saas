@@ -4,7 +4,7 @@ import { Loader2, UserPlus, ShieldCheck, AlertTriangle } from 'lucide-react'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { useInvitation } from '../lib/queries'
+import { useInvitation, useAcceptInvitationToken } from '../lib/queries'
 import { ACCESS_LABELS } from '../lib/permissions'
 
 export default function AcceptInvitation() {
@@ -13,54 +13,48 @@ export default function AcceptInvitation() {
   const { user, signUp, signIn, refreshProfile, refreshAgency } = useAuth()
 
   const { data: invite, isLoading: loading } = useInvitation(token)
+  const acceptInvitation = useAcceptInvitationToken()
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
-  const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   const scopeName = invite?.agency_name || invite?.practice_name || 'CaseLift'
   const expired = invite && (invite.accepted_at || new Date(invite.expires_at) < new Date())
 
   async function finalize() {
-    const { data, error: e } = await supabase.rpc('accept_invitation', { p_token: token })
-    if (e || !data?.ok) {
-      setError(e?.message || data?.error || 'Could not accept the invitation.')
+    try {
+      await acceptInvitation.mutateAsync({ token })
+      await Promise.all([refreshProfile?.(), refreshAgency?.()])
+      return true
+    } catch (e) {
+      setError(e?.message || 'Could not accept the invitation.')
       return false
     }
-    await Promise.all([refreshProfile?.(), refreshAgency?.()])
-    return true
   }
 
   async function acceptAsExisting() {
-    setBusy(true)
     setError('')
     const ok = await finalize()
-    setBusy(false)
     if (ok) navigate('/', { replace: true })
   }
 
   async function acceptAsNew(e) {
     e.preventDefault()
-    setBusy(true)
     setError('')
     const { error: suErr } = await signUp(invite.email, password, { full_name: name })
     if (suErr) {
       setError(suErr.message)
-      setBusy(false)
       return
     }
-    // Ensure we have a session (some projects auto-confirm; otherwise sign in).
     const { data: sess } = await supabase.auth.getSession()
     if (!sess.session) {
       const { error: siErr } = await signIn(invite.email, password)
       if (siErr) {
         setError('Account created. Please sign in to finish accepting.')
-        setBusy(false)
         return
       }
     }
     const ok = await finalize()
-    setBusy(false)
     if (ok) navigate('/', { replace: true })
   }
 
@@ -93,8 +87,8 @@ export default function AcceptInvitation() {
               )}
 
               {user ? (
-                <button onClick={acceptAsExisting} disabled={busy} className="btn-primary mt-6 w-full">
-                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                <button onClick={acceptAsExisting} disabled={acceptInvitation.isPending} className="btn-primary mt-6 w-full">
+                  {acceptInvitation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
                   Accept invitation
                 </button>
               ) : (
@@ -107,8 +101,8 @@ export default function AcceptInvitation() {
                     <label className="label">Create a password</label>
                     <input className="input" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
                   </div>
-                  <button type="submit" disabled={busy} className="btn-primary w-full">
-                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                  <button type="submit" disabled={acceptInvitation.isPending} className="btn-primary w-full">
+                    {acceptInvitation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
                     Accept &amp; create account
                   </button>
                 </form>

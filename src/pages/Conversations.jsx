@@ -8,10 +8,7 @@ import {
   Send,
   ArrowLeft,
   Phone,
-  PhoneOff,
   Mic,
-  MicOff,
-  Circle,
   Search,
   Sparkles,
   Loader2,
@@ -39,7 +36,6 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useRecorder } from '../context/RecorderContext'
 import { supabase } from '../lib/supabase'
-import { resolveAttachmentUrl } from '../lib/storage'
 import {
   useConversationsList,
   useConversationThread,
@@ -48,13 +44,20 @@ import {
   useToggleConversationRead,
   useUpdateConsultFlags,
   useUpdateConversationPatient,
+  useAddConversationNote,
+  useSendThreadMessage,
+  useUploadConversationAttachment,
   patchConversationContextConsult,
   insertConvMessage,
   useConversationsRealtime,
+  useToggleSequenceStatus,
+  useMarkConsultConverted,
+  useMarkConsultNotConverting,
   queryKeys,
 } from '../lib/queries'
+import { invokeEdgeFunction } from '../lib/messaging'
 import { stripEmDashes } from '../lib/sanitize'
-import { timeAgo, formatDate, formatDuration } from '../lib/consults'
+import { formatDate, formatDuration } from '../lib/consults'
 import { auditConversationViewed, auditPatientAccessed, auditMessageSent } from '../lib/audit'
 import { SkeletonList } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
@@ -249,10 +252,13 @@ function ReadMore({ text }) {
 }
 
 // Right-hand panel: everything the TC needs to reply without leaving the thread.
-function PatientContextPanel({ consult, conv, msgs, loading, paused, onCollapse, onStartRecording, onConsultChange, onSavePatient, onPatientSaveError, onAddThreadMessage }) {
+function PatientContextPanel({ practiceId, consult, conv, msgs, loading, paused, patientSaving, onCollapse, onStartRecording, onConsultChange, onSavePatient, onPatientSaveError, onAddThreadMessage }) {
+  const toggleSequenceMutation = useToggleSequenceStatus()
+  const markConvertedMutation = useMarkConsultConverted()
+  const markNotConvertingMutation = useMarkConsultNotConverting()
+  const addNoteMutation = useAddConversationNote()
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({})
-  const [busy, setBusy] = useState('')
   const [showConvert, setShowConvert] = useState(false)
   const [convertValue, setConvertValue] = useState('')
   const [noteOpen, setNoteOpen] = useState(false)
@@ -299,8 +305,7 @@ function PatientContextPanel({ consult, conv, msgs, loading, paused, onCollapse,
     || 'Patient'
 
   async function savePatient() {
-    if (!conv?.id || !onSavePatient) return
-    setBusy('patient')
+    if (!conv?.id || !onSavePatient || patientSaving) return
     const patch = {
       patient_first: form.patient_first.trim() || null,
       patient_last: form.patient_last.trim() || null,
@@ -312,8 +317,6 @@ function PatientContextPanel({ consult, conv, msgs, loading, paused, onCollapse,
       setEditing(false)
     } catch (e) {
       onPatientSaveError?.(e?.message || 'Could not save patient details')
-    } finally {
-      setBusy('')
     }
   }
 
@@ -334,56 +337,64 @@ function PatientContextPanel({ consult, conv, msgs, loading, paused, onCollapse,
     setEditing(false)
   }
 
-  async function toggleSequence() {
-    if (!consult?.id) return
-    setBusy('seq')
-    // Pause keeps pending messages intact so they resume cleanly - no cancelling.
+  function toggleSequence() {
+    if (!consult?.id || toggleSequenceMutation.isPending) return
     const patch = seqPaused
       ? { sequence_status: 'active', sequence_paused_reason: null, sequence_cancelled_at: null, sequence_cancelled_reason: null }
       : { sequence_status: 'paused', sequence_paused_reason: 'manual' }
-    await supabase.from('consults').update(patch).eq('id', consult.id)
-    onConsultChange?.(patch)
-    setBusy('')
+    toggleSequenceMutation.mutate(
+      { consultId: consult.id, patch, practiceId },
+      { onSuccess: () => onConsultChange?.(patch) },
+    )
   }
 
-  async function markConverted() {
-    if (!consult?.id) return
-    setBusy('convert')
-    const val = Number(String(convertValue).replace(/[^0-9.]/g, '')) || null
-    const patch = { outcome: 'closed_won', status: 'closed_won', case_value: val, closed_at: new Date().toISOString(), attribution_status: 'caselift_recovered', sequence_status: 'cancelled' }
-    await supabase.from('messages').update({ status: 'cancelled' }).eq('consult_id', consult.id).in('status', ['draft', 'scheduled', 'pending'])
-    await supabase.from('consults').update(patch).eq('id', consult.id)
-    if (consult.practice_id) {
-      supabase.from('notifications').insert({
-        practice_id: consult.practice_id, type: 'case_converted', event: 'case_converted',
-        title: 'Case converted', message: `${fullName} accepted treatment${val ? ` - ${formatMoney(val)} recovered` : ''}`,
-        link: `/consults/${consult.id}`,
-      }).then(() => {}, () => {})
-    }
-    onConsultChange?.(patch)
-    setBusy(''); setShowConvert(false); setConvertValue('')
+  function markConverted() {
+    if (!consult?.id || markConvertedMutation.isPending) return
+    markConvertedMutation.mutate(
+      {
+        consultId: consult.id,
+        practiceId,
+        conversationId: conv?.id,
+        caseValue: convertValue,
+        patientName: fullName,
+      },
+      {
+        onSuccess: ({ patch }) => {
+          onConsultChange?.(patch)
+          setShowConvert(false)
+          setConvertValue('')
+        },
+      },
+    )
   }
 
-  async function markNotConverting() {
-    if (!consult?.id) return
-    setBusy('notconv')
-    const patch = { outcome: 'not_converting', sequence_status: 'cancelled' }
-    await supabase.from('messages').update({ status: 'cancelled' }).eq('consult_id', consult.id).in('status', ['draft', 'scheduled', 'pending'])
-    await supabase.from('consults').update(patch).eq('id', consult.id)
-    onConsultChange?.(patch)
-    setBusy('')
+  function markNotConverting() {
+    if (!consult?.id || markNotConvertingMutation.isPending) return
+    markNotConvertingMutation.mutate(
+      { consultId: consult.id, practiceId, conversationId: conv?.id },
+      { onSuccess: ({ patch }) => onConsultChange?.(patch) },
+    )
   }
 
-  async function addNote() {
+  function addNote() {
     const body = note.trim()
-    if (!body || !conv?.id) return
-    setBusy('note')
-    const { data } = await supabase.from('conversation_messages')
-      .insert({ conversation_id: conv.id, direction: 'outbound', channel: 'note', body, sent_at: new Date().toISOString() })
-      .select().single()
-    if (data) onAddThreadMessage?.(data)
-    setBusy(''); setNote(''); setNoteOpen(false)
+    if (!body || !conv?.id || addNoteMutation.isPending) return
+    addNoteMutation.mutate(
+      { conversationId: conv.id, practiceId, body },
+      {
+        onSuccess: ({ message }) => {
+          if (message) onAddThreadMessage?.(message)
+          setNote('')
+          setNoteOpen(false)
+        },
+      },
+    )
   }
+
+  const seqBusy = toggleSequenceMutation.isPending && toggleSequenceMutation.variables?.consultId === consult?.id
+  const convertBusy = markConvertedMutation.isPending && markConvertedMutation.variables?.consultId === consult?.id
+  const notConvBusy = markNotConvertingMutation.isPending && markNotConvertingMutation.variables?.consultId === consult?.id
+  const noteBusy = addNoteMutation.isPending
 
   return (
     <aside className="hidden w-[280px] shrink-0 flex-col border-l border-gray-200 bg-white lg:flex">
@@ -412,7 +423,9 @@ function PatientContextPanel({ consult, conv, msgs, loading, paused, onCollapse,
                   <input value={form.patient_email} onChange={(e) => setForm((f) => ({ ...f, patient_email: e.target.value }))} placeholder="Email" className="input py-1 text-sm" />
                   <div className="flex justify-end gap-2 pt-1">
                     <button type="button" onClick={cancelPatientEdit} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
-                    <button onClick={savePatient} disabled={busy === 'patient'} className="text-xs font-semibold text-primary-600 hover:text-primary-700">Save</button>
+                    <button onClick={savePatient} disabled={patientSaving} className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 disabled:opacity-50">
+                      {patientSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Save
+                    </button>
                   </div>
                 </div>
               ) : (
@@ -477,8 +490,8 @@ function PatientContextPanel({ consult, conv, msgs, loading, paused, onCollapse,
               {seqTotal > 0 && <p className="text-[13px] font-bold text-gray-800">Message {Math.min(sentCount + 1, seqTotal)} of {seqTotal}</p>}
               {seqText && <p className="mt-0.5 text-xs text-gray-500">{seqText}</p>}
               <div className="mt-2 flex items-center gap-3">
-                <button onClick={toggleSequence} disabled={busy === 'seq'} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50">
-                  {busy === 'seq' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : seqPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                <button onClick={toggleSequence} disabled={seqBusy} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50">
+                  {seqBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : seqPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
                   {seqPaused ? 'Resume' : 'Pause'}
                 </button>
                 <Link to="/sequences" className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:underline"><GitBranch className="h-3 w-3" /> View sequence →</Link>
@@ -513,13 +526,17 @@ function PatientContextPanel({ consult, conv, msgs, loading, paused, onCollapse,
                         <input value={convertValue} onChange={(e) => setConvertValue(e.target.value)} placeholder="Treatment value e.g. 32000" className="w-full rounded border border-emerald-200 px-2 py-1 text-sm" />
                         <div className="mt-2 flex justify-end gap-2">
                           <button onClick={() => setShowConvert(false)} className="text-xs text-gray-500">Cancel</button>
-                          <button onClick={markConverted} disabled={busy === 'convert'} className="text-xs font-semibold text-emerald-700">Save</button>
+                          <button onClick={markConverted} disabled={convertBusy} className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 disabled:opacity-50">
+                            {convertBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Save
+                          </button>
                         </div>
                       </div>
                     ) : (
                       <button onClick={() => setShowConvert(true)} className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50"><CheckCircle2 className="h-4 w-4" /> Mark as converted</button>
                     )}
-                    <button onClick={markNotConverting} disabled={busy === 'notconv'} className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50"><XCircle className="h-4 w-4" /> Not converting</button>
+                    <button onClick={markNotConverting} disabled={notConvBusy} className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50 disabled:opacity-50">
+                      {notConvBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Not converting
+                    </button>
                   </>
                 )}
                 {noteOpen ? (
@@ -527,7 +544,9 @@ function PatientContextPanel({ consult, conv, msgs, loading, paused, onCollapse,
                     <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Internal note…" rows={2} className="w-full resize-none rounded border border-amber-200 px-2 py-1 text-sm" />
                     <div className="mt-2 flex justify-end gap-2">
                       <button onClick={() => { setNoteOpen(false); setNote('') }} className="text-xs text-gray-500">Cancel</button>
-                      <button onClick={addNote} disabled={busy === 'note'} className="text-xs font-semibold text-amber-700">Save note</button>
+                      <button onClick={addNote} disabled={noteBusy} className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 disabled:opacity-50">
+                        {noteBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Save note
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -567,11 +586,11 @@ export default function Conversations() {
   const toggleReadMutation = useToggleConversationRead()
   const updateConsultFlags = useUpdateConsultFlags()
   const updateConversationPatient = useUpdateConversationPatient()
+  const sendThreadMutation = useSendThreadMessage()
   const [draft, setDraft] = useState('')
   const [aiSuggested, setAiSuggested] = useState(false)
   const [channel, setChannel] = useState('sms')
   const [emailSubject, setEmailSubject] = useState('')
-  const [sending, setSending] = useState(false)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all') // all | unread | active
   const [suggesting, setSuggesting] = useState(false)
@@ -601,7 +620,7 @@ export default function Conversations() {
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [snippetsOpen, setSnippetsOpen] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const uploadAttachmentMutation = useUploadConversationAttachment()
   const [channelMenuOpen, setChannelMenuOpen] = useState(false)
   const [emailComposerExpanded, setEmailComposerExpanded] = useState(false)
   const fileInputRef = useRef(null)
@@ -792,63 +811,64 @@ export default function Conversations() {
   }
 
   // Mail icon → Mark as read / unread (reuses conversations.unread_count).
-  async function toggleRead() {
-    if (!activeConv || !practiceId) return
+  function toggleRead() {
+    if (!activeConv || !practiceId || toggleReadMutation.isPending) return
     const makeUnread = !(activeConv.unread_count > 0)
     const next = makeUnread ? Math.max(1, activeConv.unread_count || 0) : 0
-    await toggleReadMutation.mutateAsync({ practiceId, conversationId: activeId, unreadCount: next })
-    showToast(makeUnread ? 'Marked as unread' : 'Marked as read')
+    toggleReadMutation.mutate(
+      { practiceId, conversationId: activeId, unreadCount: next },
+      { onSuccess: () => showToast(makeUnread ? 'Marked as unread' : 'Marked as read') },
+    )
   }
 
   // Paperclip: upload a file and post it as a downloadable attachment bubble.
   async function uploadAttachment(file) {
     if (!file || !activeId) return
     if (file.size > 10 * 1024 * 1024) return showToast('File must be under 10MB')
-    setUploading(true)
     try {
-      const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
-      const path = `${activeId}/${Date.now()}.${ext}`
-      const up = await supabase.storage.from('conversation-attachments').upload(path, file, { contentType: file.type || undefined, upsert: false })
-      if (up.error) throw up.error
-      // Store the bare object PATH (private bucket); reads mint signed URLs on demand.
-      const nowIso = new Date().toISOString()
-      const data = await insertConvMessage({
-        conversation_id: activeId, direction: 'outbound', channel, body: file.name, sent_at: nowIso,
-        meta: { attachment: { url: path, name: file.name, type: file.type || ext } },
+      const result = await uploadAttachmentMutation.mutateAsync({
+        conversationId: activeId,
+        practiceId,
+        file,
+        channel,
+        patientPhone: activeConv?.patient_phone,
       })
-      bumpConversation(nowIso, `📎 ${file.name}`)
       refetchConv()
-      if (channel === 'sms') {
-        const target = activeConv?.patient_phone
-        // Twilio fetches MMS media over HTTP — hand it a short-lived signed URL.
-        if (target) {
-          const mediaUrl = await resolveAttachmentUrl('conversation-attachments', path, { ttl: 3600 })
-          if (mediaUrl) supabase.functions.invoke('twilio-send', { body: { practice_id: practiceId, to: target, body: file.name, media_url: mediaUrl, conversation_message_id: data?.id } }).catch(() => {})
-        }
-      }
+      if (result?.warning) showToast(result.warning)
     } catch (e) {
       showToast(/bucket|not found/i.test(e?.message || '') ? 'Attachments need the conversation-attachments bucket - apply the migration.' : 'Upload failed')
-    } finally {
-      setUploading(false)
     }
   }
 
-  // Toggle the starred flag on the linked consult (optimistic). Reflects in both
-  // the active-consult state and the conversation list (for sort-to-top).
-  async function toggleStar(consultId, current) {
+  function toggleStar(consultId, current) {
     if (!consultId) return showToast('No consult linked to star')
-    await updateConsultFlags.mutateAsync({ consultId, patch: { starred: !current }, practiceId })
+    if (updateConsultFlags.isPending && updateConsultFlags.variables?.consultId === consultId) return
+    updateConsultFlags.mutate({ consultId, patch: { starred: !current }, practiceId })
   }
 
-  async function archiveActive() {
+  function archiveActive() {
     const cid = consult?.id
     if (!cid) { setConfirmArchive(false); return showToast('No consult linked') }
+    if (updateConsultFlags.isPending) return
     const nextConv = visible.find((c) => c.id !== activeId)
-    await updateConsultFlags.mutateAsync({ consultId: cid, patch: { archived: true }, practiceId })
-    setActiveId(nextConv ? nextConv.id : null)
-    setConfirmArchive(false)
-    showToast('Conversation archived')
+    updateConsultFlags.mutate(
+      { consultId: cid, patch: { archived: true }, practiceId },
+      {
+        onSuccess: () => {
+          setActiveId(nextConv ? nextConv.id : null)
+          setConfirmArchive(false)
+          showToast('Conversation archived')
+        },
+      },
+    )
   }
+
+  const togglingRead = toggleReadMutation.isPending
+  const archiving = updateConsultFlags.isPending && updateConsultFlags.variables?.patch?.archived
+  const starringId = updateConsultFlags.isPending && updateConsultFlags.variables?.patch?.starred != null
+    ? updateConsultFlags.variables?.consultId
+    : null
+  const sending = sendThreadMutation.isPending
 
   function insertEmoji(emoji) {
     setDraft((d) => d + emoji)
@@ -885,53 +905,64 @@ export default function Conversations() {
   async function handleSend(e) {
     e?.preventDefault?.()
     const body = draft.trim()
-    if (!body || !activeId || sending) return
+    if (!body || !activeId || sendThreadMutation.isPending) return
     const isEmail = channel === 'email'
     if (isEmail && !activeConv?.patient_email) {
       showToast('Add a patient email on this conversation or linked consult first.')
       return
     }
-    setSending(true)
     const nowIso = new Date().toISOString()
     const subject = isEmail
       ? (emailSubject.trim() || `Message from ${practice?.name || 'your care team'}`)
       : null
     const meta = isEmail ? { subject } : {}
-    const { data, error } = await supabase
-      .from('conversation_messages')
-      .insert({
-        conversation_id: activeId,
-        direction: 'outbound',
-        channel,
-        body,
-        sent_at: nowIso,
-        meta,
+    try {
+      const { message: data } = await sendThreadMutation.mutateAsync({
+        practiceId,
+        conversationId: activeId,
+        row: {
+          conversation_id: activeId,
+          direction: 'outbound',
+          channel,
+          body,
+          sent_at: nowIso,
+          meta,
+        },
+        bump: { at: nowIso },
       })
-      .select()
-      .single()
-    if (!error && data) {
       setDraft('')
       setEmailSubject('')
       setAiSuggested(false)
       auditMessageSent(activeId)
       const fn = isEmail ? 'mailgun-send' : 'twilio-send'
       const target = isEmail ? activeConv?.patient_email : activeConv?.patient_phone
-      if (target) {
-        supabase.functions.invoke(fn, {
-          body: {
+      if (target && data) {
+        try {
+          await invokeEdgeFunction(fn, {
             practice_id: practiceId,
             to: target,
             body,
             subject,
             conversation_message_id: data.id,
             consult_id: activeConv?.consult_id,
-          },
-        }).catch(() => showToast('Could not send — check messaging settings.'))
+          })
+        } catch (e) {
+          showToast(e?.message || 'Could not send — check messaging settings.')
+          await supabase
+            .from('conversation_messages')
+            .update({
+              meta: {
+                ...meta,
+                delivery_status: 'failed',
+                send_error: e?.message || 'send failed',
+              },
+            })
+            .eq('id', data.id)
+        }
       }
-      bumpConversation(nowIso)
-      refetchConv()
+    } catch {
+      showToast('Could not send message.')
     }
-    setSending(false)
   }
 
   // Pre-fill the email composer when replying from a thread card.
@@ -1112,9 +1143,10 @@ export default function Conversations() {
                           aria-label="Star conversation"
                           aria-pressed={Boolean(c.consult?.starred)}
                           onClick={(e) => { e.stopPropagation(); toggleStar(c.consult?.id, Boolean(c.consult?.starred)) }}
-                          className={`transition ${c.consult?.starred ? 'text-amber-400 opacity-100' : 'text-gray-300 opacity-0 hover:text-amber-400 group-hover:opacity-100'}`}
+                          disabled={starringId === c.consult?.id}
+                          className={`transition disabled:opacity-50 ${c.consult?.starred ? 'text-amber-400 opacity-100' : 'text-gray-300 opacity-0 hover:text-amber-400 group-hover:opacity-100'}`}
                         >
-                          <Star className={`h-4 w-4 ${c.consult?.starred ? 'fill-current' : ''}`} />
+                          {starringId === c.consult?.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Star className={`h-4 w-4 ${c.consult?.starred ? 'fill-current' : ''}`} />}
                         </button>
                         {unread && (
                           <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-blue-600 px-1.5 text-[11px] font-semibold !text-white">
@@ -1194,21 +1226,23 @@ export default function Conversations() {
                   <button
                     type="button"
                     onClick={() => toggleStar(consult?.id, Boolean(consult?.starred))}
+                    disabled={starringId === consult?.id}
                     title={consult?.starred ? 'Unstar' : 'Star'}
                     aria-label="Star"
                     aria-pressed={Boolean(consult?.starred)}
-                    className={`hidden rounded-md p-1.5 transition hover:bg-gray-100 sm:inline-flex ${consult?.starred ? 'text-amber-500' : 'text-gray-400 hover:text-amber-500'}`}
+                    className={`hidden rounded-md p-1.5 transition hover:bg-gray-100 disabled:opacity-50 sm:inline-flex ${consult?.starred ? 'text-amber-500' : 'text-gray-400 hover:text-amber-500'}`}
                   >
-                    <Star className={`h-4 w-4 ${consult?.starred ? 'fill-current' : ''}`} />
+                    {starringId === consult?.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Star className={`h-4 w-4 ${consult?.starred ? 'fill-current' : ''}`} />}
                   </button>
                   <button
                     type="button"
                     onClick={toggleRead}
+                    disabled={togglingRead}
                     title={activeConv.unread_count > 0 ? 'Mark as read' : 'Mark as unread'}
                     aria-label="Toggle read"
-                    className="hidden rounded-md p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 sm:inline-flex"
+                    className="hidden rounded-md p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50 sm:inline-flex"
                   >
-                    {activeConv.unread_count > 0 ? <MailOpen className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
+                    {togglingRead ? <Loader2 className="h-4 w-4 animate-spin" /> : activeConv.unread_count > 0 ? <MailOpen className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
                   </button>
                   <button type="button" onClick={() => setConfirmArchive(true)} title="Archive" aria-label="Archive" className="hidden rounded-md p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-red-500 sm:inline-flex">
                     <Trash2 className="h-4 w-4" />
@@ -1456,7 +1490,7 @@ export default function Conversations() {
                   onInsertEmoji={insertEmoji}
                   onFillSnippet={fillSnippet}
                   onAttachClick={() => fileInputRef.current?.click()}
-                  uploading={uploading}
+                  uploading={uploadAttachmentMutation.isPending}
                   missingPatientEmail={!activeConv?.patient_email}
                   patientFirst={activeConv?.patient_first}
                   practiceDoctor={practice?.doctor_last || practice?.doctor_first}
@@ -1495,8 +1529,8 @@ export default function Conversations() {
                       <button type="button" onClick={() => { setEmojiOpen((v) => !v); setSnippetsOpen(false) }} title="Emoji" aria-label="Emoji" className={`rounded-md p-1.5 transition hover:bg-gray-200/80 hover:text-gray-700 ${emojiOpen ? 'bg-gray-200/80 text-gray-700' : ''}`}>
                         <Smile className="h-4 w-4" />
                       </button>
-                      <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} title="Attach file" aria-label="Attach file" className="rounded-md p-1.5 transition hover:bg-gray-200/80 hover:text-gray-700 disabled:opacity-40">
-                        {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                      <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadAttachmentMutation.isPending} title="Attach file" aria-label="Attach file" className="rounded-md p-1.5 transition hover:bg-gray-200/80 hover:text-gray-700 disabled:opacity-40">
+                        {uploadAttachmentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
                       </button>
                       <button type="button" onClick={() => { setSnippetsOpen((v) => !v); setEmojiOpen(false) }} title="Snippets" aria-label="Snippets" className={`rounded-md p-1.5 transition hover:bg-gray-200/80 hover:text-gray-700 ${snippetsOpen ? 'bg-gray-200/80' : ''}`}>
                         <ScrollText className="h-4 w-4" />
@@ -1565,11 +1599,13 @@ export default function Conversations() {
       {/* Contact details (right panel) - only when a thread is open and not collapsed */}
       {activeConv && !panelCollapsed && (
         <PatientContextPanel
+          practiceId={practiceId}
           consult={consult}
           conv={activeConv}
           msgs={consultMsgs}
           loading={loadingContext}
           paused={paused}
+          patientSaving={updateConversationPatient.isPending}
           onCollapse={togglePanel}
           onStartRecording={() => openRecorder()}
           onConsultChange={(patch) => {
@@ -1598,8 +1634,8 @@ export default function Conversations() {
               <button onClick={() => setConfirmArchive(false)} className="rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">
                 Cancel
               </button>
-              <button onClick={archiveActive} className="rounded-lg bg-red-600 px-3.5 py-2 text-sm font-semibold !text-white transition hover:bg-red-700">
-                Archive
+              <button onClick={archiveActive} disabled={archiving} className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3.5 py-2 text-sm font-semibold !text-white transition hover:bg-red-700 disabled:opacity-70">
+                {archiving ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Archive
               </button>
             </div>
           </div>

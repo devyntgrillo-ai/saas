@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../supabase'
 import { fetchRecordingRate } from '../pms'
 import { queryKeys } from './keys'
@@ -189,5 +189,33 @@ export function useAgencyKbPractices(agencyId) {
       return data || []
     },
     enabled: Boolean(agencyId),
+  })
+}
+
+export function useRemoveAgencyMember() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ memberId, agencyId }) => {
+      const { error } = await supabase.from('agency_members').delete().eq('id', memberId)
+      if (error) throw error
+      return { agencyId }
+    },
+    onSuccess: ({ agencyId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.agency.team(agencyId) })
+    },
+  })
+}
+
+export function useCancelAgencyInvitation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ invitationId, agencyId }) => {
+      const { error } = await supabase.from('invitations').delete().eq('id', invitationId)
+      if (error) throw error
+      return { agencyId }
+    },
+    onSuccess: ({ agencyId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.agency.team(agencyId) })
+    },
   })
 }
