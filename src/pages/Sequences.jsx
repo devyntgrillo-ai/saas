@@ -11,6 +11,7 @@ import {
   Mail,
   Phone,
   Sliders,
+  Megaphone,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -27,6 +28,7 @@ import { treatmentLabel, objectionLabel } from '../lib/treatments'
 import { SkeletonStatGrid, SkeletonTable } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
 import ReactivationCampaigns, { ReactivationLaunchButton } from '../components/ReactivationCampaigns'
+import ReactivationResults from '../components/ReactivationResults'
 import SequenceSettings from './SequenceSettings'
 
 const PAGE = 50
@@ -753,6 +755,12 @@ export default function Sequences() {
         <div className="flex items-center gap-2">
           <ReactivationLaunchButton onClick={() => setBuilding(true)} />
           <button
+            onClick={() => setTab(tab === 'reactivation' ? 'active' : 'reactivation')}
+            className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[13px] font-medium transition ${tab === 'reactivation' ? 'border-gray-300 bg-gray-100 text-gray-900' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+          >
+            <Megaphone className="h-3.5 w-3.5" /> {tab === 'reactivation' ? 'Back' : 'Campaigns'}
+          </button>
+          <button
             onClick={() => setTab(tab === 'settings' ? 'active' : 'settings')}
             className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[13px] font-medium transition ${tab === 'settings' ? 'border-gray-300 bg-gray-100 text-gray-900' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
@@ -761,10 +769,12 @@ export default function Sequences() {
         </div>
       </div>
 
-      {/* Reactivation builder modal (always mounted); list only on the main view */}
-      <ReactivationCampaigns building={building} onCloseBuilder={() => setBuilding(false)} showList={tab === 'active'} />
+      {/* Reactivation builder modal (always mounted so it can launch from any tab) */}
+      <ReactivationCampaigns building={building} onCloseBuilder={() => setBuilding(false)} showList={false} />
 
-      {tab === 'settings' ? (
+      {tab === 'reactivation' ? (
+        <ReactivationResults />
+      ) : tab === 'settings' ? (
         <SequenceSettings />
       ) : (
       <div className="space-y-5">

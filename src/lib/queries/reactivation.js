@@ -41,6 +41,27 @@ export async function fetchReactivationAudience(practiceId, { startDate, endDate
   }))
 }
 
+// Per-patient enrollment rows for a campaign's detail/results view. Joins the
+// originating consult for its case value (recovered-production estimate).
+export async function fetchCampaignEnrollments(campaignId) {
+  if (!campaignId) return []
+  const { data, error } = await supabase
+    .from('reactivation_enrollments')
+    .select('*, consult:consults(case_value)')
+    .eq('campaign_id', campaignId)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
+export function useCampaignEnrollments(campaignId) {
+  return useQuery({
+    queryKey: ['reactivation-enrollments', campaignId],
+    queryFn: () => fetchCampaignEnrollments(campaignId),
+    enabled: Boolean(campaignId),
+  })
+}
+
 export function useReactivationAudience(practiceId, filters, enabled = true) {
   return useQuery({
     queryKey: queryKeys.reactivationAudience(practiceId, filters),
