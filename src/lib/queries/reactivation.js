@@ -21,19 +21,19 @@ export function useReactivationCampaigns(practiceId) {
   })
 }
 
-export async function fetchReactivationAudience(practiceId, { minDays, maxDays, objection, treatment }) {
+// Unscheduled treatment plans (recorded consults) presented between two dates,
+// optionally narrowed to a set of treatment types. inActive flags those already
+// in a live CaseLift sequence so the builder can exclude them.
+export async function fetchReactivationAudience(practiceId, { startDate, endDate, treatmentTypes } = {}) {
   if (!practiceId) return []
-  const max = new Date(Date.now() - maxDays * 86400000).toISOString()
-  const min = new Date(Date.now() - minDays * 86400000).toISOString()
   let q = supabase
     .from('consults')
-    .select('id, patient_name, patient_phone, patient_email, objection_type, treatment_type, case_value, created_at, recording_date, outcome, sequence_activated_at, sequence_cancelled_at')
+    .select('id, patient_name, patient_first, patient_last, patient_phone, patient_email, treatment_type, case_value, created_at, recording_date, outcome, sequence_activated_at, sequence_cancelled_at')
     .eq('practice_id', practiceId)
-    .gte('created_at', max)
-    .lte('created_at', min)
-  if (objection !== 'all') q = q.eq('objection_type', objection)
-  if (treatment !== 'all') q = q.eq('treatment_type', treatment)
-  const { data, error } = await q
+  if (startDate) q = q.gte('created_at', new Date(startDate).toISOString())
+  if (endDate) q = q.lte('created_at', new Date(`${endDate}T23:59:59`).toISOString())
+  if (treatmentTypes && treatmentTypes.length) q = q.in('treatment_type', treatmentTypes)
+  const { data, error } = await q.order('created_at', { ascending: false })
   if (error) throw error
   return (data || []).map((c) => ({
     ...c,
