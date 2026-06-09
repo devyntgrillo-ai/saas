@@ -33,7 +33,6 @@ export default function AccountSwitcher() {
     agency,
     isAgencyUser,
     isSuperAdmin,
-    isMultiPractice,
     isImpersonating,
     impersonation,
     accessLevel,
@@ -104,11 +103,14 @@ export default function AccountSwitcher() {
     navigate('/')
   }
 
-  // Show the switcher for admins, resellers, and multi-location practice users.
-  if (!isSuperAdmin && !isAgencyUser && !isMultiPractice) return null
+  // Show the switcher for admins, resellers, and ALL practice users — even those
+  // with a single location. A solo practice still sees the dropdown (listing their
+  // one account), so it's clear they can add more locations/accounts later. Hidden
+  // only if a practice user has no accessible practice loaded yet.
+  if (!isSuperAdmin && !isAgencyUser && accessiblePractices.length === 0) return null
 
-  // "My Practices" for a multi-location practice user; "All Accounts" for admins/resellers.
-  const ownPractices = isMultiPractice && !isSuperAdmin && !isAgencyUser
+  // "My Practices" for any practice user (single or multi); "All Accounts" for admins/resellers.
+  const ownPractices = !isSuperAdmin && !isAgencyUser
   const listHeader = ownPractices ? 'My Practices' : 'All Accounts'
   const searchPlaceholder = isSuperAdmin
     ? 'Search for an account'
