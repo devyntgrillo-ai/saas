@@ -5,12 +5,11 @@ import {
   Phone, X, ArrowLeft, Loader2, PhoneCall, Check, Voicemail, PhoneOff, Ban, Mic, MicOff, Circle, Play, Pause,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
 import EmptyState from '../components/EmptyState'
 import { timeAgo } from '../lib/consults'
 import { formatCallTime, loadRecordingUrl } from '../lib/voice'
 import { useVoice } from '../context/VoiceContext'
-import { usePowerDialerQueue, useRecentCalls, queryKeys } from '../lib/queries'
+import { usePowerDialerQueue, useRecentCalls, useCompletePowerDialerLead, queryKeys } from '../lib/queries'
 
 const COUNTDOWN_SEC = 3
 
@@ -193,7 +192,7 @@ export default function PowerDialer() {
   const [sessionQueue, setSessionQueue] = useState([])
   const [idx, setIdx] = useState(0)
   const [notes, setNotes] = useState('')
-  const [busy, setBusy] = useState(false)
+  const completeLeadMutation = useCompletePowerDialerLead()
   const [paused, setPaused] = useState(false)
   const [countdown, setCountdown] = useState(null) // null | 3..1
 
@@ -256,52 +255,23 @@ export default function PowerDialer() {
     if (!lead || !consult) return
 
     completingRef.current = true
-    setBusy(true)
 
     const d = DISPO_BY_KEY[dispoKey] || DISPO_BY_KEY.no_answer
     const noteText = notesRef.current.trim()
 
-    let convId = null
-    const { data: existing } = await supabase.from('conversations').select('id').eq('practice_id', practiceId).eq('consult_id', consult.id).maybeSingle()
-    if (existing) convId = existing.id
-    else {
-      const [first, ...rest] = (consult.patient_name || 'Patient').split(' ')
-      const { data: created } = await supabase.from('conversations')
-        .insert({
-          practice_id: practiceId, consult_id: consult.id, patient_first: first, patient_last: rest.join(' '),
-          patient_phone: consult.patient_phone, patient_email: consult.patient_email, last_message_at: new Date().toISOString(),
-        })
-        .select('id').single()
-      convId = created?.id
-    }
+    try {
+      await completeLeadMutation.mutateAsync({
+        practiceId,
+        lead,
+        consult,
+        dispo: d,
+        noteText,
+        callSid,
+        durationSec,
+        tcName: practice?.tc_name,
+      })
+    } catch { /* noop */ }
 
-    const nowIso = new Date().toISOString()
-    const dateLabel = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    const durLabel = callSid && durationSec > 0 ? ` · ${formatCallTime(durationSec)}` : ''
-    const body = `📞 Called ${dateLabel} · ${d.log}${durLabel}${noteText ? ` · ${noteText}` : ''}`
-
-    let callLogId = null
-    if (callSid) {
-      const { data: cl } = await supabase.from('call_logs').select('id').eq('twilio_call_sid', callSid).maybeSingle()
-      callLogId = cl?.id || null
-    }
-    const meta = { outcome: d.log, duration_sec: callSid ? (durationSec || 0) : null, note: noteText || null, actor: practice?.tc_name || 'You' }
-
-    if (convId) {
-      await supabase.from('conversation_messages').insert({ conversation_id: convId, direction: 'outbound', channel: 'call', body, sent_at: nowIso, meta, call_log_id: callLogId })
-      await supabase.from('conversations').update({ last_message_at: nowIso, last_message_preview: body }).eq('id', convId)
-    }
-    if (callSid) {
-      await supabase.from('call_logs').update({
-        disposition: d.key, notes: noteText || null, duration_seconds: durationSec || null, conversation_id: convId,
-      }).eq('twilio_call_sid', callSid)
-    }
-
-    // Remove from dialer queue until the sequence schedules another call touchpoint.
-    await supabase.from('messages').update({ status: 'sent', sent_at: nowIso }).eq('id', lead.id)
-    if (d.key === 'dnc') await supabase.from('consults').update({ outcome: 'not_converting' }).eq('id', consult.id)
-
-    setBusy(false)
     completingRef.current = false
     pendingDispoRef.current = null
     advanceAfterComplete(idxRef.current + 1, sessionQueueRef.current.length)
@@ -330,9 +300,9 @@ export default function PowerDialer() {
 
   // Auto-dial when ready: first lead dials immediately; subsequent leads wait for countdown.
   useEffect(() => {
-    if (!active || paused || voiceState !== 'ready' || callState !== 'idle' || countdown != null || busy) return
+    if (!active || paused || voiceState !== 'ready' || callState !== 'idle' || countdown != null || completeLeadMutation.isPending) return
     dialCurrentLead()
-  }, [active, paused, voiceState, callState, countdown, busy, idx, dialCurrentLead])
+  }, [active, paused, voiceState, callState, countdown, completeLeadMutation.isPending, idx, dialCurrentLead])
 
   // Countdown between calls.
   useEffect(() => {
@@ -358,7 +328,7 @@ export default function PowerDialer() {
   }
 
   function disposition(d) {
-    if (!current || !c || busy) return
+    if (!current || !c || completeLeadMutation.isPending) return
     pendingDispoRef.current = d
     if (callState !== 'idle') {
       hangup()
@@ -540,9 +510,9 @@ export default function PowerDialer() {
         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Log outcome (optional — advances automatically when the call ends)</p>
         <div className="flex flex-wrap gap-2">
           {DISPOSITIONS.map((d) => (
-            <button key={d.key} onClick={() => disposition(d)} disabled={busy}
+            <button key={d.key} onClick={() => disposition(d)} disabled={completeLeadMutation.isPending}
               className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-sm font-semibold !text-white transition disabled:opacity-50 ${d.tone}`}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <d.icon className="h-4 w-4" />} {d.label}
+              {completeLeadMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <d.icon className="h-4 w-4" />} {d.label}
             </button>
           ))}
         </div>

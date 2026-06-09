@@ -30,11 +30,18 @@ import {
 } from 'lucide-react'
 import Modal from '../components/Modal'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
 import { stripEmDashes } from '../lib/sanitize'
 import { attributionStatusBadge } from '../lib/attribution'
-import { useConsultDetail, useConsultAttribution, queryKeys } from '../lib/queries'
-import { requestAnalysis, transcribeRecording } from '../lib/recording'
+import {
+  useConsultDetail,
+  useConsultAttribution,
+  useMarkConsultWon,
+  useRetryTranscription,
+  useUpdateConsult,
+  isMutating,
+  queryKeys,
+} from '../lib/queries'
+import { requestAnalysis } from '../lib/recording'
 import OutcomeControls from '../components/OutcomeControls'
 import { parseSequenceConfig } from '../lib/sequence'
 import TranscriptViewer from '../components/TranscriptViewer'
@@ -148,20 +155,13 @@ function InfoRow({ icon: Icon, label, value }) {
 }
 
 // Minimal manual patient-info form for consults with no linked PMS appointment.
-function PatientEditModal({ consult, onClose, onSave }) {
+function PatientEditModal({ consult, onClose, onSave, saving }) {
   const [form, setForm] = useState({
     patient_name: consult.patient_name || '',
     patient_phone: consult.patient_phone || '',
     patient_email: consult.patient_email || '',
   })
-  const [saving, setSaving] = useState(false)
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
-
-  async function submit() {
-    setSaving(true)
-    await onSave(form)
-    setSaving(false)
-  }
 
   return (
     <Modal
@@ -170,7 +170,7 @@ function PatientEditModal({ consult, onClose, onSave }) {
       footer={
         <>
           <button onClick={onClose} className="btn-ghost">Cancel</button>
-          <button onClick={submit} disabled={saving} className="btn-primary">
+          <button onClick={() => onSave(form)} disabled={saving} className="btn-primary">
             {saving && <Loader2 className="h-4 w-4 animate-spin" />} Save
           </button>
         </>
@@ -225,10 +225,15 @@ export default function ConsultDetail() {
   }
 
   // Inline editing of the treatment-plan value.
+  const updateConsult = useUpdateConsult()
+  const retryTranscriptionMutation = useRetryTranscription()
+
   const [editingTx, setEditingTx] = useState(false)
   const [txInput, setTxInput] = useState('')
-  const [savingTx, setSavingTx] = useState(false)
-  const [savingTreatment, setSavingTreatment] = useState(false)
+  const savingTreatment = isMutating(updateConsult, (v) => v.consultId === id && 'treatment_type' in (v.patch || {}))
+  const savingTx = isMutating(updateConsult, (v) => v.consultId === id && ('tx_plan_value' in (v.patch || {}) || v.patch?.tx_plan_value_source === null))
+  const savingPatient = isMutating(updateConsult, (v) => v.consultId === id && 'patient_name' in (v.patch || {}))
+  const retryingTranscription = retryTranscriptionMutation.isPending
 
   // Activation hold (hours) from the practice's sequence settings; drives the
   // countdown before the first follow-up message can send.
@@ -275,73 +280,47 @@ export default function ConsultDetail() {
   }, [stillProcessing, consult?.id])
 
   const transcriptionError = consult?.status === 'transcription_error'
-  const [retryingTranscription, setRetryingTranscription] = useState(false)
 
   async function retryTranscription() {
     if (!consult?.id) return
-    setRetryingTranscription(true)
     triggeredRef.current = false
     try {
-      if (consult.audio_storage_path) {
-        await transcribeRecording({
-          consultId: consult.id,
-          audioPath: consult.audio_storage_path,
-          durationSec: consult.duration,
-          patient: {
-            firstName: consult.patient_first,
-            lastName: consult.patient_last,
-            phone: consult.patient_phone,
-            email: consult.patient_email,
-          },
-        })
-        refreshConsult()
-      } else {
-        const { error } = await supabase.from('consults').update({ status: 'analyzing', transcript_error: null }).eq('id', consult.id)
-        if (!error) patchConsult({ status: 'analyzing', transcript_error: null })
-      }
+      const { patch } = await retryTranscriptionMutation.mutateAsync({ consult, practiceId })
+      if (patch) patchConsult(patch)
+      else refreshConsult()
     } catch (e) {
       console.warn('[retry] transcription failed:', e?.message || e)
-      const { error } = await supabase.from('consults').update({ status: 'transcription_error', transcript_error: e?.message || 'Transcription failed' }).eq('id', consult.id)
-      if (!error) patchConsult({ status: 'transcription_error', transcript_error: e?.message || 'Transcription failed' })
     }
-    setRetryingTranscription(false)
   }
 
   async function savePatientInfo(fields) {
-    const { error } = await supabase.from('consults').update(fields).eq('id', consult.id)
-    if (!error) {
+    try {
+      await updateConsult.mutateAsync({ consultId: consult.id, practiceId, patch: fields })
       patchConsult(fields)
       setShowPatientEdit(false)
-    }
+    } catch { /* noop */ }
   }
 
-  // Update the treatment type after recording (it was pulled from the PMS at
-  // record time). Re-running analysis is the TC's choice via "Regenerate".
   async function saveTreatment(value) {
     if (!value || value === consult.treatment_type) return
-    setSavingTreatment(true)
-    const { error } = await supabase.from('consults').update({ treatment_type: value }).eq('id', consult.id)
-    if (!error) patchConsult({ treatment_type: value })
-    setSavingTreatment(false)
+    try {
+      await updateConsult.mutateAsync({ consultId: consult.id, practiceId, patch: { treatment_type: value } })
+      patchConsult({ treatment_type: value })
+    } catch { /* noop */ }
   }
 
-  // Save the manually-entered treatment-plan value. An empty input clears it
-  // (back to estimate / practice-default resolution). Otherwise it's stored with
-  // source = 'manual', which is authoritative everywhere reporting reads tx value.
   async function saveTxValue() {
-    setSavingTx(true)
     const trimmed = txInput.trim()
     const num = Number(trimmed.replace(/[^0-9.]/g, ''))
     const hasValue = trimmed !== '' && Number.isFinite(num) && num > 0
     const patch = hasValue
       ? { tx_plan_value: num, tx_plan_value_source: 'manual' }
       : { tx_plan_value: null, tx_plan_value_source: null }
-    const { error } = await supabase.from('consults').update(patch).eq('id', consult.id)
-    if (!error) {
+    try {
+      await updateConsult.mutateAsync({ consultId: consult.id, practiceId, patch })
       patchConsult(patch)
       setEditingTx(false)
-    }
-    setSavingTx(false)
+    } catch { /* noop */ }
   }
 
   if (loading) {
@@ -773,11 +752,12 @@ export default function ConsultDetail() {
         </div>
 
         {showPatientEdit && (
-          <PatientEditModal consult={consult} onClose={() => setShowPatientEdit(false)} onSave={savePatientInfo} />
+          <PatientEditModal consult={consult} onClose={() => setShowPatientEdit(false)} onSave={savePatientInfo} saving={savingPatient} />
         )}
         {wonOpen && (
           <WonModal
             consult={consult}
+            practiceId={practiceId}
             onClose={() => setWonOpen(false)}
             onWon={(patch) => { patchConsult(patch); setWonOpen(false) }}
           />
@@ -789,16 +769,15 @@ export default function ConsultDetail() {
 
 // "Mark as Won" modal: capture treatment + case value, attest CaseLift assisted,
 // then close the consult and record the (assisted) win server-side.
-function WonModal({ consult, onClose, onWon }) {
+function WonModal({ consult, practiceId, onClose, onWon }) {
+  const markWon = useMarkConsultWon()
   const [treatment, setTreatment] = useState(consult.treatment_type || 'dental_implants')
   const [value, setValue] = useState(String(consult.tx_plan_value ?? consult.case_value ?? ''))
   const [confirmed, setConfirmed] = useState(false)
-  const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   async function submit() {
-    if (!confirmed || busy) return
-    setBusy(true)
+    if (!confirmed || markWon.isPending) return
     setError('')
     const caseValue = Number(value) || 0
     const patch = {
@@ -809,25 +788,20 @@ function WonModal({ consult, onClose, onWon }) {
       tx_plan_value: caseValue,
       tx_plan_value_source: 'manual',
     }
-    const { error: e } = await supabase.from('consults').update(patch).eq('id', consult.id)
-    if (e) { setError(e.message || 'Could not mark as won.'); setBusy(false); return }
-    // Record the assisted win + Slack alert (server-side; no-op if no sequence
-    // messages were sent). Non-blocking — the consult is already marked won.
     try {
-      await supabase.functions.invoke('record-win', {
-        body: { consult_id: consult.id, source: 'manual', case_value: caseValue, treatment_type: treatment },
-      })
-    } catch { /* win logging is best-effort */ }
-    setBusy(false)
-    onWon(patch)
+      await markWon.mutateAsync({ consultId: consult.id, practiceId, patch, caseValue, treatmentType: treatment })
+      onWon(patch)
+    } catch (e) {
+      setError(e?.message || 'Could not mark as won.')
+    }
   }
 
   return (
     <Modal title="Mark as Won" onClose={onClose} maxWidth="max-w-md" footer={
       <>
         <button onClick={onClose} className="btn-ghost">Cancel</button>
-        <button onClick={submit} disabled={!confirmed || busy} className="btn-primary">
-          {busy && <Loader2 className="h-4 w-4 animate-spin" />} Mark as Won
+        <button onClick={submit} disabled={!confirmed || markWon.isPending} className="btn-primary">
+          {markWon.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Mark as Won
         </button>
       </>
     }>

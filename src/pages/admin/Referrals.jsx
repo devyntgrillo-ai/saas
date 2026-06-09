@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { Users, DollarSign, Clock, CheckCircle2, Download, Check, Loader2 } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
-import { useAdminReferrals, queryKeys } from '../../lib/queries'
+import { useAdminReferrals, useMarkReferralPayoutPaid, isMutating } from '../../lib/queries'
 import { StatCard, Table, Badge, money, stop } from '../../components/admin/ui'
 
 const PAYOUT_STATUS = {
@@ -23,11 +21,10 @@ function csvCell(v) {
 }
 
 export default function AdminReferrals() {
-  const queryClient = useQueryClient()
-  const { data, isLoading: loading, refetch } = useAdminReferrals()
+  const { data, isLoading: loading } = useAdminReferrals()
+  const markPaidMutation = useMarkReferralPayoutPaid()
   const relationships = data?.relationships ?? []
   const payouts = data?.payouts ?? []
-  const [busyId, setBusyId] = useState(null)
   const [filter, setFilter] = useState('pending')
 
   // First of the current month, for the "pending this month" stat.
@@ -50,14 +47,8 @@ export default function AdminReferrals() {
     return { activeRelationships, pendingThisMonth, pendingTotal, paidTotal }
   }, [relationships, payouts, monthKey])
 
-  async function markPaid(id) {
-    setBusyId(id)
-    const { error } = await supabase.rpc('admin_mark_payout_paid', { p_payout_id: id })
-    if (!error) {
-      refetch()
-      queryClient.invalidateQueries({ queryKey: queryKeys.admin.referrals() })
-    }
-    setBusyId(null)
+  function markPaid(id) {
+    markPaidMutation.mutate({ payoutId: id })
   }
 
   function exportCsv() {
@@ -101,7 +92,7 @@ export default function AdminReferrals() {
   const head = ['Referring practice', 'Referred practice', 'Month', 'Status', 'Amount', 'Action']
   const rows = visible.map((p) => {
     const meta = PAYOUT_STATUS[p.status] || PAYOUT_STATUS.pending
-    const busy = busyId === p.id
+    const busy = isMutating(markPaidMutation, (v) => v.payoutId === p.id)
     return [
       <span className="font-medium text-slate-100">{p.referring_practice_name}</span>,
       p.referred_practice_name,

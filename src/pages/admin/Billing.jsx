@@ -2,12 +2,18 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { DollarSign, CheckCircle2, AlertCircle, Clock, ExternalLink, Link2, Ban, CalendarPlus, Loader2, Eye, Building2 } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
 import { useAdmin } from '../../context/AdminContext'
-import { useAdminBilling, queryKeys } from '../../lib/queries'
+import {
+  useAdminBilling,
+  useExtendPracticeTrial,
+  useSendBillingPortalLink,
+  useCancelPracticeSubscription,
+  queryKeys,
+  isMutating,
+} from '../../lib/queries'
 import { agencyStatusMeta } from '../../lib/admin'
 import { timeAgo } from '../../lib/consults'
-import { statusMeta as subStatusMeta, cancelSubscription, createPortalSession } from '../../lib/billing'
+import { statusMeta as subStatusMeta } from '../../lib/billing'
 import { StatCard, Table, Badge, Avatar, money, stop } from '../../components/admin/ui'
 
 // Deep-link to a customer in the Chargebee dashboard. Needs the site name
@@ -36,7 +42,9 @@ export default function AdminBilling() {
   const { data: ctx, impersonateAgency } = useAdmin()
   const agencies = ctx?.agencies || []
   const { data: rows = [], isLoading: loading, refetch } = useAdminBilling()
-  const [busyId, setBusyId] = useState(null)
+  const portalMutation = useSendBillingPortalLink()
+  const cancelMutation = useCancelPracticeSubscription()
+  const extendTrialMutation = useExtendPracticeTrial()
   const [flash, setFlash] = useState('')
 
   const reload = () => {
@@ -62,48 +70,52 @@ export default function AdminBilling() {
     setTimeout(() => setFlash(''), 4000)
   }
 
-  async function sendPortalLink(r) {
-    setBusyId(r.id)
-    try {
-      const url = await createPortalSession(r.id)
-      try { await navigator.clipboard.writeText(url) } catch { /* clipboard unavailable */ }
-      note(`Portal link generated for ${r.name} - copied to clipboard.`)
-    } catch (e) {
-      note(e?.message || 'Could not generate a portal link.')
-    } finally {
-      setBusyId(null)
-    }
+  function sendPortalLink(r) {
+    portalMutation.mutate(
+      { practiceId: r.id },
+      {
+        onSuccess: () => note(`Portal link generated for ${r.name} - copied to clipboard.`),
+        onError: (e) => note(e?.message || 'Could not generate a portal link.'),
+      },
+    )
   }
 
-  async function cancelSub(r) {
+  function cancelSub(r) {
     if (!confirm(`Cancel the subscription for ${r.name}? They keep access until the end of the paid period.`)) return
-    setBusyId(r.id)
-    try {
-      await cancelSubscription(r.id)
-      note(`Subscription cancelled for ${r.name}.`)
-      await reload()
-    } catch (e) {
-      note(e?.message || 'Cancel failed.')
-    } finally {
-      setBusyId(null)
-    }
+    cancelMutation.mutate(
+      { practiceId: r.id },
+      {
+        onSuccess: async () => {
+          note(`Subscription cancelled for ${r.name}.`)
+          await reload()
+        },
+        onError: (e) => note(e?.message || 'Cancel failed.'),
+      },
+    )
   }
 
-  async function extendTrial(r, days) {
-    setBusyId(r.id)
+  function extendTrial(r, days) {
     const base = r.trial_ends_at && new Date(r.trial_ends_at) > new Date() ? new Date(r.trial_ends_at) : new Date()
     base.setDate(base.getDate() + days)
-    const { error } = await supabase.from('practices').update({ trial_ends_at: base.toISOString() }).eq('id', r.id)
-    if (error) note(error.message)
-    else { note(`Extended ${r.name}'s trial by ${days} days.`); await reload() }
-    setBusyId(null)
+    extendTrialMutation.mutate(
+      { practiceId: r.id, trialEndsAt: base.toISOString() },
+      {
+        onSuccess: async () => {
+          note(`Extended ${r.name}'s trial by ${days} days.`)
+          await reload()
+        },
+        onError: (e) => note(e.message),
+      },
+    )
   }
 
   const head = ['Practice', 'Contact', 'Email', 'PMS', 'Plan', 'Status', 'Signup', 'Actions']
   const tableRows = rows.map((r) => {
     const status = r.subscription_status || 'trial'
     const meta = subStatusMeta(status)
-    const busy = busyId === r.id
+    const busy = isMutating(portalMutation, (v) => v.practiceId === r.id)
+      || isMutating(cancelMutation, (v) => v.practiceId === r.id)
+      || isMutating(extendTrialMutation, (v) => v.practiceId === r.id)
     const amount = Number(r.plan_amount) || 997
     return [
       <span className="font-medium text-slate-100">{r.name}</span>,

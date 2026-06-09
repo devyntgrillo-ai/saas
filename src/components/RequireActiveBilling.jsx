@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Outlet, Link } from 'react-router-dom'
 import { Lock, Loader2, CreditCard } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { isBillingBlocked, createPortalSession } from '../lib/billing'
+import { isBillingBlocked } from '../lib/billing'
+import { useOpenBillingPortal } from '../lib/queries'
 
 // Route guard: blocks the core app (Consults/Conversations/Performance/KB/
 // Training) when the practice's subscription is past_due/unpaid/cancelled/
@@ -10,20 +11,19 @@ import { isBillingBlocked, createPortalSession } from '../lib/billing'
 // the app shell so the sidebar (and thus Settings) remains available.
 export default function RequireActiveBilling() {
   const { practice } = useAuth()
-  const [busy, setBusy] = useState(false)
+  const openPortal = useOpenBillingPortal()
   const [err, setErr] = useState('')
 
   if (!isBillingBlocked(practice)) return <Outlet />
 
   async function updatePayment() {
-    if (!practice?.id) return
-    setBusy(true)
+    if (!practice?.id || openPortal.isPending) return
     setErr('')
     try {
-      window.location.href = await createPortalSession(practice.id)
+      const { url } = await openPortal.mutateAsync({ practiceId: practice.id })
+      window.location.href = url
     } catch (e) {
       setErr(e?.message || 'Could not open the billing portal. Please try again.')
-      setBusy(false)
     }
   }
 
@@ -40,8 +40,8 @@ export default function RequireActiveBilling() {
         {err && (
           <p className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{err}</p>
         )}
-        <button onClick={updatePayment} disabled={busy} className="btn-primary mt-5 w-full">
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+        <button onClick={updatePayment} disabled={openPortal.isPending} className="btn-primary mt-5 w-full">
+          {openPortal.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
           Update Payment Method
         </button>
         <Link to="/settings/billing" className="mt-3 inline-block text-sm text-slate-400 transition hover:text-slate-200">

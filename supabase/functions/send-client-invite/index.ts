@@ -21,6 +21,7 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
+import { acceptInviteRedirectUrl } from "../_shared/invite.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
 import { isSuperAdminUser } from "../_shared/admin.ts";
 
@@ -179,18 +180,26 @@ Deno.serve(async (req: Request) => {
     if (practiceErr) throw practiceErr;
     const practiceId = practice.id;
 
-    // --- 3) Generate the Supabase magic invite link. ---
-    const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
-      type: "invite",
-      email: ownerEmail,
-    });
-    if (linkErr || !linkData?.properties?.action_link) {
+    // --- 3) Generate a shareable link, then email it. Prefer "invite"; fall back
+    //         to magiclink when the email already belongs to an auth user. ---
+    const redirectTo = acceptInviteRedirectUrl(body.app_origin as string | undefined);
+    async function makeLink(type: "invite" | "magiclink") {
+      const { data, error } = await admin.auth.admin.generateLink({
+        type,
+        email: ownerEmail,
+        options: { redirectTo },
+      });
+      if (error) console.warn(`send-client-invite: generateLink(${type}) failed:`, error.message);
+      return error || !data?.properties?.action_link ? null : data;
+    }
+    const linkData = (await makeLink("invite")) ?? (await makeLink("magiclink"));
+    if (!linkData) {
       // The practice was created; surface a partial success so the caller can retry.
       return json(
         {
           practice_id: practiceId,
           invite_token: inviteToken,
-          warning: `Practice created, but invite link failed: ${linkErr?.message ?? "no link returned"}`,
+          warning: "Practice created, but an invite link could not be generated. Resend the invite from the practice list.",
         },
         207,
       );

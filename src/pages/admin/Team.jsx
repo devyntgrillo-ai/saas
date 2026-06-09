@@ -2,8 +2,7 @@ import { useMemo, useState } from 'react'
 import { Users, Search, Loader2, Plus, Shield, Send, Copy, Check, UserMinus, Pencil } from 'lucide-react'
 import Modal from '../../components/Modal'
 import { useAdmin } from '../../context/AdminContext'
-import { useAdminUsers } from '../../lib/queries'
-import { supabase } from '../../lib/supabase'
+import { useAdminUsers, useAdminUserAction, isMutating } from '../../lib/queries'
 import { StatCard, Table, Badge, stop } from '../../components/admin/ui'
 
 const SUPER_ADMIN_EMAIL = 'devyntgrillo@gmail.com'
@@ -40,7 +39,7 @@ export default function AdminTeam() {
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
   const [editing, setEditing] = useState(null) // user object, or 'new'
-  const [busyId, setBusyId] = useState(null)
+  const adminUserAction = useAdminUserAction()
   const [flash, setFlash] = useState('')
 
   const agencies = ctx?.agencies || []
@@ -74,16 +73,12 @@ export default function AdminTeam() {
 
   async function removeUser(u) {
     if (!confirm(`Remove access for ${u.email}? They lose all access (account is kept, not deleted) and can be re-granted later.`)) return
-    setBusyId(u.id)
     try {
-      const { data, error } = await supabase.functions.invoke('admin-users', { body: { action: 'remove', user_id: u.id, mode: 'revoke' } })
-      if (error) throw new Error(data?.error || error.message)
+      await adminUserAction.mutateAsync({ action: 'remove', user_id: u.id, mode: 'revoke' })
       note(`Access removed for ${u.email}.`)
       await refetch()
     } catch (e) {
       note(e?.message || 'Could not remove access.')
-    } finally {
-      setBusyId(null)
     }
   }
 
@@ -125,7 +120,7 @@ export default function AdminTeam() {
         <Table
           head={['User', 'Access', 'Scope', 'Joined', '']}
           rows={rows.map(({ u, meta }) => {
-            const busy = busyId === u.id
+            const busy = isMutating(adminUserAction, (v) => v.action === 'remove' && v.user_id === u.id)
             return [
               <div className="leading-tight">
                 <div className="font-medium text-slate-100">{u.display_name || u.email}</div>
@@ -163,6 +158,7 @@ export default function AdminTeam() {
 }
 
 function UserAccessModal({ existing, agencies, practices, onClose, onSaved }) {
+  const adminUserAction = useAdminUserAction()
   const isEdit = Boolean(existing)
   const initial = isEdit ? classify(existing) : { kind: 'practice' }
   const [email, setEmail] = useState(existing?.email || '')
@@ -176,7 +172,6 @@ function UserAccessModal({ existing, agencies, practices, onClose, onSaved }) {
   )
   const [agencyId, setAgencyId] = useState(existing?.agencies?.[0]?.agency?.id || agencies[0]?.id || '')
   const [practiceId, setPracticeId] = useState(existing?.practice?.id || practices[0]?.id || '')
-  const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [link, setLink] = useState('')
   const [copied, setCopied] = useState(false)
@@ -186,22 +181,18 @@ function UserAccessModal({ existing, agencies, practices, onClose, onSaved }) {
     if (!isEdit && !email.trim()) return setError('Email is required.')
     if (access === 'reseller' && !agencyId) return setError('Select a reseller.')
     if (access === 'practice' && !practiceId) return setError('Select a subaccount.')
-    setBusy(true)
     try {
       const payload = isEdit
         ? { action: 'set_access', user_id: existing.id, access, role, agency_id: access === 'reseller' ? agencyId : null, practice_id: access === 'practice' ? practiceId : null }
         : { action: 'invite', email: email.trim().toLowerCase(), access, role, agency_id: access === 'reseller' ? agencyId : null, practice_id: access === 'practice' ? practiceId : null, app_origin: window.location.origin }
-      const { data, error: e } = await supabase.functions.invoke('admin-users', { body: payload })
-      if (e) throw new Error(data?.error || e.message)
+      const data = await adminUserAction.mutateAsync(payload)
       if (!isEdit && data?.invite_link && !data?.email_sent) {
-        setLink(data.invite_link) // show copyable link if email didn't go out
-        setBusy(false)
+        setLink(data.invite_link)
         return
       }
       onSaved(isEdit ? `Updated access for ${existing.email}.` : `Invite sent to ${email}.`)
     } catch (e) {
       setError(e?.message || 'Something went wrong.')
-      setBusy(false)
     }
   }
 
@@ -220,8 +211,8 @@ function UserAccessModal({ existing, agencies, practices, onClose, onSaved }) {
       ) : (
         <>
           <button onClick={onClose} className="btn-ghost">Cancel</button>
-          <button onClick={save} disabled={busy} className="btn-primary">
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          <button onClick={save} disabled={adminUserAction.isPending} className="btn-primary">
+            {adminUserAction.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             {isEdit ? 'Save access' : 'Send invite'}
           </button>
         </>

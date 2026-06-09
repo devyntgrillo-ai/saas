@@ -42,7 +42,13 @@ import CancellationFlow from '../components/CancellationFlow'
 import InviteModal from '../components/InviteModal'
 import Modal from '../components/Modal'
 import { usePermissions, ACCESS_LABELS } from '../lib/permissions'
-import { usePracticeTeam, useRemoveTeamMember, useRevokeInvitation, useResendInvitation } from '../lib/queries'
+import {
+  usePracticeTeam,
+  useRemoveTeamMember,
+  useRevokeInvitation,
+  useResendInvitation,
+  useUpdatePractice,
+} from '../lib/queries'
 import { TREATMENT_TYPES } from '../lib/treatments'
 import {
   PLAN_NAME,
@@ -120,7 +126,7 @@ export default function Settings() {
     if (tabParam === 'phone') navigate('/settings/messaging', { replace: true })
   }, [tabParam, navigate])
   const [form, setForm] = useState({})
-  const [saving, setSaving] = useState(false)
+  const updatePractice = useUpdatePractice()
   const [savedFlash, setSavedFlash] = useState('')
   const [saveError, setSaveError] = useState('')
   const [showCancel, setShowCancel] = useState(false)
@@ -193,28 +199,21 @@ export default function Settings() {
       )
       return
     }
-    setSaving(true)
+    if (updatePractice.isPending) return
     setSaveError('')
-    const { data, error } = await supabase
-      .from('practices')
-      .update(patch)
-      .eq('id', practice.id)
-      .select('id')
-      .maybeSingle()
-    setSaving(false)
-    if (error) {
+    try {
+      await updatePractice.mutateAsync({ practiceId: practice.id, patch })
+    } catch (error) {
       setSaveError(error.message || 'Could not save changes.')
       return error
-    }
-    if (!data) {
-      setSaveError('Could not save changes. You may not have permission to update this practice.')
-      return new Error('no rows updated')
     }
     setSavedFlash(flash)
     setTimeout(() => setSavedFlash(''), 2500)
     await refreshProfile()
     return null
   }
+
+  const saving = updatePractice.isPending
 
   if (profileLoading) {
     return (
@@ -862,7 +861,6 @@ function PracticeTeamPanel({ practice }) {
   const members = data?.members ?? []
   const pending = data?.pending ?? []
   const [invite, setInvite] = useState(false)
-  const [busyInvite, setBusyInvite] = useState(null)
   const [flash, setFlash] = useState('')
 
   function note(msg) {
@@ -870,24 +868,25 @@ function PracticeTeamPanel({ practice }) {
     setTimeout(() => setFlash(''), 6000)
   }
 
-  async function removeMember(id) {
-    await removeMemberMutation.mutateAsync({ userId: id, practiceId: practice.id })
+  function removeMember(id) {
+    removeMemberMutation.mutate({ userId: id, practiceId: practice.id })
   }
-  async function cancelInvite(id) {
-    await revokeInviteMutation.mutateAsync({ invitationId: id, practiceId: practice.id })
+  function cancelInvite(id) {
+    revokeInviteMutation.mutate({ invitationId: id, practiceId: practice.id })
   }
   async function resendInvite(inv) {
-    setBusyInvite(inv.id)
     try {
-      const res = await resendInviteMutation.mutateAsync({ token: inv.token })
+      const res = await resendInviteMutation.mutateAsync({ token: inv.token, invitationId: inv.id })
       if (res?.email_sent) note(`Invite re-sent to ${inv.email}.`)
       else note(`Couldn't email ${inv.email}${res?.reason ? ` (${res.reason})` : ''} - share the invite link from the modal instead.`)
     } catch (e) {
       note(e?.message || 'Could not resend invite.')
-    } finally {
-      setBusyInvite(null)
     }
   }
+
+  const removingId = removeMemberMutation.isPending ? removeMemberMutation.variables?.userId : null
+  const revokingId = revokeInviteMutation.isPending ? revokeInviteMutation.variables?.invitationId : null
+  const resendingId = resendInviteMutation.isPending ? resendInviteMutation.variables?.invitationId : null
 
   return (
     <div className="space-y-4">
@@ -927,8 +926,8 @@ function PracticeTeamPanel({ practice }) {
                   <p className="text-xs capitalize text-slate-500">{ACCESS_LABELS[`practice_${m.role}`] || m.role}</p>
                 </div>
                 {perms.canInvite && m.id !== user?.id && (
-                  <button onClick={() => removeMember(m.id)} className="rounded-md p-2 text-slate-500 transition hover:bg-surface-800 hover:text-rose-400" title="Remove">
-                    <Trash2 className="h-4 w-4" />
+                  <button onClick={() => removeMember(m.id)} disabled={removingId === m.id} className="rounded-md p-2 text-slate-500 transition hover:bg-surface-800 hover:text-rose-400 disabled:opacity-50" title="Remove">
+                    {removingId === m.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                   </button>
                 )}
               </li>
@@ -966,13 +965,14 @@ function PracticeTeamPanel({ practice }) {
                   <div className="flex shrink-0 items-center gap-3">
                     <button
                       onClick={() => resendInvite(i)}
-                      disabled={busyInvite === i.id || !i.token}
+                      disabled={resendingId === i.id || !i.token}
                       className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-300 transition hover:text-primary-200 disabled:opacity-50"
                     >
-                      {busyInvite === i.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                      {resendingId === i.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                       Resend
                     </button>
-                    <button onClick={() => cancelInvite(i.id)} className="text-xs font-medium text-slate-500 transition hover:text-rose-300">
+                    <button onClick={() => cancelInvite(i.id)} disabled={revokingId === i.id} className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 transition hover:text-rose-300 disabled:opacity-50">
+                      {revokingId === i.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                       Cancel
                     </button>
                   </div>

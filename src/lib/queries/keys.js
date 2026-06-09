@@ -54,6 +54,7 @@ export const queryKeys = {
   notifications: (practiceId) => ['practice', practiceId, 'notifications'],
   globalSearch: (practiceId, term) => ['practice', practiceId, 'search', term],
   knowledgeBase: (practiceId) => ['practice', practiceId, 'knowledge-base'],
+  practiceKb: (practiceId) => ['practice', practiceId, 'practice-kb'],
   practiceTeam: (practiceId) => ['practice', practiceId, 'team'],
   pmsToday: (practiceId) => ['practice', practiceId, 'pms-today'],
   recordingRate: (practiceId, weeks = 4) => ['practice', practiceId, 'recording-rate', weeks],

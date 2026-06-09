@@ -1,20 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, UserCog, Ban, Eye, Check, Plus, Loader2 } from 'lucide-react'
+import { ArrowLeft, UserCog, Ban, Eye, Check, Plus, Loader2, Mail } from 'lucide-react'
 import Modal from '../../components/Modal'
 import { useAdmin } from '../../context/AdminContext'
 import { agencyStatusMeta } from '../../lib/admin'
 import { statusMeta as subStatusMeta } from '../../lib/billing'
 import { timeAgo } from '../../lib/consults'
-import { supabase } from '../../lib/supabase'
+import {
+  useToggleAgencySuspended,
+  useResendAgencyOwnerInvite,
+  useAssignReferredPractice,
+  useUpdateAgencyAdminNotes,
+} from '../../lib/queries'
 import { StatCard, Table, Badge, Avatar, money, stop } from '../../components/admin/ui'
 
 export default function AgencyDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { data, refresh, impersonateAgency, impersonatePractice } = useAdmin()
+  const toggleSuspendMutation = useToggleAgencySuspended()
+  const resendInviteMutation = useResendAgencyOwnerInvite()
   const [confirmSuspend, setConfirmSuspend] = useState(false)
   const [assigning, setAssigning] = useState(false)
+  const [inviteLink, setInviteLink] = useState('')
+  const [inviteNotice, setInviteNotice] = useState('')
 
   const agency = data.agencies.find((a) => String(a.id) === String(id))
   if (!agency) {
@@ -31,13 +40,39 @@ export default function AgencyDetail() {
   const recovered = practices.reduce((s, p) => s + (p.recovered || 0), 0)
   const meta = agencyStatusMeta(agency.status)
 
-  async function suspend() {
-    if (!String(agency.id).startsWith('demo-')) {
-      try { await supabase.from('agency_accounts').update({ active: agency.status === 'suspended', status: agency.status === 'suspended' ? 'active' : 'suspended' }).eq('id', agency.id) } catch { /* noop */ }
-      await refresh()
-    }
-    setConfirmSuspend(false)
+  function resendOwnerInvite() {
+    if (!agency.owner_email || resendInviteMutation.isPending) return
+    setInviteLink('')
+    setInviteNotice('')
+    resendInviteMutation.mutate(
+      { agencyId: agency.id, ownerEmail: agency.owner_email },
+      {
+        onSuccess: async (data) => {
+          await refresh()
+          if (data.emailSent) setInviteNotice(`Invite email sent to ${agency.owner_email}.`)
+          else if (data.inviteLink) {
+            setInviteLink(data.inviteLink)
+            setInviteNotice('Email could not be sent. Copy the invite link below and share it with the owner.')
+          } else setInviteNotice('Invite processed, but no confirmation was returned.')
+        },
+        onError: (e) => setInviteNotice(e.message || 'Could not send invite.'),
+      },
+    )
   }
+
+  function suspend() {
+    if (String(agency.id).startsWith('demo-')) {
+      setConfirmSuspend(false)
+      return
+    }
+    toggleSuspendMutation.mutate(
+      { agencyId: agency.id, currentlySuspended: agency.status === 'suspended' },
+      { onSuccess: async () => { await refresh(); setConfirmSuspend(false) } },
+    )
+  }
+
+  const suspending = toggleSuspendMutation.isPending
+  const resendingInvite = resendInviteMutation.isPending
 
   return (
     <div className="space-y-8">
@@ -59,7 +94,18 @@ export default function AgencyDetail() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {agency.owner_email && (
+            <button
+              onClick={resendOwnerInvite}
+              disabled={resendingInvite}
+              className="btn-ghost text-slate-200"
+              title="Send setup email to reseller owner"
+            >
+              {resendingInvite ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+              Resend owner invite
+            </button>
+          )}
           <button onClick={() => setAssigning(true)} className="btn-primary">
             <Plus className="h-4 w-4" /> Assign a practice
           </button>
@@ -71,6 +117,24 @@ export default function AgencyDetail() {
           </button>
         </div>
       </div>
+
+      {(inviteNotice || inviteLink) && (
+        <div className={`rounded-lg border px-3 py-2.5 text-sm ${inviteLink ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'}`}>
+          <p>{inviteNotice}</p>
+          {inviteLink && (
+            <div className="mt-2 flex gap-2">
+              <input className="input flex-1 text-xs" readOnly value={inviteLink} />
+              <button
+                type="button"
+                onClick={() => navigator.clipboard.writeText(inviteLink)}
+                className="btn-ghost shrink-0 text-xs"
+              >
+                Copy
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
@@ -121,7 +185,10 @@ export default function AgencyDetail() {
         <Modal title={agency.status === 'suspended' ? 'Reactivate reseller?' : 'Suspend reseller?'} onClose={() => setConfirmSuspend(false)} footer={
           <>
             <button onClick={() => setConfirmSuspend(false)} className="btn-ghost">Cancel</button>
-            <button onClick={suspend} className="btn-primary bg-rose-600 hover:bg-rose-500">{agency.status === 'suspended' ? 'Reactivate' : 'Suspend'}</button>
+            <button onClick={suspend} disabled={suspending} className="btn-primary inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-70">
+              {suspending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {agency.status === 'suspended' ? 'Reactivate' : 'Suspend'}
+            </button>
           </>
         }>
           <p className="text-sm text-slate-300">
@@ -139,27 +206,24 @@ export default function AgencyDetail() {
 // attribution + co-brand inheritance) and fires the commission email, both via
 // the assign-referred-practice edge function.
 function AssignPracticeModal({ agency, practices, onClose, onSaved }) {
+  const assignMutation = useAssignReferredPractice()
   const available = (practices || []).filter((p) => !p.agency_id && !p.archived_at)
   const [selected, setSelected] = useState('')
-  const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  async function save() {
-    if (!selected) return
-    setBusy(true)
+  function save() {
+    if (!selected || assignMutation.isPending) return
     setError('')
-    try {
-      const { data, error: e } = await supabase.functions.invoke('assign-referred-practice', {
-        body: { practice_id: selected, agency_id: agency.id },
-      })
-      if (e) throw new Error(data?.error || e.message)
-      if (data?.error) throw new Error(data.error)
-      onSaved()
-    } catch (e2) {
-      setError(e2.message || 'Could not assign the practice.')
-      setBusy(false)
-    }
+    assignMutation.mutate(
+      { practiceId: selected, agencyId: agency.id },
+      {
+        onSuccess: () => onSaved(),
+        onError: (e) => setError(e.message || 'Could not assign the practice.'),
+      },
+    )
   }
+
+  const busy = assignMutation.isPending
 
   return (
     <Modal
@@ -235,9 +299,9 @@ function Row({ label, value }) {
 
 // Auto-saving internal notes (super-admin only).
 function InternalNotes({ agency, onSaved }) {
+  const updateNotesMutation = useUpdateAgencyAdminNotes()
   const [value, setValue] = useState(agency.notes || '')
   const [savedAt, setSavedAt] = useState(null)
-  const [saving, setSaving] = useState(false)
   const timer = useRef(null)
 
   useEffect(() => () => clearTimeout(timer.current), [])
@@ -245,16 +309,25 @@ function InternalNotes({ agency, onSaved }) {
   function onChange(e) {
     setValue(e.target.value)
     clearTimeout(timer.current)
-    timer.current = setTimeout(async () => {
-      setSaving(true)
-      if (!String(agency.id).startsWith('demo-')) {
-        try { await supabase.from('agency_accounts').update({ admin_notes: e.target.value }).eq('id', agency.id) } catch { /* noop */ }
+    timer.current = setTimeout(() => {
+      if (String(agency.id).startsWith('demo-')) {
+        setSavedAt(new Date())
+        onSaved?.()
+        return
       }
-      setSaving(false)
-      setSavedAt(new Date())
-      onSaved?.()
+      updateNotesMutation.mutate(
+        { agencyId: agency.id, notes: e.target.value },
+        {
+          onSuccess: () => {
+            setSavedAt(new Date())
+            onSaved?.()
+          },
+        },
+      )
     }, 900)
   }
+
+  const saving = updateNotesMutation.isPending
 
   return (
     <div className="card p-5">

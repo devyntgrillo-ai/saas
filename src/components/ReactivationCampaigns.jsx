@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { Megaphone, X, Check, Loader2, ChevronRight, ChevronLeft, Pause, Play, Search, Rocket, MessageSquare, Mail } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
 import { treatmentLabel } from '../lib/treatments'
 import { REACTIVATION_TOKENS, replaceTokens, formatTxDate } from '../lib/reactivationTokens'
-import { useReactivationCampaigns, useReactivationAudience, queryKeys } from '../lib/queries'
+import {
+  useReactivationCampaigns,
+  useReactivationAudience,
+  useToggleReactivationCampaign,
+  useLaunchReactivationCampaign,
+  isMutating,
+} from '../lib/queries'
 
 // Treatment options for the Step 1 multi-select (spec list). No boxes checked =
 // all treatment plans (no filter).
@@ -115,14 +119,11 @@ export function ReactivationLaunchButton({ onClick }) {
 
 export default function ReactivationCampaigns({ building = false, onCloseBuilder, showList = true }) {
   const { practiceId } = useAuth()
-  const queryClient = useQueryClient()
   const { data: campaigns = [], refetch: refetchCampaigns } = useReactivationCampaigns(practiceId)
+  const toggleMutation = useToggleReactivationCampaign()
 
-  async function toggle(c) {
-    const next = c.status === 'paused' ? 'active' : 'paused'
-    await supabase.from('reactivation_campaigns').update({ status: next }).eq('id', c.id)
-    refetchCampaigns()
-    queryClient.invalidateQueries({ queryKey: queryKeys.reactivation(practiceId) })
+  function toggle(c) {
+    toggleMutation.mutate({ campaignId: c.id, practiceId, status: c.status })
   }
 
   return (
@@ -138,8 +139,8 @@ export default function ReactivationCampaigns({ building = false, onCloseBuilder
               </div>
               <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_PILL[c.status] || STATUS_PILL.draft}`}>{c.status}</span>
               {['active', 'paused', 'scheduled'].includes(c.status) && (
-                <button onClick={() => toggle(c)} className="rounded-md p-1.5 text-slate-400 transition hover:bg-surface-700 hover:text-slate-100">
-                  {c.status === 'paused' ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                <button onClick={() => toggle(c)} disabled={isMutating(toggleMutation, (v) => v.campaignId === c.id)} className="rounded-md p-1.5 text-slate-400 transition hover:bg-surface-700 hover:text-slate-100 disabled:opacity-50">
+                  {isMutating(toggleMutation, (v) => v.campaignId === c.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : c.status === 'paused' ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
                 </button>
               )}
             </div>
@@ -214,6 +215,7 @@ function MessageEditor({ channel, day, subject, setSubject, body, setBody, onRes
 
 function CampaignBuilder({ practiceId, onClose, onLaunched }) {
   const { practice } = useAuth()
+  const launchMutation = useLaunchReactivationCampaign()
   const [step, setStep] = useState(1)
   const [txStart, setTxStart] = useState(daysAgoCA(365))
   const [txEnd, setTxEnd] = useState(daysAgoCA(14))
@@ -227,8 +229,6 @@ function CampaignBuilder({ practiceId, onClose, onLaunched }) {
   const [msg3Body, setMsg3Body] = useState(ANGLE_BY_KEY.gentle.msg3Body)
   const [pendingAngle, setPendingAngle] = useState(null)
   const [swapping, setSwapping] = useState(false)
-  const [busy, setBusy] = useState(false)
-
   const filters = useMemo(
     () => ({ startDate: txStart, endDate: txEnd, treatmentTypes: [...treatmentTypes] }),
     [txStart, txEnd, treatmentTypes],
@@ -302,47 +302,50 @@ function CampaignBuilder({ practiceId, onClose, onLaunched }) {
   // Live preview filled with the first selected patient (or a sample).
   const previewPatient = useMemo(() => matches.find((m) => selected.has(m.id)) || matches[0] || {}, [matches, selected])
 
-  async function launch(asDraft) {
-    setBusy(true)
+  function launch(asDraft) {
+    if (launchMutation.isPending) return
     const nowIso = new Date().toISOString()
-    const { data: campaign, error } = await supabase.from('reactivation_campaigns').insert({
-      practice_id: practiceId,
-      campaign_name: autoName,
-      angle_type: angleKey,
-      message_1_sms: msg1,
-      message_2_sms: msg2,
-      message_3_email_subject: msg3Subject,
-      message_3_email_body: msg3Body,
-      tx_date_start: txStart,
-      tx_date_end: txEnd,
-      treatment_types: [...treatmentTypes],
-      total_recipients: selected.size,
-      messages_per_day: 50,
-      status: asDraft ? 'draft' : 'active',
-      scheduled_start: nowIso,
-      started_at: asDraft ? null : nowIso,
-      launched_at: asDraft ? null : nowIso,
-    }).select('id').single()
-    if (!error && campaign) {
-      const rows = matches.filter((m) => selected.has(m.id)).map((m) => {
-        const parts = (m.patient_name || '').trim().split(/\s+/)
-        return {
-          campaign_id: campaign.id,
+    const enrollments = matches.filter((m) => selected.has(m.id)).map((m) => {
+      const parts = (m.patient_name || '').trim().split(/\s+/)
+      return {
+        practice_id: practiceId,
+        consult_id: m.id,
+        patient_first: m.patient_first || parts[0] || 'Patient',
+        patient_last: m.patient_last || parts.slice(1).join(' ') || '',
+        patient_phone: m.patient_phone,
+        patient_email: m.patient_email,
+        treatment_type: m.treatment_type,
+        tx_plan_date: (m.created_at || '').slice(0, 10) || null,
+      }
+    })
+    launchMutation.mutate(
+      {
+        practiceId,
+        campaign: {
           practice_id: practiceId,
-          consult_id: m.id,
-          patient_first: m.patient_first || parts[0] || 'Patient',
-          patient_last: m.patient_last || parts.slice(1).join(' ') || '',
-          patient_phone: m.patient_phone,
-          patient_email: m.patient_email,
-          treatment_type: m.treatment_type,
-          tx_plan_date: (m.created_at || '').slice(0, 10) || null,
-        }
-      })
-      for (let i = 0; i < rows.length; i += 200) await supabase.from('reactivation_enrollments').insert(rows.slice(i, i + 200))
-    }
-    setBusy(false)
-    onLaunched()
+          campaign_name: autoName,
+          angle_type: angleKey,
+          message_1_sms: msg1,
+          message_2_sms: msg2,
+          message_3_email_subject: msg3Subject,
+          message_3_email_body: msg3Body,
+          tx_date_start: txStart,
+          tx_date_end: txEnd,
+          treatment_types: [...treatmentTypes],
+          total_recipients: selected.size,
+          messages_per_day: 50,
+          status: asDraft ? 'draft' : 'active',
+          scheduled_start: nowIso,
+          started_at: asDraft ? null : nowIso,
+          launched_at: asDraft ? null : nowIso,
+        },
+        enrollments,
+      },
+      { onSuccess: () => onLaunched() },
+    )
   }
+
+  const busy = launchMutation.isPending
 
   const steps = ['Filter', 'Preview', 'Messages', 'Launch']
 

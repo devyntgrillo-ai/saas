@@ -12,7 +12,8 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { searchNumbers, purchaseNumber, registerA2P, pollA2PStatus } from '../lib/messaging'
+import { searchNumbers, pollA2PStatus } from '../lib/messaging'
+import { usePurchasePhoneNumber, useRegisterA2P } from '../lib/queries'
 
 const DEFAULT_SAMPLES = [
   'Hi [name], following up on your implant consult. Any questions about your treatment plan? Reply STOP to opt out.',
@@ -31,7 +32,8 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
   const [searched, setSearched] = useState(false)
   const [searching, setSearching] = useState(false)
   const [selected, setSelected] = useState(null)
-  const [busy, setBusy] = useState(false)
+  const purchaseMutation = usePurchasePhoneNumber()
+  const registerA2PMutation = useRegisterA2P()
   const [error, setError] = useState('')
   const [biz, setBiz] = useState({
     legal_name: practiceName || '',
@@ -143,30 +145,26 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
   }
 
   async function confirmPurchase() {
-    setBusy(true)
     setError('')
     try {
-      await purchaseNumber(practiceId, selected.phone_number)
+      await purchaseMutation.mutateAsync({ practiceId, phoneNumber: selected.phone_number })
       setStep(3)
     } catch (e) {
       setError(e.message || 'Purchase failed')
-    } finally {
-      setBusy(false)
     }
   }
 
   async function submitA2P() {
-    setBusy(true)
     setError('')
     try {
-      await registerA2P(practiceId, biz)
+      await registerA2PMutation.mutateAsync({ practiceId, business: biz })
       setStep(4)
     } catch (e) {
       setError(e.message || 'Registration failed')
-    } finally {
-      setBusy(false)
     }
   }
+
+  const busy = purchaseMutation.isPending || registerA2PMutation.isPending
 
   const stepLabels = ['Search', 'Confirm', 'Business info', 'Pending', 'Active']
   const panel = (

@@ -48,12 +48,17 @@ export default function NotificationBell() {
   const unread = items.filter((n) => !n.read).length
 
   async function handleMarkRead(id) {
+    if (markReadMutation.isPending) return
     await markReadMutation.mutateAsync({ id, practiceId })
   }
 
   async function handleMarkAll() {
+    if (markAllMutation.isPending) return
     await markAllMutation.mutateAsync(practiceId)
   }
+
+  const markingAll = markAllMutation.isPending
+  const markingId = markReadMutation.isPending ? markReadMutation.variables?.id : null
 
   function go(n) {
     setOpen(false)
@@ -83,7 +88,8 @@ export default function NotificationBell() {
             <div className="flex items-center justify-between border-b border-surface-700 px-4 py-3">
               <h3 className="text-sm font-semibold text-white">Notifications</h3>
               {unread > 0 && (
-                <button type="button" onClick={handleMarkAll} className="text-xs font-medium text-primary-400 hover:text-primary-300">
+                <button type="button" onClick={handleMarkAll} disabled={markingAll} className="inline-flex items-center gap-1 text-xs font-medium text-primary-400 hover:text-primary-300 disabled:opacity-50">
+                  {markingAll ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                   Mark all read
                 </button>
               )}
@@ -104,10 +110,11 @@ export default function NotificationBell() {
                       key={n.id}
                       type="button"
                       onClick={() => { handleMarkRead(n.id); go(n) }}
-                      className={`flex w-full gap-3 border-l-4 px-4 py-3 text-left transition hover:bg-surface-800/60 ${TONE_BORDER[meta.tone] || ''} ${n.read ? 'opacity-60' : ''}`}
+                      disabled={markingId === n.id}
+                      className={`flex w-full gap-3 border-l-4 px-4 py-3 text-left transition hover:bg-surface-800/60 disabled:opacity-60 ${TONE_BORDER[meta.tone] || ''} ${n.read ? 'opacity-60' : ''}`}
                     >
                       <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${meta.classes}`}>
-                        <Icon className="h-4 w-4" />
+                        {markingId === n.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-slate-200">{n.title}</p>

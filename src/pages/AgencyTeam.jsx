@@ -3,15 +3,21 @@ import { Navigate } from 'react-router-dom'
 import { Plus, Trash2, Loader2, Mail, Clock } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions, ACCESS_LABELS } from '../lib/permissions'
-import { supabase } from '../lib/supabase'
-import { useAgencyTeam } from '../lib/queries'
+import {
+  useAgencyTeam,
+  useRemoveAgencyMember,
+  useCancelAgencyInvitation,
+  isMutating,
+} from '../lib/queries'
 import InviteModal from '../components/InviteModal'
 import { formatDateTime } from '../lib/consults'
 
 export default function AgencyTeam() {
   const { effectiveAgency: agency, isAgencyView, contextLoading } = useAuth()
   const perms = usePermissions()
-  const { data, isLoading: loading, refetch } = useAgencyTeam(agency?.id)
+  const { data, isLoading: loading } = useAgencyTeam(agency?.id)
+  const removeMemberMutation = useRemoveAgencyMember()
+  const cancelInviteMutation = useCancelAgencyInvitation()
   const members = data?.members ?? []
   const pending = data?.pending ?? []
   const practices = data?.practices ?? []
@@ -19,13 +25,11 @@ export default function AgencyTeam() {
 
   if (!contextLoading && !isAgencyView) return <Navigate to="/" replace />
 
-  async function removeMember(id) {
-    await supabase.from('agency_members').delete().eq('id', id)
-    refetch()
+  function removeMember(id) {
+    removeMemberMutation.mutate({ memberId: id, agencyId: agency.id })
   }
-  async function cancelInvite(id) {
-    await supabase.from('invitations').delete().eq('id', id)
-    refetch()
+  function cancelInvite(id) {
+    cancelInviteMutation.mutate({ invitationId: id, agencyId: agency.id })
   }
 
   return (
@@ -54,6 +58,7 @@ export default function AgencyTeam() {
                   const access = Array.isArray(m.accessible_practice_ids)
                     ? `${m.accessible_practice_ids.length} practice${m.accessible_practice_ids.length === 1 ? '' : 's'}`
                     : 'All practices'
+                  const removing = isMutating(removeMemberMutation, (v) => v.memberId === m.id)
                   return (
                     <li key={m.id} className="flex items-center gap-3 px-5 py-3.5">
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-700 text-xs font-semibold text-slate-200">
@@ -64,8 +69,8 @@ export default function AgencyTeam() {
                         <p className="text-xs text-slate-500">{ACCESS_LABELS[`agency_${m.role}`] || m.role} · {access}</p>
                       </div>
                       {perms.canManageAgency && (
-                        <button onClick={() => removeMember(m.id)} className="rounded-md p-2 text-slate-500 transition hover:bg-surface-800 hover:text-rose-400" title="Remove">
-                          <Trash2 className="h-4 w-4" />
+                        <button onClick={() => removeMember(m.id)} disabled={removing} className="rounded-md p-2 text-slate-500 transition hover:bg-surface-800 hover:text-rose-400 disabled:opacity-50" title="Remove">
+                          {removing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                         </button>
                       )}
                     </li>
@@ -79,18 +84,24 @@ export default function AgencyTeam() {
             <div className="card overflow-hidden">
               <div className="border-b border-surface-700 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Pending invitations</div>
               <ul className="divide-y divide-surface-700">
-                {pending.map((i) => (
-                  <li key={i.id} className="flex items-center gap-3 px-5 py-3.5">
-                    <Mail className="h-4 w-4 text-slate-500" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-slate-200">{i.email}</p>
-                      <p className="flex items-center gap-1 text-xs text-slate-500"><Clock className="h-3 w-3" /> Invited {formatDateTime(i.created_at)} · {ACCESS_LABELS[i.role] || i.role}</p>
-                    </div>
-                    {perms.canManageAgency && (
-                      <button onClick={() => cancelInvite(i.id)} className="text-xs font-medium text-slate-500 hover:text-rose-300">Cancel</button>
-                    )}
-                  </li>
-                ))}
+                {pending.map((i) => {
+                  const cancelling = isMutating(cancelInviteMutation, (v) => v.invitationId === i.id)
+                  return (
+                    <li key={i.id} className="flex items-center gap-3 px-5 py-3.5">
+                      <Mail className="h-4 w-4 text-slate-500" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm text-slate-200">{i.email}</p>
+                        <p className="flex items-center gap-1 text-xs text-slate-500"><Clock className="h-3 w-3" /> Invited {formatDateTime(i.created_at)} · {ACCESS_LABELS[i.role] || i.role}</p>
+                      </div>
+                      {perms.canManageAgency && (
+                        <button onClick={() => cancelInvite(i.id)} disabled={cancelling} className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-rose-300 disabled:opacity-50">
+                          {cancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                          Cancel
+                        </button>
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             </div>
           )}
@@ -98,7 +109,7 @@ export default function AgencyTeam() {
       )}
 
       {invite && (
-        <InviteModal scope="agency" agencyId={agency.id} practices={practices} onClose={() => setInvite(false)} onSent={() => refetch()} />
+        <InviteModal scope="agency" agencyId={agency.id} practices={practices} onClose={() => setInvite(false)} onSent={() => {}} />
       )}
     </div>
   )

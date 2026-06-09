@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Smile, MessageSquare, Pencil, Trash2, X, Check, Paperclip, Pin } from 'lucide-react'
+import { Smile, MessageSquare, Pencil, Trash2, X, Check, Paperclip, Pin, Loader2 } from 'lucide-react'
 import EmojiPicker from './EmojiPicker'
 import LinkPreview from './LinkPreview'
 import AudioClip from './AudioClip'
@@ -48,6 +48,7 @@ export default function ChatMessage({
   const [showPicker, setShowPicker] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(message.message || '')
+  const [actionBusy, setActionBusy] = useState('')
 
   const isTeam = message.sender_type === 'caselift_team'
   const mine = message.sender_id && message.sender_id === myId
@@ -59,8 +60,42 @@ export default function ChatMessage({
 
   async function saveEdit() {
     const v = draft.trim()
-    if (v && v !== message.message) await onEdit?.(message.id, v)
-    setEditing(false)
+    if (!v || v === message.message) { setEditing(false); return }
+    setActionBusy('save')
+    try {
+      await onEdit?.(message.id, v)
+      setEditing(false)
+    } finally {
+      setActionBusy('')
+    }
+  }
+
+  async function handleDelete() {
+    setActionBusy('delete')
+    try {
+      await onDelete?.(message.id)
+    } finally {
+      setActionBusy('')
+    }
+  }
+
+  async function handleReact(emoji) {
+    setActionBusy(`react-${emoji}`)
+    try {
+      await onReact?.(message.id, emoji)
+    } finally {
+      setActionBusy('')
+    }
+    setShowPicker(false)
+  }
+
+  async function handlePin() {
+    setActionBusy('pin')
+    try {
+      await onTogglePin?.(message.id)
+    } finally {
+      setActionBusy('')
+    }
   }
 
   return (
@@ -115,7 +150,9 @@ export default function ChatMessage({
               />
               <div className="mt-1.5 flex gap-2">
                 <button onClick={() => setEditing(false)} className="btn-ghost text-xs"><X className="h-3.5 w-3.5" /> Cancel</button>
-                <button onClick={saveEdit} className="btn-primary text-xs"><Check className="h-3.5 w-3.5" /> Save</button>
+                <button onClick={saveEdit} disabled={actionBusy === 'save'} className="btn-primary inline-flex items-center gap-1 text-xs disabled:opacity-50">
+                  {actionBusy === 'save' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save
+                </button>
               </div>
             </div>
           ) : (
@@ -158,7 +195,8 @@ export default function ChatMessage({
                   exit={{ scale: 0.5, opacity: 0 }}
                   transition={{ type: 'spring', stiffness: 500, damping: 22 }}
                   title={reactionTitle(g)}
-                  onClick={() => onReact?.(message.id, g.emoji)}
+                  onClick={() => handleReact(g.emoji)}
+                  disabled={Boolean(actionBusy)}
                   className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition ${
                     g.mine
                       ? 'border-[color:var(--accent-border)] bg-[color:var(--accent-subtle)] text-[color:var(--accent)]'
@@ -196,7 +234,7 @@ export default function ChatMessage({
             {showPicker && (
               <EmojiPicker
                 align={rightAlign ? 'left' : 'right'}
-                onSelect={(emoji) => onReact?.(message.id, emoji)}
+                onSelect={handleReact}
                 onClose={() => setShowPicker(false)}
               />
             )}
@@ -207,8 +245,8 @@ export default function ChatMessage({
             </button>
           )}
           {onTogglePin && (
-            <button onClick={() => onTogglePin(message.id)} className={`flex h-7 w-7 items-center justify-center rounded transition hover:bg-surface-800 ${message.pinned_at ? 'text-amber-400' : 'text-slate-400 hover:text-white'}`} title={message.pinned_at ? 'Unpin' : 'Pin message'}>
-              <Pin className="h-4 w-4" />
+            <button onClick={handlePin} disabled={actionBusy === 'pin'} className={`flex h-7 w-7 items-center justify-center rounded transition hover:bg-surface-800 disabled:opacity-50 ${message.pinned_at ? 'text-amber-400' : 'text-slate-400 hover:text-white'}`} title={message.pinned_at ? 'Unpin' : 'Pin message'}>
+              {actionBusy === 'pin' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pin className="h-4 w-4" />}
             </button>
           )}
           {canEdit && (
@@ -217,8 +255,8 @@ export default function ChatMessage({
             </button>
           )}
           {canDelete && (
-            <button onClick={() => onDelete?.(message.id)} className="flex h-7 w-7 items-center justify-center rounded text-slate-400 transition hover:bg-surface-800 hover:text-rose-400" title="Delete">
-              <Trash2 className="h-4 w-4" />
+            <button onClick={handleDelete} disabled={actionBusy === 'delete'} className="flex h-7 w-7 items-center justify-center rounded text-slate-400 transition hover:bg-surface-800 hover:text-rose-400 disabled:opacity-50" title="Delete">
+              {actionBusy === 'delete' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             </button>
           )}
         </div>

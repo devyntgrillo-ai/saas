@@ -19,6 +19,7 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
+import { acceptInviteRedirectUrl } from "../_shared/invite.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
 
 const corsHeaders = {
@@ -77,7 +78,8 @@ Deno.serve(async (req: Request) => {
     const email: string | undefined = body.email;
     const doctorFirst: string | null = body.doctor_first ?? null;
     const doctorLast: string | null = body.doctor_last ?? null;
-    const redirectTo: string | undefined = body.redirect_to;
+    const redirectTo: string =
+      body.redirect_to || acceptInviteRedirectUrl(body.app_origin as string | undefined);
 
     if (!agencyId || !practiceName || !email) {
       return json({ error: "agency_id, practice_name, and email are required" }, 400);

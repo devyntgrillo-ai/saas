@@ -22,6 +22,7 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
+import { acceptInviteRedirectUrl } from "../_shared/invite.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
 
 const SUPER_ADMIN_EMAIL = "devyntgrillo@gmail.com";
@@ -97,12 +98,12 @@ Deno.serve(async (req: Request) => {
       if (access === "practice" && !practiceId) return json({ error: "Select a subaccount for practice access" }, 400);
 
       const { access_level, userRole, practiceScoped, agencyScoped } = resolveAccess(access, role);
-      const appOrigin = String(body.app_origin || Deno.env.get("APP_URL") || "https://app.caselift.io").replace(/\/$/, "");
+      const redirectTo = acceptInviteRedirectUrl(body.app_origin as string | undefined);
 
       // Create the auth user (invite); if they already exist, fall back to a
       // magic link so we still get their id and can email them in.
       const makeLink = async (type: "invite" | "magiclink") => {
-        const { data, error } = await admin.auth.admin.generateLink({ type, email, options: { redirectTo: appOrigin } });
+        const { data, error } = await admin.auth.admin.generateLink({ type, email, options: { redirectTo } });
         if (error) return null;
         return data;
       };
@@ -126,10 +127,10 @@ Deno.serve(async (req: Request) => {
       const html = renderBrandedEmail(brand, {
         heading: `You've been granted ${accessLabel(access, role)} access`,
         bodyHtml: `<p style="margin:0">You've been given <strong>${accessLabel(access, role)}</strong> access to ${brand.companyName}. Click below to set up your account and sign in.</p>`,
-        button: { label: "Set up your account", url: inviteLink || appOrigin },
+        button: { label: "Set up your account", url: inviteLink || redirectTo },
         footerNote: "If you weren't expecting this, you can ignore this email.",
       });
-      const text = `You've been granted ${accessLabel(access, role)} access to ${brand.companyName}.\n\nSet up your account: ${inviteLink || appOrigin}`;
+      const text = `You've been granted ${accessLabel(access, role)} access to ${brand.companyName}.\n\nSet up your account: ${inviteLink || redirectTo}`;
       let emailSent = false;
       if (inviteLink) {
         const r = await sendMailgunMessage({

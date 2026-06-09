@@ -1,7 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
-import { loadAdminData } from '../admin'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { cancelSubscription, createPortalSession } from '../billing'
+import { insertAgencyAccount, loadAdminData } from '../admin'
 import { fetchAttributionByPractice } from '../attribution'
-import { fetchUnlinkedRegistrations } from '../pms'
+import { fetchUnlinkedRegistrations, saveSikkaConfig } from '../pms'
 import { supabase } from '../supabase'
 import { queryKeys } from './keys'
 
@@ -165,5 +166,261 @@ export function useAdminPracticePms(practiceId) {
     queryKey: queryKeys.admin.practicePms(practiceId),
     queryFn: () => fetchAdminPracticePms(practiceId),
     enabled: Boolean(practiceId),
+  })
+}
+
+export function useToggleAgencySuspended() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ agencyId, currentlySuspended }) => {
+      const patch = currentlySuspended
+        ? { status: 'active', active: true }
+        : { status: 'suspended', active: false }
+      const { error } = await supabase.from('agency_accounts').update(patch).eq('id', agencyId)
+      if (error) throw error
+      return { agencyId }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.data() })
+    },
+  })
+}
+
+export function useUpdateAgencyCommission() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ agencyId, commissionRate }) => {
+      const { error } = await supabase
+        .from('agency_accounts')
+        .update({ commission_rate: commissionRate })
+        .eq('id', agencyId)
+      if (error) throw error
+      return { agencyId }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.data() })
+    },
+  })
+}
+
+export function useCreateAgencyAccount() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ payload, invite }) => {
+      const agency = await insertAgencyAccount(payload)
+      if (invite?.email) {
+        const { data, error: inviteErr } = await supabase.functions.invoke('admin-users', {
+          body: {
+            action: 'invite',
+            email: invite.email,
+            access: 'reseller',
+            role: 'owner',
+            agency_id: agency.id,
+            app_origin: invite.appOrigin,
+          },
+        })
+        if (inviteErr) throw new Error(data?.error || inviteErr.message || 'Invite failed.')
+        if (data?.user_id) {
+          await supabase.from('agency_accounts').update({ owner_user_id: data.user_id }).eq('id', agency.id)
+        }
+        return { agency, inviteLink: data?.invite_link && !data?.email_sent ? data.invite_link : null }
+      }
+      return { agency, inviteLink: null }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.data() })
+    },
+  })
+}
+
+export function useAssignReferredPractice() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ practiceId, agencyId }) => {
+      const { data, error } = await supabase.functions.invoke('assign-referred-practice', {
+        body: { practice_id: practiceId, agency_id: agencyId },
+      })
+      if (error) throw new Error(data?.error || error.message)
+      if (data?.error) throw new Error(data.error)
+      return { agencyId }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.data() })
+    },
+  })
+}
+
+export function useUpdateAgencyAdminNotes() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ agencyId, notes }) => {
+      const { error } = await supabase.from('agency_accounts').update({ admin_notes: notes }).eq('id', agencyId)
+      if (error) throw error
+      return { agencyId }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.data() })
+    },
+  })
+}
+
+export function useMarkSupportChatResolved() {
+  return useMutation({
+    mutationFn: async ({ chatId, resolved }) => {
+      const { error } = await supabase
+        .from('support_chats')
+        .update({ resolved_at: resolved ? new Date().toISOString() : null })
+        .eq('id', chatId)
+      if (error) throw error
+      return { chatId, resolved }
+    },
+  })
+}
+
+export function useExtendPracticeTrial() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ practiceId, trialEndsAt }) => {
+      const { error } = await supabase
+        .from('practices')
+        .update({ trial_ends_at: trialEndsAt })
+        .eq('id', practiceId)
+      if (error) throw error
+      return { practiceId }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.billing() })
+    },
+  })
+}
+
+export function useMarkReferralPayoutPaid() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ payoutId }) => {
+      const { error } = await supabase.rpc('admin_mark_payout_paid', { p_payout_id: payoutId })
+      if (error) throw error
+      return { payoutId }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.referrals() })
+    },
+  })
+}
+
+export function useSendBillingPortalLink() {
+  return useMutation({
+    mutationFn: async ({ practiceId }) => {
+      const url = await createPortalSession(practiceId)
+      try { await navigator.clipboard.writeText(url) } catch { /* clipboard unavailable */ }
+      return { practiceId, url }
+    },
+  })
+}
+
+export function useCancelPracticeSubscription() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ practiceId }) => {
+      await cancelSubscription(practiceId)
+      return { practiceId }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.billing() })
+    },
+  })
+}
+
+export function useAdminUserAction() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload) => {
+      const { data, error } = await supabase.functions.invoke('admin-users', { body: payload })
+      if (error) throw new Error(data?.error || error.message)
+      if (data?.error) throw new Error(data.error)
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.data() })
+    },
+  })
+}
+
+export function useSaveSikkaConfig() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ practiceId, config }) => {
+      await saveSikkaConfig(practiceId, {
+        sikkaPracticeId: config.sikka_practice_id,
+        pmsType: config.pms_type,
+        sikkaConnected: config.sikka_connected,
+      })
+      return { practiceId }
+    },
+    onSuccess: ({ practiceId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.practicePms(practiceId) })
+    },
+  })
+}
+
+export function useForceCancelPractice() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ practiceId }) => {
+      const { error } = await supabase
+        .from('practices')
+        .update({ subscription_status: 'cancelled' })
+        .eq('id', practiceId)
+      if (error) throw error
+      return { practiceId }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.data() })
+    },
+  })
+}
+
+export function useUpdatePracticeAdminNotes() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ practiceId, notes }) => {
+      const { error } = await supabase.from('practices').update({ admin_notes: notes }).eq('id', practiceId)
+      if (error) throw error
+      return { practiceId }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.data() })
+    },
+  })
+}
+
+export function useResendAgencyOwnerInvite() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ agencyId, ownerEmail }) => {
+      const { data, error: e } = await supabase.functions.invoke('admin-users', {
+        body: {
+          action: 'invite',
+          email: ownerEmail.trim().toLowerCase(),
+          access: 'reseller',
+          role: 'owner',
+          agency_id: agencyId,
+          app_origin: window.location.origin,
+        },
+      })
+      if (e) throw new Error(data?.error || e.message)
+      if (data?.user_id) {
+        await supabase.from('agency_accounts').update({ owner_user_id: data.user_id }).eq('id', agencyId)
+      }
+      return {
+        agencyId,
+        emailSent: Boolean(data?.email_sent),
+        inviteLink: data?.invite_link && !data?.email_sent ? data.invite_link : null,
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.data() })
+    },
   })
 }

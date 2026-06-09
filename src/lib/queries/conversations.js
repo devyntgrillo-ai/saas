@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { invokeEdgeFunction } from '../messaging'
 import { supabase } from '../supabase'
 import { queryKeys } from './keys'
 
@@ -283,6 +284,96 @@ export function patchConversationContextConsult(queryClient, practiceId, convers
   queryClient.setQueryData(queryKeys.conversationContext(practiceId, conversationId), (old) =>
     old?.consult ? { ...old, consult: { ...old.consult, ...consultPatch } } : old,
   )
+}
+
+export function useAddConversationNote() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ conversationId, practiceId, body }) => {
+      const data = await insertConvMessage({
+        conversation_id: conversationId,
+        direction: 'outbound',
+        channel: 'note',
+        body,
+        sent_at: new Date().toISOString(),
+      })
+      return { conversationId, practiceId, message: data }
+    },
+    onSuccess: ({ practiceId, conversationId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversationThread(practiceId, conversationId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations(practiceId) })
+    },
+  })
+}
+
+export function useUploadConversationAttachment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ conversationId, practiceId, file, channel, patientPhone }) => {
+      const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
+      const path = `${conversationId}/${Date.now()}.${ext}`
+      const up = await supabase.storage
+        .from('conversation-attachments')
+        .upload(path, file, { contentType: file.type || undefined, upsert: false })
+      if (up.error) throw up.error
+      const { data: pub } = supabase.storage.from('conversation-attachments').getPublicUrl(path)
+      const nowIso = new Date().toISOString()
+      const data = await insertConvMessage({
+        conversation_id: conversationId,
+        direction: 'outbound',
+        channel,
+        body: file.name,
+        sent_at: nowIso,
+        meta: { attachment: { url: pub.publicUrl, name: file.name, type: file.type || ext } },
+      })
+      await supabase
+        .from('conversations')
+        .update({ last_message_at: nowIso, last_message_preview: `📎 ${file.name}` })
+        .eq('id', conversationId)
+      if (channel === 'sms' && patientPhone) {
+        try {
+          await invokeEdgeFunction('twilio-send', {
+            practice_id: practiceId,
+            to: patientPhone,
+            body: file.name,
+            media_url: pub.publicUrl,
+            conversation_message_id: data?.id,
+          })
+        } catch (e) {
+          return { conversationId, practiceId, warning: e?.message || 'Could not send attachment via SMS.' }
+        }
+      }
+      return { conversationId, practiceId }
+    },
+    onSuccess: ({ conversationId, practiceId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversationThread(practiceId, conversationId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations(practiceId) })
+    },
+  })
+}
+
+export function useSendThreadMessage() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload) => {
+      const data = await insertConvMessage(payload.row)
+      if (payload.bump) {
+        await supabase
+          .from('conversations')
+          .update({
+            last_message_at: payload.bump.at,
+            ...(payload.bump.preview ? { last_message_preview: payload.bump.preview } : {}),
+          })
+          .eq('id', payload.conversationId)
+      }
+      return { ...payload, message: data }
+    },
+    onSuccess: (_data, variables) => {
+      const { practiceId, conversationId } = variables
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversationThread(practiceId, conversationId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations(practiceId) })
+    },
+  })
 }
 
 export function useUpdateConversationPatient() {

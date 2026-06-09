@@ -6,12 +6,13 @@ import { useAuth } from '../context/AuthContext'
 import { takeBaaReturnPath } from '../lib/baaReturn'
 import { ensurePracticeLinked } from '../lib/linkPractice'
 import { supabase } from '../lib/supabase'
+import { useAcceptBaa } from '../lib/queries'
 
 export default function BAA() {
   const { user, practice, refreshProfile, signOut } = useAuth()
   const navigate = useNavigate()
+  const acceptBaa = useAcceptBaa()
   const [agreed, setAgreed] = useState(false)
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [linking, setLinking] = useState(false)
 
@@ -45,21 +46,15 @@ export default function BAA() {
   }, [practice?.id, user, refreshProfile])
 
   const handleAccept = async () => {
-    if (!agreed || !practice?.id) return
-    setSaving(true)
+    if (!agreed || !practice?.id || acceptBaa.isPending) return
     setError('')
-    const { error: updateError } = await supabase
-      .from('practices')
-      .update({ baa_accepted_at: new Date().toISOString() })
-      .eq('id', practice.id)
-
-    if (updateError) {
-      setSaving(false)
-      setError(updateError.message)
-      return
+    try {
+      await acceptBaa.mutateAsync({ practiceId: practice.id })
+      await refreshProfile()
+      navigate(returnPath(), { replace: true })
+    } catch (e) {
+      setError(e?.message || 'Could not record acceptance.')
     }
-    await refreshProfile()
-    navigate(returnPath(), { replace: true })
   }
 
   const handleSignOut = async () => {
@@ -196,11 +191,11 @@ export default function BAA() {
                   </button>
                   <button
                     onClick={handleAccept}
-                    disabled={!agreed || saving}
+                    disabled={!agreed || acceptBaa.isPending}
                     className="btn-primary"
                   >
-                    {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {saving ? 'Recording acceptance…' : 'Accept & continue'}
+                    {acceptBaa.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {acceptBaa.isPending ? 'Recording acceptance…' : 'Accept & continue'}
                   </button>
                 </div>
               </div>

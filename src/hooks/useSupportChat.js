@@ -3,12 +3,28 @@
 // indicators for a single channel, with live Supabase Realtime subscriptions.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { uploadChatAttachment } from '../lib/chat'
+import {
+  useSendSupportMessage,
+  useEditSupportMessage,
+  useDeleteSupportMessage,
+  useAddSupportReaction,
+  useRemoveSupportReaction,
+  useMarkSupportChatRead,
+  useToggleSupportPin,
+} from '../lib/queries/supportChat'
 
 const PAGE = 50
 const TYPING_TTL_MS = 4000 // a typing signal older than this is cleared
 
 export function useSupportChat({ chatId, practiceId, senderType, currentUser }) {
+  const sendMutation = useSendSupportMessage()
+  const editMutation = useEditSupportMessage()
+  const deleteMutation = useDeleteSupportMessage()
+  const addReactionMutation = useAddSupportReaction()
+  const removeReactionMutation = useRemoveSupportReaction()
+  const markReadMutation = useMarkSupportChatRead()
+  const togglePinMutation = useToggleSupportPin()
+
   const [messages, setMessages] = useState([]) // all messages (top-level + replies)
   const [reactions, setReactions] = useState([]) // flat reaction rows for loaded messages
   const [typing, setTyping] = useState([]) // active typing rows (excluding me)
@@ -188,79 +204,46 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
   // ── Actions ──────────────────────────────────────────────────────────────────
   const sendMessage = useCallback(
     async (text, threadParentId = null, file = null, opts = {}) => {
-      const body = (text || '').trim()
-      if ((!body && !file) || !chatId) return null
-      let attachment = null
-      if (file) attachment = await uploadChatAttachment(chatId, file)
-      const isAudio = attachment?.type?.startsWith('audio/')
-      const row = {
-        chat_id: chatId,
-        practice_id: practiceId,
-        sender_id: me || null,
-        sender_type: senderType,
-        sender_name: currentUser?.name || 'User',
-        sender_avatar: currentUser?.avatar || null,
-        message: body || null,
-        thread_parent_id: threadParentId,
-        attachment_url: attachment?.url || null,
-        attachment_name: attachment?.name || null,
-        attachment_type: attachment?.type || null,
-        audio_duration: isAudio ? (opts.audioDuration ?? null) : null,
+      if ((!text?.trim() && !file) || !chatId) return null
+      const data = await sendMutation.mutateAsync({
+        chatId, practiceId, senderType, currentUser, text, threadParentId, file, audioDuration: opts.audioDuration,
+      })
+      if (data) {
+        setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data]))
       }
-      const { data, error } = await supabase.from('support_messages').insert(row).select('*').single()
-      if (error) throw error
-      if (isAudio) supabase.functions.invoke('transcribe-chat-audio', { body: { message_id: data.id } }).catch(() => {})
-      // Optimistically show the message immediately (don't wait on the realtime
-      // echo, which the INSERT handler de-dupes by id).
-      setMessages((prev) => (prev.some((m) => m.id === data.id) ? prev : [...prev, data]))
-      // Fire notifications + Slack ping (non-blocking). Typing auto-expires and
-      // the composer calls stopTyping on send.
-      supabase.functions.invoke('chat-notify', { body: { message_id: data.id } }).catch(() => {})
       return data
     },
-    [chatId, practiceId, senderType, me, currentUser],
+    [chatId, practiceId, senderType, currentUser, sendMutation],
   )
 
-  const editMessage = useCallback(async (id, text) => {
-    const { error } = await supabase
-      .from('support_messages')
-      .update({ message: text.trim(), edited_at: new Date().toISOString() })
-      .eq('id', id)
-    if (error) throw error
-  }, [])
+  const editMessage = useCallback(
+    async (id, text) => { await editMutation.mutateAsync({ id, text }) },
+    [editMutation],
+  )
 
-  const deleteMessage = useCallback(async (id) => {
-    const { error } = await supabase
-      .from('support_messages')
-      .update({ deleted_at: new Date().toISOString(), message: null })
-      .eq('id', id)
-    if (error) throw error
-  }, [])
+  const deleteMessage = useCallback(
+    async (id) => { await deleteMutation.mutateAsync({ id }) },
+    [deleteMutation],
+  )
 
   const addReaction = useCallback(
     async (messageId, emoji) => {
       if (!me) return
-      await supabase
-        .from('support_message_reactions')
-        .insert({ message_id: messageId, user_id: me, sender_type: senderType, emoji })
-        .select('*')
-        .single()
-        .then(({ data }) => data && setReactions((prev) => (prev.some((r) => r.id === data.id) ? prev : [...prev, data])))
-        .catch(() => {}) // unique violation = already reacted
+      try {
+        const data = await addReactionMutation.mutateAsync({ messageId, userId: me, senderType, emoji })
+        if (data) setReactions((prev) => (prev.some((r) => r.id === data.id) ? prev : [...prev, data]))
+      } catch { /* unique violation = already reacted */ }
     },
-    [me, senderType],
+    [me, senderType, addReactionMutation],
   )
 
   const removeReaction = useCallback(
     async (messageId, emoji) => {
       if (!me) return
-      await supabase
-        .from('support_message_reactions')
-        .delete()
-        .match({ message_id: messageId, user_id: me, emoji })
+      await removeReactionMutation.mutateAsync({ messageId, userId: me, emoji })
       setReactions((prev) => prev.filter((r) => !(r.message_id === messageId && r.user_id === me && r.emoji === emoji)))
     },
-    [me],
+    [me, removeReactionMutation],
   )
 
   const toggleReaction = useCallback(
@@ -304,21 +287,13 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
 
   const markAsRead = useCallback(async () => {
     if (!chatId || !me) return
-    const patch = senderType === 'caselift_team' ? { unread_count_admin: 0 } : { unread_count_practice: 0 }
-    await supabase.from('support_chats').update(patch).eq('id', chatId)
-    await supabase.from('support_reads').upsert(
-      {
-        chat_id: chatId, user_id: me, last_read_at: new Date().toISOString(),
-        user_name: currentUser?.name || 'User', user_avatar: currentUser?.avatar || null, sender_type: senderType,
-      },
-      { onConflict: 'chat_id,user_id' },
-    )
-  }, [chatId, me, senderType, currentUser])
+    await markReadMutation.mutateAsync({ chatId, userId: me, senderType, currentUser })
+  }, [chatId, me, senderType, currentUser, markReadMutation])
 
   const togglePin = useCallback(async (messageId) => {
-    await supabase.rpc('toggle_pin', { p_message_id: messageId })
+    await togglePinMutation.mutateAsync({ messageId })
     loadPins()
-  }, [loadPins])
+  }, [loadPins, togglePinMutation])
 
   // Active typing users (not me), de-duplicated by user+scope. Staleness is
   // pruned by the TTL interval above, so we avoid an impure Date.now() in render.
@@ -347,6 +322,7 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
     startTyping,
     stopTyping,
     markAsRead,
+    isSending: sendMutation.isPending,
   }
 }
 

@@ -3,74 +3,49 @@ import { Loader2, Send, Copy, Check, UserPlus } from 'lucide-react'
 import Modal from './Modal'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions, ACCESS_LABELS } from '../lib/permissions'
-import { supabase } from '../lib/supabase'
+import { useSendTeamInvite } from '../lib/queries'
 
 // Invite modal usable at agency / practice scope.
 export default function InviteModal({ scope, agencyId, practiceId, practices = [], onClose, onSent }) {
   const { user } = useAuth()
   const perms = usePermissions()
   const roles = perms.grantableRoles(scope)
+  const sendInvite = useSendTeamInvite()
   const [email, setEmail] = useState('')
   const [role, setRole] = useState(roles[roles.length - 1] || '')
   const [message, setMessage] = useState('')
   const [allPractices, setAllPractices] = useState(true)
   const [selected, setSelected] = useState([])
-  const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [link, setLink] = useState('')
   const [copied, setCopied] = useState(false)
-  // Whether the invite email actually went out (vs. needing the share link).
-  const [emailSent, setEmailSent] = useState(null) // null = unknown, true/false
+  const [emailSent, setEmailSent] = useState(null)
   const [emailReason, setEmailReason] = useState('')
 
   const showPracticePicker = role === 'agency_member' && practices.length > 0
 
   async function send() {
     if (!email.trim() || !role) return
-    setSending(true)
     setError('')
     const accessible = role === 'agency_member' && !allPractices ? selected : null
-    const { data, error: e } = await supabase
-      .from('invitations')
-      .insert({
-        email: email.trim().toLowerCase(),
-        role,
-        access_level: scope,
-        agency_id: agencyId || null,
-        practice_id: practiceId || null, // (reseller scope removed)
-        accessible_practice_ids: accessible,
-        personal_message: message || null,
-        invited_by_user_id: user.id,
-      })
-      .select('token')
-      .single()
-    setSending(false)
-    if (e) {
-      setError(e.message)
-      return
-    }
-    const link = `${window.location.origin}/invite/${data.token}`
-    setLink(link)
     try {
-      const { data: fnData, error: fnErr } = await supabase.functions.invoke('invite-team-member', {
-        body: {
-          invitation_token: data.token,
-          app_origin: window.location.origin,
-        },
+      const result = await sendInvite.mutateAsync({
+        email,
+        role,
+        scope,
+        agencyId,
+        practiceId,
+        accessiblePracticeIds: accessible,
+        personalMessage: message,
+        invitedByUserId: user.id,
       })
-      if (fnErr) {
-        setEmailSent(false)
-        setEmailReason('the email service errored')
-      } else {
-        setEmailSent(fnData?.email_sent === true)
-        setEmailReason(fnData?.reason ? `reason: ${fnData.reason}` : '')
-      }
-    } catch {
-      // invitation row exists; user can still copy the link manually
-      setEmailSent(false)
-      setEmailReason('the email service is unreachable')
+      setLink(result.inviteLink)
+      setEmailSent(result.emailSent)
+      setEmailReason(result.emailReason)
+      onSent?.()
+    } catch (e) {
+      setError(e?.message || 'Could not send invite.')
     }
-    onSent?.()
   }
 
   async function copy() {
@@ -93,8 +68,8 @@ export default function InviteModal({ scope, agencyId, practiceId, practices = [
         ) : (
           <>
             <button onClick={onClose} className="btn-ghost">Cancel</button>
-            <button onClick={send} disabled={sending || !email.trim() || !role} className="btn-primary">
-              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            <button onClick={send} disabled={sendInvite.isPending || !email.trim() || !role} className="btn-primary">
+              {sendInvite.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               Send invite
             </button>
           </>

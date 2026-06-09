@@ -41,7 +41,6 @@ export default function Training() {
   const markCompleteMutation = useMarkTrainingComplete()
   const [activeGroup, setActiveGroup] = useState(null) // active module tab (group key)
   const [playing, setPlaying] = useState(null) // module being watched
-  const [saving, setSaving] = useState(false)
   const videoRef = useRef(null)
   // Custom-player UI state — presentational only, all driven off the same <video> ref.
   const [isPlaying, setIsPlaying] = useState(false)
@@ -123,14 +122,11 @@ export default function Training() {
 
   async function markComplete(moduleId) {
     if (!user) return
-    setSaving(true)
-    try {
-      await markCompleteMutation.mutateAsync({ userId: user.id, moduleId })
-      queryClient.invalidateQueries({ queryKey: queryKeys.training.modules() })
-    } finally {
-      setSaving(false)
-    }
+    await markCompleteMutation.mutateAsync({ userId: user.id, moduleId })
+    queryClient.invalidateQueries({ queryKey: queryKeys.training.modules() })
   }
+
+  const savingModuleId = markCompleteMutation.isPending ? markCompleteMutation.variables?.moduleId : null
 
   const groupCounts = useMemo(() => {
     const counts = {}
@@ -655,10 +651,10 @@ export default function Training() {
               <div className="flex shrink-0 flex-col gap-2">
                 <button
                   onClick={() => markComplete(playing.id)}
-                  disabled={saving || Boolean(progress[playing.id]?.completed_at)}
+                  disabled={savingModuleId === playing.id || Boolean(progress[playing.id]?.completed_at)}
                   className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-700 disabled:opacity-50"
                 >
-                  {saving ? (
+                  {savingModuleId === playing.id ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <CheckCircle2 className="h-4 w-4" />

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import {
   Bold, Italic, Strikethrough, Code, List, ListOrdered,
-  Plus, Smile, AtSign, Mic, Send, X, FileText,
+  Plus, Smile, AtSign, Mic, Send, X, FileText, Loader2,
 } from 'lucide-react'
 import EmojiPicker from './EmojiPicker'
 import AudioRecorder from './AudioRecorder'
@@ -10,11 +10,10 @@ import { renderEditorHighlight } from './editorHighlight'
 // Slack-style composer: formatting toolbar, growing text area, a row of action
 // icons (attach / emoji / mention / voice memo) and a send arrow. onSend(text,
 // file, meta).
-export default function ChatComposer({ placeholder = 'Message…', mentionables = [], onSend, onTyping, onStopTyping }) {
+export default function ChatComposer({ placeholder = 'Message…', mentionables = [], onSend, onTyping, onStopTyping, isSending = false }) {
   const [text, setText] = useState('')
   const [file, setFile] = useState(null)
   const [showEmoji, setShowEmoji] = useState(false)
-  const [sending, setSending] = useState(false)
   const [recording, setRecording] = useState(false)
   const [mentionQuery, setMentionQuery] = useState(null)
   const taRef = useRef(null)
@@ -78,21 +77,17 @@ export default function ChatComposer({ placeholder = 'Message…', mentionables 
 
   async function send() {
     const v = text.trim()
-    if ((!v && !file) || sending) return
+    if ((!v && !file) || isSending) return
     const f = file
     setText(''); setFile(null); onStopTyping?.()
     requestAnimationFrame(() => { if (taRef.current) taRef.current.style.height = 'auto' })
-    setSending(true)
     try { await onSend?.(v, f) } catch { setText(v); setFile(f) }
-    setSending(false)
   }
 
   async function sendAudio(blob, durationSec) {
     setRecording(false)
     const f = new File([blob], 'voice-memo.webm', { type: blob.type || 'audio/webm' })
-    setSending(true)
     try { await onSend?.('', f, { audioDuration: durationSec }) } catch { /* dropped */ }
-    setSending(false)
   }
 
   const toolBtn = 'flex h-7 w-7 items-center justify-center rounded text-slate-400 transition hover:bg-surface-700 hover:text-white'
@@ -110,7 +105,7 @@ export default function ChatComposer({ placeholder = 'Message…', mentionables 
       )}
 
       {recording ? (
-        <AudioRecorder onSend={sendAudio} onCancel={() => setRecording(false)} />
+        <AudioRecorder onSend={sendAudio} onCancel={() => setRecording(false)} isSending={isSending} />
       ) : (
         <div className="rounded-lg border border-surface-700 bg-surface-800 transition focus-within:border-primary">
           {/* Formatting toolbar */}
@@ -179,11 +174,11 @@ export default function ChatComposer({ placeholder = 'Message…', mentionables 
             )}
             <button
               onClick={send}
-              disabled={(!text.trim() && !file) || sending}
+              disabled={(!text.trim() && !file) || isSending}
               className={`flex h-7 w-7 items-center justify-center rounded transition ${text.trim() || file ? 'bg-primary !text-white hover:bg-primary-700' : 'text-slate-600'} ${text.length > 500 ? '' : 'ml-auto'}`}
               title="Send"
             >
-              <Send className="h-4 w-4" />
+              {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </button>
           </div>
         </div>

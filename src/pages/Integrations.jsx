@@ -6,8 +6,7 @@ import {
   RefreshCw, SlidersHorizontal,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
-import { usePlaudLastSync } from '../lib/queries'
+import { usePlaudLastSync, useUpdatePractice } from '../lib/queries'
 import { plaudAutoflowEmail, AUDIO_QUALITY, MIC_PREF_KEY, listMicrophones } from '../lib/recording'
 import { timeAgo } from '../lib/consults'
 
@@ -225,7 +224,7 @@ function RecordingSettingsCard({ practice, save }) {
 export default function Integrations() {
   const { practice, refreshProfile } = useAuth()
   const navigate = useNavigate()
-  const [saving, setSaving] = useState('')
+  const updatePractice = useUpdatePractice()
   const [slackUrl, setSlackUrl] = useState('')
   const [slackChannel, setSlackChannel] = useState('')
   const [slackTest, setSlackTest] = useState('')
@@ -237,13 +236,15 @@ export default function Integrations() {
     setSlackChannel(practice.slack_channel || '')
   }, [practice])
 
-  async function save(patch, key) {
-    if (!practice?.id) return
-    setSaving(key)
-    await supabase.from('practices').update(patch).eq('id', practice.id)
-    await refreshProfile()
-    setSaving('')
+  function save(patch, key) {
+    if (!practice?.id || updatePractice.isPending) return
+    updatePractice.mutate(
+      { practiceId: practice.id, patch, saveKey: key },
+      { onSuccess: () => refreshProfile() },
+    )
   }
+
+  const saving = updatePractice.isPending ? (updatePractice.variables?.saveKey || '') : ''
 
   const slackConnected = Boolean(practice?.slack_webhook_url)
   const pmsConnected = Boolean(practice?.sikka_connected || practice?.pms_type)

@@ -1,16 +1,11 @@
 import { useEffect, useState } from 'react'
 import { CheckCircle2, XCircle, CalendarClock, Clock, StopCircle, Send, PlayCircle } from 'lucide-react'
 import Modal from './Modal'
+import Spinner from './Spinner'
+import LoadingButton from './LoadingButton'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
 import { recordCloseAttribution } from '../lib/attribution'
-import { useUpdateConsult } from '../lib/queries'
-
-// Cancel all not-yet-sent messages for a consult.
-async function cancelPendingMessages(consultId) {
-  await supabase.from('messages').update({ status: 'cancelled' })
-    .eq('consult_id', consultId).in('status', ['draft', 'scheduled', 'pending'])
-}
+import { useSetConsultOutcome } from '../lib/queries'
 
 function fmtRemaining(ms) {
   if (ms <= 0) return 'now'
@@ -26,8 +21,8 @@ function fmtRemaining(ms) {
 // follow-up messages, shown once the activation hold elapses and the sequence is live.
 export default function OutcomeControls({ consult, holdHours = 24, scheduledCount = 0, onUpdated }) {
   const { user } = useAuth()
-  const updateConsult = useUpdateConsult()
-  const [busy, setBusy] = useState(false)
+  const setOutcomeMutation = useSetConsultOutcome()
+  const pending = setOutcomeMutation.isPending
   const [showNote, setShowNote] = useState(false)
   const [note, setNote] = useState('')
   const [now, setNow] = useState(() => Date.now())
@@ -46,31 +41,30 @@ export default function OutcomeControls({ consult, holdHours = 24, scheduledCoun
   const active = outcome === 'pending' && seqStatus === 'active' && remaining <= 0
 
   async function setOutcome(value, { noteText, reason } = {}) {
-    if (!consult?.id) return
-    setBusy(true)
+    if (!consult?.id || pending) return
     const patch = {
       outcome: value,
       outcome_set_at: new Date().toISOString(),
       outcome_set_by: user?.id || null,
     }
     if (noteText !== undefined) patch.outcome_note = noteText || null
+    const cancelMessages = ['accepted', 'not_converting', 'closed_won'].includes(value)
     if (value === 'pending') {
-      // (Re)start the sequence - clear any prior cancellation / pause.
       patch.sequence_cancelled_at = null
       patch.sequence_cancelled_reason = null
       patch.sequence_status = 'active'
       patch.sequence_paused_reason = null
-    } else if (['accepted', 'not_converting', 'closed_won'].includes(value)) {
+    } else if (cancelMessages) {
       patch.sequence_cancelled_at = new Date().toISOString()
       patch.sequence_cancelled_reason = reason || value
       patch.sequence_status = 'cancelled'
-      await cancelPendingMessages(consult.id)
     }
     try {
-      await updateConsult.mutateAsync({
+      await setOutcomeMutation.mutateAsync({
         consultId: consult.id,
         patch,
         practiceId: consult.practice_id,
+        cancelMessages,
       })
       let extra = {}
       if (['accepted', 'closed_won'].includes(value)) {
@@ -80,23 +74,19 @@ export default function OutcomeControls({ consult, holdHours = 24, scheduledCoun
     } catch {
       /* mutation surfaces via parent refresh */
     }
-    setBusy(false)
   }
 
   async function stopSequence() {
-    if (!consult?.id) return
-    setBusy(true)
-    // Pause (don't cancel): pending messages stay pending and resume when restarted.
+    if (!consult?.id || pending) return
     const patch = { sequence_status: 'paused', sequence_paused_reason: 'manual' }
     try {
-      await updateConsult.mutateAsync({
+      await setOutcomeMutation.mutateAsync({
         consultId: consult.id,
         patch,
         practiceId: consult.practice_id,
       })
       onUpdated?.(patch)
     } catch { /* noop */ }
-    setBusy(false)
   }
 
   // ── Resolved-state slim banners ───────────────────────────────────────────
@@ -117,25 +107,25 @@ export default function OutcomeControls({ consult, holdHours = 24, scheduledCoun
     <div className="space-y-3">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <OutcomeButton icon={CheckCircle2} label="Accepted Treatment" tone="emerald" selected={false}
-          onClick={() => setOutcome('accepted')} disabled={busy} />
+          onClick={() => setOutcome('accepted')} loading={pending} />
         <OutcomeButton icon={PlayCircle} label="Start Follow-Up Sequence" tone="brand" selected={!paused}
-          onClick={() => setOutcome('pending')} disabled={busy} />
+          onClick={() => setOutcome('pending')} loading={pending} />
         <OutcomeButton icon={XCircle} label="Not a Fit" tone="slate" selected={false}
-          onClick={() => { setNote(''); setShowNote(true) }} disabled={busy} />
+          onClick={() => { setNote(''); setShowNote(true) }} loading={pending} />
       </div>
 
       {paused ? (
-        <SlimBar tone="slate" icon={StopCircle} onResume={() => setOutcome('pending')} busy={busy}>
+        <SlimBar tone="slate" icon={StopCircle} onResume={() => setOutcome('pending')} busy={pending}>
           {consult.sequence_paused_reason === 'reply'
             ? 'Sequence paused - patient replied. Messages won’t send until resumed.'
             : 'Sequence paused - messages won’t send until resumed.'}
         </SlimBar>
       ) : inHold ? (
-        <SlimBar tone="amber" icon={Clock} onStop={stopSequence} busy={busy}>
+        <SlimBar tone="amber" icon={Clock} onStop={stopSequence} busy={pending}>
           First message sends in <span className="font-semibold">{fmtRemaining(remaining)}</span>
         </SlimBar>
       ) : active ? (
-        <SlimBar tone="sky" icon={Send} onStop={stopSequence} busy={busy}>
+        <SlimBar tone="sky" icon={Send} onStop={stopSequence} busy={pending}>
           Follow-up sequence active · {scheduledCount} message{scheduledCount === 1 ? '' : 's'} scheduled
         </SlimBar>
       ) : null}
@@ -144,8 +134,8 @@ export default function OutcomeControls({ consult, holdHours = 24, scheduledCoun
         <Modal title="Why isn't this patient converting?" onClose={() => setShowNote(false)} footer={
           <>
             <button onClick={() => setShowNote(false)} className="btn-ghost">Cancel</button>
-            <button onClick={() => { setShowNote(false); setOutcome('not_converting', { noteText: note }) }}
-              className="btn-primary bg-rose-600 hover:bg-rose-500">Mark not converting</button>
+            <LoadingButton loading={pending} onClick={() => { setShowNote(false); setOutcome('not_converting', { noteText: note }) }}
+              className="btn-primary bg-rose-600 hover:bg-rose-500">Mark not converting</LoadingButton>
           </>
         }>
           <p className="text-sm text-slate-400">Optional - a quick note helps the practice learn what's losing cases.</p>
@@ -158,7 +148,7 @@ export default function OutcomeControls({ consult, holdHours = 24, scheduledCoun
 }
 
 // Equal-size outcome button. Selected → filled tone; unselected → outlined/muted.
-function OutcomeButton({ icon: Icon, label, tone, selected, onClick, disabled }) {
+function OutcomeButton({ icon: Icon, label, tone, selected, onClick, loading, disabled }) {
   const fills = {
     emerald: 'border-transparent bg-green-600 !text-white hover:bg-green-700',
     brand: 'border-transparent bg-primary !text-white hover:bg-primary-700',
@@ -172,12 +162,12 @@ function OutcomeButton({ icon: Icon, label, tone, selected, onClick, disabled })
   return (
     <button
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || loading}
       className={`inline-flex w-full items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition disabled:opacity-50 ${
         selected ? fills[tone] : `bg-transparent ${outlines[tone]}`
       }`}
     >
-      <Icon className="h-3.5 w-3.5" /> {label}
+      {loading ? <Spinner className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />} {label}
     </button>
   )
 }
@@ -203,8 +193,9 @@ function SlimBar({ tone, icon: Icon, children, onStop, onResume, busy }) {
         <button
           onClick={onStop || onResume}
           disabled={busy}
-          className={`shrink-0 font-medium underline-offset-2 hover:underline disabled:opacity-50 ${stopTones[tone]}`}
+          className={`inline-flex shrink-0 items-center gap-1 font-medium underline-offset-2 hover:underline disabled:opacity-50 ${stopTones[tone]}`}
         >
+          {busy ? <Spinner className="h-3 w-3" /> : null}
           {onStop ? 'Stop' : 'Resume'}
         </button>
       )}

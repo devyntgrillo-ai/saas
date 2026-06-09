@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Sparkles, Check, Plus, Trash2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { useSaveKnowledgeBaseSections } from '../lib/queries'
 
 const SECTIONS = [
   { id: 'practice_overview', title: 'Practice Overview', placeholder: 'Practice name, doctor, specialty focus, what makes you different…' },
@@ -25,6 +25,7 @@ const fmtTime = (ts) => (ts ? new Date(ts).toLocaleString(undefined, { month: 's
 
 export default function KnowledgeBaseAccordion({ practiceId }) {
   const { practice, refreshProfile } = useAuth()
+  const saveKb = useSaveKnowledgeBaseSections()
   const [sections, setSections] = useState({})
   const [stories, setStories] = useState([])
   const [open, setOpen] = useState('practice_overview')
@@ -38,19 +39,25 @@ export default function KnowledgeBaseAccordion({ practiceId }) {
     setStories(Array.isArray(practice.knowledge_base_stories) ? practice.knowledge_base_stories : [])
   }, [practice])
 
-  async function persist(patch) {
+  function persist(patch, savedKey) {
     if (!practiceId) return
-    await supabase.from('practices').update({ ...patch, knowledge_base_updated_at: new Date().toISOString() }).eq('id', practiceId)
-    refreshProfile()
+    saveKb.mutate(
+      { practiceId, patch },
+      {
+        onSuccess: () => {
+          refreshProfile()
+          if (savedKey) setSavedAt((s) => ({ ...s, [savedKey]: Date.now() }))
+        },
+      },
+    )
   }
 
   function editSection(id, value) {
     setSections((prev) => {
       const next = { ...prev, [id]: value }
       clearTimeout(timers.current[id])
-      timers.current[id] = setTimeout(async () => {
-        await persist({ knowledge_base_sections: next })
-        setSavedAt((s) => ({ ...s, [id]: Date.now() }))
+      timers.current[id] = setTimeout(() => {
+        persist({ knowledge_base_sections: next }, id)
       }, 1000)
       return next
     })
@@ -58,8 +65,7 @@ export default function KnowledgeBaseAccordion({ practiceId }) {
 
   async function saveStories(next) {
     setStories(next)
-    await persist({ knowledge_base_stories: next })
-    setSavedAt((s) => ({ ...s, stories: Date.now() }))
+    persist({ knowledge_base_stories: next }, 'stories')
   }
 
   const totalWords = useMemo(() => {
@@ -73,7 +79,6 @@ export default function KnowledgeBaseAccordion({ practiceId }) {
 
   return (
     <div className="space-y-4">
-      {/* Top status */}
       <div className="card p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-300">
@@ -92,7 +97,6 @@ export default function KnowledgeBaseAccordion({ practiceId }) {
         </div>
       </div>
 
-      {/* Accordion */}
       <div className="space-y-2">
         {SECTIONS.map((s) => {
           const isOpen = open === s.id
@@ -108,7 +112,7 @@ export default function KnowledgeBaseAccordion({ practiceId }) {
               {isOpen && (
                 <div className="border-t border-surface-700 px-4 py-4">
                   {s.stories ? (
-                    <StoriesEditor stories={stories} onSave={saveStories} />
+                    <StoriesEditor stories={stories} onSave={saveStories} saving={saveKb.isPending} />
                   ) : (
                     <>
                       <textarea
@@ -131,7 +135,7 @@ export default function KnowledgeBaseAccordion({ practiceId }) {
   )
 }
 
-function StoriesEditor({ stories, onSave }) {
+function StoriesEditor({ stories, onSave, saving }) {
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState({ title: '', category: 'price_overcome', text: '' })
 
@@ -151,7 +155,7 @@ function StoriesEditor({ stories, onSave }) {
               <p className="text-sm font-semibold text-slate-100">{st.title || 'Untitled story'}</p>
               <span className="mt-0.5 inline-block rounded-full bg-surface-700 px-2 py-0.5 text-[10px] font-medium capitalize text-slate-400">{(STORY_CATEGORIES.find((c) => c.key === st.category)?.label) || st.category}</span>
             </div>
-            <button onClick={() => remove(i)} className="rounded-md p-1 text-slate-500 transition hover:bg-surface-700 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button>
+            <button onClick={() => remove(i)} disabled={saving} className="rounded-md p-1 text-slate-500 transition hover:bg-surface-700 hover:text-rose-300 disabled:opacity-40"><Trash2 className="h-3.5 w-3.5" /></button>
           </div>
           {st.text && <p className="mt-2 text-sm leading-relaxed text-slate-300">{st.text}</p>}
         </div>
@@ -166,7 +170,7 @@ function StoriesEditor({ stories, onSave }) {
           <textarea value={draft.text} onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))} placeholder="What happened, and why it converted…" rows={3} className="input resize-y" />
           <div className="mt-2 flex justify-end gap-2">
             <button onClick={() => setAdding(false)} className="btn-ghost text-sm">Cancel</button>
-            <button onClick={add} className="btn-primary text-sm">Add story</button>
+            <button onClick={add} disabled={saving} className="btn-primary text-sm">Add story</button>
           </div>
         </div>
       ) : (

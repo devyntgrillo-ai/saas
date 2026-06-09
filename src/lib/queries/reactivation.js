@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../supabase'
 import { queryKeys } from './keys'
 
@@ -67,5 +67,110 @@ export function useReactivationAudience(practiceId, filters, enabled = true) {
     queryKey: queryKeys.reactivationAudience(practiceId, filters),
     queryFn: () => fetchReactivationAudience(practiceId, filters),
     enabled: Boolean(practiceId) && enabled,
+  })
+}
+
+export function useToggleReactivationCampaign() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ campaignId, practiceId, status }) => {
+      const next = status === 'paused' ? 'active' : 'paused'
+      const { error } = await supabase.from('reactivation_campaigns').update({ status: next }).eq('id', campaignId)
+      if (error) throw error
+      return { campaignId, practiceId, status: next }
+    },
+    onSuccess: ({ practiceId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.reactivation(practiceId) })
+    },
+  })
+}
+
+export function useUpdateEnrollmentNote() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ enrollmentId, campaignId, practiceId, notes }) => {
+      const { error } = await supabase
+        .from('reactivation_enrollments')
+        .update({ notes: notes || null })
+        .eq('id', enrollmentId)
+      if (error) throw error
+      return { enrollmentId, campaignId, practiceId }
+    },
+    onSuccess: ({ campaignId }) => {
+      queryClient.invalidateQueries({ queryKey: ['reactivation-enrollments', campaignId] })
+    },
+  })
+}
+
+export function useToggleEnrollmentReopened() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ enrollment, campaign }) => {
+      const reopened = !enrollment.reopened
+      const { error } = await supabase
+        .from('reactivation_enrollments')
+        .update({ reopened, reopened_at: reopened ? new Date().toISOString() : null })
+        .eq('id', enrollment.id)
+      if (error) throw error
+      const delta = reopened ? 1 : -1
+      const val = Number(enrollment.case_value ?? enrollment.consult?.case_value) || 0
+      const { error: e2 } = await supabase
+        .from('reactivation_campaigns')
+        .update({
+          cases_reopened: Math.max(0, (campaign.cases_reopened || 0) + delta),
+          recovered_estimate: Math.max(0, (campaign.recovered_estimate || 0) + delta * val),
+        })
+        .eq('id', campaign.id)
+      if (e2) throw e2
+      return { campaignId: campaign.id, practiceId: campaign.practice_id }
+    },
+    onSuccess: ({ campaignId, practiceId }) => {
+      queryClient.invalidateQueries({ queryKey: ['reactivation-enrollments', campaignId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.reactivation(practiceId) })
+    },
+  })
+}
+
+export function useRemoveEnrollment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ enrollmentId, campaign }) => {
+      const { error } = await supabase.from('reactivation_enrollments').delete().eq('id', enrollmentId)
+      if (error) throw error
+      const { error: e2 } = await supabase
+        .from('reactivation_campaigns')
+        .update({ total_recipients: Math.max(0, (campaign.total_recipients || 1) - 1) })
+        .eq('id', campaign.id)
+      if (e2) throw e2
+      return { campaignId: campaign.id, practiceId: campaign.practice_id }
+    },
+    onSuccess: ({ campaignId, practiceId }) => {
+      queryClient.invalidateQueries({ queryKey: ['reactivation-enrollments', campaignId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.reactivation(practiceId) })
+    },
+  })
+}
+
+export function useLaunchReactivationCampaign() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ practiceId, campaign, enrollments }) => {
+      const { data: row, error } = await supabase
+        .from('reactivation_campaigns')
+        .insert(campaign)
+        .select('id')
+        .single()
+      if (error) throw error
+      for (let i = 0; i < enrollments.length; i += 200) {
+        const chunk = enrollments.slice(i, i + 200).map((r) => ({ ...r, campaign_id: row.id }))
+        const { error: e2 } = await supabase.from('reactivation_enrollments').insert(chunk)
+        if (e2) throw e2
+      }
+      return { practiceId, campaignId: row.id }
+    },
+    onSuccess: ({ practiceId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.reactivation(practiceId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.reactivationAudience(practiceId) })
+    },
   })
 }

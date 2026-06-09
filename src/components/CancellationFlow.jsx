@@ -20,12 +20,9 @@ import {
   DOWNSELL,
   CANCELLATION_REASONS,
   fetchCancellationImpact,
-  pauseSubscription,
-  acceptDownsell,
-  submitCancellationFeedback,
-  cancelSubscription,
   exportPracticeData,
 } from '../lib/billing'
+import { usePauseSubscription, useAcceptDownsell, useCancelSubscriptionFlow } from '../lib/queries'
 
 function Shell({ onClose, children, maxWidth = 'max-w-lg', dismissable = true }) {
   return (
@@ -63,7 +60,10 @@ export default function CancellationFlow({ onClose }) {
   const [step, setStep] = useState('impact') // impact | pause | downsell | survey | confirm | paused | downsell_done | goodbye
   const [impact, setImpact] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [busy, setBusy] = useState(false)
+  const pauseMutation = usePauseSubscription()
+  const downsellMutation = useAcceptDownsell()
+  const cancelMutation = useCancelSubscriptionFlow()
+  const busy = pauseMutation.isPending || downsellMutation.isPending || cancelMutation.isPending
   const [reason, setReason] = useState('')
   const [elaboration, setElaboration] = useState('')
   const [pauseInfo, setPauseInfo] = useState(null)
@@ -83,38 +83,28 @@ export default function CancellationFlow({ onClose }) {
   const activePatients = impact?.activePatients ?? 0
 
   async function doPause(months) {
-    setBusy(true)
     try {
-      const ends = await pauseSubscription(practiceId, months)
+      const { ends } = await pauseMutation.mutateAsync({ practiceId, months })
       setPauseInfo({ months, ends })
       await refreshProfile()
       setStep('paused')
-    } finally {
-      setBusy(false)
-    }
+    } catch { /* noop */ }
   }
 
   async function doDownsell() {
-    setBusy(true)
     try {
-      await acceptDownsell(practiceId)
+      await downsellMutation.mutateAsync({ practiceId })
       await refreshProfile()
       setStep('downsell_done')
-    } finally {
-      setBusy(false)
-    }
+    } catch { /* noop */ }
   }
 
   async function doCancel() {
-    setBusy(true)
     try {
-      await submitCancellationFeedback({ practiceId, reason, elaboration, impact })
-      await cancelSubscription(practiceId)
+      await cancelMutation.mutateAsync({ practiceId, reason, elaboration, impact })
       await refreshProfile()
       setStep('goodbye')
-    } finally {
-      setBusy(false)
-    }
+    } catch { /* noop */ }
   }
 
   async function doExport() {

@@ -542,8 +542,8 @@ function missingColumnFromError(message) {
 export async function insertAgencyAccount(payload) {
   let body = { ...payload }
   for (let attempt = 0; attempt < 8; attempt++) {
-    const { error } = await supabase.from('agency_accounts').insert(body)
-    if (!error) return
+    const { data, error } = await supabase.from('agency_accounts').insert(body).select('id').single()
+    if (!error) return data
     const col = missingColumnFromError(error.message)
     if (col && Object.prototype.hasOwnProperty.call(body, col)) {
       const { [col]: _drop, ...next } = body
