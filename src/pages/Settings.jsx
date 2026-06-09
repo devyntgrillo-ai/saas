@@ -28,6 +28,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { supabase } from '../lib/supabase'
+import { auditUserRoleChanged } from '../lib/audit'
 import { formatDate } from '../lib/consults'
 import KnowledgeBase from './KnowledgeBase'
 import AuditLog from './AuditLog'
@@ -880,11 +881,30 @@ function PracticeTeamPanel({ practice }) {
   const pending = data?.pending ?? []
   const [invite, setInvite] = useState(false)
   const [busyInvite, setBusyInvite] = useState(null)
+  const [busyRole, setBusyRole] = useState(null)
   const [flash, setFlash] = useState('')
 
   function note(msg) {
     setFlash(msg)
     setTimeout(() => setFlash(''), 6000)
+  }
+
+  // Owner/admin changes a teammate's role (incl. demoting to read-only viewer).
+  // Goes through the SECURITY DEFINER RPC since RLS blocks updating others' rows.
+  async function changeRole(m, role) {
+    if (role === m.role) return
+    setBusyRole(m.id)
+    try {
+      const { data, error } = await supabase.rpc('set_practice_member_role', { p_user_id: m.id, p_role: role })
+      if (error || !data?.ok) throw new Error(data?.error || error?.message || 'Could not change role')
+      auditUserRoleChanged(m.id, { from: m.role, to: role })
+      note(`${m.display_name || m.email} is now ${ACCESS_LABELS[`practice_${role}`] || role}.`)
+      refetch()
+    } catch (e) {
+      note(e?.message || 'Could not change role.')
+    } finally {
+      setBusyRole(null)
+    }
   }
 
   async function removeMember(id) {
@@ -941,7 +961,21 @@ function PracticeTeamPanel({ practice }) {
                   </p>
                   {m.job_title && <p className="truncate text-xs font-medium text-slate-400">{m.job_title}</p>}
                   {m.display_name && <p className="truncate text-xs text-slate-500">{m.email}</p>}
-                  <p className="text-xs capitalize text-slate-500">{ACCESS_LABELS[`practice_${m.role}`] || m.role}</p>
+                  {perms.canInvite && m.id !== user?.id ? (
+                    <select
+                      value={m.role === 'admin' ? 'owner' : (['owner', 'member', 'viewer'].includes(m.role) ? m.role : 'member')}
+                      onChange={(e) => changeRole(m, e.target.value)}
+                      disabled={busyRole === m.id}
+                      title="Change role"
+                      className="mt-1 rounded-md border border-surface-700 bg-surface-900 px-1.5 py-1 text-xs text-slate-300 focus:border-primary focus:outline-none disabled:opacity-50"
+                    >
+                      <option value="owner">Practice Admin</option>
+                      <option value="member">Practice Member</option>
+                      <option value="viewer">Practice Viewer (read-only)</option>
+                    </select>
+                  ) : (
+                    <p className="text-xs capitalize text-slate-500">{ACCESS_LABELS[`practice_${m.role}`] || m.role}</p>
+                  )}
                 </div>
                 {perms.canInvite && m.id !== user?.id && (
                   <button onClick={() => removeMember(m.id)} className="rounded-md p-2 text-slate-500 transition hover:bg-surface-800 hover:text-rose-400" title="Remove">
