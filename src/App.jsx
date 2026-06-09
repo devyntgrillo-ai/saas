@@ -11,6 +11,7 @@ import RequireActiveBilling from './components/RequireActiveBilling'
 import Layout from './components/Layout'
 import AdminShell from './components/admin/AdminShell'
 import LoadingScreen from './components/LoadingScreen'
+import SessionSecurity from './components/SessionSecurity'
 
 // ── Eagerly loaded: auth flow + the core routes a TC hits immediately on login
 //    (Dashboard shell, Consults, Conversations) so they paint without a chunk
@@ -92,6 +93,8 @@ function AppContent() {
   }, [])
   if (appShellLoading || !minDone) return <LoadingScreen />
   return (
+    <>
+    <SessionSecurity />
     <Suspense fallback={<LoadingScreen />}>
             <Routes>
               {/* get.caselift.io root → signup funnel (preserving ?plan=/?ref=).
@@ -193,5 +196,6 @@ function AppContent() {
               </Route>
             </Routes>
     </Suspense>
+    </>
   )
 }

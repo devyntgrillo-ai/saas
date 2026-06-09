@@ -17,3 +17,24 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# ── Security headers (HIPAA posture) ────────────────────────────────────────
+# The non-CSP headers below are safe to enforce immediately.
+#
+# CSP NOTE: the originally-specified policy would BREAK production, so it is not
+# enforced as-is. Specifically it omitted `wss://*.supabase.co` (kills Supabase
+# Realtime: chat, presence, the concurrent-session check), targeted Stripe/Helcim
+# while billing actually runs on **Chargebee**, and had no allowances for the
+# in-browser Twilio Voice SDK or Google Fonts. So CSP ships here as
+# Report-Only with a corrected policy: it logs violations to the console without
+# blocking anything. Watch the reports, confirm zero legitimate violations, then
+# promote the header name to `Content-Security-Policy` to enforce.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(self), geolocation=()"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self' 'unsafe-inline' https://js.chargebee.com https://*.chargebee.com https://sdk.twilio.com https://js.stripe.com https://js.helcim.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.twilio.com https://*.twilio.com wss://*.twilio.com https://*.chargebee.com https://hooks.slack.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; frame-src 'self' https://*.chargebee.com https://js.stripe.com; media-src 'self' blob: https://*.supabase.co; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"

@@ -18,6 +18,20 @@ export default function Login() {
   const [forgot, setForgot] = useState(false)
   const [resetSent, setResetSent] = useState(false)
   const [resetting, setResetting] = useState(false)
+  // Surface why a user landed here when they were signed out automatically.
+  // Read once on mount via lazy init (consumes the one-shot reason flag).
+  const [notice] = useState(() => {
+    try {
+      const reason = sessionStorage.getItem('cl_signout_reason')
+      if (!reason) return ''
+      sessionStorage.removeItem('cl_signout_reason')
+      if (reason === 'inactivity') return 'You were signed out due to inactivity.'
+      if (reason === 'concurrent') return 'You were signed out to secure your account.'
+    } catch {
+      /* ignore */
+    }
+    return ''
+  })
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -58,6 +72,11 @@ export default function Login() {
         <div className="mb-8 flex justify-center">
           <Logo />
         </div>
+        {notice && (
+          <div className="mb-5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {notice}
+          </div>
+        )}
 
         <div className="card p-8">
           <h1 className="text-2xl font-bold text-white">
