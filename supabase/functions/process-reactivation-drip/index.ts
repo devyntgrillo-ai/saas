@@ -19,13 +19,20 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { requireServiceRole } from "../_shared/auth.ts";
+import { replaceTokens } from "../_shared/reactivationTokens.ts";
 
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
 
 const hasText = (v: unknown) => Boolean((v ?? "").toString().trim());
 
-// Canonical ordered steps for a campaign row (mirrors src/lib/reactivation.js).
+// Day offsets per step (Day 1 / Day 4 / Day 10 in the v2 design → 0/3/9 days
+// after launch). Steps beyond the 3rd fall back to ~3-day spacing.
+const DAY_OFFSETS = [0, 3, 9];
+const stepOffset = (i: number) => DAY_OFFSETS[i] ?? i * 3;
+
+// Canonical ordered steps for a campaign row. v2 design = SMS 1, SMS 2, Email 3;
+// legacy email slots still supported.
 // deno-lint-ignore no-explicit-any
 function campaignSteps(c: any) {
   const steps: { channel: string; label: string; subject?: string; body?: string }[] = [];
@@ -38,12 +45,10 @@ function campaignSteps(c: any) {
     steps.push({ channel: "email", label: "Email 2", subject: c.message_2_email_subject, body: c.message_2_email_body });
   }
   if (hasText(c.message_3_sms)) steps.push({ channel: "sms", label: "SMS 3", body: c.message_3_sms });
+  if (hasText(c.message_3_email_body) || hasText(c.message_3_email_subject)) {
+    steps.push({ channel: "email", label: "Email 3", subject: c.message_3_email_subject, body: c.message_3_email_body });
+  }
   return steps;
-}
-
-function fillName(text: string | undefined, first: string | undefined) {
-  if (!text) return "";
-  return String(text).replace(/\[Name\]|\[name\]|\[first_name\]|\{\{first_name\}\}/g, first || "there");
 }
 
 const ANGLE_LABEL: Record<string, string> = {
@@ -90,6 +95,13 @@ Deno.serve(async (req: Request) => {
       const stepCount = steps.length;
       if (!stepCount) continue;
 
+      // Practice fields for {{practice_name}} / {{doctor_name}} / {{phone_number}}.
+      const { data: practice } = await admin
+        .from("practices").select("name, doctor_last, phone").eq("id", c.practice_id).maybeSingle();
+      const launchedRef = c.launched_at || c.started_at || c.created_at;
+      let campSent = 0;
+      let campReplies = 0;
+
       // ── 2. Reply detection ────────────────────────────────────────────────
       const { data: live } = await admin
         .from("reactivation_enrollments")
@@ -125,7 +137,7 @@ Deno.serve(async (req: Request) => {
         // reply outcome so attribution can flip to caselift_recovered later.
         await admin
           .from("reactivation_enrollments")
-          .update({ status: "replied", replied_at: reply.created_at, reply_content: reply.body || null })
+          .update({ status: "replied", replied: true, replied_at: reply.created_at, reply_content: reply.body || null })
           .eq("id", e.id);
         await admin
           .from("conversations")
@@ -147,6 +159,7 @@ Deno.serve(async (req: Request) => {
           link: "/conversations",
         });
         replies++;
+        campReplies++;
       }
 
       // ── 3. Window + day-of-week gates ─────────────────────────────────────
@@ -177,33 +190,53 @@ Deno.serve(async (req: Request) => {
 
       for (const e of nextUp || []) {
         if (budget <= 0) break;
-        const step = steps[e.messages_sent];
+        const idx = e.messages_sent || 0;
+        const step = steps[idx];
         if (!step) continue;
+        // Respect the per-step day offset (Day 1 / Day 4 / Day 10) from launch.
+        if (!force && launchedRef) {
+          const dueAt = new Date(new Date(launchedRef).getTime() + stepOffset(idx) * 86400000);
+          if (now < dueAt) continue;
+        }
         const to = step.channel === "email" ? e.patient_email : e.patient_phone;
         if (!to) continue;
 
         const transport = step.channel === "email" ? "mailgun-send" : "twilio-send";
-        const body = fillName(step.body, e.patient_first);
-        const subject = fillName(step.subject, e.patient_first);
+        const body = replaceTokens(step.body, e, practice || {});
+        const subject = replaceTokens(step.subject, e, practice || {});
+        let ok = true;
         try {
           await admin.functions.invoke(transport, {
             body: { practice_id: c.practice_id, to, subject, body, consult_id: e.consult_id, reactivation_campaign_id: c.id },
           });
         } catch (err) {
+          ok = false;
           // Best-effort in demo: log, but still advance so the drip progresses.
           console.error(`reactivation drip: ${transport} failed for enrollment ${e.id}:`, (err as Error)?.message);
         }
-        const nextCount = (e.messages_sent || 0) + 1;
-        await admin
-          .from("reactivation_enrollments")
-          .update({
-            messages_sent: nextCount,
-            last_sent_at: nowIso,
-            status: nextCount >= stepCount ? "completed" : "sending",
-          })
-          .eq("id", e.id);
+        const nextCount = idx + 1;
+        // deno-lint-ignore no-explicit-any
+        const upd: Record<string, any> = {
+          messages_sent: nextCount,
+          last_sent_at: nowIso,
+          status: nextCount >= stepCount ? "completed" : "sending",
+        };
+        if (idx < 3) {
+          upd[`msg_${idx + 1}_status`] = ok ? "sent" : "failed";
+          upd[`msg_${idx + 1}_sent_at`] = nowIso;
+        }
+        await admin.from("reactivation_enrollments").update(upd).eq("id", e.id);
         sent++;
+        campSent++;
         budget--;
+      }
+
+      // Keep the results-tab rollups current (cards read these columns).
+      if (campSent || campReplies) {
+        await admin.from("reactivation_campaigns").update({
+          messages_sent: (c.messages_sent || 0) + campSent,
+          replies_count: (c.replies_count || 0) + campReplies,
+        }).eq("id", c.id);
       }
 
       // ── 5. Complete the campaign when nothing is left in flight ───────────
