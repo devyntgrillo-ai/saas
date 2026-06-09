@@ -16,14 +16,14 @@ sequenceDiagram
   TC->>App: Send email
   App->>DB: Insert outbound conversation_message
   App->>FN: mailgun-send
-  FN->>MG: Send with Reply-To reply+{conversation_id}@{practice}.mail.heyhope.ai
+  FN->>MG: Send with Reply-To reply+{conversation_id}@{mail_subdomain}.mysmileinbox.com
   Note over Patient: Patient hits Reply
   MG->>IN: Inbound route webhook
   IN->>DB: Insert inbound conversation_message
   App->>DB: Realtime shows reply in thread
 ```
 
-1. **Outbound:** `mailgun-send` sets **From** `office@{mail_subdomain}.mail.heyhope.ai` and **Reply-To** `reply+{conversation_id}@` the same host (see **`MAILGUN_PRACTICE_MAIL.md`**).
+1. **Outbound:** `mailgun-send` sets **From** `office@{mail_subdomain}.{root}` and **Reply-To** `reply+{conversation_id}@` the same practice host (see **`MAILGUN_PRACTICE_MAIL.md`**). Patient HTML includes a CAN-SPAM trust footer (practice name, address, phone).
 2. **Inbound:** Mailgun receives the reply and POSTs to `mailgun-inbound`.
 3. **Thread:** The function inserts an **inbound** `conversation_message` with `channel: email` (same triggers as SMS: auto-pause sequence, attribution, realtime).
 
@@ -52,9 +52,17 @@ In [Mailgun](https://app.mailgun.com/) → **Sending** → **Domains** → your 
 
 | Field | Value |
 |-------|--------|
-| Expression | `match_recipient("reply+.*@.*\\.mail\\.heyhope.ai")` (see `MAILGUN_PATIENT_MAIL_ROOT`) |
+| Expression | `match_recipient("reply+.*@.*\\.mysmileinbox.com")` (subdomain Reply-To; see `MAILGUN_PATIENT_MAIL_ROOT`) |
 | Action | `forward("https://eymgqjeudrmeofytnwgs.supabase.co/functions/v1/mailgun-inbound")` |
 | Priority | `0` (or high priority) |
+
+Legacy route (keep during transition for older root Reply-To addresses):
+
+```
+match_recipient("reply+.*@mysmileinbox.com")
+```
+
+Or run: `MAILGUN_API_KEY=... node scripts/setup-mailgun-inbound-route.mjs`
 
 Optional catch-all for testing (lower priority):
 

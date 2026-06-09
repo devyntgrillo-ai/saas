@@ -201,6 +201,12 @@ export async function sendMailgunMessage(opts: {
   if (opts.html) form.append("html", opts.html);
   if (opts.replyTo) form.append("h:Reply-To", opts.replyTo);
 
+  if (audience === "patient") {
+    form.append("o:tracking", "no");
+    form.append("o:tracking-opens", "no");
+    form.append("o:tracking-clicks", "no");
+  }
+
   return postMailgun(domain, key, form);
 }
 

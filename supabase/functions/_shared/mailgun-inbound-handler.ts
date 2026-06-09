@@ -26,8 +26,21 @@ function isLegacyPlatformRecipient(recipient: string): boolean {
   return recipient.toLowerCase().includes(`@${platform}`);
 }
 
+/** Dedupe key for Mailgun double-forward (duplicate routes hitting the same webhook). */
+function inboundDedupeKey(
+  form: FormData,
+  fromEmail: string,
+  recipient: string,
+  body: string,
+  subject: string,
+): string {
+  const messageId = String(form.get("Message-Id") || form.get("message-id") || "").trim();
+  if (messageId) return messageId;
+  return `${fromEmail}|${recipient}|${subject}|${body.slice(0, 500)}`;
+}
+
 export type PatientInboundResult =
-  | { handled: true; conversationId: string }
+  | { handled: true; conversationId: string; duplicate?: boolean }
   | { handled: false; reason: string };
 
 type ConvRow = {
@@ -149,6 +162,21 @@ export async function processPatientEmailInbound(
 
   conversationId = conversation.id;
 
+  const dedupeKey = inboundDedupeKey(form, fromEmail, recipient, body, subject);
+  const { data: existingInbound } = await admin
+    .from("conversation_messages")
+    .select("id")
+    .eq("conversation_id", conversationId)
+    .eq("direction", "inbound")
+    .eq("channel", "email")
+    .filter("meta->>inbound_dedupe_key", "eq", dedupeKey)
+    .maybeSingle();
+
+  if (existingInbound?.id) {
+    console.log(`${logPrefix}: duplicate inbound skipped`);
+    return { handled: true, conversationId, duplicate: true };
+  }
+
   await admin.from("conversations").update({
     last_message_at: nowIso,
     last_message_preview: preview(body || subject || "(email)"),
@@ -164,6 +192,7 @@ export async function processPatientEmailInbound(
     sent_at: nowIso,
     meta: {
       mailgun_inbound: true,
+      inbound_dedupe_key: dedupeKey,
       from: sender,
       from_email: fromEmail,
       to: recipient,

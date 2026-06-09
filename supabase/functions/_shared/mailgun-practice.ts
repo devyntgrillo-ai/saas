@@ -115,6 +115,54 @@ export function conversationReplyOnPracticeHost(
   return conversationReplyAddress(conversationId, hostname);
 }
 
+export type PracticeTrustFooterFields = {
+  name?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  phone?: string | null;
+};
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+export function formatPracticeLocation(practice: PracticeTrustFooterFields): string | null {
+  const cityState = [practice.city?.trim(), practice.state?.trim()].filter(Boolean).join(", ");
+  const parts = [practice.address?.trim(), cityState].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/** CAN-SPAM trust footer for patient email (Conversations + sequences). */
+export function appendPatientEmailTrustFooter(opts: {
+  htmlBody: string;
+  textBody: string;
+  practice: PracticeTrustFooterFields;
+}): { html: string; text: string } {
+  const name = (opts.practice.name || "your dental practice").trim();
+  const location = formatPracticeLocation(opts.practice);
+  const phone = opts.practice.phone?.trim();
+  const reason = `You're receiving this because you visited ${name}.`;
+
+  const textLines = [name, location, phone, reason].filter(Boolean) as string[];
+  const text = `${opts.textBody}\n\n---\n${textLines.join("\n")}`;
+
+  const htmlLines = [
+    `<p style="margin:0 0 4px;font-weight:600;color:#374151">${escapeHtml(name)}</p>`,
+    location ? `<p style="margin:0 0 4px;color:#6b7280">${escapeHtml(location)}</p>` : "",
+    phone ? `<p style="margin:0 0 8px;color:#6b7280">${escapeHtml(phone)}</p>` : "",
+    `<p style="margin:0;color:#9ca3af;font-size:12px">${escapeHtml(reason)}</p>`,
+  ].filter(Boolean);
+
+  const html =
+    `${opts.htmlBody}` +
+    `<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:13px;line-height:1.5">` +
+    htmlLines.join("") +
+    `</div>`;
+
+  return { html, text };
+}
+
 /** Resolve practice id from inbound recipient host (e.g. smith.mail.heyhope.ai). */
 export async function practiceIdFromMailRecipient(
   admin: SupabaseClient,

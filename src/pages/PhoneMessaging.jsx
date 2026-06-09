@@ -128,15 +128,11 @@ export default function PhoneMessaging() {
 
   useEffect(() => {
     if (!practice) return
-    const docName = [practice.doctor_first, practice.doctor_last].filter(Boolean).join(' ')
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSmsEnabled(practice.sms_enabled ?? true)
     setSmsSender(practice.sms_sender_name || '')
     setEmailEnabled(practice.email_enabled ?? true)
-    setEmailFromName(
-      practice.email_from_name ||
-        (docName ? `${docName} - ${practice.name || ''}`.replace(/ - $/, '') : practice.name || ''),
-    )
+    setEmailFromName(practice.email_from_name || practice.name || '')
     setEmailReplyTo(practice.email_reply_to || practice.email || '')
     setInboundForwardPhone(practice.inbound_call_forward_phone || '')
     setInboundRingBrowser(practice.inbound_call_ring_browser !== false)
@@ -427,8 +423,11 @@ export default function PhoneMessaging() {
               className="input"
               value={emailFromName}
               onChange={(e) => setEmailFromName(e.target.value)}
-              placeholder="Dr. Perry - Perry Family Dentistry"
+              placeholder={practice?.name || 'Your Dental Practice'}
             />
+            <p className="mt-1.5 text-xs text-slate-500">
+              Use your practice name for best deliverability. You can add a person name if you prefer.
+            </p>
           </Field>
           <Field label="Reply-to email address">
             <input

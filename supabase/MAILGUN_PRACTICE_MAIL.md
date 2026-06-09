@@ -4,9 +4,9 @@ Patient-facing mail uses **per-practice subdomains** on your managed zone:
 
 - Host: `{mail_subdomain}.{MAILGUN_PATIENT_MAIL_ROOT}` (e.g. `gold-dental.mysmileinbox.com`)
 - From: `office@{subdomain}.{root}` (display name from Settings → Email)
-- Reply-To (Conversations / sequences): `reply+{conversation_id}@{MAILGUN_DOMAIN}` — the **receive** domain with MX, not the practice From host
+- Reply-To (Conversations / sequences): `reply+{conversation_id}@mysmileinbox.com` (root receive host with MX). **From** stays `office@{subdomain}.mysmileinbox.com`. Optional aligned Reply-To on the practice host requires wildcard MX `*.mysmileinbox.com` in DNS + `MAILGUN_REPLY_TO_ON_PRACTICE_HOST=true`.
 
-**Platform mail** (invites, billing, staff digests) still uses `MAILGUN_DOMAIN` (e.g. `mg.heyhope.ai`).
+**Platform mail** (invites, billing, staff digests) still uses `MAILGUN_DOMAIN` (e.g. `caselift.io`).
 
 ## Architecture
 
@@ -32,8 +32,8 @@ Add records for the **patient mail zone** (adjust if your root differs):
 
 | Type | Host | Value |
 |------|------|--------|
-| MX | `mail.heyhope.ai` | `mxa.mailgun.org` (priority 10), `mxb.mailgun.org` (priority 10) |
-| MX | `*.mail.heyhope.ai` | same as above (wildcard receive) |
+| MX | `mysmileinbox.com` | `mxa.mailgun.org` (10), `mxb.mailgun.org` (10) |
+| MX | `*` (wildcard) | same as above — **required** for Reply-To on `{sub}.mysmileinbox.com` |
 | TXT | `mail.heyhope.ai` | SPF per Mailgun dashboard after adding domain |
 | TXT | `smtp._domainkey.mail.heyhope.ai` | DKIM from Mailgun |
 | CNAME | `email.mail.heyhope.ai` | `mailgun.org` (tracking, if Mailgun shows it) |
@@ -57,12 +57,12 @@ No per-practice domain creation in Mailgun is required; the app assigns `practic
 | `MAILGUN_FROM` | optional | `CaseLift <noreply@mg.heyhope.ai>` | Platform From default |
 | `MAILGUN_PATIENT_MAIL_ROOT` | yes | `mail.heyhope.ai` | Host suffix for practices |
 | `MAILGUN_PATIENT_MAIL_DOMAIN` | yes | `mail.heyhope.ai` | Mailgun API v3 domain for patient sends |
-| `MAILGUN_INBOUND_DOMAIN` | optional | `mysmileinbox.com` | Host for Reply-To (must have MX); defaults to `MAILGUN_DOMAIN` |
+| `MAILGUN_INBOUND_DOMAIN` | optional | `mysmileinbox.com` | Legacy override for inbound receive host docs; Reply-To uses practice subdomain host |
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | recommended | from Mailgun webhooks | `mailgun-inbound` |
 
 `MAILGUN_PATIENT_MAIL_DOMAIN` is usually the same as `MAILGUN_PATIENT_MAIL_ROOT` (the wildcard domain registered in Mailgun).
 
-**Send behavior:** By default, `mailgun-send` uses **per-practice** From (`office@{subdomain}.{root}`) with the practice display name. Set `MAILGUN_PATIENT_DELIVER_VIA_PLATFORM=true` only for legacy sandbox mode (single shared From like `hello@caselift.io`).
+**Send behavior:** By default, `mailgun-send` uses **per-practice** From (`office@{subdomain}.{root}`) with the practice display name. Reply-To is `reply+{conversation_id}@` the mail root (e.g. `mysmileinbox.com`) so replies work with root MX only. Set `MAILGUN_REPLY_TO_ON_PRACTICE_HOST=true` after adding wildcard MX `*.mysmileinbox.com` at your DNS provider to align Reply-To with From.
 
 ### 4. Inbound route (patient replies)
 
@@ -70,14 +70,16 @@ Mailgun → **Routes** (high priority):
 
 | Field | Value |
 |-------|--------|
-| Expression | `match_recipient("reply+.*@.*\.mail\.heyhope.ai")` |
+| Expression | `match_recipient("reply+.*@.*\.mysmileinbox.com")` (subdomain Reply-To) |
 | Action | `forward("https://<project-ref>.supabase.co/functions/v1/mailgun-inbound")` |
 
-Optional legacy route if you previously used platform domain for patient mail:
+Keep a **legacy** route during transition (older messages used root Reply-To):
 
 ```
-match_recipient("reply+.*@mg.heyhope.ai")
+match_recipient("reply+.*@mysmileinbox.com")
 ```
+
+Or run: `MAILGUN_API_KEY=... node scripts/setup-mailgun-inbound-route.mjs`
 
 ### 5. Frontend (optional display)
 

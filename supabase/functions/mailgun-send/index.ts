@@ -18,6 +18,7 @@ import {
   sendMailgunMessage,
 } from "../_shared/mailgun.ts";
 import {
+  appendPatientEmailTrustFooter,
   conversationReplyOnPracticeHost,
   ensurePracticeMailSubdomain,
   resolveConversationForEmail,
@@ -44,6 +45,10 @@ interface Body {
 function preview(text: string, max = 80): string {
   const t = String(text || "").replace(/\s+/g, " ").trim();
   return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 Deno.serve(async (req: Request) => {
@@ -80,7 +85,9 @@ Deno.serve(async (req: Request) => {
 
     const { data: pr } = await admin
       .from("practices")
-      .select("id, name, email_enabled, email_from_name, email_reply_to, mail_subdomain, mail_from_local_part, agency:agency_accounts(*)")
+      .select(
+        "id, name, address, city, state, phone, email_enabled, email_from_name, email_reply_to, mail_subdomain, mail_from_local_part, agency:agency_accounts(*)",
+      )
       .eq("id", practiceId)
       .maybeSingle();
     if (!pr) return json({ error: "Practice not found." }, 404);
@@ -90,7 +97,6 @@ Deno.serve(async (req: Request) => {
 
     const mail = await ensurePracticeMailSubdomain(admin, pr);
     const brand = await resolveBrand(admin, pr);
-    // Practice name first — patient mail should not show "CaseLift" unless the practice has no name.
     const fromName =
       (pr.email_from_name && String(pr.email_from_name).trim()) ||
       (pr.name && String(pr.name).trim()) ||
@@ -109,19 +115,25 @@ Deno.serve(async (req: Request) => {
       conversationId = await resolveConversationForEmail(admin, practiceId, payload.consult_id, to);
     }
 
-    // Reply-To must land on a Mailgun-receiving host (MAILGUN_INBOUND_DOMAIN / patient mail root).
-    // From can be office@{sub}.mysmileinbox.com (send-only) without MX on that host.
-    const receiveHost = mailgunInboundReceiveDomain();
+    // Reply-To: default root receive host (MX on mysmileinbox.com). Practice-subdomain
+    // Reply-To requires wildcard MX (*.mysmileinbox.com) in DNS — set
+    // MAILGUN_REPLY_TO_ON_PRACTICE_HOST=true once that exists (GoDaddy/registrar).
+    const replyOnPracticeHost = Deno.env.get("MAILGUN_REPLY_TO_ON_PRACTICE_HOST") === "true";
+    const replyHost = replyOnPracticeHost ? mail.hostname : mailgunInboundReceiveDomain();
     const threadReplyTo = (host: string | null) =>
       conversationId && host ? conversationReplyOnPracticeHost(conversationId, host) : null;
-    const inboundReply = threadReplyTo(receiveHost);
+    const inboundReply = threadReplyTo(replyHost);
     const replyTo = inboundReply || pr.email_reply_to || brand.supportEmail || null;
 
-    const text = body;
-    const html =
+    const htmlBody =
       `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.6;color:#111827">` +
       `<p style="margin:0 0 12px;color:#6b7280;font-size:13px">${escapeHtml(fromName)}</p>` +
       `<div style="white-space:pre-wrap">${escapeHtml(body)}</div></div>`;
+    const { html, text } = appendPatientEmailTrustFooter({
+      htmlBody,
+      textBody: body,
+      practice: pr,
+    });
 
     const platformFrom = mailgunFromAddress("noreply");
     const platformDomain = mailgunPlatformDomain();
@@ -130,11 +142,25 @@ Deno.serve(async (req: Request) => {
 
     let result: Awaited<ReturnType<typeof sendMailgunMessage>>;
     let usedFallback = false;
-    let sentReplyTo: string | null = replyTo;
+    const sentReplyTo = replyTo;
     let sentFromAddress = mail.fromAddress;
 
-    const sendPatient = () =>
-      sendMailgunMessage({
+    if (forcePlatformOnly && platformFrom && platformDomain) {
+      usedFallback = true;
+      sentFromAddress = platformFrom;
+      result = await sendMailgunMessage({
+        to,
+        subject,
+        text,
+        html,
+        fromName,
+        replyTo,
+        fromAddress: platformFrom,
+        audience: "platform",
+        mailgunDomain: platformDomain,
+      });
+    } else {
+      result = await sendMailgunMessage({
         to,
         subject,
         text,
@@ -145,43 +171,6 @@ Deno.serve(async (req: Request) => {
         audience: "patient",
         mailgunDomain: mail.apiDomain,
       });
-
-    const sendPlatform = (platformReplyTo: string | null) =>
-      sendMailgunMessage({
-        to,
-        subject,
-        text,
-        html,
-        fromName,
-        replyTo: platformReplyTo,
-        fromAddress: platformFrom!,
-        audience: "platform",
-        mailgunDomain: platformDomain!,
-      });
-
-    if (forcePlatformOnly && platformFrom && platformDomain) {
-      const platformReply = threadReplyTo(receiveHost) || replyTo;
-      sentReplyTo = platformReply;
-      sentFromAddress = platformFrom;
-      result = await sendPlatform(platformReply);
-      usedFallback = true;
-    } else {
-      result = await sendPatient();
-      if (
-        !result.sent &&
-        platformFrom &&
-        platformDomain &&
-        (result.reason === "mailgun_401" ||
-          result.reason === "mailgun_403" ||
-          result.reason === "mailgun_404")
-      ) {
-        console.warn(`mailgun-send: patient domain failed (${result.reason}); trying ${platformDomain}`);
-        const platformReply = threadReplyTo(receiveHost) || replyTo;
-        sentReplyTo = platformReply;
-        sentFromAddress = platformFrom;
-        result = await sendPlatform(platformReply);
-        usedFallback = result.sent;
-      }
     }
 
     if (!result.sent) {
@@ -231,8 +220,3 @@ Deno.serve(async (req: Request) => {
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }
 });
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
