@@ -48,10 +48,21 @@ export function usePermissions() {
     // Practice
     canViewSettings: rank >= ACCESS_LEVELS.practice_owner,
     canViewBilling: rank >= ACCESS_LEVELS.practice_owner,
+    canViewTeam: rank >= ACCESS_LEVELS.practice_owner,
     canManagePracticeSettings: rank >= ACCESS_LEVELS.practice_owner,
     canInvite: is('practice_owner') || rank >= ACCESS_LEVELS.agency_admin || Boolean(isSuperAdmin),
     canEditConsults: rank >= ACCESS_LEVELS.practice_member,
     readOnly: is('practice_viewer'),
+
+    // ── HIPAA "minimum necessary" PHI gates ───────────────────────────────
+    // A practice_viewer (rank 0, e.g. office manager) sees aggregate metrics
+    // and sequence counts only — never individual patient PHI. practice_member
+    // (TC) and above get full PHI access within their practice. Agency/super
+    // roles rank higher, so they pass too.
+    canViewPHI: rank >= ACCESS_LEVELS.practice_member,
+    canViewConsultDetail: rank >= ACCESS_LEVELS.practice_member,
+    canViewTranscripts: rank >= ACCESS_LEVELS.practice_member,
+    canViewConversations: rank >= ACCESS_LEVELS.practice_member,
 
     // Roles the current user may grant (at or below their own level).
     grantableRoles: (scope) => {

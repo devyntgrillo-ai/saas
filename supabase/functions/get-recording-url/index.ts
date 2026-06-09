@@ -5,6 +5,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { recordAuditFromReq } from "../_shared/audit.ts";
+import { callerRole, roleCanViewPHI } from "../_shared/roles.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,6 +49,22 @@ Deno.serve(async (req: Request) => {
       if (!user) return json({ error: "Unauthorized" }, 401);
       actorId = user.id;
       actorEmail = user.email ?? null;
+
+      // Minimum necessary: a read-only viewer must never retrieve patient audio.
+      const role = await callerRole({ userId: actorId ?? undefined, isServiceRole, client: scoped });
+      if (!roleCanViewPHI(role)) {
+        const admin0 = createClient(SUPABASE_URL, SERVICE_KEY);
+        await recordAuditFromReq(admin0, req, {
+          action: "access.denied",
+          userId: actorId,
+          userEmail: actorEmail,
+          resourceType: "consult",
+          resourceId: consultId,
+          details: { reason: "insufficient_role", role, fn: "get-recording-url" },
+          phiAccessed: false,
+        });
+        return json({ error: "Your role does not have access to patient recordings." }, 403);
+      }
     }
 
     const { data: consult } = await scoped

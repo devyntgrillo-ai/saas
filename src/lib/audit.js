@@ -46,6 +46,11 @@ export const AUDIT = {
   USER_ROLE_CHANGED: 'user.role_changed',
   BILLING_ACTION: 'billing.action',
 
+  // ── Access control ──
+  // A lower-privileged user tried to reach restricted PHI/content. Recorded so
+  // attempted access (not just successful access) is auditable per HIPAA.
+  ACCESS_DENIED: 'access.denied',
+
   // ── Data ──
   CONSULT_CREATED: 'consult.created',
   CONSULT_DELETED: 'consult.deleted',
@@ -128,6 +133,12 @@ export async function logAuthEvent(action, { email = null, details = null } = {}
 }
 
 // ── Semantic convenience wrappers used across the app ──
+// A blocked access attempt. resource describes what was being reached (e.g.
+// 'consult', 'conversation', 'settings:billing'); details carry the reason +
+// the path. phi_accessed stays false — access was denied, no PHI was shown.
+export const auditAccessDenied = (resource, resourceId = null, details = null) =>
+  logAudit(AUDIT.ACCESS_DENIED, { resourceType: resource, resourceId, details, phiAccessed: false })
+
 export const auditConsultViewed = (id) =>
   logAudit(AUDIT.CONSULT_VIEWED, { resourceType: 'consult', resourceId: id })
 

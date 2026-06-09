@@ -42,6 +42,7 @@ import CancellationFlow from '../components/CancellationFlow'
 import InviteModal from '../components/InviteModal'
 import Modal from '../components/Modal'
 import { usePermissions, ACCESS_LABELS } from '../lib/permissions'
+import AccessRestricted from '../components/AccessRestricted'
 import { usePracticeTeam, useRemoveTeamMember, useRevokeInvitation, useResendInvitation } from '../lib/queries'
 import { TREATMENT_TYPES } from '../lib/treatments'
 import {
@@ -105,6 +106,7 @@ export default function Settings() {
     if (t.hidden) return false
     if (t.adminOnly && !isAdmin) return false
     if (t.key === 'billing' && !perms.canViewBilling) return false
+    if (t.key === 'team' && !perms.canViewTeam) return false
     // Reseller-onboarded practices refer through their reseller, not directly.
     if (t.directOnly && practice?.agency_id) return false
     return true
@@ -113,6 +115,13 @@ export default function Settings() {
   const { tab: tabParam } = useParams()
   const tab = TAB_KEYS.includes(tabParam) ? tabParam : 'profile'
   const setTab = (key) => navigate(key === 'profile' ? '/settings' : `/settings/${key}`)
+
+  // Deep-linking to a restricted tab (billing/team/audit-log) is blocked even
+  // though the chip is hidden — members/viewers get Access Restricted (logged).
+  const tabBlocked =
+    (tab === 'billing' && !perms.canViewBilling) ||
+    (tab === 'team' && !perms.canViewTeam) ||
+    (tab === 'audit-log' && !isAdmin)
 
   // Legacy tab URLs — keep old links working.
   useEffect(() => {
@@ -263,8 +272,16 @@ export default function Settings() {
 
         {/* Panel */}
         <div className="min-w-0 flex-1">
+          {tabBlocked && (
+            <AccessRestricted
+              resource={`settings:${tab}`}
+              reason="insufficient_role"
+              message="Only practice admins can access this section."
+              showHomeLink={false}
+            />
+          )}
           {/* Practice Profile */}
-          {tab === 'profile' && (
+          {!tabBlocked && tab === 'profile' && (
             <div className="space-y-6">
             <div className="card p-6">
               <h2 className="text-base font-semibold text-white">Practice Profile</h2>
@@ -414,10 +431,10 @@ export default function Settings() {
           {/* Team */}
           {tab === 'account' && <UserProfilePanel />}
 
-          {tab === 'team' && <PracticeTeamPanel practice={practice} />}
+          {tab === 'team' && perms.canViewTeam && <PracticeTeamPanel practice={practice} />}
 
           {/* Billing */}
-          {tab === 'billing' && (
+          {tab === 'billing' && perms.canViewBilling && (
             <BillingPanel
               practice={practice}
               showSuccess={showSuccess}
@@ -430,7 +447,7 @@ export default function Settings() {
           )}
 
           {/* Audit Log (admin only) */}
-          {tab === 'audit-log' && <AuditLog />}
+          {tab === 'audit-log' && isAdmin && <AuditLog />}
         </div>
       </div>
 

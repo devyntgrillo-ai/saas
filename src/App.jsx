@@ -8,6 +8,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import RequireBAA from './components/RequireBAA'
 import RequireOnboarding from './components/RequireOnboarding'
 import RequireActiveBilling from './components/RequireActiveBilling'
+import RequirePermission from './components/RequirePermission'
 import Layout from './components/Layout'
 import AdminShell from './components/admin/AdminShell'
 import LoadingScreen from './components/LoadingScreen'
@@ -178,11 +179,18 @@ function AppContent() {
                   {/* Core app - gated by active billing. Settings/Dashboard stay open. */}
                   <Route element={<RequireActiveBilling />}>
                     <Route path="/knowledge-base" element={<Navigate to="/settings/knowledge-base" replace />} />
+                    {/* Consult LIST stays open to viewers (patient names masked
+                        inside). Detail pages + conversations are PHI — blocked
+                        for practice_viewer via RequirePermission. */}
                     <Route path="/consults" element={<Consults />} />
-                    <Route path="/consults/:id/processing" element={<ProcessingScreen />} />
-                    <Route path="/consults/:id" element={<ConsultDetail />} />
-                    <Route path="/conversations" element={<Conversations />} />
-                    <Route path="/conversations/dialer" element={<PowerDialer />} />
+                    <Route element={<RequirePermission perm="canViewConsultDetail" resource="consult" />}>
+                      <Route path="/consults/:id/processing" element={<ProcessingScreen />} />
+                      <Route path="/consults/:id" element={<ConsultDetail />} />
+                    </Route>
+                    <Route element={<RequirePermission perm="canViewConversations" resource="conversation" />}>
+                      <Route path="/conversations" element={<Conversations />} />
+                      <Route path="/conversations/dialer" element={<PowerDialer />} />
+                    </Route>
                     <Route path="/chat" element={<Chat />} />
                     {/* Sequence editing is desktop-only for now; the native app
                         shows a gate instead of the management/settings view. */}
