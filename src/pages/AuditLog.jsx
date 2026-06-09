@@ -7,6 +7,7 @@ import { useAuditLog } from '../lib/queries'
 import { SkeletonTable } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
 import ErrorState, { friendlyError } from '../components/ErrorState'
+import BreachInvestigation from '../components/BreachInvestigation'
 
 // Human labels for the canonical action names recorded by lib/audit.js.
 const ACTION_LABELS = {
@@ -36,14 +37,14 @@ const RANGES = [
 ]
 
 export default function AuditLog() {
-  const { profile } = useAuth()
+  const { profile, isSuperAdmin } = useAuth()
   const { isLight } = useTheme()
   const isAdmin = ['owner', 'admin'].includes(profile?.role)
 
   const [actionFilter, setActionFilter] = useState('all')
   const [range, setRange] = useState('30d')
 
-  const { data: rows = [], isLoading: loading, error: queryError } = useAuditLog(range, isAdmin)
+  const { data: rows = [], isLoading: loading, error: queryError, refetch } = useAuditLog(range, isAdmin)
   const error = queryError ? friendlyError(queryError) : null
 
   const visible = useMemo(
@@ -74,6 +75,9 @@ export default function AuditLog() {
           cannot be edited or deleted from here.
         </p>
       </div>
+
+      {/* Platform-admin only: breach-window PHI access investigation + CSV export. */}
+      {isSuperAdmin && <BreachInvestigation />}
 
       {/* Filters */}
       <div className="flex flex-col gap-3 rounded-xl border border-surface-700 bg-surface-900 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -117,7 +121,7 @@ export default function AuditLog() {
       {loading ? (
         <SkeletonTable rows={8} cols={4} />
       ) : error ? (
-        <ErrorState message={friendlyError(error)} onRetry={load} />
+        <ErrorState message={friendlyError(error)} onRetry={refetch} />
       ) : visible.length === 0 ? (
         <EmptyState
           icon={ScrollText}
