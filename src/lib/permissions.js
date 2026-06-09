@@ -17,7 +17,7 @@ export const ACCESS_LABELS = {
   agency_owner: 'Reseller Owner',
   agency_admin: 'Reseller Admin',
   agency_member: 'Reseller Member',
-  practice_owner: 'Practice Owner',
+  practice_owner: 'Practice Admin',
   practice_member: 'Practice Member',
   practice_viewer: 'Practice Viewer',
 }

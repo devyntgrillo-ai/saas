@@ -9,8 +9,18 @@ import MessageList from '../../components/chat/MessageList'
 import ChatComposer from '../../components/chat/ChatComposer'
 import ThreadPanel from '../../components/chat/ThreadPanel'
 import PresenceBar from '../../components/chat/PresenceBar'
+import ChatSearch from '../../components/chat/ChatSearch'
+import PinnedBar from '../../components/chat/PinnedBar'
 import { Avatar } from '../../components/chat/ChatMessage'
 import { initials, avatarColor, shortRelative } from '../../components/chat/chatUtil'
+
+function jumpToMessage(id) {
+  const el = document.getElementById(`msg-${id}`)
+  if (!el) return
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  el.classList.add('ring-2', 'ring-primary/50')
+  setTimeout(() => el.classList.remove('ring-2', 'ring-primary/50'), 1600)
+}
 
 const ONLINE_MS = 5 * 60 * 1000
 // Only currently-subscribed subaccounts appear in the inbox — not trials or
@@ -35,7 +45,17 @@ export default function AdminChats() {
   const [filter, setFilter] = useState('all') // all | unread | resolved
   const [thread, setThread] = useState(null)
   const [now, setNow] = useState(0)
+  const [members, setMembers] = useState([])
   const searchRef = useRef(null)
+
+  // Selected practice's member roster → mentionable names.
+  useEffect(() => {
+    if (!selectedId) return undefined
+    let on = true
+    supabase.from('users').select('display_name, email').eq('practice_id', selectedId)
+      .then(({ data }) => { if (on) setMembers(data || []) })
+    return () => { on = false }
+  }, [selectedId])
 
   // Ticking clock (state, not Date.now() in render) for the "online" dots.
   useEffect(() => {
@@ -151,6 +171,14 @@ export default function AdminChats() {
   const liveThread = thread ? chat.messages.find((m) => m.id === thread.id) || thread : null
   const mainTyping = chat.typingUsers.filter((t) => t.scope === 'main')
   const threadTyping = liveThread ? chat.typingUsers.filter((t) => t.scope === String(liveThread.id)) : []
+  const mentionNames = useMemo(() => {
+    const set = new Set(['CaseLift Team'])
+    members.forEach((m) => set.add(m.display_name || m.email))
+    chat.presence.forEach((u) => u.name && set.add(u.name))
+    chat.messages.forEach((m) => m.sender_name && set.add(m.sender_name))
+    if (currentUser.name) set.add(currentUser.name)
+    return [...set].filter(Boolean)
+  }, [members, chat.presence, chat.messages, currentUser])
 
   return (
     <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-xl border border-surface-700 bg-surface-900">
@@ -244,8 +272,9 @@ export default function AdminChats() {
                   <p className="truncate text-xs text-slate-400">{doctorLine(selectedChat) || 'Practice'}</p>
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-3">
+              <div className="flex shrink-0 items-center gap-2">
                 <PresenceBar users={chat.presence} />
+                <ChatSearch chatId={chatId} onJump={jumpToMessage} />
                 <Link to={`/admin/practices/${selectedChat.practice_id}`} className="flex items-center gap-1 text-xs text-primary-300 hover:underline">
                   View practice <ExternalLink className="h-3.5 w-3.5" />
                 </Link>
@@ -256,6 +285,8 @@ export default function AdminChats() {
                 )}
               </div>
             </div>
+
+            <PinnedBar pins={chat.pins} onJump={jumpToMessage} onUnpin={chat.togglePin} />
 
             <div className="relative flex min-h-0 flex-1 overflow-hidden">
               <div className="flex min-w-0 flex-1 flex-col">
@@ -270,11 +301,15 @@ export default function AdminChats() {
                     canModerate
                     typingUsers={mainTyping}
                     hasMore={chat.hasMore}
+                    reads={chat.reads}
+                    previousReadAt={chat.previousReadAt}
+                    mentionNames={mentionNames}
                     onLoadEarlier={chat.loadEarlier}
                     onReact={chat.toggleReaction}
                     onEdit={chat.editMessage}
                     onDelete={chat.deleteMessage}
                     onOpenThread={(m) => setThread(m)}
+                    onTogglePin={chat.togglePin}
                   />
                 )}
                 <div className="flex items-center gap-1.5 px-5 pt-1 text-[11px] text-slate-500">
@@ -283,7 +318,8 @@ export default function AdminChats() {
                 </div>
                 <ChatComposer
                   placeholder={`Reply to ${practiceName(selectedChat)}…`}
-                  onSend={(t, f) => chat.sendMessage(t, null, f)}
+                  mentionables={mentionNames}
+                  onSend={(t, f, meta) => chat.sendMessage(t, null, f, meta)}
                   onTyping={() => chat.startTyping()}
                   onStopTyping={() => chat.stopTyping()}
                 />
@@ -300,6 +336,7 @@ export default function AdminChats() {
                     viewerType="caselift_team"
                     canModerate
                     typingUsers={threadTyping}
+                    mentionNames={mentionNames}
                     onClose={() => setThread(null)}
                     onReact={chat.toggleReaction}
                     onEdit={chat.editMessage}

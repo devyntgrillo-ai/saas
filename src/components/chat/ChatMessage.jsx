@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Smile, MessageSquare, Pencil, Trash2, X, Check, Paperclip } from 'lucide-react'
+import { Smile, MessageSquare, Pencil, Trash2, X, Check, Paperclip, Pin } from 'lucide-react'
 import EmojiPicker from './EmojiPicker'
+import LinkPreview from './LinkPreview'
+import AudioClip from './AudioClip'
 import { groupReactions } from '../../hooks/useSupportChat'
 import { initials, avatarColor, timeLabel, shortRelative } from './chatUtil'
+import { renderRich, firstUrl } from './richtext'
 
 // One avatar for everyone: a real profile photo when we have one, otherwise
 // deterministic colored initials. Coaches (team) get the brand-accent circle.
@@ -34,11 +37,13 @@ export default function ChatMessage({
   replyCount = 0,
   lastReplyAt = null,
   inThread = false,
+  mentionNames = [],
   onReact,
   onReply,
   onEdit,
   onDelete,
   onOpenThread,
+  onTogglePin,
 }) {
   const [showPicker, setShowPicker] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -59,10 +64,17 @@ export default function ChatMessage({
   }
 
   return (
-    <div className={`group relative flex gap-2.5 px-4 py-1 hover:bg-surface-800/40 ${showHeader ? 'mt-2.5' : ''} ${rightAlign ? 'flex-row-reverse' : ''}`}>
-      {/* Avatar column (kept for spacing when grouped) */}
-      <div className="w-9 shrink-0">
-        {showHeader && <Avatar name={message.sender_name} url={message.sender_avatar} team={isTeam} />}
+    <div id={`msg-${message.id}`} className={`group relative flex scroll-mt-4 gap-2.5 px-4 py-1 hover:bg-surface-800/40 ${showHeader ? 'mt-2.5' : ''} ${message.pinned_at ? 'bg-amber-500/[0.06]' : ''} ${rightAlign ? 'flex-row-reverse' : ''}`}>
+      {/* Avatar column (kept for spacing when grouped). Grouped rows show the
+          timestamp here on hover, Slack-style. */}
+      <div className="flex w-9 shrink-0 justify-center">
+        {showHeader ? (
+          <Avatar name={message.sender_name} url={message.sender_avatar} team={isTeam} />
+        ) : (
+          <span className="mt-1 select-none text-[10px] leading-none text-slate-500 opacity-0 transition group-hover:opacity-100">
+            {timeLabel(message.created_at).replace(/\s?[AP]M$/i, '')}
+          </span>
+        )}
       </div>
 
       <div className={`min-w-0 flex-1 ${rightAlign ? 'flex flex-col items-end' : ''}`}>
@@ -82,6 +94,11 @@ export default function ChatMessage({
 
         {/* Message body */}
         <div className={`mt-0.5 max-w-[680px] ${isTeam && !rightAlign ? 'border-l-2 border-primary/40 pl-2.5' : ''}`}>
+          {message.pinned_at && !deleted && (
+            <span className="mb-0.5 flex items-center gap-1 text-[10px] font-medium text-amber-400/80">
+              <Pin className="h-3 w-3" /> Pinned
+            </span>
+          )}
           {deleted ? (
             <p className="text-sm italic text-slate-500">This message was deleted</p>
           ) : editing ? (
@@ -104,12 +121,16 @@ export default function ChatMessage({
           ) : (
             <>
               {message.message && (
-                <p className={`whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-200 ${rightAlign ? 'rounded-2xl rounded-tr-sm bg-primary/15 px-3 py-2' : ''}`}>
-                  {message.message}
+                <p className={`whitespace-pre-wrap break-words text-[15px] leading-[1.5] text-slate-200 ${rightAlign ? 'rounded-2xl rounded-tr-sm bg-primary/15 px-3 py-2' : ''}`}>
+                  {renderRich(message.message, mentionNames)}
                   {message.edited_at && <span className="ml-1.5 text-[11px] text-slate-500">(edited)</span>}
                 </p>
               )}
-              {message.attachment_url && (
+              {message.message && firstUrl(message.message) && <LinkPreview url={firstUrl(message.message)} />}
+              {message.attachment_url && message.attachment_type?.startsWith('audio/') && (
+                <AudioClip url={message.attachment_url} durationSec={message.audio_duration} transcript={message.audio_transcript} seed={message.id} />
+              )}
+              {message.attachment_url && !message.attachment_type?.startsWith('audio/') && (
                 message.attachment_type?.startsWith('image/') ? (
                   <a href={message.attachment_url} target="_blank" rel="noreferrer" className="mt-1 block w-fit">
                     <img src={message.attachment_url} alt={message.attachment_name || ''} className="max-h-72 max-w-xs rounded-lg border border-surface-700 object-cover" />
@@ -183,6 +204,11 @@ export default function ChatMessage({
           {!inThread && (
             <button onClick={() => onReply?.(message)} className="flex h-7 w-7 items-center justify-center rounded text-slate-400 transition hover:bg-surface-800 hover:text-white" title="Reply in thread">
               <MessageSquare className="h-4 w-4" />
+            </button>
+          )}
+          {onTogglePin && (
+            <button onClick={() => onTogglePin(message.id)} className={`flex h-7 w-7 items-center justify-center rounded transition hover:bg-surface-800 ${message.pinned_at ? 'text-amber-400' : 'text-slate-400 hover:text-white'}`} title={message.pinned_at ? 'Unpin' : 'Pin message'}>
+              <Pin className="h-4 w-4" />
             </button>
           )}
           {canEdit && (

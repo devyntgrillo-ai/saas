@@ -208,7 +208,7 @@ function UserAccessModal({ existing, agencies, practices, onClose, onSaved }) {
   const roleOptions = access === 'reseller'
     ? [['owner', 'Owner'], ['admin', 'Admin']]
     : access === 'practice'
-    ? [['owner', 'Owner'], ['member', 'Member'], ['viewer', 'Viewer']]
+    ? [['owner', 'Admin'], ['member', 'Member'], ['viewer', 'Viewer']]
     : []
 
   return (

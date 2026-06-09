@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react'
-import ChatMessage from './ChatMessage'
+import ChatMessage, { Avatar } from './ChatMessage'
 import TypingIndicator from './TypingIndicator'
 import { dayKey, dayLabel } from './chatUtil'
 
 const GROUP_GAP_MS = 5 * 60 * 1000
 
 // Renders the main message stream: date dividers, grouped consecutive messages,
-// thread reply counts, smart auto-scroll, and the typing indicator at the bottom.
+// unread divider, thread counts, read receipts, smart auto-scroll, typing.
 export default function MessageList({
   messages,
   reactions,
@@ -15,11 +15,15 @@ export default function MessageList({
   canModerate = false,
   typingUsers = [],
   hasMore = false,
+  reads = [],
+  previousReadAt = null,
+  mentionNames = [],
   onLoadEarlier,
   onReact,
   onEdit,
   onDelete,
   onOpenThread,
+  onTogglePin,
 }) {
   const scrollRef = useRef(null)
   const nearBottomRef = useRef(true)
@@ -34,6 +38,8 @@ export default function MessageList({
     const out = []
     let lastDay = null
     let prev = null
+    let unreadMarked = false
+    const prevRead = previousReadAt ? new Date(previousReadAt) : null
     for (const m of top) {
       const dk = dayKey(m.created_at)
       const showDivider = dk !== lastDay
@@ -42,17 +48,29 @@ export default function MessageList({
       const closeInTime = prev && new Date(m.created_at) - new Date(prev.created_at) < GROUP_GAP_MS
       const showHeader = showDivider || !sameSender || !closeInTime
       prev = m
+      let firstUnread = false
+      if (!unreadMarked && prevRead && m.sender_id !== myId && new Date(m.created_at) > prevRead) {
+        firstUnread = true
+        unreadMarked = true
+      }
       const replies = messages.filter((x) => x.thread_parent_id === m.id)
       out.push({
         m,
         showDivider,
         showHeader,
+        firstUnread,
         replyCount: replies.length,
         lastReplyAt: replies.length ? replies[replies.length - 1].created_at : null,
       })
     }
     return out
-  }, [messages])
+  }, [messages, previousReadAt, myId])
+
+  // "Seen by" — other users whose last read is at/after the latest message.
+  const lastMsg = rows.length ? rows[rows.length - 1].m : null
+  const seenBy = lastMsg
+    ? reads.filter((r) => r.user_id !== myId && new Date(r.last_read_at) >= new Date(lastMsg.created_at))
+    : []
 
   function onScroll(e) {
     const el = e.currentTarget
@@ -82,7 +100,7 @@ export default function MessageList({
         </div>
       )}
 
-      {rows.map(({ m, showDivider, showHeader, replyCount, lastReplyAt }) => (
+      {rows.map(({ m, showDivider, showHeader, firstUnread, replyCount, lastReplyAt }) => (
         <div key={m.id}>
           {showDivider && (
             <div className="my-3 flex items-center gap-3 px-4">
@@ -91,6 +109,13 @@ export default function MessageList({
                 {dayLabel(m.created_at)}
               </span>
               <div className="h-px flex-1 bg-surface-700" />
+            </div>
+          )}
+          {firstUnread && (
+            <div className="my-2 flex items-center gap-3 px-4">
+              <div className="h-px flex-1 bg-rose-500/40" />
+              <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] font-semibold text-rose-300">New</span>
+              <div className="h-px flex-1 bg-rose-500/40" />
             </div>
           )}
           <ChatMessage
@@ -102,14 +127,30 @@ export default function MessageList({
             showHeader={showHeader}
             replyCount={replyCount}
             lastReplyAt={lastReplyAt}
+            mentionNames={mentionNames}
             onReact={onReact}
             onReply={onOpenThread}
             onEdit={onEdit}
             onDelete={onDelete}
             onOpenThread={onOpenThread}
+            onTogglePin={onTogglePin}
           />
         </div>
       ))}
+
+      {seenBy.length > 0 && (
+        <div className="flex items-center justify-end gap-1.5 px-4 pt-1.5 text-[11px] text-slate-500">
+          <span>Seen by</span>
+          <div className="flex -space-x-1">
+            {seenBy.slice(0, 4).map((r) => (
+              <div key={r.user_id} className="rounded ring-2 ring-surface-900" title={r.user_name}>
+                <Avatar name={r.user_name} url={r.user_avatar} team={r.sender_type === 'caselift_team'} size="h-4 w-4" />
+              </div>
+            ))}
+          </div>
+          {seenBy.length > 4 && <span>+{seenBy.length - 4}</span>}
+        </div>
+      )}
 
       <div className="px-4 pt-1">
         <TypingIndicator users={typingUsers} />

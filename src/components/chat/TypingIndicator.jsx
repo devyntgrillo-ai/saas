@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 // Animated "…is typing" row. `users` is the list of active typing rows (already
 // filtered to exclude the current user).
 export default function TypingIndicator({ users = [] }) {
-  const names = users.map((u) => u.sender_name).filter(Boolean)
+  const names = users.map((u) => u.name || u.sender_name).filter(Boolean)
   let label = ''
   if (names.length === 1) label = `${names[0]} is typing`
   else if (names.length === 2) label = `${names[0]} and ${names[1]} are typing`

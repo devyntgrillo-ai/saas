@@ -14,6 +14,7 @@ export default function ThreadPanel({
   viewerType,
   canModerate,
   typingUsers = [],
+  mentionNames = [],
   onClose,
   onReact,
   onEdit,
@@ -69,6 +70,7 @@ export default function ThreadPanel({
             viewerType={viewerType}
             canModerate={canModerate}
             inThread
+            mentionNames={mentionNames}
             onReact={onReact}
             onEdit={onEdit}
             onDelete={onDelete}
@@ -89,6 +91,7 @@ export default function ThreadPanel({
             viewerType={viewerType}
             canModerate={canModerate}
             inThread
+            mentionNames={mentionNames}
             onReact={onReact}
             onEdit={onEdit}
             onDelete={onDelete}
