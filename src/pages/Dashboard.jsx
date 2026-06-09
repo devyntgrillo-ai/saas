@@ -209,6 +209,17 @@ export default function Dashboard() {
         </Link>
       )}
 
+      {/* Learning-system insight (Part 6) — what's getting replies, from the weekly tune. */}
+      {practice?.channel_performance?.top_insight && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+          <span className="text-base leading-none">💡</span>
+          <div className="min-w-0">
+            <p className="font-medium text-primary-200">Follow-up insight</p>
+            <p className="mt-0.5 text-slate-300">{practice.channel_performance.top_insight}</p>
+          </div>
+        </div>
+      )}
+
       {!practiceId && !loading && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           Your account isn't linked to a practice yet. Finish setup in{' '}
