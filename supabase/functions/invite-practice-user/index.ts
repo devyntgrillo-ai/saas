@@ -21,6 +21,7 @@ import { createClient } from "@supabase/supabase-js";
 import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
 import { recordAuditFromReq } from "../_shared/audit.ts";
+import { safeRedirect } from "../_shared/appUrl.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -78,7 +79,9 @@ Deno.serve(async (req: Request) => {
     const email: string | undefined = body.email;
     const doctorFirst: string | null = body.doctor_first ?? null;
     const doctorLast: string | null = body.doctor_last ?? null;
-    const redirectTo: string | undefined = body.redirect_to;
+    // Force the canonical production origin; keep only the path (/accept-invite)
+    // from the caller so a localhost inviter can't break the real invite link.
+    const redirectTo: string = safeRedirect(body.redirect_to, "/accept-invite");
 
     if (!agencyId || !practiceName || !email) {
       return json({ error: "agency_id, practice_name, and email are required" }, 400);

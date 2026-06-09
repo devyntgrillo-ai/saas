@@ -24,6 +24,7 @@ import { createClient } from "@supabase/supabase-js";
 import { renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
 import { recordAuditFromReq } from "../_shared/audit.ts";
+import { appBaseUrl } from "../_shared/appUrl.ts";
 
 const SUPER_ADMIN_EMAIL = "devyntgrillo@gmail.com";
 
@@ -98,7 +99,9 @@ Deno.serve(async (req: Request) => {
       if (access === "practice" && !practiceId) return json({ error: "Select a subaccount for practice access" }, 400);
 
       const { access_level, userRole, practiceScoped, agencyScoped } = resolveAccess(access, role);
-      const appOrigin = String(body.app_origin || Deno.env.get("APP_URL") || "https://app.caselift.io").replace(/\/$/, "");
+      // Always use the canonical production URL — never the inviter's browser
+      // origin (which is localhost in dev and would break real invite links).
+      const appOrigin = appBaseUrl();
 
       // If this email already belongs to a user (e.g. a previously deactivated
       // one), lift any ban FIRST so we can generate a sign-in link and reactivate
