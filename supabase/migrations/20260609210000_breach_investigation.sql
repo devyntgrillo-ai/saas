@@ -50,23 +50,27 @@ begin
     raise exception 'not authorized' using errcode = '42501';
   end if;
 
+  -- Columns are cast to the declared return types, and the consults join casts
+  -- BOTH sides to text: production audit_logs.resource_id is uuid (the original
+  -- migration declared it text), so an unqualified c.id::text = al.resource_id
+  -- raised "operator does not exist: text = uuid".
   return query
     select
-      al.created_at,
-      al.action,
-      al.user_email,
-      al.practice_id,
-      p.name,
-      p.email,
-      p.phone,
-      al.resource_id,
-      c.patient_name,
-      c.patient_phone,
-      c.patient_email,
-      al.ip_address
+      al.created_at::timestamptz,
+      al.action::text,
+      al.user_email::text,
+      al.practice_id::uuid,
+      p.name::text,
+      p.email::text,
+      p.phone::text,
+      al.resource_id::text,
+      c.patient_name::text,
+      c.patient_phone::text,
+      c.patient_email::text,
+      al.ip_address::text
     from public.audit_logs al
     left join public.practices p on p.id = al.practice_id
-    left join public.consults  c on c.id::text = al.resource_id
+    left join public.consults  c on c.id::text = al.resource_id::text
     where al.created_at between window_start and window_end
       and al.action in (
         'consult.viewed',
