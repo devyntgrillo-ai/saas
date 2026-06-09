@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, UserCog, Ban, Eye, Check } from 'lucide-react'
 import Modal from '../../components/Modal'
 import { useAdmin } from '../../context/AdminContext'
-import { agencyStatusMeta, PRICING } from '../../lib/admin'
+import { agencyStatusMeta } from '../../lib/admin'
 import { statusMeta as subStatusMeta } from '../../lib/billing'
 import { timeAgo } from '../../lib/consults'
 import { supabase } from '../../lib/supabase'
@@ -69,11 +69,10 @@ export default function AgencyDetail() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
-        <StatCard label="MRR to CaseLift" value={money(agency.mrrToCaseLift)} accent="text-emerald-300" />
-        <StatCard label="Their client MRR" value={money(agency.clientMrr)} />
-        <StatCard label="Their margin" value={money(agency.margin)} />
-        <StatCard label="Active practices" value={practices.filter((p) => p.subscription_status === 'active').length} />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
+        <StatCard label="Commission / mo" value={money(agency.commissionOwed)} accent="text-emerald-300" />
+        <StatCard label="Commission rate" value={`${money(agency.commission_rate)}/practice`} />
+        <StatCard label="Active referred" value={practices.filter((p) => p.subscription_status === 'active').length} />
         <StatCard label="Consults (mo)" value={consultsMonth} />
         <StatCard label="Recovered (mo)" value={money(recovered)} accent="text-emerald-300" />
       </div>
@@ -104,8 +103,6 @@ export default function AgencyDetail() {
         <WhiteLabelCard wl={agency.white_label} />
         <InternalNotes agency={agency} onSaved={refresh} />
       </div>
-
-      <BillingHistory agency={agency} />
 
       {confirmSuspend && (
         <Modal title={agency.status === 'suspended' ? 'Reactivate reseller?' : 'Suspend reseller?'} onClose={() => setConfirmSuspend(false)} footer={
@@ -198,26 +195,3 @@ function InternalNotes({ agency, onSaved }) {
   )
 }
 
-function BillingHistory({ agency }) {
-  // Seed 3 months of charges from the agency's MRR-to-CaseLift.
-  const amount = agency.mrrToCaseLift || agency.practiceCount * PRICING.agencyPerLocation
-  const months = [0, 1, 2].map((i) => {
-    const d = new Date()
-    d.setMonth(d.getMonth() - i)
-    return { month: d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }), amount, status: 'Paid', invoice: `INV-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}` }
-  })
-  return (
-    <section className="space-y-3">
-      <h2 className="text-sm font-semibold text-white">Billing history</h2>
-      <Table
-        head={['Month', 'Amount', 'Status', 'Invoice']}
-        rows={months.map((m) => [
-          m.month,
-          money(m.amount),
-          <Badge className="bg-emerald-500/15 text-emerald-300">{m.status}</Badge>,
-          <span className="font-mono text-xs text-slate-400">{m.invoice}</span>,
-        ])}
-      />
-    </section>
-  )
-}

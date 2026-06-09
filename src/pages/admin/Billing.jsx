@@ -166,7 +166,7 @@ export default function AdminBilling() {
       <section className="space-y-3 pt-2">
         <h2 className="text-sm font-semibold text-white">Reseller performance</h2>
         <Table
-          head={['Reseller', 'Owner', 'Practices', 'MRR', 'Status', 'Joined', 'Last activity', '']}
+          head={['Reseller', 'Owner', 'Practices', 'Commission / mo', 'Status', 'Joined', 'Last activity', '']}
           rows={agencies.map((a) => [
             <div className="flex items-center gap-2.5">
               <Avatar name={a.name} color={a.white_label?.primary_color} />
@@ -174,7 +174,7 @@ export default function AdminBilling() {
             </div>,
             a.owner_email || '-',
             a.practiceCount,
-            money(a.mrrToCaseLift),
+            money(a.commissionOwed),
             <Badge className={agencyStatusMeta(a.status).classes}>{agencyStatusMeta(a.status).label}</Badge>,
             new Date(a.created_at).toLocaleDateString(),
             a.last_activity ? timeAgo(a.last_activity) : '-',

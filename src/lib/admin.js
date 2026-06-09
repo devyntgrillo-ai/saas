@@ -1,7 +1,7 @@
 // Admin data layer — loads real agency_accounts / practices; no silent demo blending.
 // Use loadAdminDemoData() or VITE_ADMIN_SHOW_DEMO=true for local previews only.
 import { isAcceptedConsult } from './attribution'
-import { WHOLESALE_PRICE, isActiveSubaccount, commissionRate, commissionOwed } from './resellerSaas'
+import { isActiveSubaccount, commissionRate, commissionOwed } from './resellerSaas'
 import { supabase } from './supabase'
 
 export const PRICING = {
@@ -30,8 +30,7 @@ const DEMO_AGENCIES = [
     status: 'active',
     created_at: iso(45),
     last_activity: iso(0.1),
-    perLocationFee: 500,
-    clientPricePerLocation: 1497, // what the agency charges each of its practices
+    commission_rate: 200, // flat $/mo per active referred practice
     notes: 'Founding partner. Expanding into Idaho in Q3 - likely +2 locations.',
     white_label: {
       brand_name: 'NW Recovery Suite',
@@ -48,8 +47,7 @@ const DEMO_AGENCIES = [
     status: 'active',
     created_at: iso(30),
     last_activity: iso(0.4),
-    perLocationFee: 500,
-    clientPricePerLocation: 1297,
+    commission_rate: 250,
     notes: 'Onboarding their 3rd location next month.',
     white_label: null,
   },
@@ -131,48 +129,25 @@ function computeAgencyLastActivityMap(rawPractices, consults) {
 
 function shapeRealAgency(row, practices, { lastActivity, ownerEmails } = {}) {
   const mine = practices.filter((p) => p.agency_id === row.id)
-  const activeList = mine.filter((p) => isActiveSubaccount(p.subscription_status))
-  const active = activeList.length
-  const wholesale = Number(row.reseller_wholesale_price) || Number(row.monthly_fee || row.per_location_fee) || WHOLESALE_PRICE
-  const price = Number(row.reseller_client_price) || 0
-  const configured = row.reseller_client_price != null
-  const clientPrice = configured ? price : Number(row.client_price) || 0
-  const mrrToCaseLift = active * wholesale
-  const clientMrr = active * clientPrice
-  const gross = active * price
-  const ourRevenue = active * wholesale
-  const saasMargin = active * (price - wholesale)
+  const active = mine.filter((p) => isActiveSubaccount(p.subscription_status)).length
   const status = agencyStatus(row)
   const rate = commissionRate(row)
   return {
     id: row.id,
     name: row.company_name || row.brand_name || row.name,
-    // Referral-commission model: flat rate per active referred practice.
-    commission_rate: rate,
-    commissionOwed: commissionOwed({ rate, activeCount: active }),
     owner_name: row.owner_name || null,
     owner_email: row.owner_email || ownerEmails?.[row.owner_user_id] || row.owner?.email || null,
     status,
     created_at: row.created_at,
     last_activity: lastActivity || row.last_activity || row.created_at,
-    perLocationFee: wholesale,
-    clientPricePerLocation: clientPrice,
     practiceCount: mine.length,
     activePracticeCount: active,
-    mrrToCaseLift,
-    clientMrr,
-    margin: clientMrr - mrrToCaseLift,
-    wholesale,
-    price,
     active,
-    gross,
-    ourRevenue,
-    saasMargin,
-    configured,
+    // Referral-commission model: flat rate per active referred practice. These
+    // two fields are the source of truth for the admin payout tally.
+    commission_rate: rate,
+    commissionOwed: commissionOwed({ rate, activeCount: active }),
     suspended: status === 'suspended' || row.active === false,
-    reseller_client_price: row.reseller_client_price,
-    reseller_wholesale_price: row.reseller_wholesale_price,
-    reseller_slug: row.reseller_slug || null,
     white_label_enabled: Boolean(row.white_label_enabled),
     notes: row.admin_notes || row.notes || '',
     white_label:
@@ -190,14 +165,15 @@ function shapeRealAgency(row, practices, { lastActivity, ownerEmails } = {}) {
 function deriveDemoAgencies() {
   return DEMO_AGENCIES.map((a) => {
     const mine = DEMO_PRACTICES.filter((p) => p.agency_id === a.id)
-    const mrrToCaseLift = mine.length * a.perLocationFee
-    const clientMrr = mine.length * a.clientPricePerLocation
+    const active = mine.filter((p) => isActiveSubaccount(p.subscription_status)).length
+    const rate = commissionRate(a)
     return {
       ...a,
       practiceCount: mine.length,
-      mrrToCaseLift,
-      clientMrr,
-      margin: clientMrr - mrrToCaseLift,
+      activePracticeCount: active,
+      active,
+      commission_rate: rate,
+      commissionOwed: commissionOwed({ rate, activeCount: active }),
     }
   })
 }
@@ -450,12 +426,14 @@ export function computeOverview(data) {
   const { agencies, practices, cancellations } = data
   const activePractices = practices.filter((p) => p.subscription_status === 'active')
   const directActive = activePractices.filter((p) => !p.agency_id)
-  const agencyFees = agencies.reduce((s, a) => s + (a.mrrToCaseLift || 0), 0)
-  const directRevenue = directActive.reduce(
-    (s, p) => s + (Number(p.plan_amount) || PRICING.directPractice),
-    0,
-  )
+  const agencyActivePractices = activePractices.filter((p) => p.agency_id)
+  // Every practice — agency-referred or direct — bills CaseLift $997 directly.
+  const planMrr = (p) => Number(p.plan_amount) || PRICING.directPractice
+  const directRevenue = directActive.reduce((s, p) => s + planMrr(p), 0)
+  const agencyFees = agencyActivePractices.reduce((s, p) => s + planMrr(p), 0)
   const totalMrr = agencyFees + directRevenue
+  // Flat referral commission CaseLift pays out (a cost, not part of MRR).
+  const commissionOwedTotal = agencies.reduce((s, a) => s + (a.commissionOwed || 0), 0)
 
   const monthStart = new Date()
   monthStart.setDate(1)
@@ -469,6 +447,7 @@ export function computeOverview(data) {
     totalMrr,
     agencyFees,
     directRevenue,
+    commissionOwedTotal,
     activePractices: activePractices.length,
     activeAgencies,
     churnThisMonth,
@@ -483,7 +462,6 @@ export function computeMrrHistory(practices, agencies, cancellations = []) {
   for (const c of cancellations) {
     if (c.practice_id && c.date) cancelByPractice[c.practice_id] = c.date
   }
-  const agencyFee = Object.fromEntries(agencies.map((a) => [a.id, a.perLocationFee || WHOLESALE_PRICE]))
 
   const now = new Date()
   const months = []
@@ -500,11 +478,11 @@ export function computeMrrHistory(practices, agencies, cancellations = []) {
       const cancelled = cancelByPractice[p.id]
       if (cancelled && new Date(cancelled) < start) continue
 
-      if (p.agency_id) {
-        agency += agencyFee[p.agency_id] || WHOLESALE_PRICE
-      } else {
-        direct += Number(p.plan_amount) || PRICING.directPractice
-      }
+      // Every active practice bills CaseLift $997 directly; split the stack by
+      // whether it came via a referring agency or signed up direct.
+      const mrr = Number(p.plan_amount) || PRICING.directPractice
+      if (p.agency_id) agency += mrr
+      else direct += mrr
     }
     months.push({ month: label, agency, direct, total: agency + direct })
   }

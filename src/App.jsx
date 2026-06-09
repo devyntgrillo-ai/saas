@@ -17,7 +17,6 @@ import LoadingScreen from './components/LoadingScreen'
 //    fetch. Their charts/heavy panels are split out separately (see below). ──
 import Login from './pages/Login'
 import Suspended from './pages/Suspended'
-import ResellerSignup from './pages/ResellerSignup'
 import ReferralRedirect from './components/ReferralRedirect'
 import BAAEntry from './components/BAAEntry'
 import Onboarding from './pages/Onboarding'
@@ -41,7 +40,6 @@ const Settings = lazy(() => import('./pages/Settings'))
 const Training = lazy(() => import('./pages/Training'))
 const Community = lazy(() => import('./pages/Community'))
 const Agency = lazy(() => import('./pages/Agency'))
-const AgencySaaSMode = lazy(() => import('./pages/AgencySaaSMode'))
 const AgencyAnalytics = lazy(() => import('./pages/AgencyAnalytics'))
 const AgencyKnowledgeBase = lazy(() => import('./pages/AgencyKnowledgeBase'))
 const AgencyTeam = lazy(() => import('./pages/AgencyTeam'))
@@ -113,8 +111,6 @@ function AppContent() {
               <Route path="/login" element={<Login />} />
               {/* Signup is the first step of the unified onboarding stepper. */}
               <Route path="/signup" element={<Onboarding />} />
-              {/* White-labeled reseller client signup (SaaS mode). Public. */}
-              <Route path="/signup/:slug" element={<ResellerSignup />} />
               {/* Referral link entry: stores the code and forwards to signup. */}
               <Route path="/r/:code" element={<ReferralRedirect />} />
               <Route path="/accept-invite" element={<AcceptInvite />} />
@@ -167,7 +163,6 @@ function AppContent() {
                 >
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/agency" element={<Agency />} />
-                  <Route path="/agency/saas-mode" element={<AgencySaaSMode />} />
                   <Route path="/agency/analytics" element={<AgencyAnalytics />} />
                   <Route path="/agency/knowledge-base" element={<AgencyKnowledgeBase />} />
                   <Route path="/agency/team" element={<AgencyTeam />} />

@@ -1,3 +1,0 @@
-# Public signup page hits this — no caller JWT.
-[functions.reseller-signup]
-verify_jwt = false

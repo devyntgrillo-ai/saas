@@ -1,11 +1,10 @@
 import { useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { DollarSign, Stethoscope, Building2, TrendingDown, TrendingUp, Calendar } from 'lucide-react'
 import { useAdmin } from '../../context/AdminContext'
 import { computeOverview, computeMonthlySignupsChurn, agencyStatusMeta, mrrSeries12, MRR_MILESTONES } from '../../lib/admin'
 import { timeAgo } from '../../lib/consults'
 import { StackedMRRChart, SignupsChurnChart } from '../../components/admin/charts'
-import { StatCard, Table, Badge, Avatar, money, stop } from '../../components/admin/ui'
+import { StatCard, Table, Badge, money, stop } from '../../components/admin/ui'
 import { useAdminAttribution } from '../../lib/queries'
 
 const TONE_DOT = { good: 'bg-emerald-400', bad: 'bg-rose-400', neutral: 'bg-sky-400' }
@@ -13,7 +12,6 @@ const TONE_DOT = { good: 'bg-emerald-400', bad: 'bg-rose-400', neutral: 'bg-sky-
 // Merged Overview + Revenue: the at-a-glance health + financials dashboard.
 export default function Dashboard() {
   const { data, impersonateAgency } = useAdmin()
-  const navigate = useNavigate()
   const o = computeOverview(data)
   const series = useMemo(() => mrrSeries12(data.mrrHistory), [data.mrrHistory])
 
@@ -43,18 +41,14 @@ export default function Dashboard() {
     return { closed, touched, attributed, rate: closed ? Math.round((touched / closed) * 100) : 0 }
   }, [attributionRows])
 
-  // Revenue by reseller (locations / fee / monthly / since / est. total paid) +
-  // status + impersonate.
+  // Commission by referring agency (active referred practices × rate) + status.
   const revenueByReseller = data.agencies.map((a) => {
-    const monthsActive = Math.max(1, Math.round((Date.now() - new Date(a.created_at).getTime()) / (30 * 86400000)))
-    const locations = a.activePracticeCount ?? a.practiceCount
     return [
       <span className="font-medium text-slate-100">{a.name}</span>,
-      locations,
-      money(a.perLocationFee),
-      money(a.mrrToCaseLift),
+      a.activePracticeCount ?? a.active ?? 0,
+      money(a.commission_rate),
+      <span className="font-medium text-emerald-300">{money(a.commissionOwed)}</span>,
       new Date(a.created_at).toLocaleDateString(),
-      money(a.mrrToCaseLift * monthsActive),
       <Badge className={agencyStatusMeta(a.status).classes}>{agencyStatusMeta(a.status).label}</Badge>,
       <div className="flex items-center gap-1.5" onClick={stop}>
         <button onClick={() => impersonateAgency(a)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-primary-300 transition hover:bg-surface-700">
@@ -65,10 +59,10 @@ export default function Dashboard() {
   })
   revenueByReseller.push([
     <span className="font-semibold text-white">Total</span>,
-    data.agencies.reduce((s, a) => s + (a.activePracticeCount ?? a.practiceCount), 0),
+    data.agencies.reduce((s, a) => s + (a.activePracticeCount ?? a.active ?? 0), 0),
     '-',
-    <span className="font-semibold text-emerald-300">{money(o.agencyFees)}</span>,
-    '', '', '', '',
+    <span className="font-semibold text-emerald-300">{money(data.agencies.reduce((s, a) => s + (a.commissionOwed || 0), 0))}</span>,
+    '', '', '',
   ])
 
   return (
@@ -91,9 +85,9 @@ export default function Dashboard() {
 
       {/* Revenue by reseller - full width */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-white">Revenue by reseller</h2>
+        <h2 className="text-sm font-semibold text-white">Commission by agency</h2>
         <Table
-          head={['Reseller', 'Active locations', 'Fee / location', 'Monthly total', 'Since', 'Est. total paid', 'Status', '']}
+          head={['Agency', 'Active referred', 'Commission rate', 'Commission / mo', 'Since', 'Status', '']}
           rows={revenueByReseller}
           empty="No resellers yet."
           icon={Building2}

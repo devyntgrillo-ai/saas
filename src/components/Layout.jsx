@@ -52,7 +52,6 @@ const practiceNav = [
 const agencyNav = [
   { key: 'analytics', label: 'Dashboard', icon: LayoutDashboard, to: '/agency/analytics' },
   { key: 'overview', label: 'Subaccounts', icon: LayoutGrid, to: '/agency' },
-  { key: 'saas-mode', label: 'SaaS Mode', icon: Rocket, to: '/agency/saas-mode' },
   { key: 'team', label: 'Team', icon: Users, to: '/agency/team' },
   { key: 'settings', label: 'Settings', icon: Settings, to: '/agency?tab=settings' },
 ]
@@ -129,8 +128,7 @@ export default function Layout() {
   const showSettings = showPracticeNav && perms.canViewSettings
   const chatUnread = useChatUnread(practiceId)
   const agencyActive =
-    location.pathname.startsWith('/agency/saas-mode') ? 'saas-mode'
-    : location.pathname.startsWith('/agency/analytics') ? 'analytics'
+    location.pathname.startsWith('/agency/analytics') ? 'analytics'
     : location.pathname.startsWith('/agency/team') ? 'team'
     : searchParams.get('tab') === 'settings' ? 'settings'
     : 'overview'
