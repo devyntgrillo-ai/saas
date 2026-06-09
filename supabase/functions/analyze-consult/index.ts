@@ -394,7 +394,7 @@ ${deidentified}`;
         link: `/consults/${consultId}`,
       });
     } catch { /* non-blocking */ }
-    try { await admin.rpc("log_audit_event", { p_action: "consult.analyzed", p_resource_type: "consult", p_resource_id: consultId, p_ip_address: ip }); } catch { /* non-blocking */ }
+    try { await admin.rpc("log_audit_event", { p_action: "consult.analyzed", p_resource_type: "consult", p_resource_id: consultId, p_phi_accessed: true, p_ip_address: ip }); } catch { /* non-blocking */ }
 
     return json({ consult_id: consultId, urgency, intelligence, message_count: messagesOut.length, messages: messagesOut });
   } catch (e) {

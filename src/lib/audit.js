@@ -140,23 +140,26 @@ export async function logAuthEvent(action, { email = null, details = null } = {}
 export const auditAccessDenied = (resource, resourceId = null, details = null) =>
   logAudit(AUDIT.ACCESS_DENIED, { resourceType: resource, resourceId, details, phiAccessed: false })
 
+// PHI-access wrappers set phiAccessed:true EXPLICITLY (not via the PHI_ACTIONS
+// default) so the flag is unambiguous at the call site and never depends on the
+// action string matching the set.
 export const auditConsultViewed = (id) =>
-  logAudit(AUDIT.CONSULT_VIEWED, { resourceType: 'consult', resourceId: id })
+  logAudit(AUDIT.CONSULT_VIEWED, { resourceType: 'consult', resourceId: id, phiAccessed: true })
 
 export const auditTranscriptViewed = (id) =>
-  logAudit(AUDIT.TRANSCRIPT_VIEWED, { resourceType: 'consult', resourceId: id })
+  logAudit(AUDIT.TRANSCRIPT_VIEWED, { resourceType: 'consult', resourceId: id, phiAccessed: true })
 
 export const auditPatientAccessed = (id) =>
-  logAudit(AUDIT.PATIENT_ACCESSED, { resourceType: 'patient', resourceId: id })
+  logAudit(AUDIT.PATIENT_ACCESSED, { resourceType: 'patient', resourceId: id, phiAccessed: true })
 
 export const auditMessageSent = (conversationId) =>
   logAudit(AUDIT.MESSAGE_SENT, { resourceType: 'conversation', resourceId: conversationId, phiAccessed: true })
 
 export const auditConversationViewed = (id) =>
-  logAudit(AUDIT.CONVERSATION_VIEWED, { resourceType: 'conversation', resourceId: id })
+  logAudit(AUDIT.CONVERSATION_VIEWED, { resourceType: 'conversation', resourceId: id, phiAccessed: true })
 
 export const auditMessagesViewed = (id) =>
-  logAudit(AUDIT.MESSAGES_VIEWED, { resourceType: 'conversation', resourceId: id })
+  logAudit(AUDIT.MESSAGES_VIEWED, { resourceType: 'conversation', resourceId: id, phiAccessed: true })
 
 export const auditFileDownloaded = (resourceType, id, details = null) =>
   logAudit(AUDIT.FILE_DOWNLOADED, { resourceType, resourceId: id, details, phiAccessed: true })
