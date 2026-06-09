@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { takeBaaReturnPath } from '../lib/baaReturn'
 import { ensurePracticeLinked } from '../lib/linkPractice'
 import { supabase } from '../lib/supabase'
+import { recordBaaAcceptance } from '../lib/baa'
 
 export default function BAA() {
   const { user, practice, refreshProfile, signOut } = useAuth()
@@ -48,14 +49,10 @@ export default function BAA() {
     if (!agreed || !practice?.id) return
     setSaving(true)
     setError('')
-    const { error: updateError } = await supabase
-      .from('practices')
-      .update({ baa_accepted_at: new Date().toISOString() })
-      .eq('id', practice.id)
-
-    if (updateError) {
+    const ok = await recordBaaAcceptance(practice.id)
+    if (!ok) {
       setSaving(false)
-      setError(updateError.message)
+      setError('Could not record your BAA acceptance. Please try again.')
       return
     }
     await refreshProfile()

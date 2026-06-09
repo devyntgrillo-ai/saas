@@ -5,6 +5,8 @@ import {
   Plug, ArrowRight, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { usePermissions } from '../lib/permissions'
+import { displayPatientName } from '../lib/phi'
 import { useRecorder } from '../context/RecorderContext'
 import { useConsultsDay, useNextConsults, useProcessingConsults, useRecentConsults, useConsultArchive, ARCHIVE_PAGE_SIZE, useConsultsRealtime } from '../lib/queries'
 import { statusMeta } from '../lib/consults'
@@ -39,6 +41,7 @@ const STATUS = {
 
 export default function Consults() {
   const { practice, practiceId } = useAuth()
+  const canPHI = usePermissions().canViewPHI
   const { openRecorder } = useRecorder()
   const navigate = useNavigate()
   const connected = Boolean(practice?.sikka_connected || practice?.pms_connected)
@@ -125,10 +128,12 @@ export default function Consults() {
     const q = search.trim().toLowerCase()
     return appts.filter((a) => {
       if (statusFilter !== 'all' && statusOf(a) !== statusFilter) return false
-      if (q && !fullName(a).toLowerCase().includes(q)) return false
+      // Name search is gated to PHI roles — a viewer must not be able to probe
+      // for a patient by typing their name.
+      if (q && canPHI && !fullName(a).toLowerCase().includes(q)) return false
       return true
     })
-  }, [appts, statusFilter, search])
+  }, [appts, statusFilter, search, canPHI])
 
   const counts = useMemo(() => {
     const c = { all: appts.length, needs: 0, recorded: 0, missed: 0 }
@@ -276,12 +281,13 @@ const PROCESSING_CARD_CSS = `
 `
 
 function ProcessingCard({ c, onOpen }) {
+  const canPHI = usePermissions().canViewPHI
   const [bi, setBi] = useState(0)
   useEffect(() => {
     const t = setInterval(() => setBi((i) => (i + 1) % PROC_BADGES.length), 2500)
     return () => clearInterval(t)
   }, [])
-  const name = c.patient_name || [c.patient_first, c.patient_last].filter(Boolean).join(' ') || 'New patient'
+  const name = displayPatientName(c, canPHI, 'New patient')
   return (
     <button
       onClick={onOpen}
@@ -305,7 +311,8 @@ function ProcessingCard({ c, onOpen }) {
 // A consult whose analysis just finished — keeps it visible (and clickable into
 // the detail page) instead of disappearing the moment it leaves "processing".
 function CompleteCard({ c, onOpen }) {
-  const name = c.patient_name || [c.patient_first, c.patient_last].filter(Boolean).join(' ') || 'New patient'
+  const canPHI = usePermissions().canViewPHI
+  const name = displayPatientName(c, canPHI, 'New patient')
   const failed = c.status === 'transcription_error'
   return (
     <button
@@ -382,7 +389,7 @@ function ConsultArchive({ practiceId, navigate }) {
           <div className="card divide-y divide-surface-700/60 overflow-hidden p-0">
             {rows.map((c) => {
               const meta = statusMeta(c.status)
-              const name = c.patient_name || [c.patient_first, c.patient_last].filter(Boolean).join(' ') || 'Unknown patient'
+              const name = displayPatientName(c, canPHI, 'Unknown patient')
               const d = c.recording_date || c.created_at
               return (
                 <button
@@ -430,6 +437,7 @@ function ConsultArchive({ practiceId, navigate }) {
 }
 
 function RecordedTable({ rows, navigate, openRecorder, caughtUp, consultStatus = {} }) {
+  const canPHI = usePermissions().canViewPHI
   return (
     <div className="card overflow-hidden">
       {caughtUp && (
@@ -485,10 +493,10 @@ function RecordedTable({ rows, navigate, openRecorder, caughtUp, consultStatus =
                     onClick={(e) => e.stopPropagation()}
                     className="block truncate text-sm font-medium text-slate-100 underline-offset-2 hover:text-white hover:underline"
                   >
-                    {fullName(a)}
+                    {displayPatientName(a, canPHI)}
                   </Link>
                 ) : (
-                  <p className="truncate text-sm font-medium text-slate-100">{fullName(a)}</p>
+                  <p className="truncate text-sm font-medium text-slate-100">{displayPatientName(a, canPHI)}</p>
                 )}
                 <p className="truncate text-xs text-slate-500">
                   {a.appointment_type || 'Consult'}{a.provider ? ` · ${a.provider}` : ''}
@@ -533,6 +541,7 @@ function fmtDate(ts) {
 // The next few upcoming consults regardless of day, with Date + Time columns,
 // earliest first. Used so the Schedule tab is never an empty page.
 function NextConsults({ rows, navigate, openRecorder }) {
+  const canPHI = usePermissions().canViewPHI
   return (
     <section className="space-y-2">
       <h2 className="text-sm font-semibold text-slate-200">Next {rows.length} consult{rows.length === 1 ? '' : 's'}</h2>
@@ -551,7 +560,7 @@ function NextConsults({ rows, navigate, openRecorder }) {
                 <span className="w-[120px] shrink-0 text-sm font-medium text-slate-200">{fmtDate(a.appointment_time)}</span>
                 <span className="w-[72px] shrink-0 text-sm tabular-nums text-slate-400">{fmtTime(a.appointment_time)}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-slate-100">{fullName(a)}</p>
+                  <p className="truncate text-sm font-medium text-slate-100">{displayPatientName(a, canPHI)}</p>
                   <p className="truncate text-xs text-slate-500">
                     {a.appointment_type || 'Consult'}{a.provider ? ` · ${a.provider}` : ''}
                   </p>

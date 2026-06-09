@@ -5,6 +5,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { requireServiceRole } from "../_shared/auth.ts";
+import { recordAudit } from "../_shared/audit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,7 +34,7 @@ Deno.serve(async (req: Request) => {
     // then decide per-row (retention 0 = delete now; N = delete once older than N days).
     const { data: rows, error } = await admin
       .from("consults")
-      .select("id, audio_storage_path, created_at, practice:practices(audio_retention_days)")
+      .select("id, practice_id, audio_storage_path, created_at, practice:practices(audio_retention_days)")
       .not("audio_storage_path", "is", null)
       .limit(2000);
     if (error) return json({ error: "Query failed", detail: error.message }, 500);
@@ -48,13 +49,29 @@ Deno.serve(async (req: Request) => {
       if (new Date(r.created_at as string).getTime() >= cutoff) continue; // not old enough for this practice
 
       // Remove the file (ignore "already gone"); then null the path + stamp the time.
-      await admin.storage.from(BUCKET).remove([r.audio_storage_path as string]).catch(() => {});
+      const purgedPath = r.audio_storage_path as string;
+      await admin.storage.from(BUCKET).remove([purgedPath]).catch(() => {});
       const { error: upErr } = await admin
         .from("consults")
         .update({ audio_storage_path: null, audio_deleted_at: new Date().toISOString() })
         .eq("id", r.id);
       if (upErr) { failed++; continue; }
       deleted++;
+
+      // HIPAA audit trail: record every PHI (audio) deletion. Best-effort —
+      // recordAudit never throws, so a logging failure can't block the purge.
+      // No request context (cron job), so attribute to the system actor.
+      const ageDays = Math.floor((now - new Date(r.created_at as string).getTime()) / DAY_MS);
+      await recordAudit(admin, {
+        action: "recording.purged",
+        userId: null,
+        userEmail: "system:purge-consult-audio",
+        practiceId: (r.practice_id as string) ?? null,
+        resourceType: "consult",
+        resourceId: r.id as string,
+        details: { bucket: BUCKET, path: purgedPath, retention_days: days, age_days: ageDays },
+        phiAccessed: true,
+      });
     }
 
     console.log(`purge-consult-audio: deleted=${deleted} failed=${failed} scanned=${rows?.length ?? 0}`);

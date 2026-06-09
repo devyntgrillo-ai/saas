@@ -32,6 +32,23 @@ Deno.serve(async (req: Request) => {
     const nowIso = new Date().toISOString();
     const nowMs = Date.now();
 
+    // HIPAA audit: record each successful send as a PHI transmission. IDs +
+    // metadata only — NEVER the subject/body content. Best-effort (service role
+    // bypasses RLS); a logging failure must not stop the sender.
+    // deno-lint-ignore no-explicit-any
+    const auditSent = async (mm: any, cc: any) => {
+      await admin.from("audit_logs").insert({
+        user_id: null,
+        user_role: "service_role",
+        practice_id: cc?.practice_id ?? null,
+        action: "message.sent",
+        resource_type: "message",
+        resource_id: String(mm.id),
+        phi_accessed: true,
+        details: { channel: mm.channel, sequence_id: mm.consult_id, practice_id: cc?.practice_id ?? null },
+      }).then(() => {}, () => {});
+    };
+
     // Due, not-yet-sent messages + their consult guard fields. Includes failed
     // messages that are still within the stale window for retry.
     const { data: due, error } = await admin
@@ -111,6 +128,7 @@ Deno.serve(async (req: Request) => {
         }).then(() => {}, () => {});
         await admin.from("messages").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", m.id);
         await logPerf();
+        await auditSent(m, c);
         sent++;
         continue;
       }
@@ -146,6 +164,7 @@ Deno.serve(async (req: Request) => {
         if (tErr) throw tErr;
         await admin.from("messages").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", m.id);
         await logPerf();
+        await auditSent(m, c);
         sent++;
       } catch (e) {
         console.error(`send-due-messages: ${transport} failed for message ${m.id}:`, (e as Error)?.message);

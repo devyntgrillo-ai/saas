@@ -13,6 +13,30 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# HIPAA transport security: force HTTPS. Netlify also serves over HTTPS by default
+# (and has a "Force HTTPS" toggle), but this makes the 301 upgrade explicit and
+# guarantees any http:// request is permanently redirected to https://. Declared
+# before the SPA catch-all so the scheme upgrade wins.
+[[redirects]]
+  from = "http://*"
+  to = "https://:splat"
+  status = 301
+  force = true
+
+# Security headers applied to every response. CSP carries upgrade-insecure-requests
+# so any stray http:// subresource is auto-upgraded to https; HSTS pins HTTPS in
+# the browser for a year (with subdomains + preload).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "upgrade-insecure-requests"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# SPA fallback: every deep link serves the app shell (keep last so it doesn't
+# shadow the scheme-upgrade redirect above).
 [[redirects]]
   from = "/*"
   to = "/index.html"

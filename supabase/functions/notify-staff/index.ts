@@ -63,7 +63,10 @@ function build(event: string, p: any, practiceName: string): Built {
       const prev = String(p?.message_preview ?? "").slice(0, 100);
       const link = p?.conversation_url || `${APP}/conversations`;
       return {
-        subject: `Patient replied — ${initials}`,
+        // Generic subject — no patient identifier in the email header (it transits
+        // and is logged/previewed externally). The name stays in the body, which
+        // is the practice viewing its own patient (treatment ops).
+        subject: `New patient reply`,
         heading: `${rawName} replied`,
         bodyHtml:
           `<p style="margin:0">${name} replied to your CaseLift sequence.</p>` +

@@ -137,7 +137,7 @@ Deno.serve(async (req: Request) => {
     }
 
     try {
-      await auditClient.rpc("log_audit_event", { p_action: "consult.transcribed", p_resource_type: "consult", p_resource_id: savedId, p_ip_address: ip });
+      await auditClient.rpc("log_audit_event", { p_action: "consult.transcribed", p_resource_type: "consult", p_resource_id: savedId, p_phi_accessed: true, p_ip_address: ip });
     } catch { /* non-blocking */ }
 
     return json({ consult_id: savedId, status: "transcribed" });
