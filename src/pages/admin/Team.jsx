@@ -23,7 +23,7 @@ function classify(u) {
     const role = lvl.startsWith('practice_') ? lvl.split('_')[1] : u.role || 'member'
     return { kind: 'practice', label: `Practice ${role}`, cls: 'bg-sky-500/15 text-sky-300', scope: u.practice?.name || '—' }
   }
-  return { kind: 'none', label: 'No access', cls: 'bg-slate-500/15 text-slate-400', scope: '—' }
+  return { kind: 'none', label: 'Deactivated', cls: 'bg-slate-500/15 text-slate-400', scope: '—' }
 }
 
 const FILTERS = [
@@ -31,7 +31,7 @@ const FILTERS = [
   { key: 'super_admin', label: 'Super admins' },
   { key: 'reseller', label: 'Resellers' },
   { key: 'practice', label: 'Practice users' },
-  { key: 'none', label: 'No access' },
+  { key: 'none', label: 'Deactivated' },
 ]
 
 export default function AdminTeam() {
@@ -72,16 +72,20 @@ export default function AdminTeam() {
     return c
   }, [list])
 
-  async function removeUser(u) {
-    if (!confirm(`Remove access for ${u.email}? They lose all access (account is kept, not deleted) and can be re-granted later.`)) return
+  async function deactivateUser(u) {
+    if (!confirm(`Deactivate ${u.email}? Their account is removed from CaseLift and they immediately lose all access. The email is freed in Supabase Auth so it can be re-invited later.`)) return
     setBusyId(u.id)
     try {
-      const { data, error } = await supabase.functions.invoke('admin-users', { body: { action: 'remove', user_id: u.id, mode: 'revoke' } })
+      // mode: 'delete' hard-deletes the auth user (cascading their users row), so
+      // the email no longer exists in Supabase Auth and a future invite won't fail
+      // with "user already exists". 'revoke' (the old behavior) left the auth
+      // account in place, which is what blocked re-adding.
+      const { data, error } = await supabase.functions.invoke('admin-users', { body: { action: 'remove', user_id: u.id, mode: 'delete' } })
       if (error) throw new Error(data?.error || error.message)
-      note(`Access removed for ${u.email}.`)
+      note(`${u.email} deactivated and removed. The email can be re-invited.`)
       await refetch()
     } catch (e) {
-      note(e?.message || 'Could not remove access.')
+      note(e?.message || 'Could not deactivate user.')
     } finally {
       setBusyId(null)
     }
@@ -138,7 +142,7 @@ export default function AdminTeam() {
               u.created_at ? new Date(u.created_at).toLocaleDateString() : '-',
               <div className="flex items-center gap-1.5" onClick={stop}>
                 <button onClick={() => setEditing(u)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-slate-300 transition hover:bg-surface-700" title="Edit access"><Pencil className="h-3.5 w-3.5" /></button>
-                <button onClick={() => removeUser(u)} disabled={busy} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-rose-300 transition hover:bg-surface-700 disabled:opacity-40" title="Remove access">
+                <button onClick={() => deactivateUser(u)} disabled={busy} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-rose-300 transition hover:bg-surface-700 disabled:opacity-40" title="Deactivate user">
                   {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserMinus className="h-3.5 w-3.5" />}
                 </button>
               </div>,
