@@ -238,7 +238,13 @@ async function syncOnePractice(admin: any, practice: SikkaPracticeRow) {
   return rows.length;
 }
 
-const PRACTICE_COLS = "id, sikka_practice_id, sikka_request_key, sikka_refresh_token, sikka_token_expires_at";
+const PRACTICE_COLS = "id, email, sikka_practice_id, sikka_request_key, sikka_refresh_token, sikka_token_expires_at";
+
+// The seeded sales-demo practice ("Demo Dental") is intentionally a FAKE
+// PMS-connected account with hand-seeded "today" appointments kept current by the
+// demo-today-refresh cron. A live PMS sync would overwrite that curated state, so
+// it is permanently excluded from syncing — even if someone re-links Sikka to it.
+const DEMO_PRACTICE_EMAIL = "demo@pinnacledental.com";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -293,6 +299,12 @@ Deno.serve(async (req: Request) => {
     let synced = 0;
     const errors: { practice_id: string; error: string }[] = [];
     for (const p of practices) {
+      // Never sync the seeded sales-demo practice — its curated "today" worklist
+      // must not be overwritten by a live PMS pull.
+      if ((p.email || "").toLowerCase() === DEMO_PRACTICE_EMAIL) {
+        console.log(`sync-appointments: skipping demo practice ${p.id} (excluded from PMS sync)`);
+        continue;
+      }
       try {
         synced += await syncOnePractice(admin, p);
       } catch (e) {

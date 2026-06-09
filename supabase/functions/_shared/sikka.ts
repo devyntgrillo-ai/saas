@@ -128,6 +128,7 @@ export function refreshAccessToken(refreshToken: string): Promise<SikkaTokens> {
 
 export interface SikkaPracticeRow {
   id: string;
+  email?: string | null;
   sikka_practice_id: string | null;
   sikka_request_key: string | null;
   sikka_refresh_token: string | null;
