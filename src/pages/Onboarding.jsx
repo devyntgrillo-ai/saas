@@ -20,6 +20,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { createCheckout } from '../lib/billing'
 import { validatePassword } from '../lib/passwordPolicy'
+import { recordBaaAcceptance } from '../lib/baa'
 import PhoneSetupWizard from '../components/PhoneSetupWizard'
 import { REF_STORAGE_KEY } from '../components/ReferralRedirect'
 
@@ -238,7 +239,7 @@ export default function Onboarding() {
 
   async function acceptBaa() {
     if (!baaAgree) return
-    const ok = await savePatch({ baa_accepted_at: new Date().toISOString() })
+    const ok = await recordBaaAcceptance(practiceId)
     if (ok) nextStep()
   }
 

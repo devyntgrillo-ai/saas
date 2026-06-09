@@ -45,6 +45,7 @@ const ACTION_GROUPS = [
       'user.invited': 'User invited',
       'user.role_changed': 'User role changed',
       'billing.action': 'Billing action',
+      'baa.accepted': 'BAA accepted',
     },
   },
   {
@@ -82,6 +83,7 @@ const ACTION_CLASSES = {
   'user.invited': 'bg-blue-100 text-blue-800',
   'user.role_changed': 'bg-amber-100 text-amber-800',
   'billing.action': 'bg-blue-100 text-blue-800',
+  'baa.accepted': 'bg-green-100 text-green-800',
   'consult.created': 'bg-green-100 text-green-800',
   'consult.deleted': 'bg-rose-100 text-rose-800',
   'sequence.started': 'bg-green-100 text-green-800',

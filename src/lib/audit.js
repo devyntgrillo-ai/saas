@@ -45,6 +45,7 @@ export const AUDIT = {
   USER_INVITED: 'user.invited',
   USER_ROLE_CHANGED: 'user.role_changed',
   BILLING_ACTION: 'billing.action',
+  BAA_ACCEPTED: 'baa.accepted',
 
   // ── Access control ──
   // A lower-privileged user tried to reach restricted PHI/content. Recorded so
