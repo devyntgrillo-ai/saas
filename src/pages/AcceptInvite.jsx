@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Loader2, ShieldCheck, KeyRound } from 'lucide-react'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
+import { logAudit, AUDIT } from '../lib/audit'
 import { useUpdatePassword } from '../lib/queries'
 
 // Landing page for Supabase auth invite / recovery / magic links.
@@ -36,6 +37,10 @@ export default function AcceptInvite() {
     if (password !== confirm) return setError('Passwords do not match.')
     try {
       await updatePassword.mutateAsync({ password })
+      logAudit(AUDIT.PASSWORD_CHANGED, {
+        resourceType: 'auth',
+        details: { context: isRecovery ? 'password_reset' : 'invite_accept' },
+      })
       navigate('/', { replace: true })
     } catch (err) {
       setError(err?.message || 'Could not update password.')

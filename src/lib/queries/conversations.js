@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { invokeEdgeFunction } from '../messaging'
 import { supabase } from '../supabase'
+import { resolveAttachmentUrl } from '../storage'
 import { queryKeys } from './keys'
 
 export async function fetchConversationsList(practiceId) {
@@ -316,7 +317,8 @@ export function useUploadConversationAttachment() {
         .from('conversation-attachments')
         .upload(path, file, { contentType: file.type || undefined, upsert: false })
       if (up.error) throw up.error
-      const { data: pub } = supabase.storage.from('conversation-attachments').getPublicUrl(path)
+      // Private bucket (HIPAA): store the bare object PATH; reads mint short-lived
+      // signed URLs on demand. Never persist a public URL to a patient attachment.
       const nowIso = new Date().toISOString()
       const data = await insertConvMessage({
         conversation_id: conversationId,
@@ -324,7 +326,7 @@ export function useUploadConversationAttachment() {
         channel,
         body: file.name,
         sent_at: nowIso,
-        meta: { attachment: { url: pub.publicUrl, name: file.name, type: file.type || ext } },
+        meta: { attachment: { url: path, name: file.name, type: file.type || ext } },
       })
       await supabase
         .from('conversations')
@@ -332,11 +334,13 @@ export function useUploadConversationAttachment() {
         .eq('id', conversationId)
       if (channel === 'sms' && patientPhone) {
         try {
+          // Twilio fetches MMS media over HTTP — hand it a short-lived signed URL.
+          const mediaUrl = await resolveAttachmentUrl('conversation-attachments', path, { ttl: 3600 })
           await invokeEdgeFunction('twilio-send', {
             practice_id: practiceId,
             to: patientPhone,
             body: file.name,
-            media_url: pub.publicUrl,
+            media_url: mediaUrl,
             conversation_message_id: data?.id,
           })
         } catch (e) {

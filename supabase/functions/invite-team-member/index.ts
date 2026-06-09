@@ -9,6 +9,8 @@ import { createClient } from "@supabase/supabase-js";
 import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
 import { isSuperAdminUser } from "../_shared/admin.ts";
+import { recordAuditFromReq } from "../_shared/audit.ts";
+import { appBaseUrl } from "../_shared/appUrl.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -62,7 +64,8 @@ Deno.serve(async (req: Request) => {
     const role = body.role || "member";
     const accessLevel = body.access_level || "practice_member";
     const personalMessage = body.personal_message ?? null;
-    const appOrigin = String(body.app_origin || Deno.env.get("APP_URL") || "https://app.caselift.io").replace(/\/$/, "");
+    // Always the canonical production URL — never the inviter's browser origin.
+    const appOrigin = appBaseUrl();
 
     const admin = createClient(url, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -146,6 +149,16 @@ Deno.serve(async (req: Request) => {
         (sendResult as { detail?: string }).detail ?? "",
       );
     }
+
+    await recordAuditFromReq(admin, req, {
+      action: "user.invited",
+      userId: user.id,
+      userEmail: user.email ?? null,
+      practiceId: practiceRow?.id ?? null,
+      resourceType: "user",
+      resourceId: recipientEmail,
+      details: { scope: scopeName, resend: Boolean(body.invitation_id) },
+    });
 
     return json({
       ok: true,

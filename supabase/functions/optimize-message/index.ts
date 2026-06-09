@@ -3,6 +3,7 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // + the practice knowledge base for that patient type. Uses the caller's JWT.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { sanitizeAIOutput } from '../_shared/sanitize.ts'
+import { callerRole, roleCanViewPHI } from '../_shared/roles.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -20,6 +21,19 @@ Deno.serve(async (req) => {
     if (!message_id) return json({ error: 'message_id required' }, 400)
     const auth = req.headers.get('Authorization') || ''
     const supabase = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_ANON_KEY'), { global: { headers: { Authorization: auth } } })
+
+    // Minimum necessary: the response echoes the message body (PHI). A read-only
+    // viewer must never receive it, even if the UI is bypassed.
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return json({ error: 'Unauthorized' }, 401)
+    const role = await callerRole({ userId: user.id, isServiceRole: false, client: supabase })
+    if (!roleCanViewPHI(role)) {
+      try {
+        const admin = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))
+        await admin.from('audit_logs').insert({ user_id: user.id, user_role: role, action: 'access.denied', resource_type: 'message', resource_id: String(message_id), details: { reason: 'insufficient_role', role, fn: 'optimize-message' }, phi_accessed: false })
+      } catch { /* best-effort audit */ }
+      return json({ error: 'Your role does not have access to message content.' }, 403)
+    }
 
     const { data: msg, error: me } = await supabase.from('messages').select('id, body, subject, channel, consult_id, practice_id').eq('id', message_id).maybeSingle()
     if (me) return json({ error: me.message }, 400)

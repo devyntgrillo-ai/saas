@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../supabase'
 import { queryKeys } from './keys'
 import { patchConversationContextConsult } from './conversations'
+import { recordBaaAcceptance } from '../baa'
+import { auditPracticeArchived } from '../audit'
 
 export async function cancelPendingMessages(consultId) {
   const { error } = await supabase
@@ -89,6 +91,8 @@ export function useSetConsultOutcome() {
       return { consultId, practiceId, patch }
     },
     onSuccess: ({ consultId, practiceId }) => {
+      // Sequence start/stop is audited at the call site (OutcomeControls), which
+      // has the precise reason/context — not here, to avoid double-logging.
       queryClient.invalidateQueries({ queryKey: queryKeys.consult(consultId) })
       if (practiceId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(practiceId) })
@@ -108,9 +112,10 @@ export function useArchivePractice() {
         : { archived_at: null, archived_by: null }
       const { error } = await supabase.from('practices').update(patch).eq('id', practiceId)
       if (error) throw error
-      return { practiceId, agencyId }
+      return { practiceId, agencyId, archive }
     },
-    onSuccess: ({ practiceId, agencyId }) => {
+    onSuccess: ({ practiceId, agencyId, archive }) => {
+      if (archive) auditPracticeArchived(practiceId)
       queryClient.invalidateQueries({ queryKey: queryKeys.practice(practiceId) })
       if (agencyId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.agency.overview(agencyId) })
@@ -202,11 +207,10 @@ export function useAcceptBaa() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ practiceId }) => {
-      const { error } = await supabase
-        .from('practices')
-        .update({ baa_accepted_at: new Date().toISOString() })
-        .eq('id', practiceId)
-      if (error) throw error
+      // Hardened path: server-timestamped, append-only ledger + signer/IP + audit
+      // event via the accept-baa edge function (with a direct-write fallback).
+      const ok = await recordBaaAcceptance(practiceId)
+      if (!ok) throw new Error('Could not record BAA acceptance.')
       return { practiceId }
     },
     onSuccess: ({ practiceId }) => {

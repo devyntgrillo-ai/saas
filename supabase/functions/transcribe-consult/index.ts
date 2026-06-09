@@ -51,8 +51,8 @@ Deno.serve(async (req: Request) => {
       await admin.storage.createBucket(BUCKET, { public: false }).catch(() => {});
       const { data: file, error: dErr } = await admin.storage.from(BUCKET).download(body.audio_path);
       if (dErr || !file) {
-        console.error(`Audio download failed (path=${body.audio_path}):`, dErr?.message);
-        return json({ error: `Could not read the uploaded audio from storage (${body.audio_path}).` }, 502);
+        console.error("Audio download failed:", dErr?.message);
+        return json({ error: "Could not read the uploaded audio from storage." }, 502);
       }
       try {
         const { text, segments } = await transcribeAudioWhisperVerbose(openaiKey, file as Blob, body.audio_path.split("/").pop());
@@ -75,7 +75,7 @@ Deno.serve(async (req: Request) => {
         }
       } catch (e) {
         const detail = (e as Error)?.message ?? String(e);
-        console.error(`Transcription failed (audio_path=${body.audio_path}):`, detail);
+        console.error("Transcription failed:", detail);
         return json({ error: "Transcription failed.", detail }, 502);
       }
     }
@@ -137,7 +137,7 @@ Deno.serve(async (req: Request) => {
     }
 
     try {
-      await auditClient.rpc("log_audit_event", { p_action: "consult.transcribed", p_resource_type: "consult", p_resource_id: savedId, p_ip_address: ip });
+      await auditClient.rpc("log_audit_event", { p_action: "consult.transcribed", p_resource_type: "consult", p_resource_id: savedId, p_phi_accessed: true, p_ip_address: ip });
     } catch { /* non-blocking */ }
 
     return json({ consult_id: savedId, status: "transcribed" });

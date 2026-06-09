@@ -6,6 +6,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { escapeHtml, renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
+import { appBaseUrl } from "../_shared/appUrl.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -32,7 +33,10 @@ Deno.serve(async (req: Request) => {
     const friendName = String(body.friend_name || "").trim();
     const customSubject = String(body.subject || "").trim();
     const customMessage = String(body.message || "").trim();
-    const appOrigin = String(body.app_origin || "https://app.caselift.io").replace(/\/$/, "");
+    // The referral link is emailed to a third party, so it must point at the
+    // canonical production app — never the referrer's browser origin (localhost
+    // in dev). app_origin from the body is ignored for link construction.
+    const appOrigin = appBaseUrl();
     if (!isEmail(friendEmail)) return json({ error: "A valid friend email is required." }, 400);
 
     // Resolve the caller's practice from their token (don't trust the body).

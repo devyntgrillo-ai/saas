@@ -4,6 +4,12 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { ensurePracticeLinked } from '../lib/linkPractice'
 import { supabase } from '../lib/supabase'
 import { resetPrimaryColor } from '../lib/whitelabel'
+import {
+  AUDIT,
+  logAuthEvent,
+  auditImpersonationStarted,
+  auditImpersonationEnded,
+} from '../lib/audit'
 
 const AuthContext = createContext({})
 const VIEW_KEY = 'ciq_view_practice'
@@ -384,13 +390,20 @@ export function AuthProvider({ children }) {
   const viewPractice = useCallback((id) => {
     localStorage.setItem(VIEW_KEY, id)
     setViewingPracticeId(id)
-  }, [])
+    // Only super-admin / agency entry is impersonation (exposes another practice's
+    // PHI). A multi-location user switching their OWN practice is not, and isn't
+    // audited as impersonation.
+    if (canImpersonate) auditImpersonationStarted('practice', id, { level: 'practice' }, id)
+  }, [canImpersonate])
 
   const exitPractice = useCallback(() => {
+    if (canImpersonate && viewingPracticeId) {
+      auditImpersonationEnded('practice', viewingPracticeId, { level: 'practice' }, viewingPracticeId)
+    }
     localStorage.removeItem(VIEW_KEY)
     setViewingPracticeId(null)
     setActivePractice(null)
-  }, [])
+  }, [canImpersonate, viewingPracticeId])
 
   // Enter reseller-level impersonation (super-admin only). Clears any sub-account
   // drill-in so we land on the reseller's own dashboard.
@@ -400,10 +413,12 @@ export function AuthProvider({ children }) {
     setViewingAgencyId(id)
     setViewingPracticeId(null)
     setActivePractice(null)
+    auditImpersonationStarted('reseller', id, { level: 'reseller' })
   }, [])
 
   // Exit all impersonation (reseller + any sub-account) back to super admin.
   const exitAgency = useCallback(() => {
+    if (viewingAgencyId) auditImpersonationEnded('reseller', viewingAgencyId, { level: 'reseller' })
     localStorage.removeItem(AGENCY_VIEW_KEY)
     localStorage.removeItem(VIEW_KEY)
     setViewingAgencyId(null)
@@ -411,12 +426,14 @@ export function AuthProvider({ children }) {
     setActiveAgencyFor(null)
     setViewingPracticeId(null)
     setActivePractice(null)
-  }, [])
+  }, [viewingAgencyId])
 
   // White-label theming (primary color, logo, title, favicon) is resolved and
   // applied by BrandingContext, which reads this auth context. On sign-out we
   // still reset the palette here so the login screen returns to CaseLift.
   const signOut = useCallback(async () => {
+    // Log while the session is still valid so the event is attributed to the user.
+    logAuthEvent(AUDIT.LOGOUT)
     localStorage.removeItem(VIEW_KEY)
     localStorage.removeItem(AGENCY_VIEW_KEY)
     setViewingPracticeId(null)
@@ -540,7 +557,17 @@ export function AuthProvider({ children }) {
           ])
         : Promise.resolve(null),
 
-    signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
+    signIn: async (email, password) => {
+      const res = await supabase.auth.signInWithPassword({ email, password })
+      if (res?.error) {
+        // Audit the failed attempt — email + reason only. The attempted password
+        // is NEVER logged. phi_accessed is false (enforced by the edge function).
+        logAuthEvent(AUDIT.LOGIN_FAILURE, { email, details: { email, reason: res.error.message } })
+      } else {
+        logAuthEvent(AUDIT.LOGIN_SUCCESS, { email })
+      }
+      return res
+    },
     signUp: (email, password, metadata) =>
       supabase.auth.signUp({ email, password, options: { data: metadata } }),
     signOut,

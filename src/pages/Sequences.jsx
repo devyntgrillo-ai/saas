@@ -14,6 +14,8 @@ import {
   Megaphone,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { usePermissions } from '../lib/permissions'
+import { displayPatientName, maskedPatientLabel } from '../lib/phi'
 import { supabase } from '../lib/supabase'
 import {
   useSequences,
@@ -653,7 +655,8 @@ const PENDING_SEQ_CSS = `
 `
 
 function PendingSequenceCard({ c }) {
-  const name = c.patient_name || [c.patient_first, c.patient_last].filter(Boolean).join(' ') || 'New patient'
+  const canPHI = usePermissions().canViewPHI
+  const name = displayPatientName(c, canPHI, 'New patient')
   return (
     <Link
       to={`/consults/${c.id}/processing`}
@@ -679,6 +682,7 @@ function PendingSequenceCard({ c }) {
 
 export default function Sequences() {
   const { practiceId, practice } = useAuth()
+  const canPHI = usePermissions().canViewPHI
   const queryClient = useQueryClient()
   const { data: rows = [], isLoading: loading, refetch } = useSequences(practiceId)
   useSequencesRealtime(practiceId)
@@ -754,7 +758,9 @@ export default function Sequences() {
   const filtered = useMemo(() => {
     let list = derived
     if (filter !== 'all') list = list.filter((r) => r.bucket === filter)
-    if (debounced) {
+    if (debounced && canPHI) {
+      // Name/contact search is gated to PHI roles — a viewer must not be able
+      // to probe for a patient by name, phone, or email.
       list = list.filter((r) =>
         `${r.name} ${r.phone} ${r.email}`.toLowerCase().includes(debounced)
       )
@@ -768,7 +774,7 @@ export default function Sequences() {
       return dir === 'asc' ? v : -v
     })
     return sorted
-  }, [derived, filter, debounced, sort, dir])
+  }, [derived, filter, debounced, sort, dir, canPHI])
 
   const visible = filtered.slice(0, shown)
 
@@ -907,18 +913,24 @@ export default function Sequences() {
             {visible.map((r) => (
               <div
                 key={r.id}
-                onClick={() => setDrawerRow(r)}
-                className="grid cursor-pointer grid-cols-1 gap-2 px-4 py-3 text-[13px] transition hover:bg-gray-50 lg:grid-cols-12 lg:items-center lg:gap-4"
+                // Viewers (no PHI) see status only — the drawer reveals message
+                // bodies, so it doesn't open for them.
+                onClick={canPHI ? () => setDrawerRow(r) : undefined}
+                className={`grid grid-cols-1 gap-2 px-4 py-3 text-[13px] transition lg:grid-cols-12 lg:items-center lg:gap-4 ${canPHI ? 'cursor-pointer hover:bg-gray-50' : ''}`}
               >
                 {/* Patient */}
                 <div className="min-w-0 lg:col-span-4">
-                  <Link
-                    to={`/consults/${r.id}`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="block truncate font-medium text-gray-900 hover:underline"
-                  >
-                    {r.name === 'Unknown patient' ? <span className="italic text-gray-400">Awaiting patient info</span> : r.name}
-                  </Link>
+                  {canPHI ? (
+                    <Link
+                      to={`/consults/${r.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="block truncate font-medium text-gray-900 hover:underline"
+                    >
+                      {r.name === 'Unknown patient' ? <span className="italic text-gray-400">Awaiting patient info</span> : r.name}
+                    </Link>
+                  ) : (
+                    <span className="block truncate font-medium text-gray-900">{maskedPatientLabel(r.id)}</span>
+                  )}
                   <p className="mt-0.5 truncate text-[11px] text-gray-400">{r.serviceType}</p>
                 </div>
 

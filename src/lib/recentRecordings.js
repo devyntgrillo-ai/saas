@@ -31,11 +31,13 @@ function write(list) {
 
 // Mark a consult as just-recorded. Called from the recorder the instant the
 // placeholder consult row is created.
-export function markRecording({ id, practiceId, name }) {
+export function markRecording({ id, practiceId }) {
   if (!id) return
   const now = Date.now()
   const list = read().filter((r) => r.id !== id && now - r.ts < STORE_TTL_MS)
-  list.push({ id, practiceId: practiceId || null, name: name || null, ts: now })
+  // Only id/practiceId/ts — never the patient name (PHI must not hit localStorage).
+  // Consumers key off id and ts only; the name was never read.
+  list.push({ id, practiceId: practiceId || null, ts: now })
   write(list)
 }
 

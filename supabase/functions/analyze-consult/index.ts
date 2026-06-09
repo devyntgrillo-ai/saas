@@ -17,6 +17,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { resolveAuth } from "../_shared/auth.ts";
+import { callerRole, roleCanViewPHI } from "../_shared/roles.ts";
 import { sanitizeAIOutput } from "../_shared/sanitize.ts";
 import { computeScheduledFor, rulesFrom } from "../_shared/sequence.ts";
 
@@ -205,6 +206,17 @@ Deno.serve(async (req: Request) => {
     if (!ctx.isServiceRole) {
       const { data: allowed } = await ctx.client.from("consults").select("id").eq("id", consultId).maybeSingle();
       if (!allowed) return json({ error: "Not your practice's consult." }, 403);
+      // Minimum necessary: the response carries patient intelligence + drafted
+      // messages (PHI). A read-only viewer must never receive it.
+      const role = await callerRole(ctx);
+      if (!roleCanViewPHI(role)) {
+        await admin.from("audit_logs").insert({
+          user_id: ctx.userId ?? null, user_role: role, practice_id: consult.practice_id,
+          action: "access.denied", resource_type: "consult", resource_id: String(consultId),
+          details: { reason: "insufficient_role", role, fn: "analyze-consult" }, phi_accessed: false,
+        });
+        return json({ error: "Your role does not have access to consult intelligence." }, 403);
+      }
     }
     const practiceId = consult.practice_id;
     if (consult.status === "analyzed" && !regenerate) return json({ consult_id: consultId, status: "analyzed", already: true });
@@ -382,7 +394,7 @@ ${deidentified}`;
         link: `/consults/${consultId}`,
       });
     } catch { /* non-blocking */ }
-    try { await admin.rpc("log_audit_event", { p_action: "consult.analyzed", p_resource_type: "consult", p_resource_id: consultId, p_ip_address: ip }); } catch { /* non-blocking */ }
+    try { await admin.rpc("log_audit_event", { p_action: "consult.analyzed", p_resource_type: "consult", p_resource_id: consultId, p_phi_accessed: true, p_ip_address: ip }); } catch { /* non-blocking */ }
 
     return json({ consult_id: consultId, urgency, intelligence, message_count: messagesOut.length, messages: messagesOut });
   } catch (e) {

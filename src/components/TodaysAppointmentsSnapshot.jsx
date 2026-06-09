@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { CalendarDays, ArrowRight, Mic, CheckCircle2 } from 'lucide-react'
 import { useTodaysAppointments } from '../lib/queries'
+import { usePermissions } from '../lib/permissions'
+import { displayPatientName } from '../lib/phi'
 import { treatmentLabel, normalizeTreatment } from '../lib/treatments'
 
 // Resolve a friendly treatment label for an appointment row, falling back to a
@@ -20,6 +22,7 @@ function fmtTime(ts) {
 // been recorded yet. Fuller controls live on the Schedule / Consults views.
 export default function TodaysAppointmentsSnapshot({ practiceId }) {
   const { data: rows = [], isLoading: loading } = useTodaysAppointments(practiceId)
+  const canPHI = usePermissions().canViewPHI
   const appts = useMemo(() => rows.filter((a) => a.is_implant_consult), [rows])
 
   return (
@@ -46,7 +49,7 @@ export default function TodaysAppointmentsSnapshot({ practiceId }) {
                 <div className="w-14 shrink-0 text-xs text-slate-400">{fmtTime(a.appointment_time)}</div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-slate-200">
-                    {[a.patient_first, a.patient_last].filter(Boolean).join(' ') || 'Patient'}
+                    {displayPatientName(a, canPHI, 'Patient')}
                   </p>
                   <p className="truncate text-xs text-slate-500">{apptTreatmentLabel(a)}{a.provider ? ` · ${a.provider}` : ''}</p>
                 </div>

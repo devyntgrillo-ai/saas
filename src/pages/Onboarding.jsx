@@ -15,8 +15,11 @@ import {
   Mail,
 } from 'lucide-react'
 import Logo from '../components/Logo'
+import PasswordField from '../components/PasswordField'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { validatePassword } from '../lib/passwordPolicy'
+import { recordBaaAcceptance } from '../lib/baa'
 import {
   useSaveOnboardingPatch,
   usePersistOnboardingStep,
@@ -33,11 +36,6 @@ function parsePlanAmount(searchParams) {
   const raw = Number(searchParams.get('plan'))
   return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 997
 }
-function splitContactName(full) {
-  const parts = (full || '').trim().split(/\s+/)
-  return { doctor_first: parts[0] || '', doctor_last: parts.slice(1).join(' ') || '' }
-}
-
 // Steps are intentionally NOT labeled "Step 1 of 5" anywhere — the sidebar just
 // lists the named stages with quiet completion ticks (Asana/ClickUp feel). Each
 // stage saves independently so a practice can leave and resume any time.
@@ -183,6 +181,9 @@ export default function Onboarding() {
   async function createAccount(e) {
     e?.preventDefault?.()
     setSaveError('')
+    // Enforce the HIPAA password policy before creating the account.
+    const pwCheck = validatePassword(acct.password)
+    if (!pwCheck.valid) { setSaveError(pwCheck.errors[0]); return }
     try {
       await createAccountMutation.mutateAsync({
         signUp,
@@ -228,7 +229,7 @@ export default function Onboarding() {
 
   async function acceptBaa() {
     if (!baaAgree) return
-    const ok = await savePatch({ baa_accepted_at: new Date().toISOString() })
+    const ok = await recordBaaAcceptance(practiceId)
     if (ok) nextStep()
   }
 
@@ -346,7 +347,7 @@ export default function Onboarding() {
                   <Field label="Your name"><input className="input" required value={acct.contactName} onChange={setA('contactName')} placeholder="Dr. Jordan Rivera" /></Field>
                   <Field label="Office phone"><input className="input" value={acct.phone} onChange={setA('phone')} placeholder="(480) 555-0142" /></Field>
                   <Field label="Work email"><input className="input" type="email" required value={acct.email} onChange={setA('email')} placeholder="you@yourpractice.com" /></Field>
-                  <Field label="Password"><input className="input" type="password" required minLength={6} value={acct.password} onChange={setA('password')} placeholder="At least 6 characters" /></Field>
+                  <PasswordField id="password" value={acct.password} onChange={(v) => setAcct((a) => ({ ...a, password: v }))} />
                   <div className="sm:col-span-2">
                     <Field label="Where did you hear about us?">
                       <select className="input" required value={acct.heardFrom} onChange={setA('heardFrom')}>

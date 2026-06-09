@@ -24,6 +24,8 @@ import { createClient } from "@supabase/supabase-js";
 import { renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
 import { acceptInviteRedirectUrl } from "../_shared/invite.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
+import { recordAuditFromReq } from "../_shared/audit.ts";
+import { appBaseUrl } from "../_shared/appUrl.ts";
 
 const SUPER_ADMIN_EMAIL = "devyntgrillo@gmail.com";
 
@@ -98,7 +100,18 @@ Deno.serve(async (req: Request) => {
       if (access === "practice" && !practiceId) return json({ error: "Select a subaccount for practice access" }, 400);
 
       const { access_level, userRole, practiceScoped, agencyScoped } = resolveAccess(access, role);
+      // Canonical production URLs for the email + sign-in link — never the
+      // inviter's localhost dev origin (both helpers ignore a client origin).
+      const appOrigin = appBaseUrl();
       const redirectTo = acceptInviteRedirectUrl(body.app_origin as string | undefined);
+
+      // If this email already belongs to a user (e.g. a previously deactivated
+      // one), lift any ban FIRST so we can generate a sign-in link and reactivate
+      // them. Their access is (re)granted by the upsert below.
+      const { data: priorRow } = await admin.from("users").select("id").eq("email", email).maybeSingle();
+      if (priorRow?.id) {
+        await admin.auth.admin.updateUserById(priorRow.id, { ban_duration: "none" });
+      }
 
       // Create the auth user (invite); if they already exist, fall back to a
       // magic link so we still get their id and can email them in.
@@ -143,6 +156,15 @@ Deno.serve(async (req: Request) => {
         });
         emailSent = r.sent === true;
       }
+      await recordAuditFromReq(admin, req, {
+        action: "user.invited",
+        userId: user.id,
+        userEmail: user.email ?? null,
+        practiceId: practiceScoped ? (practiceId ?? null) : null,
+        resourceType: "user",
+        resourceId: email,
+        details: { access, role: role ?? null, access_level, agency_id: agencyId ?? null },
+      });
       return json({ ok: true, user_id: newUserId, email_sent: emailSent, invite_link: inviteLink ?? null });
     }
 
@@ -163,6 +185,8 @@ Deno.serve(async (req: Request) => {
         role: userRole,
         practice_id: practiceScoped ? practiceId : null,
       }).eq("id", userId);
+      // Granting access also lifts any deactivation ban so they can sign in again.
+      await admin.auth.admin.updateUserById(userId, { ban_duration: "none" });
 
       if (agencyScoped) {
         // Reset memberships then set the single chosen one.
@@ -174,13 +198,26 @@ Deno.serve(async (req: Request) => {
       } else {
         await admin.from("agency_members").delete().eq("user_id", userId);
       }
+      await recordAuditFromReq(admin, req, {
+        action: "user.role_changed",
+        userId: user.id,
+        userEmail: user.email ?? null,
+        practiceId: practiceScoped ? (practiceId ?? null) : null,
+        resourceType: "user",
+        resourceId: userId,
+        details: { access, role: role ?? null, access_level, agency_id: agencyId ?? null },
+      });
       return json({ ok: true });
     }
 
-    // ---- remove (revoke access by default, or hard-delete the account) ----
+    // ---- remove: deactivate (keep account + ban login), revoke (legacy), or hard-delete ----
     if (action === "remove") {
       const userId = String(body.user_id || "");
-      const mode = body.mode === "delete" ? "delete" : "revoke";
+      const mode = body.mode === "delete"
+        ? "delete"
+        : body.mode === "deactivate"
+        ? "deactivate"
+        : "revoke";
       if (!userId) return json({ error: "user_id is required" }, 400);
       if (userId === user.id) return json({ error: "You can't remove your own account." }, 400);
 
@@ -189,9 +226,24 @@ Deno.serve(async (req: Request) => {
         // Cascades the public.users row via the FK on delete cascade.
         const { error } = await admin.auth.admin.deleteUser(userId);
         if (error) return json({ error: error.message }, 502);
+      } else if (mode === "deactivate") {
+        // Keep the account + users row as a record of who once had access, strip
+        // their access, and BAN the auth user so they can't sign in until they're
+        // re-invited (which un-bans + re-grants). The email stays reserved to them.
+        await admin.from("users").update({ access_level: "deactivated", practice_id: null, role: "member" }).eq("id", userId);
+        const { error } = await admin.auth.admin.updateUserById(userId, { ban_duration: "876600h" });
+        if (error) return json({ error: error.message }, 502);
       } else {
         await admin.from("users").update({ access_level: null, practice_id: null, role: "member" }).eq("id", userId);
       }
+      await recordAuditFromReq(admin, req, {
+        action: mode === "deactivate" ? "user.deactivated" : "user.role_changed",
+        userId: user.id,
+        userEmail: user.email ?? null,
+        resourceType: "user",
+        resourceId: userId,
+        details: { mode },
+      });
       return json({ ok: true });
     }
 

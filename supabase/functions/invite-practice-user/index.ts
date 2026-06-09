@@ -21,6 +21,8 @@ import { createClient } from "@supabase/supabase-js";
 import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
 import { acceptInviteRedirectUrl } from "../_shared/invite.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
+import { recordAuditFromReq } from "../_shared/audit.ts";
+import { safeRedirect } from "../_shared/appUrl.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -78,8 +80,9 @@ Deno.serve(async (req: Request) => {
     const email: string | undefined = body.email;
     const doctorFirst: string | null = body.doctor_first ?? null;
     const doctorLast: string | null = body.doctor_last ?? null;
-    const redirectTo: string =
-      body.redirect_to || acceptInviteRedirectUrl(body.app_origin as string | undefined);
+    // Force the canonical production origin; keep only the path (/accept-invite)
+    // from the caller so a localhost inviter can't break the real invite link.
+    const redirectTo: string = safeRedirect(body.redirect_to, "/accept-invite");
 
     if (!agencyId || !practiceName || !email) {
       return json({ error: "agency_id, practice_name, and email are required" }, 400);
@@ -115,6 +118,16 @@ Deno.serve(async (req: Request) => {
       .single();
     if (practiceErr) throw practiceErr;
     const practiceId = practice.id;
+
+    await recordAuditFromReq(admin, req, {
+      action: "practice.created",
+      userId: user.id,
+      userEmail: user.email ?? null,
+      practiceId,
+      resourceType: "practice",
+      resourceId: practiceId,
+      details: { agency_id: agencyId, name: practiceName, via: "agency_invite" },
+    });
 
     // --- 3) Generate a shareable link, then email it via Mailgun using the
     //         reseller's white-label brand. (No longer uses Supabase Auth's
@@ -173,6 +186,16 @@ Deno.serve(async (req: Request) => {
           { onConflict: "practice_id,user_id", ignoreDuplicates: true },
         );
     }
+
+    await recordAuditFromReq(admin, req, {
+      action: "user.invited",
+      userId: user.id,
+      userEmail: user.email ?? null,
+      practiceId,
+      resourceType: "user",
+      resourceId: email,
+      details: { role: "member", via: "agency_invite", invited_user_id: invitedUserId },
+    });
 
     return json({
       practice_id: practiceId,

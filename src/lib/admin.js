@@ -531,6 +531,11 @@ export function smsStatusMeta(s) {
   return SMS_STATUS[s] || SMS_STATUS.none
 }
 
+// Impersonation auditing now lives in src/lib/audit.js (auditImpersonationStarted
+// / auditImpersonationEnded), invoked from AuthContext.viewPractice / viewAgency.
+// The previous direct-insert logImpersonation() targeted columns that don't exist
+// and had no INSERT policy, so it silently failed; it has been removed.
+
 /** PostgREST column name from "Could not find the 'foo' column …" errors. */
 function missingColumnFromError(message) {
   if (!message) return null
@@ -553,22 +558,6 @@ export async function insertAgencyAccount(payload) {
     throw error
   }
   throw new Error('Could not create reseller.')
-}
-
-// Best-effort audit log of an impersonation event. Never throws.
-export async function logImpersonation({ actorId, targetType, targetId, targetName }) {
-  try {
-    const { error } = await supabase.from('audit_logs').insert({
-      actor_id: actorId || null,
-      action: 'impersonate',
-      target_type: targetType,
-      target_id: targetId,
-      detail: targetName,
-    })
-    if (error) console.warn('[audit] logImpersonation failed:', error.message)
-  } catch (e) {
-    console.error('[audit] logImpersonation threw:', e)
-  }
 }
 
 // Last 12 months of stacked MRR for the dashboard chart.

@@ -8,10 +8,7 @@ import {
   Send,
   ArrowLeft,
   Phone,
-  PhoneOff,
   Mic,
-  MicOff,
-  Circle,
   Search,
   Sparkles,
   Loader2,
@@ -25,7 +22,6 @@ import {
   SlidersHorizontal,
   Smile,
   Paperclip,
-  Download,
   ScrollText,
   X,
   Pencil,
@@ -61,7 +57,7 @@ import {
 } from '../lib/queries'
 import { invokeEdgeFunction } from '../lib/messaging'
 import { stripEmDashes } from '../lib/sanitize'
-import { timeAgo, formatDate, formatDuration } from '../lib/consults'
+import { formatDate, formatDuration } from '../lib/consults'
 import { auditConversationViewed, auditPatientAccessed, auditMessageSent } from '../lib/audit'
 import { SkeletonList } from '../components/Skeleton'
 import EmptyState from '../components/EmptyState'
@@ -72,6 +68,7 @@ import CallMessageBubble from '../components/CallMessageBubble'
 import EmailMessageBubble from '../components/EmailMessageBubble'
 import EmailComposer from '../components/EmailComposer'
 import ChannelToggle from '../components/ChannelToggle'
+import ConvAttachment from '../components/ConvAttachment'
 
 function initials(first, last) {
   return `${(first || '?')[0]}${(last || '')[0] || ''}`.toUpperCase()
@@ -1432,16 +1429,7 @@ export default function Conversations() {
                               color utility - plain `text-white` gets flipped dark by the
                               light-mode override in index.css. */}
                           {m.meta?.attachment ? (
-                            <a
-                              href={m.meta.attachment.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              download
-                              className={`flex items-center gap-2 px-3.5 py-2.5 ${radius} ${outbound ? 'bg-[var(--accent)] text-[#fff]' : 'bg-[var(--bg-elevated)] text-[var(--text-primary)]'}`}
-                            >
-                              <Download className="h-4 w-4 shrink-0 opacity-80" />
-                              <span className="truncate text-sm font-medium underline-offset-2 hover:underline">{m.meta.attachment.name || 'Attachment'}</span>
-                            </a>
+                            <ConvAttachment attachment={m.meta.attachment} outbound={outbound} radius={radius} />
                           ) : (
                             <div className={`px-3.5 py-2 text-[15px] leading-snug ${radius} ${outbound ? 'bg-[var(--accent)] text-[#fff]' : 'bg-[var(--bg-elevated)] text-[var(--text-primary)]'}`}>
                               <p className="whitespace-pre-wrap">{cleanBody(m.body)}</p>

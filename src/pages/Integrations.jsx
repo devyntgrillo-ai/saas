@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Mic, Video, Smartphone, Plug, Hash, Copy, Check,
+  Mic, Video, Smartphone, Plug, Copy, Check,
   Loader2, CheckCircle2, Lock, ChevronDown,
   RefreshCw, SlidersHorizontal,
 } from 'lucide-react'
@@ -249,20 +249,6 @@ export default function Integrations() {
   const slackConnected = Boolean(practice?.slack_webhook_url)
   const pmsConnected = Boolean(practice?.sikka_connected || practice?.pms_type)
 
-  async function testSlack() {
-    if (!slackUrl) return
-    setSlackTest('sending')
-    try {
-      await fetch(slackUrl, {
-        method: 'POST', mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: '🟢 *CaseLift* - test notification. Your Slack integration is working.' }),
-      })
-      setSlackTest('sent')
-    } catch { setSlackTest('sent') }
-    setTimeout(() => setSlackTest(''), 2500)
-  }
-
   return (
     <div className="space-y-6">
       <h2 className="text-base font-semibold text-white">CaseLift Integrations</h2>
@@ -300,33 +286,6 @@ export default function Integrations() {
         </div>
 
         <RecordingSettingsCard practice={practice} save={save} />
-      </div>
-
-      {/* NOTIFICATIONS */}
-      <div>
-        <SectionHeader>Notifications</SectionHeader>
-        <IntegrationCard logo={<Hash className="h-5 w-5" />} logoTone="bg-violet-600" title="Slack"
-          badge={slackConnected ? <Badge tone="green"><CheckCircle2 className="h-3 w-3" /> Connected</Badge> : <Badge tone="slate">Not connected</Badge>}>
-          Get CaseLift alerts in your Slack workspace.
-          <div className="mt-3 space-y-2">
-            <input value={slackUrl} onChange={(e) => setSlackUrl(e.target.value)} placeholder="Slack incoming webhook URL" className="input" />
-            <div className="flex gap-2">
-              <input value={slackChannel} onChange={(e) => setSlackChannel(e.target.value)} placeholder="#caselift-alerts" className="input" />
-              <button onClick={() => save({ slack_webhook_url: slackUrl.trim() || null, slack_channel: slackChannel.trim() || null }, 'slack')} disabled={saving === 'slack'} className="btn-primary shrink-0">
-                {saving === 'slack' ? <Loader2 className="h-4 w-4 animate-spin" /> : slackConnected ? 'Update' : 'Connect'}
-              </button>
-            </div>
-            {slackConnected && (
-              <div className="flex items-center gap-2">
-                <button onClick={testSlack} disabled={slackTest === 'sending'} className="btn-secondary text-xs">
-                  {slackTest === 'sending' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : slackTest === 'sent' ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : null}
-                  {slackTest === 'sent' ? 'Test sent' : 'Send test'}
-                </button>
-                <button onClick={() => save({ slack_webhook_url: null, slack_channel: null }, 'slack')} className="text-xs font-medium text-rose-300 hover:text-rose-200">Disconnect</button>
-              </div>
-            )}
-          </div>
-        </IntegrationCard>
       </div>
     </div>
   )

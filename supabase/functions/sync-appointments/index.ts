@@ -1,4 +1,5 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
+import { patientInitials } from "../_shared/phi.ts";
 // ============================================================================
 // sync-appointments - pull consult appointments from Sikka into pms_appointments.
 // Only runs for practices that approved their consult sync rules (pms_sync_approved_at).
@@ -168,7 +169,7 @@ async function syncOnePractice(admin: any, practice: PmsSyncPracticeRow) {
             || match.patient_name || "A patient";
           const valStr = value != null ? `$${value.toLocaleString()}` : "value pending";
           await postSlackInline(
-            `🟢 Treatment accepted - ${name} - ${valStr} - Attributed to CaseLift (${status === "caselift_recovered" ? "Recovered" : "Assisted"})`,
+            `🟢 Treatment accepted - ${patientInitials(name)} - ${valStr} - Attributed to CaseLift (${status === "caselift_recovered" ? "Recovered" : "Assisted"})`,
           );
         }
       }
@@ -180,6 +181,11 @@ async function syncOnePractice(admin: any, practice: PmsSyncPracticeRow) {
   return rows.length;
 }
 
+// The seeded sales-demo practice ("Demo Dental") is intentionally a FAKE
+// PMS-connected account with hand-seeded "today" appointments kept current by the
+// demo-today-refresh cron. A live PMS sync would overwrite that curated state, so
+// it is permanently excluded from syncing — even if someone re-links Sikka to it.
+const DEMO_PRACTICE_EMAIL = "demo@pinnacledental.com";
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -204,7 +210,7 @@ Deno.serve(async (req: Request) => {
     if (isService && body.sync_all) {
       const { data } = await admin
         .from("practices")
-        .select(PRACTICE_SYNC_COLS)
+        .select(`${PRACTICE_SYNC_COLS}, email`)
         .eq("sikka_connected", true)
         .not("sikka_refresh_token", "is", null)
         .not("pms_sync_approved_at", "is", null);
@@ -221,7 +227,7 @@ Deno.serve(async (req: Request) => {
         practiceId = prof?.practice_id ?? null;
       }
       if (!practiceId) return json({ error: "No practice in context." }, 400);
-      const { data: pr } = await admin.from("practices").select(PRACTICE_SYNC_COLS).eq("id", practiceId).maybeSingle();
+      const { data: pr } = await admin.from("practices").select(`${PRACTICE_SYNC_COLS}, email`).eq("id", practiceId).maybeSingle();
       if (!pr) return json({ error: "Practice not found." }, 404);
       if (!pr.sikka_refresh_token) return json({ error: "This practice hasn't connected to Sikka yet.", code: "not_linked" }, 409);
       if (!isSyncApproved(pr as PmsSyncPracticeRow)) {
@@ -244,6 +250,13 @@ Deno.serve(async (req: Request) => {
     const errors: { practice_id: string; error: string }[] = [];
     const skipped: string[] = [];
     for (const p of practices) {
+      // Never sync the seeded sales-demo practice — its curated "today" worklist
+      // must not be overwritten by a live PMS pull (even if Sikka is re-linked).
+      if (((p as { email?: string }).email || "").toLowerCase() === DEMO_PRACTICE_EMAIL) {
+        console.log(`sync-appointments: skipping demo practice ${p.id} (excluded from PMS sync)`);
+        skipped.push(p.id);
+        continue;
+      }
       if (!isSyncApproved(p)) {
         skipped.push(p.id);
         continue;

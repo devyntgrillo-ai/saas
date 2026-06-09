@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2, Gift, Check, CreditCard, ArrowLeft, Building2 } from 'lucide-react'
 import Logo from '../components/Logo'
+import PasswordField from '../components/PasswordField'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { createCheckout } from '../lib/billing'
+import { validatePassword } from '../lib/passwordPolicy'
 import { REF_STORAGE_KEY } from '../components/ReferralRedirect'
 
 const HEARD_FROM_OPTIONS = ['Referral', 'Instagram', 'Facebook', 'Google', 'Podcast', 'Other']
@@ -88,6 +90,15 @@ export default function Signup() {
 
     if (practiceId) {
       setStep(2)
+      return
+    }
+
+    // Enforce the password policy before hitting the auth API (mirrors the
+    // server-side rule in Supabase config). Keeps weak passwords out of HIPAA-
+    // scoped accounts.
+    const pwCheck = validatePassword(form.password)
+    if (!pwCheck.valid) {
+      setError(pwCheck.errors[0])
       return
     }
 
@@ -288,11 +299,11 @@ export default function Signup() {
                 </div>
 
                 {!practiceId && (
-                  <div>
-                    <label className="label" htmlFor="password">Password</label>
-                    <input id="password" type="password" required minLength={6} autoComplete="new-password"
-                      className="input" placeholder="At least 6 characters" value={form.password} onChange={set('password')} />
-                  </div>
+                  <PasswordField
+                    id="password"
+                    value={form.password}
+                    onChange={(v) => setForm((f) => ({ ...f, password: v }))}
+                  />
                 )}
 
                 <div>

@@ -1,0 +1,2 @@
+[functions.accept-baa]
+verify_jwt = true

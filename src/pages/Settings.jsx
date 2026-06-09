@@ -28,6 +28,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { supabase } from '../lib/supabase'
+import { auditUserRoleChanged } from '../lib/audit'
 import { formatDate } from '../lib/consults'
 import KnowledgeBase from './KnowledgeBase'
 import AuditLog from './AuditLog'
@@ -42,6 +43,7 @@ import CancellationFlow from '../components/CancellationFlow'
 import InviteModal from '../components/InviteModal'
 import Modal from '../components/Modal'
 import { usePermissions, ACCESS_LABELS } from '../lib/permissions'
+import AccessRestricted from '../components/AccessRestricted'
 import {
   usePracticeTeam,
   useRemoveTeamMember,
@@ -111,6 +113,7 @@ export default function Settings() {
     if (t.hidden) return false
     if (t.adminOnly && !isAdmin) return false
     if (t.key === 'billing' && !perms.canViewBilling) return false
+    if (t.key === 'team' && !perms.canViewTeam) return false
     // Reseller-onboarded practices refer through their reseller, not directly.
     if (t.directOnly && practice?.agency_id) return false
     return true
@@ -119,6 +122,13 @@ export default function Settings() {
   const { tab: tabParam } = useParams()
   const tab = TAB_KEYS.includes(tabParam) ? tabParam : 'profile'
   const setTab = (key) => navigate(key === 'profile' ? '/settings' : `/settings/${key}`)
+
+  // Deep-linking to a restricted tab (billing/team/audit-log) is blocked even
+  // though the chip is hidden — members/viewers get Access Restricted (logged).
+  const tabBlocked =
+    (tab === 'billing' && !perms.canViewBilling) ||
+    (tab === 'team' && !perms.canViewTeam) ||
+    (tab === 'audit-log' && !isAdmin)
 
   // Legacy tab URLs — keep old links working.
   useEffect(() => {
@@ -262,8 +272,16 @@ export default function Settings() {
 
         {/* Panel */}
         <div className="min-w-0 flex-1">
+          {tabBlocked && (
+            <AccessRestricted
+              resource={`settings:${tab}`}
+              reason="insufficient_role"
+              message="Only practice admins can access this section."
+              showHomeLink={false}
+            />
+          )}
           {/* Practice Profile */}
-          {tab === 'profile' && (
+          {!tabBlocked && tab === 'profile' && (
             <div className="space-y-6">
             <div className="card p-6">
               <h2 className="text-base font-semibold text-white">Practice Profile</h2>
@@ -413,10 +431,10 @@ export default function Settings() {
           {/* Team */}
           {tab === 'account' && <UserProfilePanel />}
 
-          {tab === 'team' && <PracticeTeamPanel practice={practice} />}
+          {tab === 'team' && perms.canViewTeam && <PracticeTeamPanel practice={practice} />}
 
           {/* Billing */}
-          {tab === 'billing' && (
+          {tab === 'billing' && perms.canViewBilling && (
             <BillingPanel
               practice={practice}
               showSuccess={showSuccess}
@@ -429,7 +447,7 @@ export default function Settings() {
           )}
 
           {/* Audit Log (admin only) */}
-          {tab === 'audit-log' && <AuditLog />}
+          {tab === 'audit-log' && isAdmin && <AuditLog />}
         </div>
       </div>
 
@@ -861,11 +879,30 @@ function PracticeTeamPanel({ practice }) {
   const members = data?.members ?? []
   const pending = data?.pending ?? []
   const [invite, setInvite] = useState(false)
+  const [busyRole, setBusyRole] = useState(null)
   const [flash, setFlash] = useState('')
 
   function note(msg) {
     setFlash(msg)
     setTimeout(() => setFlash(''), 6000)
+  }
+
+  // Owner/admin changes a teammate's role (incl. demoting to read-only viewer).
+  // Goes through the SECURITY DEFINER RPC since RLS blocks updating others' rows.
+  async function changeRole(m, role) {
+    if (role === m.role) return
+    setBusyRole(m.id)
+    try {
+      const { data, error } = await supabase.rpc('set_practice_member_role', { p_user_id: m.id, p_role: role })
+      if (error || !data?.ok) throw new Error(data?.error || error?.message || 'Could not change role')
+      auditUserRoleChanged(m.id, { from: m.role, to: role })
+      note(`${m.display_name || m.email} is now ${ACCESS_LABELS[`practice_${role}`] || role}.`)
+      refetch()
+    } catch (e) {
+      note(e?.message || 'Could not change role.')
+    } finally {
+      setBusyRole(null)
+    }
   }
 
   function removeMember(id) {
@@ -923,7 +960,21 @@ function PracticeTeamPanel({ practice }) {
                   </p>
                   {m.job_title && <p className="truncate text-xs font-medium text-slate-400">{m.job_title}</p>}
                   {m.display_name && <p className="truncate text-xs text-slate-500">{m.email}</p>}
-                  <p className="text-xs capitalize text-slate-500">{ACCESS_LABELS[`practice_${m.role}`] || m.role}</p>
+                  {perms.canInvite && m.id !== user?.id ? (
+                    <select
+                      value={m.role === 'admin' ? 'owner' : (['owner', 'member', 'viewer'].includes(m.role) ? m.role : 'member')}
+                      onChange={(e) => changeRole(m, e.target.value)}
+                      disabled={busyRole === m.id}
+                      title="Change role"
+                      className="mt-1 rounded-md border border-surface-700 bg-surface-900 px-1.5 py-1 text-xs text-slate-300 focus:border-primary focus:outline-none disabled:opacity-50"
+                    >
+                      <option value="owner">Practice Admin</option>
+                      <option value="member">Practice Member</option>
+                      <option value="viewer">Practice Viewer (read-only)</option>
+                    </select>
+                  ) : (
+                    <p className="text-xs capitalize text-slate-500">{ACCESS_LABELS[`practice_${m.role}`] || m.role}</p>
+                  )}
                 </div>
                 {perms.canInvite && m.id !== user?.id && (
                   <button onClick={() => removeMember(m.id)} disabled={removingId === m.id} className="rounded-md p-2 text-slate-500 transition hover:bg-surface-800 hover:text-rose-400 disabled:opacity-50" title="Remove">

@@ -1,5 +1,6 @@
 // Browser-recording helpers + recording-source display config.
 import { supabase } from './supabase'
+import { auditConsultCreated } from './audit'
 
 export const RECORDING_SOURCES = {
   browser: { label: '📱 Phone Recording', classes: 'bg-primary/10 text-primary-300 ring-primary-400/20' },
@@ -67,6 +68,7 @@ export async function createBrowserConsult(practiceId, { durationSec, patient, s
   }
   const { data, error } = await supabase.from('consults').insert(row).select('id').single()
   if (error) throw error
+  auditConsultCreated(data.id, { source: source || 'browser' })
   return data.id
 }
 

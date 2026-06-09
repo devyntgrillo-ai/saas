@@ -4,6 +4,8 @@
 // signed URL (with the service role) for the private consult-recordings bucket.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
+import { recordAuditFromReq } from "../_shared/audit.ts";
+import { callerRole, roleCanViewPHI } from "../_shared/roles.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,15 +41,35 @@ Deno.serve(async (req: Request) => {
       ? createClient(SUPABASE_URL, SERVICE_KEY)
       : createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
 
+    let actorId: string | null = null;
+    let actorEmail: string | null = null;
     if (!isServiceRole) {
       // Validate the specific bearer token (more robust than reading a session).
       const { data: { user } } = await scoped.auth.getUser(token);
       if (!user) return json({ error: "Unauthorized" }, 401);
+      actorId = user.id;
+      actorEmail = user.email ?? null;
+
+      // Minimum necessary: a read-only viewer must never retrieve patient audio.
+      const role = await callerRole({ userId: actorId ?? undefined, isServiceRole, client: scoped });
+      if (!roleCanViewPHI(role)) {
+        const admin0 = createClient(SUPABASE_URL, SERVICE_KEY);
+        await recordAuditFromReq(admin0, req, {
+          action: "access.denied",
+          userId: actorId,
+          userEmail: actorEmail,
+          resourceType: "consult",
+          resourceId: consultId,
+          details: { reason: "insufficient_role", role, fn: "get-recording-url" },
+          phiAccessed: false,
+        });
+        return json({ error: "Your role does not have access to patient recordings." }, 403);
+      }
     }
 
     const { data: consult } = await scoped
       .from("consults")
-      .select("id, audio_storage_path")
+      .select("id, audio_storage_path, practice_id")
       .eq("id", consultId)
       .maybeSingle();
 
@@ -64,6 +86,19 @@ Deno.serve(async (req: Request) => {
       // before audio was retained). Treat as "no recording" rather than an error.
       return json({ error: "This recording is no longer available." }, 404);
     }
+
+    // Authoritative server-side PHI access log: a consult recording was retrieved
+    // for download/playback. Best-effort; never blocks the response.
+    await recordAuditFromReq(admin, req, {
+      action: "recording.accessed",
+      userId: actorId,
+      userEmail: actorEmail,
+      practiceId: (consult.practice_id as string) ?? null,
+      resourceType: "consult",
+      resourceId: consultId,
+      details: { bucket: BUCKET, service_role: isServiceRole },
+      phiAccessed: true,
+    });
 
     return json({ url: signed.signedUrl });
   } catch (e) {

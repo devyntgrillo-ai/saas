@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Check, Mail, MessageSquare, Hash, Send, Info } from 'lucide-react'
+import { Loader2, Check, Mail, MessageSquare, Send, Info } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useUpdatePractice, useSendTestDigest } from '../lib/queries'
 
@@ -9,7 +9,10 @@ const EVENTS = [
   { key: 'daily_calls_due', label: 'Daily Calls Due', tip: 'Get a daily list of patients scheduled for a manual follow-up call today', def: { email: true, sms: true, slack: false } },
   { key: 'low_recording_rate', label: 'Low Recording Reminder', tip: 'Email a reminder when several implant consults pass in a row without being recorded', def: { email: true, sms: false, slack: false }, emailOnly: true },
 ]
-const CHANNELS = ['email', 'sms', 'slack']
+// Practice-facing notification channels. Slack is intentionally absent: alerts
+// route only to CaseLift's internal Slack (server-side), never a practice's own
+// workspace, so practices don't configure or toggle it.
+const CHANNELS = ['email', 'sms']
 
 function defaultPrefs() {
   const out = {}
@@ -75,7 +78,6 @@ export default function NotificationSettings() {
       weekly_digest_time: practice.weekly_digest_time || '9am',
       digest_owner_email: practice.digest_owner_email || practice.email || '',
       digest_tc_email: practice.digest_tc_email || '',
-      slack_webhook_url: practice.slack_webhook_url || '',
     })
   }, [practice])
 
@@ -142,15 +144,6 @@ export default function NotificationSettings() {
             <div className="flex items-center gap-2 text-sm text-slate-200"><MessageSquare className="h-4 w-4 text-slate-400" /> SMS</div>
             <input value={form.notify_sms_number || ''} onChange={(e) => setForm((f) => ({ ...f, notify_sms_number: e.target.value }))}
               onBlur={(e) => save({ notify_sms_number: e.target.value || null })} placeholder="(512) 555-0142" className="input max-w-[260px]" />
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-surface-700 pt-3">
-            <div className="flex items-center gap-2 text-sm text-slate-200">
-              <Hash className="h-4 w-4 text-slate-400" /> Slack
-              {slackConnected && <span className="ml-1 text-xs font-medium text-emerald-300">Connected</span>}
-            </div>
-            <input value={form.slack_webhook_url || ''} onChange={(e) => setForm((f) => ({ ...f, slack_webhook_url: e.target.value }))}
-              onBlur={(e) => save({ slack_webhook_url: e.target.value.trim() || null }, e.target.value.trim() ? 'Slack connected' : 'Slack disconnected')}
-              placeholder="Paste your Slack incoming webhook URL" className="input max-w-[300px]" />
           </div>
         </div>
       </Section>
