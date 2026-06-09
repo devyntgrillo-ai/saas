@@ -21,6 +21,7 @@ import {
 } from 'recharts'
 import { useAuth } from '../context/AuthContext'
 import { useAgencyAnalytics, useAgencyOverview } from '../lib/queries'
+import { commissionRate } from '../lib/resellerSaas'
 import { formatMoney } from '../lib/analytics'
 import { isWonStatus } from '../lib/consults'
 import StatCard from '../components/StatCard'
@@ -41,6 +42,15 @@ function parseDate(d) {
 const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 const isWon = (c) => isWonStatus(c.status)
 
+const SUB_BADGE = {
+  active: 'bg-emerald-500/15 text-emerald-300',
+  trial: 'bg-amber-500/15 text-amber-300',
+  trialing: 'bg-amber-500/15 text-amber-300',
+  past_due: 'bg-rose-500/15 text-rose-300',
+  cancelled: 'bg-slate-500/15 text-slate-400',
+  canceled: 'bg-slate-500/15 text-slate-400',
+}
+
 export default function AgencyAnalytics() {
   const { effectiveAgency: agency, isAgencyView, contextLoading, viewPractice } = useAuth()
   const navigate = useNavigate()
@@ -54,8 +64,8 @@ export default function AgencyAnalytics() {
   // the searchable client list.
   const { data: overview } = useAgencyOverview(agency?.id)
   const rollup = overview?.rollup || { totalCount: 0, activeCount: 0, recovered: 0 }
-  const clientPrice = Number(agency?.reseller_client_price) || 0
-  const yourMrr = rollup.activeCount * clientPrice
+  const rate = commissionRate(agency)
+  const yourCommission = rollup.activeCount * rate
   // Clients to nudge: BAA unsigned, stale, or low recording rate. Memoized so the
   // current-time check stays out of the render path. Each row carries its reasons.
   const needsAttention = useMemo(() => {
@@ -180,19 +190,19 @@ export default function AgencyAnalytics() {
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <div className="card p-4">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-slate-400">Your MRR</p>
+                <p className="text-xs font-medium text-slate-400">Your Commission</p>
                 <Wallet className="h-4 w-4 text-slate-500" />
               </div>
-              <p className="mt-1 text-2xl font-bold text-emerald-300">{formatMoney(yourMrr)}</p>
-              <p className="mt-0.5 text-xs text-slate-500">{rollup.activeCount} active × {formatMoney(clientPrice)}/mo</p>
+              <p className="mt-1 text-2xl font-bold text-emerald-300">{formatMoney(yourCommission)}/mo</p>
+              <p className="mt-0.5 text-xs text-slate-500">{rollup.activeCount} active × {formatMoney(rate)}/mo</p>
             </div>
             <div className="card p-4">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-slate-400">Active subaccounts</p>
+                <p className="text-xs font-medium text-slate-400">Referred practices</p>
                 <Building2 className="h-4 w-4 text-slate-500" />
               </div>
               <p className="mt-1 text-2xl font-bold text-white">{rollup.activeCount}</p>
-              <p className="mt-0.5 text-xs text-slate-500">of {rollup.totalCount} total</p>
+              <p className="mt-0.5 text-xs text-slate-500">active of {rollup.totalCount} total</p>
             </div>
             <div className="card p-4">
               <div className="flex items-center justify-between">
@@ -272,6 +282,28 @@ export default function AgencyAnalytics() {
                 </ul>
               </div>
             )}
+          </div>
+
+          {/* Your referred practices — moved from the old SaaS Mode active-clients list */}
+          <div>
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-300">
+              <Building2 className="h-4 w-4 text-slate-400" /> Your referred practices
+            </h2>
+            <div className="card overflow-hidden">
+              <ul className="divide-y divide-surface-700">
+                {practices.filter((p) => !p.archived_at).map((p) => {
+                  const st = p.subscription_status || 'active'
+                  return (
+                    <li key={p.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                      <span className="min-w-0 truncate text-sm font-medium text-slate-200">{p.name}</span>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium capitalize ${SUB_BADGE[st] || 'bg-surface-700 text-slate-300'}`}>
+                        {String(st).replace('_', ' ')}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
           </div>
         </>
       )}
