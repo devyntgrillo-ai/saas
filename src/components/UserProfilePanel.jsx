@@ -3,6 +3,7 @@ import { Loader2, Check, Camera } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { uploadAvatar, updateMyProfile, ROLE_OPTIONS } from '../lib/profile'
 import { Avatar } from './chat/ChatMessage'
+import MfaSetup from './MfaSetup'
 
 // Settings → Your Profile: set the display name + avatar + role shown across the app.
 export default function UserProfilePanel() {
@@ -49,6 +50,7 @@ export default function UserProfilePanel() {
   }
 
   return (
+    <div className="space-y-6">
     <div className="card p-6">
       <h2 className="text-base font-semibold text-white">Your Profile</h2>
       <p className="mt-1 text-sm text-slate-400">
@@ -106,6 +108,9 @@ export default function UserProfilePanel() {
           {saved ? 'Saved' : 'Save profile'}
         </button>
       </div>
+    </div>
+
+    <MfaSetup />
     </div>
   )
 }

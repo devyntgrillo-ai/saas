@@ -15,9 +15,11 @@ import {
   Mail,
 } from 'lucide-react'
 import Logo from '../components/Logo'
+import PasswordField from '../components/PasswordField'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { createCheckout } from '../lib/billing'
+import { validatePassword } from '../lib/passwordPolicy'
 import PhoneSetupWizard from '../components/PhoneSetupWizard'
 import { REF_STORAGE_KEY } from '../components/ReferralRedirect'
 
@@ -170,6 +172,9 @@ export default function Onboarding() {
   async function createAccount(e) {
     e?.preventDefault?.()
     setSaveError('')
+    // Enforce the HIPAA password policy before creating the account.
+    const pwCheck = validatePassword(acct.password)
+    if (!pwCheck.valid) { setSaveError(pwCheck.errors[0]); return }
     setSaving(true)
     const { data, error: signUpError } = await signUp(acct.email, acct.password, { practice_name: acct.practiceName })
     if (signUpError) { setSaving(false); setSaveError(signUpError.message); return }
@@ -361,7 +366,7 @@ export default function Onboarding() {
                   <Field label="Your name"><input className="input" required value={acct.contactName} onChange={setA('contactName')} placeholder="Dr. Jordan Rivera" /></Field>
                   <Field label="Office phone"><input className="input" value={acct.phone} onChange={setA('phone')} placeholder="(480) 555-0142" /></Field>
                   <Field label="Work email"><input className="input" type="email" required value={acct.email} onChange={setA('email')} placeholder="you@yourpractice.com" /></Field>
-                  <Field label="Password"><input className="input" type="password" required minLength={6} value={acct.password} onChange={setA('password')} placeholder="At least 6 characters" /></Field>
+                  <PasswordField id="password" value={acct.password} onChange={(v) => setAcct((a) => ({ ...a, password: v }))} />
                   <div className="sm:col-span-2">
                     <Field label="Where did you hear about us?">
                       <select className="input" required value={acct.heardFrom} onChange={setA('heardFrom')}>

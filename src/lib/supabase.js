@@ -13,7 +13,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
+    // JWTs expire after 1 hour (config.toml: jwt_expiry = 3600). autoRefreshToken
+    // silently exchanges the refresh token for a fresh access token before expiry;
+    // refresh-token rotation is handled server-side (config.toml:
+    // enable_refresh_token_rotation = true), so each refresh issues a new token.
     autoRefreshToken: true,
+    // Required so the password-recovery link (/reset-password) is detected and a
+    // recovery session is established from the URL hash.
     detectSessionInUrl: true,
   },
 })

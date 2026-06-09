@@ -560,7 +560,9 @@ export function AuthProvider({ children }) {
     signIn: async (email, password) => {
       const res = await supabase.auth.signInWithPassword({ email, password })
       if (res?.error) {
-        logAuthEvent(AUDIT.LOGIN_FAILURE, { email, details: { reason: res.error.message } })
+        // Audit the failed attempt — email + reason only. The attempted password
+        // is NEVER logged. phi_accessed is false (enforced by the edge function).
+        logAuthEvent(AUDIT.LOGIN_FAILURE, { email, details: { email, reason: res.error.message } })
       } else {
         logAuthEvent(AUDIT.LOGIN_SUCCESS, { email })
       }

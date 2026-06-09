@@ -176,6 +176,15 @@ export const auditPracticeCreated = (practiceId, details = null) =>
 export const auditBillingAction = (action, details = null) =>
   logAudit(AUDIT.BILLING_ACTION, { resourceType: 'billing', resourceId: action, details })
 
+// MFA lifecycle events. Routed through logAuthEvent so they carry the user's
+// identity + real client IP from the edge function. Never include the TOTP
+// secret, codes, or backup codes in details.
+export const auditMfaEnrolled = (details = null) =>
+  logAuthEvent(AUDIT.MFA_ENROLLED, { details })
+
+export const auditMfaDisabled = (details = null) =>
+  logAuthEvent(AUDIT.MFA_CHALLENGE, { details: { ...(details || {}), event: 'disabled' } })
+
 export const auditImpersonationStarted = (targetType, targetId, details = null, practiceId = null) =>
   logAudit(AUDIT.IMPERSONATION_STARTED, { resourceType: targetType, resourceId: targetId, details, practiceId })
 
