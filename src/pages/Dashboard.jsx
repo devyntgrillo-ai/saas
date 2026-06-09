@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { Link, Navigate } from 'react-router-dom'
 import AILearningFeed from '../components/AILearningFeed'
+import LaunchpadCard from '../components/LaunchpadCard'
 import TodaysAppointmentsSnapshot from '../components/TodaysAppointmentsSnapshot'
 import { SkeletonStatGrid } from '../components/Skeleton'
 const RecordingRateCard = lazy(() => import('../components/RecordingRateCard'))
@@ -185,6 +186,8 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
+      {/* Setup-in-progress nudge — disappears once the Launchpad is complete. */}
+      <LaunchpadCard />
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-white">
           Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}. Here's what CaseLift has been working on.

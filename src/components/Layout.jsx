@@ -18,6 +18,7 @@ import {
   Moon,
   LayoutGrid,
   Rocket,
+  ClipboardList,
 } from 'lucide-react'
 import Logo from './Logo'
 import NotificationBell from './NotificationBell'
@@ -124,7 +125,14 @@ export default function Layout() {
   // The practice sidebar shows only when a practice is in context AND we're not
   // viewing the reseller portal.
   const showPracticeNav = Boolean(practiceId) && !inResellerPortal
-  const nav = showPracticeNav ? practiceNav : []
+  // Launchpad sits ABOVE Dashboard until setup is complete, then disappears for
+  // good (keyed off launchpad_completed_at). The blue dot flags it as pending.
+  const showLaunchpad = showPracticeNav && !practice?.launchpad_completed_at
+  const nav = showPracticeNav
+    ? (showLaunchpad
+        ? [{ to: '/launchpad', label: 'Launchpad', icon: ClipboardList, end: true, dot: true }, ...practiceNav]
+        : practiceNav)
+    : []
   const showSettings = showPracticeNav && perms.canViewSettings
   const chatUnread = useChatUnread(practiceId)
   const agencyActive =
@@ -160,7 +168,7 @@ export default function Layout() {
                 <span className="flex-1">{label}</span>
               </Link>
             ))
-          : nav.map(({ to, label, icon: Icon, end, locked }) => (
+          : nav.map(({ to, label, icon: Icon, end, locked, dot }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -172,6 +180,8 @@ export default function Layout() {
                     brand accent when active. Size 16px, 10px gap (gap-2.5 above). */}
                 {Icon && <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />}
                 <span className="flex-1">{label}</span>
+                {/* Blue dot flags pending setup on the Launchpad item. */}
+                {dot && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
                 {/* Live unread badge for the Chat channel. */}
                 {to === '/chat' && chatUnread > 0 && (
                   <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold !text-white">

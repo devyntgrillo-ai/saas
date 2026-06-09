@@ -60,6 +60,7 @@ const AdminReferrals = lazy(() => import('./pages/admin/Referrals'))
 const AdminCommissions = lazy(() => import('./pages/admin/Commissions'))
 const AdminChats = lazy(() => import('./pages/admin/AdminChats'))
 const Chat = lazy(() => import('./pages/Chat'))
+const Launchpad = lazy(() => import('./pages/Launchpad'))
 
 // get.caselift.io is a signup landing host: visiting its root sends people
 // straight into the signup funnel. Hostname is stable per page load, so this is
@@ -173,6 +174,8 @@ function AppContent() {
                   }
                 >
                   <Route path="/" element={<Dashboard />} />
+                  {/* Launchpad setup checklist — open during trial (not behind billing). */}
+                  <Route path="/launchpad" element={<Launchpad />} />
                   <Route path="/agency" element={<Agency />} />
                   <Route path="/agency/analytics" element={<AgencyAnalytics />} />
                   <Route path="/agency/knowledge-base" element={<AgencyKnowledgeBase />} />
