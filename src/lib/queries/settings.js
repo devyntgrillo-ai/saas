@@ -30,8 +30,12 @@ export function useRemoveTeamMember() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ userId, practiceId }) => {
-      const { error } = await supabase.from('users').update({ practice_id: null }).eq('id', userId)
+      // RLS only lets a user update their OWN row, so a direct client update of
+      // another user silently no-ops. Go through the SECURITY DEFINER RPC, which
+      // authorizes the caller (owner/admin/super-admin) and unlinks the member.
+      const { data, error } = await supabase.rpc('remove_practice_member', { p_user_id: userId })
       if (error) throw error
+      if (!data?.ok) throw new Error(data?.error || 'Could not remove member')
       return { practiceId }
     },
     onSuccess: ({ practiceId }) => {
