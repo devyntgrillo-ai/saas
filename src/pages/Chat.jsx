@@ -102,7 +102,7 @@ export default function Chat() {
       <div className="border-b border-surface-700 px-4 py-2">
         <div className="flex items-center gap-2">
           <h1 className="flex items-center gap-1 text-[15px] font-bold text-white">
-            <span className="text-slate-500">#</span> coaching
+            <span className="text-slate-500">#</span> Private 1-on-1 Coaching Channel
           </h1>
           {online ? (
             <span className="flex items-center gap-1 text-[11px] text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Online</span>
