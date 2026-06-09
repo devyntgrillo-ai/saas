@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Phone,
   Copy,
@@ -103,6 +103,12 @@ export default function PhoneMessaging() {
   const { practice, practiceId, refreshProfile } = useAuth()
   const updatePractice = useUpdatePractice()
   const [setupOpen, setSetupOpen] = useState(false)
+  const setupRef = useRef(null)
+
+  useEffect(() => {
+    if (!setupOpen || !setupRef.current) return
+    setupRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [setupOpen])
 
   // ---- form state, seeded from the practice record --------------------------
   const [smsEnabled, setSmsEnabled] = useState(true)
@@ -279,16 +285,18 @@ export default function PhoneMessaging() {
       )}
 
       {setupOpen && (
-        <PhoneSetupWizard
-          embedded
-          practiceId={practiceId}
-          practiceName={practice?.name}
-          onClose={() => setSetupOpen(false)}
-          onComplete={async () => {
-            await refreshProfile()
-            setSetupOpen(false)
-          }}
-        />
+        <div ref={setupRef} className="scroll-mt-6">
+          <PhoneSetupWizard
+            embedded
+            practiceId={practiceId}
+            practiceName={practice?.name}
+            onClose={() => setSetupOpen(false)}
+            onComplete={async () => {
+              await refreshProfile()
+              setSetupOpen(false)
+            }}
+          />
+        </div>
       )}
 
       {/* ── SMS follow-up settings ───────────────────────────────────── */}

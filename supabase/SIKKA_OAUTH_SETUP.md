@@ -53,7 +53,38 @@ integration is the webhook + `request_key` path (already live), and the
 authorization-code callback simply isn't needed. Confirm with Sikka support if
 unsure.
 
-## 4. Deploy the functions
+## 4. Consult sync calibration (v2)
+
+After a practice connects Sikka, **no appointments sync until a practice admin approves**
+the consult filter rules.
+
+| Setting | Default | Range |
+|---------|---------|-------|
+| History (backfill) | **1 year** | 1–5 years (`pms_history_years`) |
+| Forward look | **1 year** | 1–5 years (`pms_forward_years`) |
+
+**Flow**
+
+1. **Discovery** (`discover-pms-consults`) — scans appointments across the configured
+   year window (chunked at 1 year per Sikka API call), clusters appointment types +
+   procedure codes, then **always runs AI** (Anthropic) to classify each cluster as
+   `likely_consult` / `likely_routine` / `unknown`.
+2. **Approval** (`approve-pms-sync`) — practice admin reviews clusters in
+   **Settings → PMS**, adjusts checkboxes + year sliders, clicks **Approve & start sync**.
+3. **Ongoing sync** (`sync-appointments`, webhooks) — only matched consult rows land in
+   `pms_appointments`; excluded types are hidden entirely. Patients are JIT-synced from
+   matched appointments only.
+
+Migration: `supabase/migrations/20260609040000_pms_sync_calibration.sql`
+
+Deploy:
+
+```bash
+supabase functions deploy discover-pms-consults
+supabase functions deploy approve-pms-sync
+```
+
+## 5. Deploy the functions
 
 ```bash
 supabase functions deploy sync-appointments
@@ -63,14 +94,14 @@ supabase functions deploy search-sikka-practice
 supabase functions deploy sikka-oauth-callback --no-verify-jwt
 ```
 
-## 5. Connect flow (what the user does)
+## 6. Connect flow (what the user does)
 
 Settings → Integrations → PMS → **Connect to Sikka** → approves in Sikka's
 portal → redirected back to `/settings/integrations?sikka=connected`. Tokens are
 saved; the 15-min `sync-appointments` cron (see `apply_cron.sql`) then pulls
 appointments. "Sync now" / admin "Test Sync" both work immediately.
 
-## 6. API version - confirmed v4
+## 7. API version - confirmed v4
 
 Confirmed against Sikka's knowledge base + API portal (api.sikkasoft.com/v4):
 - **Base: `https://api.sikkasoft.com/v4`** (default).
@@ -85,7 +116,7 @@ Still verify against your account's docs (env-overridable, no redeploy needed):
   `client_id/secret` or `app_id/app_key` (we send both),
 - the exact appointment date-range param names if your account differs.
 
-## 7. Webhook events (`sikka-connect-webhook`)
+## 8. Webhook events (`sikka-connect-webhook`)
 
 The single webhook receiver routes every Sikka event by type (tolerates the
 "… details" suffixes and singular/plural). Office linkage: payload `office_id`
@@ -94,8 +125,8 @@ The single webhook receiver routes every Sikka event by type (tolerates the
 | Event | Action |
 |---|---|
 | `Data_Refresh` | invoke `sync-appointments` for that office |
-| `appointment(s)` | upsert `pms_appointments` (key `practice_id,pms_appointment_id`) |
-| `patient(s)` | upsert `pms_patients` |
+| `appointment(s)` | upsert matched consult `pms_appointments` only (after admin approval) |
+| `patient(s)` | no-op (patients JIT from matched appointments) |
 | `treatment_plan(s)` | match patient → open consult → `closed_won` + cancel sequence |
 | `transaction(s)` | upsert `pms_transactions` (reporting) |
 | `provider(s)` | upsert `pms_providers` |

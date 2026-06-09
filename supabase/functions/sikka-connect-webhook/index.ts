@@ -22,11 +22,18 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { normalizeTreatment, pickTxValue } from "../_shared/sikka.ts";
+import {
+  isSyncApproved,
+  jitUpsertPatientsFromAppointments,
+  mapAppointmentRow,
+  matchesSyncRules,
+  upsertAppointments,
+  type PmsSyncRules,
+} from "../_shared/pms-sync.ts";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-const TYPE_RE = /(consult|implant|new patient implant)/i;
 const last10 = (s: unknown) => (s ?? "").toString().replace(/\D/g, "").slice(-10);
 const str = (v: unknown) => (v == null ? null : String(v).trim() || null);
 // First defined value across several candidate keys.
@@ -56,7 +63,9 @@ function recordsFrom(payload: any): any[] {
 // deno-lint-ignore no-explicit-any
 async function resolvePractice(admin: any, officeId: string | null) {
   if (!officeId) return null;
-  const { data } = await admin.from("practices").select("id, sikka_practice_id").eq("sikka_practice_id", officeId).maybeSingle();
+  const { data } = await admin.from("practices").select(
+    "id, sikka_practice_id, pms_sync_approved_at, pms_sync_rules, pms_sync_status",
+  ).eq("sikka_practice_id", officeId).maybeSingle();
   return data ?? null;
 }
 
@@ -73,35 +82,30 @@ function appointmentTime(rec: any): string | null {
 // ---- per-resource handlers -------------------------------------------------
 
 // deno-lint-ignore no-explicit-any
-async function upsertAppointments(admin: any, practiceId: string, recs: any[]) {
-  const rows = recs.map((r) => {
-    const type = str(pick(r, "appointment_type", "type", "description"));
-    return {
-      practice_id: practiceId,
-      pms_appointment_id: str(pick(r, "appointment_sr_no", "sikka_appointment_id", "appointment_id", "id")),
-      patient_first: str(pick(r, "patient_first_name", "firstname", "first_name")),
-      patient_last: str(pick(r, "patient_last_name", "lastname", "last_name")),
-      patient_phone: str(pick(r, "cell", "mobile_phone", "phone", "patient_phone")),
-      patient_email: str(pick(r, "email", "patient_email")),
-      appointment_time: appointmentTime(r),
-      appointment_type: type,
-      provider: str(pick(r, "provider_name", "provider")),
-      duration_minutes: pick(r, "duration_minutes", "length") ? Number(pick(r, "duration_minutes", "length")) : null,
-      is_implant_consult: TYPE_RE.test(type || ""),
-      // Treatment type + plan value pulled straight from the PMS appointment.
-      treatment_type: normalizeTreatment(pick(r, "treatment_type", "appointment_type", "type", "description")),
-      tx_plan_value: pickTxValue(r),
-    };
-  }).filter((row) => row.pms_appointment_id);
-  if (!rows.length) return 0;
-  // Retry without the treatment columns if they don't exist yet (pre-migration).
-  let res = await admin.from("pms_appointments").upsert(rows, { onConflict: "practice_id,pms_appointment_id" });
-  if (res.error && /treatment_type|tx_plan_value|column/i.test(res.error.message || "")) {
-    // deno-lint-ignore no-explicit-any
-    const stripped = rows.map(({ treatment_type, tx_plan_value, ...row }: any) => row);
-    res = await admin.from("pms_appointments").upsert(stripped, { onConflict: "practice_id,pms_appointment_id" });
+async function upsertAppointmentsFiltered(
+  admin: any,
+  practice: { id: string; sikka_practice_id?: string | null; pms_sync_approved_at?: string | null; pms_sync_rules?: PmsSyncRules | null; pms_sync_status?: string | null },
+  recs: any[],
+) {
+  if (!isSyncApproved(practice)) return 0;
+  const rules = practice.pms_sync_rules;
+  if (!rules?.clusters?.length) return 0;
+
+  const matched: any[] = [];
+  const rows = [];
+  for (const r of recs) {
+    const { match, ruleId } = matchesSyncRules(rules, r);
+    if (!match) continue;
+    const row = mapAppointmentRow(r, practice.id, ruleId, rules);
+    if (!row.pms_appointment_id) continue;
+    rows.push(row);
+    matched.push(r);
   }
-  if (res.error) throw res.error;
+  if (!rows.length) return 0;
+  await upsertAppointments(admin, rows);
+  if (practice.sikka_practice_id) {
+    await jitUpsertPatientsFromAppointments(admin, practice.id, practice.sikka_practice_id, matched);
+  }
   return rows.length;
 }
 
@@ -331,10 +335,11 @@ Deno.serve(async (req: Request) => {
         result.triggered = "sync-appointments";
         break;
       case "appointment":
-        result.upserted = await upsertAppointments(admin, practice.id, recs);
+        result.upserted = await upsertAppointmentsFiltered(admin, practice, recs);
         break;
       case "patient":
-        result.upserted = await upsertPatients(admin, practice.id, officeId!, recs);
+        // Patients are JIT-synced from matched consult appointments only.
+        result.upserted = 0;
         break;
       case "provider":
         result.upserted = await upsertProviders(admin, practice.id, officeId!, recs);

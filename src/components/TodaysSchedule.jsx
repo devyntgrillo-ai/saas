@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CalendarDays, Plug } from 'lucide-react'
-import { fetchTodaysAppointments, setImplantConsult } from '../lib/pms'
+import { fetchTodaysAppointments, formatAppointmentType, setImplantConsult } from '../lib/pms'
 import { treatmentLabel, normalizeTreatment } from '../lib/treatments'
 
 // Resolve a friendly treatment label for an appointment row, falling back to a
@@ -102,7 +102,7 @@ export default function TodaysSchedule({ practice, practiceId }) {
                 <p className="truncate text-sm font-medium text-slate-200">
                   {[a.patient_first, a.patient_last].filter(Boolean).join(' ') || 'Patient'}
                 </p>
-                <p className="truncate text-xs text-slate-500">{a.appointment_type || '-'}{a.provider ? ` · ${a.provider}` : ''}</p>
+                <p className="truncate text-xs text-slate-500">{formatAppointmentType(a, practice) || '-'}{a.provider ? ` · ${a.provider}` : ''}</p>
               </div>
               <button
                 onClick={() => toggle(a)}

@@ -7,6 +7,7 @@ import Modal from '../components/Modal'
 import { formatDateTime } from '../lib/consults'
 import { savePmsType, fetchAppointmentCount } from '../lib/pms'
 import { useDisconnectPms, usePmsAppointmentCount } from '../lib/queries'
+import PmsSyncApproval from '../components/PmsSyncApproval'
 
 // The practice only picks a PMS by name - everything routes through Sikka behind
 // the scenes, so the practice never sees a Sikka ID or any API key.
@@ -172,7 +173,8 @@ export default function PMSIntegration() {
   const connected = Boolean(practice?.sikka_connected)
   const wizardComplete = connected || Boolean(practice?.pms_type)
   const lastSynced = practice?.pms_last_synced_at || practice?.pms_last_sync || null
-  const { data: apptCount = 0 } = usePmsAppointmentCount(practiceId, wizardComplete)
+  const syncApproved = Boolean(practice?.pms_sync_approved_at)
+  const { data: apptCount = 0 } = usePmsAppointmentCount(practiceId, wizardComplete && syncApproved)
 
   async function handleDisconnect() {
     try {
@@ -223,6 +225,8 @@ export default function PMSIntegration() {
             </div>
           </div>
 
+          {connected && <div className="mt-5"><PmsSyncApproval onApproved={() => refreshProfile()} /></div>}
+
           <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="rounded-xl border border-surface-700 bg-surface-800/50 p-4">
               <Calendar className="h-4 w-4 text-slate-400" />
@@ -256,7 +260,7 @@ export default function PMSIntegration() {
           practiceId={practiceId}
           currentType={practice?.pms_type}
           onClose={() => setWizard(false)}
-          onDone={() => { refreshProfile(); load() }}
+          onDone={() => refreshProfile()}
         />
       )}
 

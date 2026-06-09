@@ -89,7 +89,7 @@ function toTokens(data: any): SikkaTokens {
   const ttlMs = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 24 * 60 * 60 * 1000;
   return {
     request_key: String(requestKey),
-    refresh_token: data?.refresh_token ?? data?.refreshToken ?? null,
+    refresh_token: data?.refresh_token ?? data?.refreshToken ?? data?.refresh_key ?? null,
     expires_at: new Date(Date.now() + ttlMs).toISOString(),
   };
 }
@@ -121,9 +121,33 @@ export function exchangeAuthCode(code: string): Promise<SikkaTokens> {
   return postToken({ grant_type: "authorization_code", code, redirect_uri: redirectUri() });
 }
 
-// Renew an expired request_key with the stored refresh_token.
+// Renew an expired request_key with the stored refresh_token (OAuth flow).
 export function refreshAccessToken(refreshToken: string): Promise<SikkaTokens> {
   return postToken({ grant_type: "refresh_token", refresh_token: refreshToken });
+}
+
+// Renew via Sikka's request_key endpoint (grant_type=refresh_key). This is the
+// model used when a practice is linked with office_id + refresh_key (sandbox /
+// manual link), not the OAuth /token endpoint.
+export async function refreshRequestKey(officeId: string, refreshKey: string): Promise<SikkaTokens> {
+  const { id, secret } = getAppCreds();
+  const path = Deno.env.get("SIKKA_REQUEST_KEY_PATH") || "/request_key";
+  const res = await fetch(`${SIKKA_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      grant_type: "refresh_key",
+      refresh_key: refreshKey,
+      app_id: id,
+      app_key: secret,
+      office_id: officeId,
+    }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`sikka_refresh_key_${res.status}: ${text.slice(0, 300)}`);
+  let data: unknown;
+  try { data = JSON.parse(text); } catch { throw new Error(`sikka_refresh_key_parse: ${text.slice(0, 200)}`); }
+  return toTokens(data);
 }
 
 export interface SikkaPracticeRow {
@@ -155,7 +179,17 @@ export async function ensureFreshToken(admin: any, practice: SikkaPracticeRow): 
     return practice.sikka_request_key;
   }
   if (!practice.sikka_refresh_token) throw new Error("sikka_not_connected");
-  const refreshed = await refreshAccessToken(practice.sikka_refresh_token);
+  let refreshed: SikkaTokens;
+  if (practice.sikka_practice_id) {
+    try {
+      refreshed = await refreshRequestKey(practice.sikka_practice_id, practice.sikka_refresh_token);
+    } catch (e) {
+      console.warn("Sikka refresh_key failed, trying OAuth refresh_token:", (e as Error)?.message);
+      refreshed = await refreshAccessToken(practice.sikka_refresh_token);
+    }
+  } else {
+    refreshed = await refreshAccessToken(practice.sikka_refresh_token);
+  }
   await saveTokens(admin, practice.id, refreshed, { sikka_connected: true });
   return refreshed.request_key;
 }
@@ -169,8 +203,15 @@ export async function sikkaGet(path: string, requestKey: string, params: Record<
   const res = await fetch(`${SIKKA_BASE}${path}?${q.toString()}`, {
     headers: { Accept: "application/json", "Request-Key": requestKey },
   });
-  if (!res.ok) throw new Error(`sikka_${res.status}: ${(await res.text()).slice(0, 300)}`);
-  return await res.json();
+  const text = await res.text();
+  if (!res.ok) throw new Error(`sikka_${res.status}: ${text.slice(0, 300)}`);
+  // Sikka returns 204 with an empty body when a date range has no rows.
+  if (res.status === 204 || !text.trim()) return [];
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`sikka_parse: ${text.slice(0, 200)}`);
+  }
 }
 
 // Tolerate the list-wrapping shapes Sikka returns. v4 wraps results as
