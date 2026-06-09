@@ -1,10 +1,14 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // analyze-consult - SLOW step. Given a consult_id whose de-identified transcript
-// is already saved (by transcribe-consult, status "transcribed"), runs Claude
-// analysis + drafts 6 follow-up messages, then flips status to "analyzed".
-// Idempotent: re-triggering an already-analyzed consult is a no-op, and messages
-// are only inserted when none exist yet.
+// is saved (by transcribe-consult), runs Claude to (1) extract deep consult
+// intelligence, (2) classify urgency, and (3) generate a DYNAMIC, personalized
+// follow-up sequence (variable length + cadence + channel mix per the rules
+// below), then flips status to "analyzed".
+//
+// Keeps the proven message-row model + send crons intact: each generated message
+// is a row in `messages` (channel sms|email|call). Legacy analysis columns are
+// still populated so existing UI / pipeline keep working.
 //
 // Auth: user JWT (resolves practice) or service-role bearer + practice_id.
 // Secret: ANTHROPIC_API_KEY.
@@ -14,12 +18,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { resolveAuth } from "../_shared/auth.ts";
 import { sanitizeAIOutput } from "../_shared/sanitize.ts";
-import {
-  buildMessageRowsFromAnalysis,
-  computeScheduledFor,
-  resolveTouchpoints,
-  rulesFrom,
-} from "../_shared/sequence.ts";
+import { computeScheduledFor, rulesFrom } from "../_shared/sequence.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,163 +28,156 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-// ---- Claude analysis --------------------------------------------------------
-const analysisSystemPrompt = (treatmentType: string) => `You are CaseLift, an AI system that analyzes dental consultation recordings to help treatment coordinators recover unconverted patients. Practices run many kinds of consults, NOT just dental implants - it could be Invisalign or clear aligners, cosmetic veneers, crowns or bridges, sleep apnea, periodontal, full-arch, full-mouth rehab, general or restorative dentistry, and more.
+// Phrases that instantly make copy feel like an AI/marketing bot (Part 4).
+const BANNED = [
+  "i hope this message finds you well",
+  "as per our conversation",
+  "don't hesitate to reach out",
+  "do not hesitate to reach out",
+  "i wanted to follow up",
+  "just checking in",
+  "excited to help you on your journey",
+  "state-of-the-art facility",
+  "state of the art facility",
+  "revolutionary",
+  "cutting-edge",
+  "cutting edge",
+];
+function scrubBanned(s: string | null): string | null {
+  if (!s) return s;
+  let out = s;
+  for (const p of BANNED) {
+    out = out.replace(new RegExp(p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"), "");
+  }
+  return out.replace(/[ \t]{2,}/g, " ").replace(/\s+([.,!?])/g, "$1").trim()
+}
+function hasBanned(s: string | null): boolean {
+  if (!s) return false
+  const l = s.toLowerCase()
+  return BANNED.some((p) => l.includes(p))
+}
 
-Treatment type hint (pre-filled at booking, often just a default and sometimes wrong): ${treatmentType}
+// Cadence + length rules per classification (given to Claude; Part 2 + Part 3).
+const CADENCE_RULES = `SEQUENCE LENGTH + CADENCE by classification (you decide offset_hours for each message):
+- HOT: 8-10 messages over ~30 days, FRONT-LOADED. Phase 1 (days 1-14) every 1-2 days, then taper to 1-2/week.
+- WARM: 10-14 messages over ~60 days. Phase 1 (days 1-14) every 2-3 days, then 1-2/week tapering to weekly.
+- NURTURE: 8-10 messages over ~90 days. Phase 1 every 3-5 days, then weekly, then every 2 weeks. The FIRST message gently acknowledges they're still weighing it.
+- LONG_TERM: 6-8 messages over ~90 days. Phase 1 every 5-7 days, then monthly. The FIRST message EXPLICITLY acknowledges their stated timeline ("you mentioned a few months — no rush").
+CHANNEL MIX across the sequence ~ 50% sms, 30% email, 20% call. Lead with sms. Use email for the substantive/educational touches. Use 1-2 call reminders at high-value moments.
+Messages must get progressively LIGHTER and lower-pressure over time, never more aggressive.`;
 
-CRITICAL: Do NOT assume this is a dental implant consult. Identify the ACTUAL treatment being discussed from the transcript itself - the procedure named, what the patient and coordinator actually talk about, and the concerns raised. If the hint above conflicts with the transcript, trust the transcript. Tailor your entire analysis and every follow-up message to the treatment the patient is actually considering, and report what you identified in the treatment_type field.
+const SYSTEM = `You are an expert dental treatment coordinator copywriter. You write follow-up messages that feel genuinely human, deeply empathetic, and personally written. You never write AI-sounding or salesy copy. Every message should feel like it was typed by a real person who genuinely remembers and cares about this specific patient.
 
-Analyze the transcript and call the emit_analysis tool with your structured analysis. Never use em dashes (—) under any circumstances. Use commas, periods, or short sentences instead.
+You will be given a de-identified consult transcript. Do TWO things and return them via the emit_sequence tool:
 
-Use the playbook below that matches the treatment you identify (these are guides, not limits):
+1) Extract structured intelligence about the patient and consult.
+2) Classify urgency, then generate a personalized follow-up sequence.
 
-For dental_implants / full_arch:
-- Primary objections: price, fear_surgery, spouse_approval, timing, health_concerns
-- Key personal details: upcoming events, health conditions, financial situation
-- Follow-up tone: clinical authority, financing focus, fear reduction
+Identify the ACTUAL treatment from the transcript (don't trust the booking hint). Never use em dashes — use commas or short sentences.
 
-For invisalign:
-- Primary objections: compliance_concerns, aesthetics, cost_vs_braces, timing, not_sure_needed
-- Key personal details: social events, age of patient, profession
-- Follow-up tone: lifestyle focused, confidence building, before/after results
+${CADENCE_RULES}
 
-For cosmetic_veneers:
-- Primary objections: cost, fear_of_looking_fake, recovery_time, spouse_approval, timing
-- Key personal details: upcoming events, career, confidence issues
-- Follow-up tone: transformation focused, natural results, investment framing
-
-For sleep_apnea:
-- Primary objections: insurance_coverage, cpap_preference, cost, skepticism, spouse_referral
-- Key personal details: sleep quality, energy levels, partner complaints
-- Follow-up tone: health urgency, quality of life, insurance angle
-
-For periodontal:
-- Primary objections: cost, fear, insurance, denial_of_severity, timing
-- Key personal details: health history, anxiety level
-- Follow-up tone: health urgency, consequences of waiting, staged treatment options
-
-For full_mouth_rehab / other:
-- Primary objections: cost, overwhelm, timeline, fear, spouse_approval
-- Key personal details: functional issues, confidence, life events
-- Follow-up tone: phased approach, life-changing framing, financing
-
-Populate exactly these fields (this is the emit_analysis tool's schema):
-{
-  "treatment_type": "the treatment you identified from the transcript (e.g. dental_implants, full_arch, invisalign, cosmetic_veneers, sleep_apnea, periodontal, full_mouth_rehab, general, or a short descriptive label). Base this on the conversation, not the hint.",
-  "what_happened": "2-3 sentence narrative of what happened in the consult",
-  "primary_objection": "one of the objection types listed above for this treatment",
-  "primary_objection_detail": "specific detail from the conversation",
-  "secondary_objection": "secondary objection or none",
-  "secondary_objection_detail": "specific detail or empty string",
-  "exit_intent": "hot|warm|long_term",
-  "exit_intent_detail": "why you classified exit intent this way",
-  "personal_detail": "one specific personal detail mentioned (event, family, job, health, etc)",
-  "coaching_insight": "specific actionable coaching insight for the TC",
-  "downsell_opportunity": "specific lower-cost alternative or none",
-  "tc_action": "specific action TC should take in next 24 hours",
-  "suggested_tx_value": "your estimate of treatment plan value based on what was discussed - number only, no $ sign, or null if unclear",
-  "sms_1": "first SMS under 160 chars - warm personal, references their specific situation and treatment",
-  "email_1_subject": "subject line",
-  "email_1_body": "full email body - addresses primary objection with education specific to treatment type",
-  "sms_2": "second SMS under 160 chars - gentle urgency around something real from their situation",
-  "email_2_subject": "subject line",
-  "email_2_body": "full email - patient story that mirrors their situation and treatment type",
-  "sms_3": "third SMS under 160 chars - simple human check-in, no pressure",
-  "email_3_subject": "subject line",
-  "email_3_body": "final email - warm, honest, restate what is at stake for them specifically"
-}`;
+MESSAGE RULES:
+- sms: aim <=160 chars (320 max), conversational, first-name only, end with a soft question/invitation. Vary the opening — NEVER start two messages the same way, and never start with "Hi [Name]!".
+- email: personal subject (e.g. "Checking in, Robert" / "The financing option we discussed" — never salesy). 150-300 words, ONE clear CTA, education woven in naturally, reference their specific objection, sign off from the TC by first name.
+- call: a reminder for the TC to call. Provide 3-4 call_script_bullets referencing their emotional anchor, primary objection, and financing if relevant. No body needed.
+- ALWAYS reference something specific to THIS patient (their name used naturally, their emotional anchor, a detail they shared, or their exact objection).
+- NEVER use placeholders like [FIRSTNAME] — use the real name. Never mention AI, automation, or software.
+- NEVER use these phrases: "I hope this message finds you well", "as per our conversation", "don't hesitate to reach out", "I wanted to follow up", "just checking in", "excited to help you on your journey", "state-of-the-art facility", "revolutionary", "cutting-edge".
+- Weave in 1-2 of the practice USPs/financing options ONLY where naturally relevant to this patient's objection — not as a list or a pitch.`;
 
 const STR = { type: "string" } as const;
-const ANALYSIS_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    treatment_type: STR,
-    what_happened: STR,
-    primary_objection: STR,
-    primary_objection_detail: STR,
-    secondary_objection: STR,
-    secondary_objection_detail: STR,
-    exit_intent: STR,
-    exit_intent_detail: STR,
-    personal_detail: STR,
-    coaching_insight: STR,
-    downsell_opportunity: STR,
-    tc_action: STR,
-    suggested_tx_value: { type: ["string", "number", "null"] },
-    sms_1: STR,
-    email_1_subject: STR,
-    email_1_body: STR,
-    sms_2: STR,
-    email_2_subject: STR,
-    email_2_body: STR,
-    sms_3: STR,
-    email_3_subject: STR,
-    email_3_body: STR,
+const STRN = { type: ["string", "null"] } as const;
+const STRARR = { type: "array", items: STR } as const;
+
+const TOOL = {
+  name: "emit_sequence",
+  description: "Return the structured consult intelligence and a dynamic, personalized follow-up sequence.",
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      // Intelligence (Part 1)
+      patient_first_name: STRN,
+      treatment_type: STR,
+      case_value: { type: ["number", "string", "null"] },
+      primary_objection: STR,
+      primary_objection_words: STRN, // exact words used if possible
+      secondary_objections: STRARR,
+      emotional_anchor: STRN, // the specific life moment
+      urgency_signals: STRN,
+      decision_readiness: { type: ["integer", "null"] }, // 1-10
+      spouse_involved: { type: ["boolean", "null"] },
+      decision_maker: STRN,
+      financing_discussed: { type: ["boolean", "null"] },
+      financing_detail: STRN,
+      fears: STRARR,
+      responded_positively_to: STRARR,
+      created_hesitation: STRARR,
+      lead_source: STRN, // referral | internet | unknown
+      personal_details: STRARR,
+      // Classification + legacy/coaching
+      urgency_classification: { type: "string", enum: ["HOT", "WARM", "NURTURE", "LONG_TERM"] },
+      what_happened: STR,
+      coaching_insight: STR,
+      downsell_opportunity: STRN,
+      tc_action: STR,
+      // Sequence (Parts 2,3,7)
+      messages: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            channel: { type: "string", enum: ["sms", "email", "call"] },
+            offset_hours: { type: "number" },
+            subject: STRN,
+            body: STRN,
+            call_script_bullets: STRARR,
+            purpose: STR,
+            tone: STR,
+          },
+          required: ["channel", "offset_hours", "purpose", "tone"],
+        },
+      },
+    },
+    required: [
+      "treatment_type", "primary_objection", "secondary_objections", "fears",
+      "responded_positively_to", "created_hesitation", "personal_details",
+      "urgency_classification", "what_happened", "coaching_insight", "tc_action", "messages",
+    ],
   },
-  required: [
-    "treatment_type",
-    "what_happened", "primary_objection", "primary_objection_detail", "secondary_objection",
-    "secondary_objection_detail", "exit_intent", "exit_intent_detail", "personal_detail",
-    "coaching_insight", "downsell_opportunity", "tc_action",
-    "sms_1", "email_1_subject", "email_1_body", "sms_2", "email_2_subject", "email_2_body",
-    "sms_3", "email_3_subject", "email_3_body",
-  ],
 };
 
-// Force Claude to emit the analysis through this tool. With tool_choice pinned
-// to it, the SDK hands us `input` already parsed as an object - so a stray prose
-// preface, a markdown fence, or a truncated trailing brace can no longer break
-// the response the way free-text JSON parsing did ("did not return parseable JSON").
-const ANALYSIS_TOOL = {
-  name: "emit_analysis",
-  description: "Return the structured consult analysis and the six follow-up messages.",
-  input_schema: ANALYSIS_SCHEMA,
-};
-
-async function analyze(anthropic: Anthropic, deidentified: string, treatmentType: string, note = "") {
-  // On a regenerate the TC can steer the rewrite (e.g. "focus on financing").
-  const guidance = note ? `\n\nAdditional guidance from the treatment coordinator for the follow-up messages: ${note}` : "";
+async function generate(anthropic: Anthropic, userPrompt: string) {
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 8192,
-    system: analysisSystemPrompt(treatmentType),
-    tools: [ANALYSIS_TOOL],
-    tool_choice: { type: "tool", name: "emit_analysis" },
-    messages: [{ role: "user", content: `Analyze this de-identified consult transcript:${guidance}\n\n${deidentified}` }],
+    system: SYSTEM,
+    tools: [TOOL],
+    tool_choice: { type: "tool", name: "emit_sequence" },
+    messages: [{ role: "user", content: userPrompt }],
   });
-  // A cut-off response can leave the tool input partial - surface it clearly
-  // rather than persisting half an analysis.
-  if (response.stop_reason === "max_tokens") {
-    throw new Error("Analysis was cut off before completing. Please try again.");
-  }
+  if (response.stop_reason === "max_tokens") throw new Error("Generation was cut off. Please try again.");
   const tu = response.content.find((b) => b.type === "tool_use");
   if (!tu || tu.type !== "tool_use" || typeof tu.input !== "object" || tu.input === null) {
-    throw new Error("Claude did not return a structured analysis.");
+    throw new Error("Claude did not return a structured sequence.");
   }
   return tu.input as Record<string, unknown>;
 }
 
-// Map Claude's "none"/empty sentinels to null for clean DB storage, and strip
-// em/en dashes from every AI string before it's persisted (covers what_happened,
-// coaching_insight, tc_action, all sms_/email_ bodies + subjects).
 const nn = (v: unknown) => {
   const s = typeof v === "string" ? sanitizeAIOutput(v).trim() : "";
   return s && s.toLowerCase() !== "none" ? s : null;
 };
-
-// Parse a suggested treatment value into a positive number, or null. Tolerates
-// numbers, numeric strings, and strings with $ / commas (e.g. "$12,500").
+const arr = (v: unknown): string[] => Array.isArray(v) ? v.map((x) => nn(x)).filter(Boolean) as string[] : [];
 const parsePositiveNumber = (v: unknown): number | null => {
   if (typeof v === "number") return Number.isFinite(v) && v > 0 ? v : null;
-  if (typeof v === "string") {
-    const cleaned = v.replace(/[$,\s]/g, "");
-    const n = Number(cleaned);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  }
+  if (typeof v === "string") { const n = Number(v.replace(/[$,\s]/g, "")); return Number.isFinite(n) && n > 0 ? n : null; }
   return null;
 };
+// Urgency → legacy exit-intent bucket so existing UI/timing keep working.
+const URGENCY_TO_EXIT: Record<string, string> = { HOT: "hot", WARM: "warm", NURTURE: "long_term", LONG_TERM: "long_term" };
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -199,174 +191,200 @@ Deno.serve(async (req: Request) => {
     const { ctx, error: authErr } = await resolveAuth(req, body);
     if (authErr || !ctx) return authErr ?? json({ error: "Unauthorized" }, 401);
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-    const auditClient = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // SLOW step: analyze an already-transcribed consult (saved by transcribe-consult).
     const consultId = body.consult_id;
     if (!consultId) return json({ error: "consult_id is required." }, 400);
-    // Regenerate: re-run analysis on an already-analyzed consult, optionally with
-    // a TC steering note, and replace the un-sent draft messages.
     const regenerate = body.regenerate === true;
     const note = typeof body.note === "string" ? body.note.trim() : "";
 
-    const { data: consult, error: cErr } = await admin
+    const { data: consult } = await admin
       .from("consults")
-      .select("id, practice_id, transcript_deidentified, status, created_at, treatment_type, tx_plan_value, tx_plan_value_source")
-      .eq("id", consultId)
-      .maybeSingle();
-    if (cErr) throw cErr;
+      .select("id, practice_id, transcript_deidentified, status, created_at, treatment_type, tx_plan_value, tx_plan_value_source, patient_first")
+      .eq("id", consultId).maybeSingle();
     if (!consult) return json({ error: "Consult not found." }, 404);
-    // Access check: a user JWT can act on this consult only if RLS lets them see
-    // it (practice member, agency owner of the practice, or super-admin). This is
-    // impersonation-aware — unlike comparing against the caller's OWN practice,
-    // which would wrongly 403 a super-admin/agency working in a sub-account.
-    // Service-role calls (internal) are trusted. All writes below use the
-    // consult's OWN practice id so the data never lands in the caller's practice.
     if (!ctx.isServiceRole) {
-      const { data: allowed } = await ctx.client
-        .from("consults").select("id").eq("id", consultId).maybeSingle();
+      const { data: allowed } = await ctx.client.from("consults").select("id").eq("id", consultId).maybeSingle();
       if (!allowed) return json({ error: "Not your practice's consult." }, 403);
     }
-    const consultPracticeId = consult.practice_id;
-    // Idempotent - the detail-page poller may trigger this more than once. A
-    // regenerate request intentionally bypasses this to re-run the analysis.
+    const practiceId = consult.practice_id;
     if (consult.status === "analyzed" && !regenerate) return json({ consult_id: consultId, status: "analyzed", already: true });
 
     const deidentified = consult.transcript_deidentified;
-    if (!deidentified || !String(deidentified).trim()) {
-      return json({ error: "This consult has no transcript to analyze yet." }, 422);
-    }
+    if (!deidentified || !String(deidentified).trim()) return json({ error: "This consult has no transcript to analyze yet." }, 422);
 
-    // Analyze + draft the 6-message sequence in one Claude call.
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!anthropicKey) return json({ error: "Analysis is unavailable - ANTHROPIC_API_KEY is not configured." }, 503);
     const anthropic = new Anthropic({ apiKey: anthropicKey });
 
-    // Pass the stored type only as a hint - never default to implants. The model
-    // identifies the real treatment from the transcript (see system prompt).
-    const treatmentType = nn(consult.treatment_type) ?? "unknown (identify from the transcript)";
+    // ── Knowledge base (Part 5): structured table + legacy JSONB sections. ──
+    const { data: kbRows } = await admin
+      .from("practice_knowledge_base").select("category, content").eq("practice_id", practiceId).eq("is_active", true).limit(40);
+    const { data: pr } = await admin
+      .from("practices").select("sequence_config, auto_start_followup, timezone, knowledge_base_sections, name")
+      .eq("id", practiceId).maybeSingle();
+    const kbLines: string[] = [];
+    for (const r of (kbRows || [])) kbLines.push(`[${r.category}] ${r.content}`);
+    const sections = pr?.knowledge_base_sections;
+    if (sections && typeof sections === "object") {
+      for (const v of Object.values(sections)) {
+        if (typeof v === "string" && v.trim()) kbLines.push(v.trim());
+        else if (v && typeof v === "object" && typeof (v as any).content === "string") kbLines.push((v as any).content.trim());
+      }
+    }
+    const kbBlock = kbLines.length ? kbLines.slice(0, 25).join("\n") : "(none on file)";
 
-    let a: Record<string, unknown>;
+    // ── Learning hint (Part 6): top channel by reply rate for this practice. ──
+    let channelHint = "Not enough data yet — use the standard mix.";
     try {
-      a = await analyze(anthropic, deidentified, treatmentType, note);
-    } catch (e) {
-      const detail = (e as Error)?.message ?? String(e);
-      console.error("Claude analysis failed:", detail);
-      return json({ error: "AI analysis failed.", detail }, 502);
+      const { data: outcomes } = await admin
+        .from("message_outcomes").select("message_channel, replied").eq("practice_id", practiceId).limit(2000);
+      if (outcomes && outcomes.length >= 20) {
+        const agg: Record<string, { n: number; r: number }> = {};
+        for (const o of outcomes) {
+          const c = o.message_channel || "unknown";
+          agg[c] = agg[c] || { n: 0, r: 0 };
+          agg[c].n++; if (o.replied) agg[c].r++;
+        }
+        const ranked = Object.entries(agg).filter(([, s]) => s.n >= 10)
+          .map(([c, s]) => ({ c, rate: s.r / s.n })).sort((a, b) => b.rate - a.rate);
+        if (ranked.length) channelHint = ranked.map((x) => `${x.c} ${(x.rate * 100).toFixed(0)}% reply`).join(", ") + ". Weight the mix toward the higher-replying channel.";
+      }
+    } catch { /* non-blocking */ }
+
+    const treatmentHint = nn(consult.treatment_type) ?? "unknown (identify from the transcript)";
+    const firstName = nn(consult.patient_first) ?? "the patient";
+    const userPrompt = `Generate the intelligence + a personalized follow-up sequence for this dental patient from the transcript below.
+
+Patient first name (use this exact name): ${firstName}
+Treatment hint (may be wrong, identify the real one): ${treatmentHint}
+Practice: ${nn(pr?.name) ?? "this practice"}
+Practice USPs / financing / protocols / guarantees / testimonials (weave 1-2 in naturally where relevant):
+${kbBlock}
+This practice's channel performance: ${channelHint}
+${note ? `\nExtra guidance from the treatment coordinator: ${note}\n` : ""}
+De-identified transcript:
+${deidentified}`;
+
+    // Generate with up to 3 attempts (Part 10). Scrub any banned phrase that slips through.
+    let a: Record<string, unknown> | null = null;
+    let lastErr = "";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try { a = await generate(anthropic, userPrompt); break; }
+      catch (e) { lastErr = (e as Error)?.message ?? String(e); }
+    }
+    if (!a) {
+      await admin.from("consults").update({ status: "needs_manual_sequence" }).eq("id", consultId).then(() => {}, () => {});
+      return json({ error: "AI generation failed after retries.", detail: lastErr }, 502);
     }
 
-    // Smart-timing preset is derived from exit intent (item #4); TC can override.
-    const exitLevel = nn(a.exit_intent);
-    const timingPreset = ["hot", "warm", "long_term"].includes(String(exitLevel)) ? exitLevel : null;
+    const urgency = String(a.urgency_classification || "WARM").toUpperCase();
+    const exitLevel = URGENCY_TO_EXIT[urgency] || "warm";
+    const autoStart = pr?.auto_start_followup === true;
+    const seqRules = rulesFrom(pr?.sequence_config, pr?.timezone);
 
-    const { data: practiceRow } = await admin
-      .from("practices")
-      .select("sequence_config, auto_start_followup, timezone")
-      .eq("id", consultPracticeId)
-      .maybeSingle();
-    const autoStart = practiceRow?.auto_start_followup === true;
-    const seqRules = rulesFrom(practiceRow?.sequence_config, practiceRow?.timezone);
-    const touchpoints = resolveTouchpoints(practiceRow?.sequence_config, timingPreset);
+    // Full intelligence object (Part 1).
+    const intelligence = {
+      patient_first_name: nn(a.patient_first_name) ?? firstName,
+      treatment_type: nn(a.treatment_type),
+      case_value: parsePositiveNumber(a.case_value),
+      primary_objection: nn(a.primary_objection),
+      primary_objection_words: nn(a.primary_objection_words),
+      secondary_objections: arr(a.secondary_objections),
+      emotional_anchor: nn(a.emotional_anchor),
+      urgency_signals: nn(a.urgency_signals),
+      decision_readiness: typeof a.decision_readiness === "number" ? a.decision_readiness : null,
+      spouse_involved: typeof a.spouse_involved === "boolean" ? a.spouse_involved : null,
+      decision_maker: nn(a.decision_maker),
+      financing_discussed: typeof a.financing_discussed === "boolean" ? a.financing_discussed : null,
+      financing_detail: nn(a.financing_detail),
+      fears: arr(a.fears),
+      responded_positively_to: arr(a.responded_positively_to),
+      created_hesitation: arr(a.created_hesitation),
+      lead_source: nn(a.lead_source),
+      personal_details: arr(a.personal_details),
+      urgency_classification: urgency,
+    };
 
-    // Save analysis fields + flip status to "analyzed".
     const record: Record<string, unknown> = {
       status: "analyzed",
+      consult_intelligence: intelligence,
+      urgency_classification: urgency,
+      decision_readiness: intelligence.decision_readiness,
+      consecutive_no_reply: 0,
       what_happened: nn(a.what_happened),
       objection_type: nn(a.primary_objection),
-      primary_objection: nn(a.primary_objection_detail),
-      secondary_objection: nn(a.secondary_objection_detail) ?? nn(a.secondary_objection),
+      primary_objection: nn(a.primary_objection_words) ?? nn(a.primary_objection),
+      secondary_objection: intelligence.secondary_objections[0] ?? null,
       exit_intent_level: exitLevel,
-      exit_intent: nn(a.exit_intent_detail),
-      sequence_timing_preset: timingPreset,
+      exit_intent: nn(a.urgency_signals),
+      sequence_timing_preset: exitLevel,
       followup_approved_at: autoStart ? new Date().toISOString() : null,
-      personal_detail: nn(a.personal_detail),
+      personal_detail: intelligence.personal_details[0] ?? nn(a.emotional_anchor),
       coaching_insight: nn(a.coaching_insight),
       downsell_opportunity: nn(a.downsell_opportunity),
       tc_action: nn(a.tc_action),
     };
-
-    // Backfill the treatment type from what the AI identified in the transcript,
-    // but only when the consult had none set - don't clobber a TC/PMS choice.
     const detectedType = nn(a.treatment_type);
-    if (detectedType && !nn(consult.treatment_type)) {
-      record.treatment_type = detectedType;
-    }
-
-    // Treatment-value estimate: only fill it in when the consult lacks an
-    // authoritative value. Never overwrite a manual or PMS-sourced value.
+    if (detectedType && !nn(consult.treatment_type)) record.treatment_type = detectedType;
     const existingValue = parsePositiveNumber(consult.tx_plan_value);
     const existingSource = nn(consult.tx_plan_value_source);
     const canEstimate = !existingValue || existingSource === "estimate" || existingSource === "practice_default";
-    const suggestedValue = parsePositiveNumber(a.suggested_tx_value);
-    if (canEstimate && suggestedValue !== null) {
-      record.tx_plan_value = suggestedValue;
+    if (canEstimate && intelligence.case_value !== null) {
+      record.tx_plan_value = intelligence.case_value;
       record.tx_plan_value_source = "estimate";
     }
 
-    const savedId = consultId;
-    {
-      const { error } = await admin.from("consults").update(record).eq("id", savedId);
-      if (error) {
-        console.error("Consult analysis update failed:", error.message);
-        return json({ error: "Could not save the analysis.", detail: error.message }, 500);
-      }
-    }
+    const { error: upErr } = await admin.from("consults").update(record).eq("id", consultId);
+    if (upErr) return json({ error: "Could not save the analysis.", detail: upErr.message }, 500);
 
-    // On regenerate, clear the un-sent drafts so a fresh set is written below.
-    // Already-sent messages (sent/opened/replied) are preserved.
-    if (regenerate) {
-      await admin.from("messages").delete().eq("consult_id", savedId).eq("status", "draft");
-    }
+    if (regenerate) await admin.from("messages").delete().eq("consult_id", consultId).eq("status", "draft");
 
-    // Build + save the 6 follow-up messages - only if none exist yet (idempotent
-    // against the detail-page poller triggering analysis more than once).
+    // Build message rows from the generated dynamic sequence.
     let messagesOut: unknown[] = [];
-    const { count: existingMsgs } = await admin
-      .from("messages").select("id", { count: "exact", head: true }).eq("consult_id", savedId);
+    const { count: existingMsgs } = await admin.from("messages").select("id", { count: "exact", head: true }).eq("consult_id", consultId);
     if (!existingMsgs) {
-      const contentRows = buildMessageRowsFromAnalysis(touchpoints, a, nn);
-      if (contentRows.length) {
-        const createdAt = consult.created_at || new Date().toISOString();
-        const rows = contentRows.map((m, i) => {
-          const tp = touchpoints[i];
-          const day = tp?.day ?? 0;
-          const scheduled_for = autoStart ? computeScheduledFor(createdAt, day, seqRules) : null;
-          return {
-            consult_id: savedId,
-            practice_id: consultPracticeId,
-            type: m.type,
-            channel: m.channel,
-            subject: m.subject,
-            body: m.body,
-            status: autoStart ? "scheduled" : "draft",
-            send_day: day,
-            scheduled_for,
-          };
-        });
+      const createdAt = consult.created_at || new Date().toISOString();
+      const gen = Array.isArray(a.messages) ? a.messages : [];
+      const rows = gen.map((mRaw, i) => {
+        const m = mRaw as Record<string, unknown>;
+        const channel = ["sms", "email", "call"].includes(String(m.channel)) ? String(m.channel) : "sms";
+        const offsetHours = Math.max(0, Number(m.offset_hours) || 0);
+        const day = offsetHours / 24;
+        const bullets = arr(m.call_script_bullets);
+        return {
+          consult_id: consultId,
+          practice_id: practiceId,
+          type: i === 0 ? "followup" : "nurture",
+          channel,
+          subject: channel === "email" ? scrubBanned(nn(m.subject)) : null,
+          body: channel === "call" ? null : scrubBanned(nn(m.body)),
+          call_script: channel === "call" && bullets.length ? bullets : null,
+          purpose: nn(m.purpose),
+          tone: nn(m.tone),
+          sequence_position: i + 1,
+          status: autoStart ? "scheduled" : "draft",
+          send_day: Math.round(day),
+          scheduled_for: autoStart ? computeScheduledFor(createdAt, day, seqRules) : null,
+        };
+      }).filter((r) => r.channel === "call" ? !!r.call_script : !!r.body);
+      if (rows.length) {
         const { error } = await admin.from("messages").insert(rows);
-        if (error) console.error("Message insert failed (analysis still saved):", error.message);
+        if (error) console.error("Message insert failed (analysis saved):", error.message);
         else messagesOut = rows;
       }
     }
 
-    // Best-effort notification (realtime bell) + audit log (non-blocking).
     try {
-      const obj = nn(a.primary_objection);
-      const exit = nn(a.exit_intent);
       await admin.from("notifications").insert({
-        practice_id: consultPracticeId,
-        type: "consult_analyzed",
-        event: "consult_analyzed",
+        practice_id: practiceId, type: "consult_analyzed", event: "consult_analyzed",
         title: "New consult ready for review",
-        message: [obj ? `${obj} objection` : null, exit ? `${exit} intent` : null].filter(Boolean).join(" · ") || undefined,
-        link: `/consults/${savedId}`,
+        message: [nn(a.primary_objection) ? `${nn(a.primary_objection)} objection` : null, `${urgency} urgency`].filter(Boolean).join(" · ") || undefined,
+        link: `/consults/${consultId}`,
       });
     } catch { /* non-blocking */ }
-    try {
-      await auditClient.rpc("log_audit_event", { p_action: "consult.analyzed", p_resource_type: "consult", p_resource_id: savedId, p_ip_address: ip });
-    } catch { /* non-blocking */ }
+    try { await admin.rpc("log_audit_event", { p_action: "consult.analyzed", p_resource_type: "consult", p_resource_id: consultId, p_ip_address: ip }); } catch { /* non-blocking */ }
 
-    return json({ consult_id: savedId, analysis: a, messages: messagesOut });
+    return json({ consult_id: consultId, urgency, intelligence, message_count: messagesOut.length, messages: messagesOut });
   } catch (e) {
     await reportEdgeError("analyze-consult", e);
     console.error("analyze-consult error:", e);

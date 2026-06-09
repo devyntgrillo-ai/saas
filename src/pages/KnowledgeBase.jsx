@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import KnowledgeBaseAccordion from '../components/KnowledgeBaseAccordion'
+import StructuredKnowledgeBase from '../components/StructuredKnowledgeBase'
 
 // Per-practice knowledge base (own practice, or the client an agency is impersonating).
 export default function KnowledgeBase() {
@@ -18,6 +19,7 @@ export default function KnowledgeBase() {
           {practice?.name ? ` - ${practice.name}` : ''}.
         </p>
       </div>
+      <StructuredKnowledgeBase practiceId={practiceId} />
       <KnowledgeBaseAccordion practiceId={practiceId} />
     </div>
   )

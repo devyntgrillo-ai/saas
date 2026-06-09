@@ -36,7 +36,7 @@ Deno.serve(async (req: Request) => {
     // messages that are still within the stale window for retry.
     const { data: due, error } = await admin
       .from("messages")
-      .select("id, consult_id, channel, subject, body, send_day, scheduled_for, consult:consults(practice_id, outcome, sequence_status, sequence_cancelled_at, sequence_activated_at, followup_approved_at, patient_phone, patient_email)")
+      .select("id, consult_id, channel, subject, body, send_day, scheduled_for, call_script, purpose, sequence_position, consult:consults(practice_id, outcome, sequence_status, sequence_cancelled_at, sequence_activated_at, followup_approved_at, patient_phone, patient_email, patient_first, patient_name, created_at)")
       .in("status", ["draft", "scheduled", "failed"])
       .not("scheduled_for", "is", null)
       .lte("scheduled_for", nowIso)
@@ -84,6 +84,37 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
+      // 12-month stop: sequences end a year after the consult (Part 8).
+      if (c.created_at && nowMs - new Date(c.created_at).getTime() > 365 * 86400000) {
+        await admin.from("messages").update({ status: "cancelled" }).eq("id", m.id);
+        await admin.from("consults").update({ sequence_status: "cancelled", sequence_cancelled_at: nowIso, sequence_cancelled_reason: "12_months" }).eq("id", m.consult_id).then(() => {}, () => {});
+        skipped++;
+        continue;
+      }
+
+      const logPerf = async () => {
+        await admin.from("message_performance").insert({
+          message_id: m.id, practice_id: c.practice_id, channel: m.channel,
+          sequence_position: m.sequence_position ?? null, sent_at: new Date().toISOString(),
+        }).then(() => {}, () => {});
+      };
+
+      // Call reminders are NOT outbound sends — they notify the TC with a script (Part 3).
+      if (m.channel === "call") {
+        const who = c.patient_first || c.patient_name || "the patient";
+        const bullets = Array.isArray(m.call_script) ? m.call_script : [];
+        await admin.from("notifications").insert({
+          practice_id: c.practice_id, type: "call_reminder", event: "call_reminder",
+          title: `Call reminder: ${who}`,
+          message: [m.purpose, ...bullets].filter(Boolean).join(" • ").slice(0, 500) || undefined,
+          link: `/consults/${m.consult_id}`,
+        }).then(() => {}, () => {});
+        await admin.from("messages").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", m.id);
+        await logPerf();
+        sent++;
+        continue;
+      }
+
       const to = m.channel === "email" ? c.patient_email : c.patient_phone;
       if (!to) {
         // Missing contact info is permanent - don't retry.
@@ -114,6 +145,7 @@ Deno.serve(async (req: Request) => {
         });
         if (tErr) throw tErr;
         await admin.from("messages").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", m.id);
+        await logPerf();
         sent++;
       } catch (e) {
         console.error(`send-due-messages: ${transport} failed for message ${m.id}:`, (e as Error)?.message);

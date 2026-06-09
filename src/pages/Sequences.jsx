@@ -113,6 +113,19 @@ function ObjectionBadge({ objection, label }) {
   return <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${cls}`}>{label}</span>
 }
 
+// Urgency classification badge (HOT/WARM/NURTURE/LONG_TERM).
+const URGENCY_BADGE = {
+  HOT: { label: 'HOT', cls: 'bg-rose-100 text-rose-700' },
+  WARM: { label: 'WARM', cls: 'bg-amber-100 text-amber-700' },
+  NURTURE: { label: 'NURTURE', cls: 'bg-sky-100 text-sky-700' },
+  LONG_TERM: { label: 'LONG-TERM', cls: 'bg-slate-200 text-slate-600' },
+}
+function UrgencyBadge({ urgency }) {
+  const u = URGENCY_BADGE[urgency]
+  if (!u) return null
+  return <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${u.cls}`}>{u.label}</span>
+}
+
 const isCallMsg = (m) => m.channel === 'call' || m.type === 'call'
 
 // Resolve a touchpoint's day-offset for display/editing. Prefer the stored
@@ -221,6 +234,7 @@ function deriveRow(c, holdMs, now) {
     sortNext,
     objection: c.objection_type || c.primary_objection || null,
     objectionLabel: objectionLabel(c.objection_type || c.primary_objection),
+    urgency: c.urgency_classification || null,
     serviceType: treatmentLabel(c.treatment_type),
     raw: c,
   }
@@ -845,7 +859,10 @@ export default function Sequences() {
 
                 {/* Objection */}
                 <div className="lg:col-span-2">
-                  <ObjectionBadge objection={r.objection} label={r.objectionLabel} />
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <UrgencyBadge urgency={r.urgency} />
+                    <ObjectionBadge objection={r.objection} label={r.objectionLabel} />
+                  </div>
                 </div>
 
                 {/* Progress */}

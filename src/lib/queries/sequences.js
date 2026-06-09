@@ -3,7 +3,7 @@ import { supabase } from '../supabase'
 import { queryKeys } from './keys'
 
 const SEQUENCE_SELECT =
-  'id, patient_name, patient_phone, patient_email, outcome, status, created_at, recording_date, duration, treatment_type, objection_type, primary_objection, exit_intent, exit_intent_level, sequence_timing_preset, what_happened, coaching_insight, tc_action, personal_detail, sequence_activated_at, sequence_cancelled_at, sequence_cancelled_reason, sequence_status, sequence_paused_reason, messages(id, status, channel, type, subject, body, scheduled_for, send_day, sent_at, created_at)'
+  'id, patient_name, patient_phone, patient_email, outcome, status, created_at, recording_date, duration, treatment_type, objection_type, primary_objection, exit_intent, exit_intent_level, urgency_classification, sequence_timing_preset, what_happened, coaching_insight, tc_action, personal_detail, sequence_activated_at, sequence_cancelled_at, sequence_cancelled_reason, sequence_status, sequence_paused_reason, messages(id, status, channel, type, subject, body, scheduled_for, send_day, sent_at, created_at)'
 
 export async function fetchSequences(practiceId) {
   if (!practiceId) return []
