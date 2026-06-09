@@ -185,7 +185,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!conversation) {
-      console.warn(`mailgun-inbound: no conversation for from=${fromEmail} recipient=${recipient}`);
+      console.warn(`mailgun-inbound: no conversation for recipient=${recipient}`);
       return ok();
     }
 

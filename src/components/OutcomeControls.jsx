@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { recordCloseAttribution } from '../lib/attribution'
 import { useUpdateConsult } from '../lib/queries'
+import { auditSequenceStarted, auditSequenceStopped } from '../lib/audit'
 
 // Cancel all not-yet-sent messages for a consult.
 async function cancelPendingMessages(consultId) {
@@ -76,6 +77,10 @@ export default function OutcomeControls({ consult, holdHours = 24, scheduledCoun
       if (['accepted', 'closed_won'].includes(value)) {
         extra = await recordCloseAttribution({ ...consult, ...patch }, { source: 'manual' })
       }
+      if (value === 'pending') auditSequenceStarted(consult.id, { via: 'outcome_change' })
+      else if (['accepted', 'not_converting', 'closed_won'].includes(value)) {
+        auditSequenceStopped(consult.id, { reason: reason || value })
+      }
       onUpdated?.({ ...patch, ...extra })
     } catch {
       /* mutation surfaces via parent refresh */
@@ -94,6 +99,7 @@ export default function OutcomeControls({ consult, holdHours = 24, scheduledCoun
         patch,
         practiceId: consult.practice_id,
       })
+      auditSequenceStopped(consult.id, { reason: 'manual_pause' })
       onUpdated?.(patch)
     } catch { /* noop */ }
     setBusy(false)

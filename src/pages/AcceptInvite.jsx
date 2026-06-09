@@ -4,6 +4,7 @@ import { Loader2, ShieldCheck, KeyRound } from 'lucide-react'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { logAudit, AUDIT } from '../lib/audit'
 
 // Landing page for the invite link an agency sends to a new practice's TC.
 // Supabase has already established a session from the invite token (detectSessionInUrl).
@@ -35,6 +36,7 @@ export default function AcceptInvite() {
       setError(updateError.message)
       return
     }
+    logAudit(AUDIT.PASSWORD_CHANGED, { resourceType: 'auth', details: { context: 'invite_accept' } })
     // BAA gate will route to /baa, then their dashboard.
     navigate('/', { replace: true })
   }

@@ -1,4 +1,5 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
+import { patientInitials } from "../_shared/phi.ts";
 // ============================================================================
 // sync-appointments - pull upcoming consult/implant appointments from Sikka
 // (the universal PMS middleware) into pms_appointments.
@@ -225,7 +226,7 @@ async function syncOnePractice(admin: any, practice: SikkaPracticeRow) {
             || match.patient_name || "A patient";
           const valStr = value != null ? `$${value.toLocaleString()}` : "value pending";
           await postSlackInline(
-            `🟢 Treatment accepted - ${name} - ${valStr} - Attributed to CaseLift (${status === "caselift_recovered" ? "Recovered" : "Assisted"})`,
+            `🟢 Treatment accepted - ${patientInitials(name)} - ${valStr} - Attributed to CaseLift (${status === "caselift_recovered" ? "Recovered" : "Assisted"})`,
           );
         }
       }

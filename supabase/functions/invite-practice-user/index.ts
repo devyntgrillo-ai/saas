@@ -20,6 +20,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
+import { recordAuditFromReq } from "../_shared/audit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -114,6 +115,16 @@ Deno.serve(async (req: Request) => {
     if (practiceErr) throw practiceErr;
     const practiceId = practice.id;
 
+    await recordAuditFromReq(admin, req, {
+      action: "practice.created",
+      userId: user.id,
+      userEmail: user.email ?? null,
+      practiceId,
+      resourceType: "practice",
+      resourceId: practiceId,
+      details: { agency_id: agencyId, name: practiceName, via: "agency_invite" },
+    });
+
     // --- 3) Generate a shareable link, then email it via Mailgun using the
     //         reseller's white-label brand. (No longer uses Supabase Auth's
     //         un-brandable invite email.) Prefer an "invite" link; if the email
@@ -171,6 +182,16 @@ Deno.serve(async (req: Request) => {
           { onConflict: "practice_id,user_id", ignoreDuplicates: true },
         );
     }
+
+    await recordAuditFromReq(admin, req, {
+      action: "user.invited",
+      userId: user.id,
+      userEmail: user.email ?? null,
+      practiceId,
+      resourceType: "user",
+      resourceId: email,
+      details: { role: "member", via: "agency_invite", invited_user_id: invitedUserId },
+    });
 
     return json({
       practice_id: practiceId,

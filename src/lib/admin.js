@@ -531,21 +531,10 @@ export function smsStatusMeta(s) {
   return SMS_STATUS[s] || SMS_STATUS.none
 }
 
-// Best-effort audit log of an impersonation event. Never throws.
-export async function logImpersonation({ actorId, targetType, targetId, targetName }) {
-  try {
-    const { error } = await supabase.from('audit_logs').insert({
-      actor_id: actorId || null,
-      action: 'impersonate',
-      target_type: targetType,
-      target_id: targetId,
-      detail: targetName,
-    })
-    if (error) console.warn('[audit] logImpersonation failed:', error.message)
-  } catch (e) {
-    console.error('[audit] logImpersonation threw:', e)
-  }
-}
+// Impersonation auditing now lives in src/lib/audit.js (auditImpersonationStarted
+// / auditImpersonationEnded), invoked from AuthContext.viewPractice / viewAgency.
+// The previous direct-insert logImpersonation() targeted columns that don't exist
+// and had no INSERT policy, so it silently failed; it has been removed.
 
 // Last 12 months of stacked MRR for the dashboard chart.
 export function mrrSeries12(history) {

@@ -8,7 +8,7 @@
 //   3. Email -> notify_email_address (or practice.email) via branded Mailgun.
 //      SMS   -> notify_sms_number via the practice's Twilio number (staff alert;
 //               NOT logged as a patient conversation).
-//      Slack -> practice.slack_webhook_url, else global SLACK_WEBHOOK_URL.
+//      Slack -> CaseLift's internal SLACK_WEBHOOK_URL only (never per-practice).
 //   4. Always inserts a notifications row for the in-app bell.
 //
 // Push is intentionally out of scope. Service-role only (called by detectors,
@@ -21,6 +21,7 @@ import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand } from "../_sh
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
 import { getTwilioConfig, sendSms } from "../_shared/twilio.ts";
 import { resolveTwilioSmsContext } from "../_shared/twilio-sms-context.ts";
+import { patientInitials } from "../_shared/phi.ts";
 
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
@@ -53,12 +54,16 @@ interface Built {
 function build(event: string, p: any, practiceName: string): Built {
   const name = escapeHtml(String(p?.patient_name ?? "A patient"));
   const rawName = String(p?.patient_name ?? "A patient");
+  // Initials only for low-trust sinks (Slack channels, email subject lines that
+  // transit/log externally). The in-app bell, email body, and staff SMS keep the
+  // full name — that's the practice viewing its own patients (treatment ops).
+  const initials = patientInitials(rawName);
   switch (event) {
     case "patient_replied": {
       const prev = String(p?.message_preview ?? "").slice(0, 100);
       const link = p?.conversation_url || `${APP}/conversations`;
       return {
-        subject: `Patient replied — ${rawName}`,
+        subject: `Patient replied — ${initials}`,
         heading: `${rawName} replied`,
         bodyHtml:
           `<p style="margin:0">${name} replied to your CaseLift sequence.</p>` +
@@ -66,7 +71,8 @@ function build(event: string, p: any, practiceName: string): Built {
           `<p style="margin:14px 0 0">Click below to view the conversation.</p>`,
         button: { label: "View Conversation", url: link },
         smsText: `CaseLift: ${rawName} replied. Log in to respond: app.caselift.io/conversations`,
-        slackText: `💬 *Patient Reply*\nPractice: ${practiceName}\nPatient: ${rawName}\nMessage: "${prev}"`,
+        // Slack: initials only, and NO message content (it can quote the patient).
+        slackText: `💬 *Patient Reply*\nPractice: ${practiceName}\nPatient: ${initials}`,
         bellTitle: `${rawName} replied`,
         bellMessage: prev || undefined,
         link: "/conversations",
@@ -86,7 +92,7 @@ function build(event: string, p: any, practiceName: string): Built {
           `<strong style="color:#e2e8f0">Case Value:</strong> ${amount}</p>`,
         button: { label: "View Dashboard", url: `${APP}/` },
         smsText: `CaseLift Win 🏆 ${rawName} just converted. ${amount} case. app.caselift.io`,
-        slackText: `🏆 *Case Converted*\nPractice: ${practiceName}\nPatient: ${rawName}\nTreatment: ${p?.treatment_type ?? "—"}\nValue: ${amount}`,
+        slackText: `🏆 *Case Converted*\nPractice: ${practiceName}\nPatient: ${initials}\nTreatment: ${p?.treatment_type ?? "—"}\nValue: ${amount}`,
         bellTitle: `🏆 Case converted — ${amount}`,
         bellMessage: `${rawName} · ${p?.treatment_type ?? ""}`.trim(),
         link,
@@ -108,7 +114,7 @@ function build(event: string, p: any, practiceName: string): Built {
           `scheduled for today.</p>${listHtml}`,
         button: { label: "View Patients", url: `${APP}/consults` },
         smsText: `CaseLift: ${count} follow-up call${plural} due today. app.caselift.io`,
-        slackText: `📞 *Calls Due Today*\nPractice: ${practiceName}\n${count} call${plural}${names.length ? ": " + names.join(", ") : ""}`,
+        slackText: `📞 *Calls Due Today*\nPractice: ${practiceName}\n${count} call${plural}${names.length ? ": " + names.map((n) => patientInitials(n)).join(", ") : ""}`,
         bellTitle: `${count} call${plural} due today`,
         bellMessage: names.slice(0, 5).join(", ") || undefined,
         link: "/consults",
@@ -244,12 +250,11 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 4) Slack (per-practice webhook, else global env).
+    // 4) Slack — CaseLift's internal channel ONLY (global env webhook). We do not
+    // route to per-practice Slack workspaces: PHI must stay inside our own
+    // BAA-covered Slack, never a workspace we can't verify is HIPAA-configured.
     if (prefs.slack) {
-      // Per-practice webhook (newer column - tolerate it not being migrated yet), else global env.
-      const { data: sw } = await admin.from("practices").select("slack_webhook_url").eq("id", practiceId).maybeSingle();
-      const practiceWebhook = (sw as { slack_webhook_url?: string } | null)?.slack_webhook_url || null;
-      const webhook = practiceWebhook || Deno.env.get("SLACK_WEBHOOK_URL");
+      const webhook = Deno.env.get("SLACK_WEBHOOK_URL");
       if (!webhook) ch.slack = { sent: false, reason: "no_webhook" };
       else {
         try {

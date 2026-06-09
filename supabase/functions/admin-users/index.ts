@@ -23,6 +23,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
+import { recordAuditFromReq } from "../_shared/audit.ts";
 
 const SUPER_ADMIN_EMAIL = "devyntgrillo@gmail.com";
 
@@ -142,6 +143,15 @@ Deno.serve(async (req: Request) => {
         });
         emailSent = r.sent === true;
       }
+      await recordAuditFromReq(admin, req, {
+        action: "user.invited",
+        userId: user.id,
+        userEmail: user.email ?? null,
+        practiceId: practiceScoped ? (practiceId ?? null) : null,
+        resourceType: "user",
+        resourceId: email,
+        details: { access, role: role ?? null, access_level, agency_id: agencyId ?? null },
+      });
       return json({ ok: true, user_id: newUserId, email_sent: emailSent, invite_link: inviteLink ?? null });
     }
 
@@ -173,6 +183,15 @@ Deno.serve(async (req: Request) => {
       } else {
         await admin.from("agency_members").delete().eq("user_id", userId);
       }
+      await recordAuditFromReq(admin, req, {
+        action: "user.role_changed",
+        userId: user.id,
+        userEmail: user.email ?? null,
+        practiceId: practiceScoped ? (practiceId ?? null) : null,
+        resourceType: "user",
+        resourceId: userId,
+        details: { access, role: role ?? null, access_level, agency_id: agencyId ?? null },
+      });
       return json({ ok: true });
     }
 
@@ -191,6 +210,14 @@ Deno.serve(async (req: Request) => {
       } else {
         await admin.from("users").update({ access_level: null, practice_id: null, role: "member" }).eq("id", userId);
       }
+      await recordAuditFromReq(admin, req, {
+        action: "user.role_changed",
+        userId: user.id,
+        userEmail: user.email ?? null,
+        resourceType: "user",
+        resourceId: userId,
+        details: { mode },
+      });
       return json({ ok: true });
     }
 

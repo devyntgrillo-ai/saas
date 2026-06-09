@@ -11,6 +11,7 @@
 // SLACK_WEBHOOK_URL (the signups channel).
 // ============================================================================
 import { reportEdgeError } from "../_shared/report-error.ts";
+import { patientInitials } from "../_shared/phi.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 
@@ -136,7 +137,7 @@ Deno.serve(async (req: Request) => {
       "",
       `💰 *Case Value:* ${money(caseValue)}`,
       `🦷 *Treatment:* ${prettyTreatment(treatment)}`,
-      `👤 *Patient:* ${patientName}`,
+      `👤 *Patient:* ${patientInitials(patientName)}`,
       `📨 *Messages Sent:* ${messagesSent} follow-up${messagesSent === 1 ? "" : "s"}${days ? ` over ${days} day${days === 1 ? "" : "s"}` : ""}`,
       `📅 *First Contact:* ${firstContact}`,
       `✅ *Closed:* ${today}`,

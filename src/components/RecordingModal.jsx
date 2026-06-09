@@ -287,11 +287,7 @@ export default function RecordingModal({ onClose, patient = null }) {
       id = await createBrowserConsult(practiceId, { durationSec, patient, source: native ? 'native_mobile' : undefined })
       // Surface an "AI is analyzing…" card on the list pages immediately, even
       // if backend analysis finishes before the user navigates there.
-      markRecording({
-        id,
-        practiceId,
-        name: [patient?.firstName, patient?.lastName].filter(Boolean).join(' ') || null,
-      })
+      markRecording({ id, practiceId })
       const path = await uploadRecording(practiceId, id, blob)
       setConsultId(id)
 
@@ -326,7 +322,7 @@ export default function RecordingModal({ onClose, patient = null }) {
     let id
     try {
       id = await createBrowserConsult(practiceId, { durationSec: EXAMPLE_DURATION, patient: patient || undefined })
-      markRecording({ id, practiceId, name: patientName })
+      markRecording({ id, practiceId })
       setConsultId(id)
       await transcribeRecording({
         consultId: id,

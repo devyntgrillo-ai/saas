@@ -9,6 +9,7 @@ import { createClient } from "@supabase/supabase-js";
 import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand } from "../_shared/brand.ts";
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
 import { isSuperAdminUser } from "../_shared/admin.ts";
+import { recordAuditFromReq } from "../_shared/audit.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -146,6 +147,16 @@ Deno.serve(async (req: Request) => {
         (sendResult as { detail?: string }).detail ?? "",
       );
     }
+
+    await recordAuditFromReq(admin, req, {
+      action: "user.invited",
+      userId: user.id,
+      userEmail: user.email ?? null,
+      practiceId: practiceRow?.id ?? null,
+      resourceType: "user",
+      resourceId: recipientEmail,
+      details: { scope: scopeName, resend: Boolean(body.invitation_id) },
+    });
 
     return json({
       ok: true,

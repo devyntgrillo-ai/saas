@@ -39,6 +39,7 @@ import OutcomeControls from '../components/OutcomeControls'
 import { parseSequenceConfig } from '../lib/sequence'
 import TranscriptViewer from '../components/TranscriptViewer'
 import RecordingPlayer from '../components/RecordingPlayer'
+import { auditTranscriptViewed } from '../lib/audit'
 import {
   formatDate,
   formatTime,
@@ -273,6 +274,17 @@ export default function ConsultDetail() {
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stillProcessing, consult?.id])
+
+  // Audit transcript views once per consult (the page refetches every 10s, so a
+  // ref guard prevents duplicate events on each poll).
+  const transcriptLoggedRef = useRef(null)
+  useEffect(() => {
+    const cid = consult?.id
+    if (cid && consult?.transcript_deidentified && transcriptLoggedRef.current !== cid) {
+      transcriptLoggedRef.current = cid
+      auditTranscriptViewed(cid)
+    }
+  }, [consult?.id, consult?.transcript_deidentified])
 
   const transcriptionError = consult?.status === 'transcription_error'
   const [retryingTranscription, setRetryingTranscription] = useState(false)

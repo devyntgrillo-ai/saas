@@ -29,6 +29,7 @@ import { supabase } from '../lib/supabase'
 import { timeAgo } from '../lib/consults'
 import { rateColor } from '../lib/pms'
 import { useAgencyOverview } from '../lib/queries'
+import { auditPracticeArchived } from '../lib/audit'
 
 function AddPracticeModal({ agencyId, onClose, onAdded }) {
   const [form, setForm] = useState({ practice_name: '', doctor_first: '', doctor_last: '', email: '' })
@@ -300,6 +301,7 @@ export default function Agency() {
       .eq('id', p.id)
     setBusyId(null)
     if (error) return alert(error.message)
+    auditPracticeArchived(p.id, { name: p.name })
     refetchOverview()
   }
 

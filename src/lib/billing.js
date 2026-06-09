@@ -6,6 +6,7 @@
 //   past_due  - a renewal payment failed
 //   cancelled - subscription cancelled (access until end of paid period)
 import { supabase } from './supabase'
+import { auditBillingAction } from './audit'
 
 export const PLAN_NAME = 'CaseLift'
 export const PLAN_PRICE = '$997/month'
@@ -70,6 +71,7 @@ export async function createCheckout({ practiceId, email, planAmount, redirectPa
   })
   if (error) throw new Error(await edgeErrorMessage(error))
   if (!data?.url) throw new Error('No checkout URL returned')
+  auditBillingAction('checkout_started', { practiceId, planAmount: data.plan_amount ?? planAmount })
   return { url: data.url, planAmount: data.plan_amount ?? planAmount }
 }
 
@@ -210,9 +212,11 @@ export async function cancelSubscription(practiceId) {
       body: { practice_id: practiceId },
     })
     if (error) throw error
+    auditBillingAction('subscription_cancelled', { practiceId })
     return data
   } catch {
     await supabase.from('practices').update({ subscription_status: 'cancelled' }).eq('id', practiceId)
+    auditBillingAction('subscription_cancelled', { practiceId, fallback: true })
     return { ok: true, fallback: true }
   }
 }

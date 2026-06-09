@@ -1,13 +1,12 @@
 import { createContext, useCallback, useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { logImpersonation } from '../lib/admin'
 import { useAdminData } from '../lib/queries'
 import { useAuth } from './AuthContext'
 
 const AdminContext = createContext(null)
 
 export function AdminProvider({ children }) {
-  const { user, viewPractice, viewAgency } = useAuth()
+  const { viewPractice, viewAgency } = useAuth()
   const navigate = useNavigate()
   const { data = null, isLoading: loading, refetch } = useAdminData()
 
@@ -16,14 +15,15 @@ export function AdminProvider({ children }) {
     return r.data
   }, [refetch])
 
+  // Impersonation is audited inside viewPractice / viewAgency (AuthContext), which
+  // also covers the agency-dashboard and account-switcher entry points.
   const impersonatePractice = useCallback(
     (practice) => {
       if (!practice?.id) return
-      logImpersonation({ actorId: user?.id, targetType: 'practice', targetId: practice.id, targetName: practice.name })
       viewPractice(practice.id)
       navigate('/')
     },
-    [user, viewPractice, navigate],
+    [viewPractice, navigate],
   )
 
   // Reseller-level impersonation: view the reseller's OWN dashboard (/agency)
@@ -31,11 +31,10 @@ export function AdminProvider({ children }) {
   const impersonateAgency = useCallback(
     (agency) => {
       if (!agency?.id) return
-      logImpersonation({ actorId: user?.id, targetType: 'agency', targetId: agency.id, targetName: agency.name })
       viewAgency(agency.id)
       navigate('/agency')
     },
-    [user, viewAgency, navigate],
+    [viewAgency, navigate],
   )
 
   return (
