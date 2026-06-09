@@ -101,7 +101,7 @@ export default function Onboarding() {
   }, [isAgencyUser, navigate])
 
   // Per-step completion, derived from the practice's own data so it stays correct
-  // across reloads and the Chargebee redirect round-trip.
+  // across reloads.
   const done = useMemo(() => {
     const p = practice || {}
     return {
@@ -116,8 +116,7 @@ export default function Onboarding() {
   const doneList = STEPS.map((s) => done[s.key])
 
   // Seed the form + open the right step once the practice loads. Prefer the
-  // saved onboarding_step; otherwise the first incomplete step. Returning from
-  // Chargebee (?success) refreshes and lands on payment.
+  // saved onboarding_step; otherwise the first incomplete step.
   useEffect(() => {
     if (!practice || seeded) return
     // eslint-disable-next-line react-hooks/set-state-in-effect

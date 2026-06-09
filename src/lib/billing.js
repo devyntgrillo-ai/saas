@@ -1,8 +1,8 @@
-// Shared billing / subscription helpers for CaseLift (Chargebee).
+// Shared billing / subscription helpers for CaseLift (Helcim).
 //
 // Subscription lifecycle (practices.subscription_status):
 //   trial     - new signups; full access until trial_ends_at (14 days)
-//   active    - paid Chargebee subscription
+//   active    - paid via Helcim (helcim_transaction_id / helcim_customer_code)
 //   past_due  - a renewal payment failed
 //   cancelled - subscription cancelled (access until end of paid period)
 import { supabase } from './supabase'
@@ -54,25 +54,6 @@ export function needsPaywall(practice) {
   return status === 'past_due' || status === 'cancelled' || status === 'canceled'
 }
 
-// Create a Chargebee hosted-page checkout for this practice and return the
-// hosted-page URL for redirect.
-// redirectPath lets a caller (e.g. the signup funnel) send the user somewhere
-// other than the default billing settings page after a successful checkout.
-export async function createCheckout({ practiceId, email, planAmount, redirectPath } = {}) {
-  const redirect = `${window.location.origin}${redirectPath || '/settings/billing?success=true'}`
-  const { data, error } = await supabase.functions.invoke('create-checkout', {
-    body: {
-      practice_id: practiceId,
-      email,
-      ...(planAmount != null ? { plan_amount: planAmount } : {}),
-      redirect_url: redirect,
-    },
-  })
-  if (error) throw new Error(await edgeErrorMessage(error))
-  if (!data?.url) throw new Error('No checkout URL returned')
-  return { url: data.url, planAmount: data.plan_amount ?? planAmount }
-}
-
 // supabase-js surfaces non-2xx edge responses as a generic
 // "Edge Function returned a non-2xx status code". Pull the real `error` field
 // out of the response body so callers can show something actionable.
@@ -84,26 +65,6 @@ async function edgeErrorMessage(error) {
     /* body wasn't JSON or already consumed */
   }
   return error?.message || 'Request failed'
-}
-
-// Authoritative subscription status for a practice (via the get-billing-status
-// edge function). Returns { plan, status, trial_ends_at, subscription_id }.
-export async function getBillingStatus(practiceId) {
-  const { data, error } = await supabase.functions.invoke('get-billing-status', {
-    body: { practice_id: practiceId },
-  })
-  if (error) throw new Error(await edgeErrorMessage(error))
-  return data
-}
-
-// Create a Chargebee customer-portal URL (update payment method / manage sub).
-export async function createPortalSession(practiceId) {
-  const { data, error } = await supabase.functions.invoke('create-portal-session', {
-    body: { practice_id: practiceId },
-  })
-  if (error) throw new Error(await edgeErrorMessage(error))
-  if (!data?.url) throw new Error('No portal URL returned')
-  return data.url
 }
 
 // ============================================================================
@@ -219,7 +180,7 @@ export async function pauseSubscription(practiceId, months) {
 }
 
 // Downsell: keep them active and record the accepted retention offer. A real
-// Chargebee discount is applied server-side via the billing portal; we lock in
+// retention discount can be applied at the next Helcim charge; we lock in
 // the intent here so the account stays active and the offer is auditable.
 export async function acceptDownsell(practiceId) {
   const { error } = await supabase
@@ -242,19 +203,13 @@ export async function submitCancellationFeedback({ practiceId, reason, elaborati
   if (error) throw error
 }
 
-// Final cancel - calls the edge function (Chargebee) and falls back to a
-// direct status flip so the flow always completes.
+// Final cancel. Helcim has no recurring-subscription object to cancel (billing
+// is per-charge), so this is a direct status flip; access persists to the end
+// of the paid period via next_billing_date.
 export async function cancelSubscription(practiceId) {
-  try {
-    const { data, error } = await supabase.functions.invoke('cancel-subscription', {
-      body: { practice_id: practiceId },
-    })
-    if (error) throw error
-    return data
-  } catch {
-    await supabase.from('practices').update({ subscription_status: 'cancelled' }).eq('id', practiceId)
-    return { ok: true, fallback: true }
-  }
+  const { error } = await supabase.from('practices').update({ subscription_status: 'cancelled' }).eq('id', practiceId)
+  if (error) throw error
+  return { ok: true }
 }
 
 // Client-side export of the practice's data (preserved for 90 days regardless).

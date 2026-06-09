@@ -36,7 +36,7 @@ export async function fetchAdminBilling() {
   const { data, error } = await supabase
     .from('practices')
     .select(
-      'id, name, doctor_first, doctor_last, email, phone, pms_type, plan_amount, subscription_status, next_billing_date, trial_ends_at, created_at, chargebee_customer_id, agency:agency_accounts(name)',
+      'id, name, doctor_first, doctor_last, email, phone, pms_type, plan_amount, subscription_status, next_billing_date, trial_ends_at, created_at, helcim_customer_code, helcim_transaction_id, agency:agency_accounts(name)',
     )
     .is('archived_at', null)
     .order('created_at', { ascending: false })
