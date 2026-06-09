@@ -1,4 +1,6 @@
-// Chat attachment upload → public `chat-attachments` bucket.
+// Chat attachment upload → PRIVATE `chat-attachments` bucket. We store the bare
+// object path in support_messages.attachment_url; reads mint signed URLs on
+// demand (see lib/storage.js / useAttachmentUrl).
 import { supabase } from './supabase'
 
 export async function uploadChatAttachment(chatId, file) {
@@ -9,6 +11,5 @@ export async function uploadChatAttachment(chatId, file) {
     .from('chat-attachments')
     .upload(path, file, { contentType: file.type || undefined, upsert: false })
   if (error) throw error
-  const { data } = supabase.storage.from('chat-attachments').getPublicUrl(path)
-  return { url: data.publicUrl, name: file.name || 'file', type: file.type || '' }
+  return { url: path, name: file.name || 'file', type: file.type || '' }
 }

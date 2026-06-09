@@ -5,6 +5,7 @@ import EmojiPicker from './EmojiPicker'
 import LinkPreview from './LinkPreview'
 import AudioClip from './AudioClip'
 import { groupReactions } from '../../hooks/useSupportChat'
+import { useAttachmentUrl } from '../../hooks/useAttachmentUrl'
 import { initials, avatarColor, timeLabel, shortRelative } from './chatUtil'
 import { renderRich, firstUrl } from './richtext'
 
@@ -49,6 +50,7 @@ export default function ChatMessage({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(message.message || '')
 
+  const attachmentSrc = useAttachmentUrl('chat-attachments', message.attachment_url)
   const isTeam = message.sender_type === 'caselift_team'
   const mine = message.sender_id && message.sender_id === myId
   const rightAlign = viewerType === 'caselift_team' && isTeam
@@ -128,15 +130,15 @@ export default function ChatMessage({
               )}
               {message.message && firstUrl(message.message) && <LinkPreview url={firstUrl(message.message)} />}
               {message.attachment_url && message.attachment_type?.startsWith('audio/') && (
-                <AudioClip url={message.attachment_url} durationSec={message.audio_duration} transcript={message.audio_transcript} seed={message.id} />
+                <AudioClip url={attachmentSrc} durationSec={message.audio_duration} transcript={message.audio_transcript} seed={message.id} />
               )}
               {message.attachment_url && !message.attachment_type?.startsWith('audio/') && (
                 message.attachment_type?.startsWith('image/') ? (
-                  <a href={message.attachment_url} target="_blank" rel="noreferrer" className="mt-1 block w-fit">
-                    <img src={message.attachment_url} alt={message.attachment_name || ''} className="max-h-72 max-w-xs rounded-lg border border-surface-700 object-cover" />
+                  <a href={attachmentSrc || undefined} target="_blank" rel="noreferrer" className="mt-1 block w-fit">
+                    <img src={attachmentSrc} alt={message.attachment_name || ''} className="max-h-72 max-w-xs rounded-lg border border-surface-700 object-cover" />
                   </a>
                 ) : (
-                  <a href={message.attachment_url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-2 rounded-lg border border-surface-700 bg-surface-800 px-3 py-2 text-sm text-slate-200 transition hover:border-surface-600">
+                  <a href={attachmentSrc || undefined} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-2 rounded-lg border border-surface-700 bg-surface-800 px-3 py-2 text-sm text-slate-200 transition hover:border-surface-600">
                     <Paperclip className="h-4 w-4 shrink-0 text-slate-400" />
                     <span className="max-w-[220px] truncate">{message.attachment_name || 'Attachment'}</span>
                   </a>

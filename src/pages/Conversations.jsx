@@ -25,7 +25,6 @@ import {
   SlidersHorizontal,
   Smile,
   Paperclip,
-  Download,
   ScrollText,
   X,
   Pencil,
@@ -40,6 +39,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { useRecorder } from '../context/RecorderContext'
 import { supabase } from '../lib/supabase'
+import { resolveAttachmentUrl } from '../lib/storage'
 import {
   useConversationsList,
   useConversationThread,
@@ -65,6 +65,7 @@ import CallMessageBubble from '../components/CallMessageBubble'
 import EmailMessageBubble from '../components/EmailMessageBubble'
 import EmailComposer from '../components/EmailComposer'
 import ChannelToggle from '../components/ChannelToggle'
+import ConvAttachment from '../components/ConvAttachment'
 
 function initials(first, last) {
   return `${(first || '?')[0]}${(last || '')[0] || ''}`.toUpperCase()
@@ -809,17 +810,21 @@ export default function Conversations() {
       const path = `${activeId}/${Date.now()}.${ext}`
       const up = await supabase.storage.from('conversation-attachments').upload(path, file, { contentType: file.type || undefined, upsert: false })
       if (up.error) throw up.error
-      const { data: pub } = supabase.storage.from('conversation-attachments').getPublicUrl(path)
+      // Store the bare object PATH (private bucket); reads mint signed URLs on demand.
       const nowIso = new Date().toISOString()
       const data = await insertConvMessage({
         conversation_id: activeId, direction: 'outbound', channel, body: file.name, sent_at: nowIso,
-        meta: { attachment: { url: pub.publicUrl, name: file.name, type: file.type || ext } },
+        meta: { attachment: { url: path, name: file.name, type: file.type || ext } },
       })
       bumpConversation(nowIso, `📎 ${file.name}`)
       refetchConv()
       if (channel === 'sms') {
         const target = activeConv?.patient_phone
-        if (target) supabase.functions.invoke('twilio-send', { body: { practice_id: practiceId, to: target, body: file.name, media_url: pub.publicUrl, conversation_message_id: data?.id } }).catch(() => {})
+        // Twilio fetches MMS media over HTTP — hand it a short-lived signed URL.
+        if (target) {
+          const mediaUrl = await resolveAttachmentUrl('conversation-attachments', path, { ttl: 3600 })
+          if (mediaUrl) supabase.functions.invoke('twilio-send', { body: { practice_id: practiceId, to: target, body: file.name, media_url: mediaUrl, conversation_message_id: data?.id } }).catch(() => {})
+        }
       }
     } catch (e) {
       showToast(/bucket|not found/i.test(e?.message || '') ? 'Attachments need the conversation-attachments bucket - apply the migration.' : 'Upload failed')
@@ -1390,16 +1395,7 @@ export default function Conversations() {
                               color utility - plain `text-white` gets flipped dark by the
                               light-mode override in index.css. */}
                           {m.meta?.attachment ? (
-                            <a
-                              href={m.meta.attachment.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              download
-                              className={`flex items-center gap-2 px-3.5 py-2.5 ${radius} ${outbound ? 'bg-[var(--accent)] text-[#fff]' : 'bg-[var(--bg-elevated)] text-[var(--text-primary)]'}`}
-                            >
-                              <Download className="h-4 w-4 shrink-0 opacity-80" />
-                              <span className="truncate text-sm font-medium underline-offset-2 hover:underline">{m.meta.attachment.name || 'Attachment'}</span>
-                            </a>
+                            <ConvAttachment attachment={m.meta.attachment} outbound={outbound} radius={radius} />
                           ) : (
                             <div className={`px-3.5 py-2 text-[15px] leading-snug ${radius} ${outbound ? 'bg-[var(--accent)] text-[#fff]' : 'bg-[var(--bg-elevated)] text-[var(--text-primary)]'}`}>
                               <p className="whitespace-pre-wrap">{cleanBody(m.body)}</p>
