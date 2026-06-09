@@ -40,6 +40,7 @@ export default function AdminTeam() {
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
   const [editing, setEditing] = useState(null) // user object, or 'new'
+  const [reinviting, setReinviting] = useState(null) // deactivated user being re-invited
   const [busyId, setBusyId] = useState(null)
   const [flash, setFlash] = useState('')
 
@@ -73,16 +74,16 @@ export default function AdminTeam() {
   }, [list])
 
   async function deactivateUser(u) {
-    if (!confirm(`Deactivate ${u.email}? Their account is removed from CaseLift and they immediately lose all access. The email is freed in Supabase Auth so it can be re-invited later.`)) return
+    if (!confirm(`Deactivate ${u.email}? They immediately lose all access and can no longer sign in, but they stay in this list as "Deactivated" for your records. You can re-invite them anytime.`)) return
     setBusyId(u.id)
     try {
-      // mode: 'delete' hard-deletes the auth user (cascading their users row), so
-      // the email no longer exists in Supabase Auth and a future invite won't fail
-      // with "user already exists". 'revoke' (the old behavior) left the auth
-      // account in place, which is what blocked re-adding.
-      const { data, error } = await supabase.functions.invoke('admin-users', { body: { action: 'remove', user_id: u.id, mode: 'delete' } })
+      // mode: 'deactivate' keeps the account + users row (so they stay listed as
+      // "Deactivated" — a record of who once had access), strips their access, and
+      // bans the auth user so they can't sign in. "Resend invite" un-bans and
+      // re-grants. (Not 'delete' — that would remove them from the records.)
+      const { data, error } = await supabase.functions.invoke('admin-users', { body: { action: 'remove', user_id: u.id, mode: 'deactivate' } })
       if (error) throw new Error(data?.error || error.message)
-      note(`${u.email} deactivated and removed. The email can be re-invited.`)
+      note(`${u.email} deactivated. They remain in your records and can be re-invited.`)
       await refetch()
     } catch (e) {
       note(e?.message || 'Could not deactivate user.')
@@ -142,9 +143,13 @@ export default function AdminTeam() {
               u.created_at ? new Date(u.created_at).toLocaleDateString() : '-',
               <div className="flex items-center gap-1.5" onClick={stop}>
                 <button onClick={() => setEditing(u)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-slate-300 transition hover:bg-surface-700" title="Edit access"><Pencil className="h-3.5 w-3.5" /></button>
-                <button onClick={() => deactivateUser(u)} disabled={busy} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-rose-300 transition hover:bg-surface-700 disabled:opacity-40" title="Deactivate user">
-                  {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserMinus className="h-3.5 w-3.5" />}
-                </button>
+                {meta.kind === 'none' ? (
+                  <button onClick={() => setReinviting(u)} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-emerald-300 transition hover:bg-surface-700" title="Resend invite"><Send className="h-3.5 w-3.5" /></button>
+                ) : (
+                  <button onClick={() => deactivateUser(u)} disabled={busy} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-rose-300 transition hover:bg-surface-700 disabled:opacity-40" title="Deactivate user">
+                    {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserMinus className="h-3.5 w-3.5" />}
+                  </button>
+                )}
               </div>,
             ]
           })}
@@ -162,13 +167,25 @@ export default function AdminTeam() {
           onSaved={(msg) => { setEditing(null); note(msg); refetch() }}
         />
       )}
+
+      {reinviting && (
+        <UserAccessModal
+          existing={reinviting}
+          reinvite
+          agencies={agencies}
+          practices={practices}
+          onClose={() => setReinviting(null)}
+          onSaved={(msg) => { setReinviting(null); note(msg); refetch() }}
+        />
+      )}
     </div>
   )
 }
 
-function UserAccessModal({ existing, agencies, practices, onClose, onSaved }) {
-  const isEdit = Boolean(existing)
-  const initial = isEdit ? classify(existing) : { kind: 'practice' }
+function UserAccessModal({ existing, reinvite = false, agencies, practices, onClose, onSaved }) {
+  const isEdit = Boolean(existing) && !reinvite   // edit access (set_access)
+  const asInvite = !isEdit                         // invite flow: brand-new OR re-invite
+  const initial = existing ? classify(existing) : { kind: 'practice' }
   const [email, setEmail] = useState(existing?.email || '')
   const [access, setAccess] = useState(initial.kind === 'none' ? 'practice' : initial.kind === 'super_admin' ? 'super_admin' : initial.kind)
   const [role, setRole] = useState(
@@ -187,22 +204,23 @@ function UserAccessModal({ existing, agencies, practices, onClose, onSaved }) {
 
   async function save() {
     setError('')
-    if (!isEdit && !email.trim()) return setError('Email is required.')
+    if (asInvite && !existing && !email.trim()) return setError('Email is required.')
     if (access === 'reseller' && !agencyId) return setError('Select a reseller.')
     if (access === 'practice' && !practiceId) return setError('Select a subaccount.')
     setBusy(true)
     try {
-      const payload = isEdit
-        ? { action: 'set_access', user_id: existing.id, access, role, agency_id: access === 'reseller' ? agencyId : null, practice_id: access === 'practice' ? practiceId : null }
-        : { action: 'invite', email: email.trim().toLowerCase(), access, role, agency_id: access === 'reseller' ? agencyId : null, practice_id: access === 'practice' ? practiceId : null, app_origin: window.location.origin }
+      const inviteEmail = existing ? existing.email : email.trim().toLowerCase()
+      const payload = asInvite
+        ? { action: 'invite', email: inviteEmail, access, role, agency_id: access === 'reseller' ? agencyId : null, practice_id: access === 'practice' ? practiceId : null, app_origin: window.location.origin }
+        : { action: 'set_access', user_id: existing.id, access, role, agency_id: access === 'reseller' ? agencyId : null, practice_id: access === 'practice' ? practiceId : null }
       const { data, error: e } = await supabase.functions.invoke('admin-users', { body: payload })
       if (e) throw new Error(data?.error || e.message)
-      if (!isEdit && data?.invite_link && !data?.email_sent) {
+      if (asInvite && data?.invite_link && !data?.email_sent) {
         setLink(data.invite_link) // show copyable link if email didn't go out
         setBusy(false)
         return
       }
-      onSaved(isEdit ? `Updated access for ${existing.email}.` : `Invite sent to ${email}.`)
+      onSaved(reinvite ? `Invite resent to ${existing.email}.` : isEdit ? `Updated access for ${existing.email}.` : `Invite sent to ${inviteEmail}.`)
     } catch (e) {
       setError(e?.message || 'Something went wrong.')
       setBusy(false)
@@ -217,7 +235,7 @@ function UserAccessModal({ existing, agencies, practices, onClose, onSaved }) {
 
   return (
     <Modal
-      title={isEdit ? `Edit access — ${existing.email}` : 'Add user'}
+      title={reinvite ? `Re-invite — ${existing.email}` : isEdit ? `Edit access — ${existing.email}` : 'Add user'}
       onClose={onClose}
       footer={link ? (
         <button onClick={onClose} className="btn-primary">Done</button>
@@ -226,7 +244,7 @@ function UserAccessModal({ existing, agencies, practices, onClose, onSaved }) {
           <button onClick={onClose} className="btn-ghost">Cancel</button>
           <button onClick={save} disabled={busy} className="btn-primary">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            {isEdit ? 'Save access' : 'Send invite'}
+            {asInvite ? 'Send invite' : 'Save access'}
           </button>
         </>
       )}
@@ -243,10 +261,11 @@ function UserAccessModal({ existing, agencies, practices, onClose, onSaved }) {
         </div>
       ) : (
         <div className="space-y-4">
-          {!isEdit && (
+          {asInvite && (
             <div>
               <label className="label">Email address</label>
-              <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="person@company.com" />
+              <input className="input" type="email" value={existing ? existing.email : email} onChange={(e) => setEmail(e.target.value)} placeholder="person@company.com" readOnly={Boolean(existing)} />
+              {reinvite && <p className="mt-1 text-xs text-slate-500">Re-inviting a deactivated user — choose their access below and we’ll send a fresh sign-in link.</p>}
             </div>
           )}
           <div>
