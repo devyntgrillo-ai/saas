@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, UserCog, Ban, Eye, Check } from 'lucide-react'
+import { ArrowLeft, UserCog, Ban, Eye, Check, Plus, Loader2 } from 'lucide-react'
 import Modal from '../../components/Modal'
 import { useAdmin } from '../../context/AdminContext'
 import { agencyStatusMeta } from '../../lib/admin'
@@ -14,6 +14,7 @@ export default function AgencyDetail() {
   const navigate = useNavigate()
   const { data, refresh, impersonateAgency, impersonatePractice } = useAdmin()
   const [confirmSuspend, setConfirmSuspend] = useState(false)
+  const [assigning, setAssigning] = useState(false)
 
   const agency = data.agencies.find((a) => String(a.id) === String(id))
   if (!agency) {
@@ -59,6 +60,9 @@ export default function AgencyDetail() {
           </div>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => setAssigning(true)} className="btn-primary">
+            <Plus className="h-4 w-4" /> Assign a practice
+          </button>
           <button onClick={() => impersonateAgency(agency)} className="btn-ghost text-primary-300">
             <UserCog className="h-4 w-4" /> Impersonate
           </button>
@@ -104,6 +108,15 @@ export default function AgencyDetail() {
         <InternalNotes agency={agency} onSaved={refresh} />
       </div>
 
+      {assigning && (
+        <AssignPracticeModal
+          agency={agency}
+          practices={data.practices}
+          onClose={() => setAssigning(false)}
+          onSaved={() => { setAssigning(false); refresh() }}
+        />
+      )}
+
       {confirmSuspend && (
         <Modal title={agency.status === 'suspended' ? 'Reactivate reseller?' : 'Suspend reseller?'} onClose={() => setConfirmSuspend(false)} footer={
           <>
@@ -119,6 +132,72 @@ export default function AgencyDetail() {
         </Modal>
       )}
     </div>
+  )
+}
+
+// Provision a practice under this agency: sets practices.agency_id (commission
+// attribution + co-brand inheritance) and fires the commission email, both via
+// the assign-referred-practice edge function.
+function AssignPracticeModal({ agency, practices, onClose, onSaved }) {
+  const available = (practices || []).filter((p) => !p.agency_id && !p.archived_at)
+  const [selected, setSelected] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function save() {
+    if (!selected) return
+    setBusy(true)
+    setError('')
+    try {
+      const { data, error: e } = await supabase.functions.invoke('assign-referred-practice', {
+        body: { practice_id: selected, agency_id: agency.id },
+      })
+      if (e) throw new Error(data?.error || e.message)
+      if (data?.error) throw new Error(data.error)
+      onSaved()
+    } catch (e2) {
+      setError(e2.message || 'Could not assign the practice.')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal
+      title={`Assign a practice — ${agency.name}`}
+      onClose={onClose}
+      maxWidth="max-w-md"
+      footer={
+        <>
+          <button onClick={onClose} className="btn-ghost">Cancel</button>
+          <button onClick={save} disabled={busy || !selected} className="btn-primary">
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />} Assign &amp; notify
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <p className="text-sm text-slate-400">
+          Attributes the practice to {agency.name} and emails the owner that {money(agency.commission_rate)}/mo
+          was added to their payouts. The practice keeps billing CaseLift $997 directly.
+        </p>
+        {available.length === 0 ? (
+          <p className="rounded-lg border border-surface-700 bg-surface-800 px-3 py-2 text-sm text-slate-400">
+            No unassigned practices available. Every practice is already under an agency.
+          </p>
+        ) : (
+          <div>
+            <label className="label">Practice</label>
+            <select className="input" value={selected} onChange={(e) => setSelected(e.target.value)}>
+              <option value="">Select a practice…</option>
+              {available.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {error && <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
+      </div>
+    </Modal>
   )
 }
 
