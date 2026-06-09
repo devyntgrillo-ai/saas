@@ -21,29 +21,76 @@ const REACTIVATION_TREATMENTS = [
 
 const SMS_MAX = 320
 
-const DEFAULT_MSG1 =
-  "Hi {{first_name}}, this is [TC Name] from {{practice_name}}. I was looking back at your chart and wanted to reach out — we discussed {{treatment_type}} back on {{tx_plan_date}}. Is this something you're still thinking about? Happy to answer any questions."
-const DEFAULT_MSG2 =
-  "{{first_name}}, just wanted to make sure my last message didn't get buried! We'd love to help you move forward when the time is right. Any questions I can answer for you?"
-const DEFAULT_MSG3_SUBJECT = 'Still thinking about it, {{first_name}}?'
-const DEFAULT_MSG3_BODY = `Hi {{first_name}},
+// Three pre-built sequence angles. Each is a starting point — every message is
+// fully editable after the angle is chosen.
+const ANGLES = [
+  {
+    key: 'gentle',
+    name: 'The Gentle Check-In',
+    desc: 'Low pressure, relationship-first. Best for patients who went cold without a clear reason.',
+    badge: 'Recommended for most patients',
+    msg1: "Hi {{first_name}}, it's [TC Name] from {{practice_name}}. I was reviewing some charts and thought of you — we talked about {{treatment_type}} back in {{tx_plan_date}}. Still something you're thinking about?",
+    msg2: "{{first_name}}, just wanted to make sure my last text didn't get lost. No rush at all — just want to make sure you have everything you need if and when you're ready. Anything I can answer for you?",
+    msg3Subject: 'Checking in, {{first_name}}',
+    msg3Body: `Hi {{first_name}},
 
-I wanted to follow up one more time about the {{treatment_type}} treatment plan we put together for you back in {{tx_plan_date}}.
+I wanted to reach out one more time about the {{treatment_type}} plan we put together for you. I know life gets busy and these decisions take time — completely understand.
 
-I know decisions like this take time — and that's completely okay. I just want to make sure you have everything you need to feel confident whenever you're ready.
+I just want you to know that your file is still here, {{doctor_name}} remembers your case, and we're happy to pick up right where we left off whenever you're ready.
 
-A few things worth knowing:
-- We still have your records and treatment plan on file — no need to start over
-- We can walk through financing options that fit your budget
-- {{doctor_name}} is happy to answer any clinical questions before you commit to anything
+No pressure — but if you have any questions or just want to talk through your options, I'm easy to reach.
 
-If now isn't the right time, no pressure at all. But if you've been thinking about it, I'd love to find 15 minutes to talk it through.
-
-Would any of these work for a quick call this week?
+Would love to hear from you.
 
 [TC Name]
-{{practice_name}}
-{{phone_number}}`
+{{practice_name}} — {{phone_number}}`,
+  },
+  {
+    key: 'price_lock',
+    name: 'The Price Lock',
+    desc: 'Creates soft urgency around pricing or availability. Best for patients whose main objection was cost or timing.',
+    badge: 'Best for cost objections',
+    msg1: "Hi {{first_name}}, [TC Name] at {{practice_name}}. Quick heads up — we've had some patients ask about pricing recently and wanted to make sure you still had access to the same treatment plan we built for you in {{tx_plan_date}}. Worth a quick chat?",
+    msg2: "{{first_name}}, just following up on my last message. The plan we discussed for {{treatment_type}} is still on file. Happy to walk through the financing options again if that would help — a lot of patients are surprised by how manageable the monthly payment is. Want me to send the breakdown?",
+    msg3Subject: 'Your {{treatment_type}} plan — still on file, {{first_name}}',
+    msg3Body: `Hi {{first_name}},
+
+I wanted to reach out before too much more time passes. The {{treatment_type}} treatment plan {{doctor_name}} put together for you is still on file, and I want to make sure you have the full picture before making any decisions.
+
+A lot of patients are surprised to learn that treatment like this can often be broken down into payments that are less than a car payment. We work with several financing partners and can usually find something that fits.
+
+If cost was part of what gave you pause, I'd love to spend 10 minutes walking you through the options — no commitment, just information.
+
+Would that be worth a quick call?
+
+[TC Name]
+{{practice_name}} — {{phone_number}}`,
+  },
+  {
+    key: 'clinical',
+    name: 'The Clinical Update',
+    desc: "Positions the follow-up as new information or a changed situation. Best for patients who wanted to 'wait and see'.",
+    badge: 'Best for hesitant patients',
+    msg1: "Hi {{first_name}}, this is [TC Name] from {{practice_name}}. We chatted about {{treatment_type}} back in {{tx_plan_date}} — I wanted to reach out because we've had a few things change that might be relevant to your situation. Worth a quick conversation?",
+    msg2: "{{first_name}}, following up from my last message. I know timing wasn't quite right before — just wanted to check in and see if anything has changed on your end. {{doctor_name}} would love to reconnect when the time is right.",
+    msg3Subject: 'A few things worth knowing, {{first_name}}',
+    msg3Body: `Hi {{first_name}},
+
+When we last spoke about {{treatment_type}}, I know there were some things you wanted to think through. That's completely fair — and I respect that.
+
+I wanted to share a couple of things that might be helpful as you consider your options:
+
+The longer a tooth or bone issue goes unaddressed, the more complex the treatment can become — and in some cases, more costly. This isn't meant to create pressure, just something worth knowing as you weigh the timing.
+
+{{doctor_name}} has helped a lot of patients in similar situations find a path that worked for their timeline and budget. If you're open to it, even a 15-minute phone call might help clarify things.
+
+Is there a good time this week to connect?
+
+[TC Name]
+{{practice_name}} — {{phone_number}}`,
+  },
+]
+const ANGLE_BY_KEY = Object.fromEntries(ANGLES.map((a) => [a.key, a]))
 
 const STATUS_PILL = {
   draft: 'bg-slate-500/15 text-slate-400', scheduled: 'bg-sky-500/15 text-sky-300',
@@ -132,7 +179,7 @@ function TokenBar({ targetRef, setValue }) {
   )
 }
 
-function MessageEditor({ channel, day, subject, setSubject, body, setBody }) {
+function MessageEditor({ channel, day, subject, setSubject, body, setBody, onReset }) {
   const ref = useRef(null)
   const isSms = channel === 'sms'
   const count = isSms ? (body || '').length : (body || '').trim().split(/\s+/).filter(Boolean).length
@@ -143,6 +190,9 @@ function MessageEditor({ channel, day, subject, setSubject, body, setBody }) {
           {isSms ? <MessageSquare className="h-3 w-3" /> : <Mail className="h-3 w-3" />} {isSms ? 'SMS' : 'Email'}
         </span>
         <span className="rounded-md bg-surface-700 px-2 py-0.5 text-[11px] font-semibold text-slate-300">Day {day}</span>
+        {onReset && (
+          <button type="button" onClick={onReset} className="ml-auto text-[11px] font-medium text-slate-400 transition hover:text-primary-300">Reset to default</button>
+        )}
       </div>
       {!isSms && (
         <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject line" className="input mb-2 text-sm" />
@@ -170,10 +220,13 @@ function CampaignBuilder({ practiceId, onClose, onLaunched }) {
   const [treatmentTypes, setTreatmentTypes] = useState(() => new Set())
   const [selected, setSelected] = useState(() => new Set())
   const [search, setSearch] = useState('')
-  const [msg1, setMsg1] = useState(DEFAULT_MSG1)
-  const [msg2, setMsg2] = useState(DEFAULT_MSG2)
-  const [msg3Subject, setMsg3Subject] = useState(DEFAULT_MSG3_SUBJECT)
-  const [msg3Body, setMsg3Body] = useState(DEFAULT_MSG3_BODY)
+  const [angleKey, setAngleKey] = useState('gentle')
+  const [msg1, setMsg1] = useState(ANGLE_BY_KEY.gentle.msg1)
+  const [msg2, setMsg2] = useState(ANGLE_BY_KEY.gentle.msg2)
+  const [msg3Subject, setMsg3Subject] = useState(ANGLE_BY_KEY.gentle.msg3Subject)
+  const [msg3Body, setMsg3Body] = useState(ANGLE_BY_KEY.gentle.msg3Body)
+  const [pendingAngle, setPendingAngle] = useState(null)
+  const [swapping, setSwapping] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const filters = useMemo(
@@ -213,6 +266,30 @@ function CampaignBuilder({ practiceId, onClose, onLaunched }) {
 
   const completion = inDaysLabel(10)
 
+  // ── Sequence angle: swap templates, with per-message + overall dirty tracking ──
+  const angle = ANGLE_BY_KEY[angleKey]
+  const m1Dirty = msg1 !== angle.msg1
+  const m2Dirty = msg2 !== angle.msg2
+  const m3Dirty = msg3Subject !== angle.msg3Subject || msg3Body !== angle.msg3Body
+  const dirty = m1Dirty || m2Dirty || m3Dirty
+  function applyAngle(key) {
+    const a = ANGLE_BY_KEY[key]
+    setSwapping(true)
+    setAngleKey(key)
+    setMsg1(a.msg1); setMsg2(a.msg2); setMsg3Subject(a.msg3Subject); setMsg3Body(a.msg3Body)
+    requestAnimationFrame(() => requestAnimationFrame(() => setSwapping(false)))
+  }
+  function chooseAngle(key) {
+    if (key === angleKey) return
+    if (dirty) { setPendingAngle(key); return } // confirm before discarding edits
+    applyAngle(key)
+  }
+  function resetMsg(which) {
+    if (which === 1) setMsg1(angle.msg1)
+    else if (which === 2) setMsg2(angle.msg2)
+    else { setMsg3Subject(angle.msg3Subject); setMsg3Body(angle.msg3Body) }
+  }
+
   // Auto campaign name from the dominant selected treatment.
   const autoName = useMemo(() => {
     const counts = {}
@@ -231,7 +308,7 @@ function CampaignBuilder({ practiceId, onClose, onLaunched }) {
     const { data: campaign, error } = await supabase.from('reactivation_campaigns').insert({
       practice_id: practiceId,
       campaign_name: autoName,
-      angle_type: 'reactivation',
+      angle_type: angleKey,
       message_1_sms: msg1,
       message_2_sms: msg2,
       message_3_email_subject: msg3Subject,
@@ -371,16 +448,32 @@ function CampaignBuilder({ practiceId, onClose, onLaunched }) {
             </div>
           )}
 
-          {/* STEP 3 — CUSTOMIZE SEQUENCE */}
+          {/* STEP 3 — CHOOSE YOUR SEQUENCE ANGLE */}
           {step === 3 && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-base font-semibold text-white">Customize the sequence</h3>
-                <p className="mt-0.5 text-xs text-slate-500">Click a token to insert it; it auto-fills with each patient's real data when sent.</p>
+                <h3 className="text-base font-semibold text-white">Choose your sequence angle</h3>
+                <p className="mt-0.5 text-xs text-slate-500">Pick a starting point — then edit any message. Tokens auto-fill with each patient's real data when sent.</p>
               </div>
-              <MessageEditor channel="sms" day={1} body={msg1} setBody={setMsg1} />
-              <MessageEditor channel="sms" day={4} body={msg2} setBody={setMsg2} />
-              <MessageEditor channel="email" day={10} subject={msg3Subject} setSubject={setMsg3Subject} body={msg3Body} setBody={setMsg3Body} />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {ANGLES.map((a) => {
+                  const on = a.key === angleKey
+                  return (
+                    <button key={a.key} type="button" onClick={() => chooseAngle(a.key)}
+                      className={`relative rounded-xl border p-3 text-left transition ${on ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : 'border-surface-700 hover:bg-surface-800/60'}`}>
+                      {on && <Check className="absolute right-2 top-2 h-4 w-4 text-primary-300" />}
+                      <p className="pr-5 text-sm font-semibold text-white">{a.name}</p>
+                      <p className="mt-1 text-xs text-slate-400">{a.desc}</p>
+                      <span className="mt-2 inline-block rounded-full bg-surface-800 px-2 py-0.5 text-[10px] font-medium text-primary-300">{a.badge}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <div key={angleKey} className={`space-y-4 transition-opacity duration-200 ${swapping ? 'opacity-0' : 'opacity-100'}`}>
+                <MessageEditor channel="sms" day={1} body={msg1} setBody={setMsg1} onReset={m1Dirty ? () => resetMsg(1) : null} />
+                <MessageEditor channel="sms" day={4} body={msg2} setBody={setMsg2} onReset={m2Dirty ? () => resetMsg(2) : null} />
+                <MessageEditor channel="email" day={10} subject={msg3Subject} setSubject={setMsg3Subject} body={msg3Body} setBody={setMsg3Body} onReset={m3Dirty ? () => resetMsg(3) : null} />
+              </div>
               <details className="rounded-lg border border-surface-700 bg-surface-800/40 p-3">
                 <summary className="cursor-pointer text-xs font-medium text-slate-400">Preview with {previewPatient.patient_name || 'a sample patient'}</summary>
                 <div className="mt-2 space-y-2 text-xs text-slate-300">
@@ -426,6 +519,21 @@ function CampaignBuilder({ practiceId, onClose, onLaunched }) {
           )}
         </div>
       </div>
+
+      {/* Switching angles discards message edits — confirm first. */}
+      {pendingAngle && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setPendingAngle(null)} />
+          <div className="relative z-10 w-full max-w-sm rounded-xl border border-surface-700 bg-surface-900 p-5 shadow-2xl">
+            <p className="text-sm font-semibold text-white">Switch angle?</p>
+            <p className="mt-1.5 text-sm text-slate-400">Switching to “{ANGLE_BY_KEY[pendingAngle]?.name}” will reset your message edits. Continue?</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setPendingAngle(null)} className="btn-ghost text-sm">Keep my edits</button>
+              <button onClick={() => { applyAngle(pendingAngle); setPendingAngle(null) }} className="btn-primary text-sm">Switch angle</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
