@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { AlertTriangle, Search, Download, Loader2 } from 'lucide-react'
 import { runBreachInvestigation } from '../lib/queries'
 import { formatDateTime } from '../lib/consults'
-import { friendlyError } from './ErrorState'
 
 const ACTION_LABELS = {
   'consult.viewed': 'Viewed consult',
@@ -60,7 +59,9 @@ export default function BreachInvestigation() {
       setRows(data)
       setRan(true)
     } catch (e) {
-      setError(friendlyError(e) || 'Investigation failed.')
+      // Surface the real error (this is a super-admin diagnostic tool).
+      const detail = [e?.message, e?.details, e?.hint].filter(Boolean).join(' · ')
+      setError(detail ? `${detail}${e?.code ? ` [${e.code}]` : ''}` : 'Investigation failed.')
     } finally {
       setLoading(false)
     }
