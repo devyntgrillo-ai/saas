@@ -1,7 +1,8 @@
 import { Component } from 'react'
-import { AlertTriangle, RefreshCw, Loader2 } from 'lucide-react'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { reportError } from '../lib/errorReporting'
 import { isChunkLoadError, reloadForFreshBuild } from '../lib/lazyWithReload'
+import LoadingScreen from './LoadingScreen'
 
 // App-wide error boundary: catches uncaught React render errors, reports them to
 // Slack (#caselift-errors), and shows a recovery screen instead of a blank page.
@@ -31,16 +32,11 @@ export default class ErrorBoundary extends Component {
 
   render() {
     if (this.state.hasError) {
-      // Stale-chunk error → a reload is already underway; show a calm "updating"
-      // state rather than the alarming error card.
+      // Stale-chunk error → a reload is already underway. Render the SAME branded
+      // loading screen the app uses on boot, so the brief moment before the reload
+      // takes over looks like normal loading, not an error.
       if (isChunkLoadError(this.state.error)) {
-        return (
-          <div className="flex min-h-screen items-center justify-center bg-surface p-6">
-            <div className="flex items-center gap-3 text-sm text-slate-400">
-              <Loader2 className="h-5 w-5 animate-spin" /> Updating to the latest version…
-            </div>
-          </div>
-        )
+        return <LoadingScreen />
       }
       return (
         <div className="flex min-h-screen items-center justify-center bg-surface p-6">
