@@ -37,7 +37,7 @@ function readHelcimResults() {
   }
 }
 
-export default function HelcimCardForm({ amount, submitLabel = 'Pay', onApproved, onDeclined, onError }) {
+export default function HelcimCardForm({ amount, submitLabel = 'Pay', onApproved, onDeclined, onError, showAmountInLabel = true, showSecureNote = true }) {
   const [processing, setProcessing] = useState(false)
   const configured = Boolean(HELCIM_JS_TOKEN)
 
@@ -110,11 +110,13 @@ export default function HelcimCardForm({ amount, submitLabel = 'Pay', onApproved
 
         <button type="button" id="buttonProcess" onClick={pay} disabled={processing} className="btn-primary w-full justify-center">
           {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
-          {submitLabel}{amount != null ? ` — $${Number(amount).toLocaleString()}` : ''}
+          {submitLabel}{showAmountInLabel && amount != null ? ` — $${Number(amount).toLocaleString()}` : ''}
         </button>
-        <p className="flex items-center justify-center gap-1 text-[11px] text-slate-500">
-          <Lock className="h-3 w-3" /> Secured by Helcim · card details never touch our servers
-        </p>
+        {showSecureNote && (
+          <p className="flex items-center justify-center gap-1 text-[11px] text-slate-500">
+            <Lock className="h-3 w-3" /> Secured by Helcim
+          </p>
+        )}
       </form>
     </>
   )
