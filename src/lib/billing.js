@@ -133,6 +133,21 @@ export async function updateHelcimCard({ cardToken, cardLast4, cardType } = {}) 
   return data
 }
 
+// Annual upgrade: pay 10× the monthly rate once (2 months free), covered 12
+// months. The edge function charges the card on file and stops monthly billing.
+export function annualAmountFor(practice) {
+  const monthly = Number(practice?.plan_amount) > 0 ? Number(practice.plan_amount) : PLAN_PRICE_NUMERIC
+  return monthly * 10
+}
+export async function upgradeToAnnual() {
+  const { data, error } = await supabase.functions.invoke('helcim-checkout', {
+    body: { action: 'upgrade_annual' },
+  })
+  if (error) throw new Error(await edgeErrorMessage(error))
+  if (!data?.success) throw new Error(data?.error || 'Could not upgrade to annual billing. Please try again.')
+  return data
+}
+
 // Super-admin only (enforced server-side): refund a transaction.
 export async function helcimRefund({ transactionId, amount } = {}) {
   const { data, error } = await supabase.functions.invoke('helcim-checkout', {
