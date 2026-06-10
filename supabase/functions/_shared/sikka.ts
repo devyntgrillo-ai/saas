@@ -27,6 +27,11 @@ export const SIKKA_AUTHORIZE_URL = Deno.env.get("SIKKA_AUTHORIZE_URL") || "https
 // Resource paths (relative to SIKKA_BASE) - overridable.
 export const SIKKA_APPOINTMENTS_PATH = Deno.env.get("SIKKA_APPOINTMENTS_PATH") || "/appointments";
 export const SIKKA_AUTHORIZED_PRACTICES_PATH = Deno.env.get("SIKKA_AUTHORIZED_PRACTICES_PATH") || "/authorized_practices";
+// Unscheduled treatment plans. The exact v4 resource name is account-dependent
+// (Sikka exposes treatment plans / unscheduled treatment under a couple of
+// names), so it is env-overridable like the others. Confirm against the target
+// account's API portal and set SIKKA_UNSCHEDULED_TX_PATH if it differs.
+export const SIKKA_UNSCHEDULED_TX_PATH = Deno.env.get("SIKKA_UNSCHEDULED_TX_PATH") || "/unscheduled_treatment_plans";
 // Full OAuth token endpoint URL. Defaults to {base}/token but is independently
 // overridable since the token endpoint may live off the versioned API base.
 export const SIKKA_TOKEN_URL = Deno.env.get("SIKKA_TOKEN_URL") || `${SIKKA_BASE}${Deno.env.get("SIKKA_TOKEN_PATH") || "/token"}`;
