@@ -698,7 +698,7 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
       <Modal title={payMode === 'activate' ? 'Activate subscription' : 'Update payment method'} onClose={() => setPayMode(null)} maxWidth="max-w-md">
         {payMode === 'activate'
           ? <p className="mb-3 text-sm text-slate-400">{PLAN_NAME} — ${planAmount.toLocaleString()}/month. Enter your card to activate.</p>
-          : <p className="mb-3 text-sm text-slate-400">Enter a new card. It replaces the card on file for future billing — you won't be charged now.</p>}
+          : <p className="mb-3 text-sm text-slate-400">Enter a new card. It replaces the card on file for future billing. You won't be charged now.</p>}
         <HelcimCardForm
           verify={payMode === 'update'}
           customerCode={payMode === 'update' ? practice?.helcim_customer_code : undefined}
