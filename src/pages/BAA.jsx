@@ -94,20 +94,27 @@ export default function BAA() {
                 </>
               ) : (
                 <>
-                  <p className="mt-3 text-sm text-slate-300">
-                    Your account isn't linked to a practice yet.
+                  <p className="mt-3 text-sm font-medium text-slate-200">
+                    Your workspace isn't ready yet.
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    A practice must exist before the BAA can be accepted. Finish setup, then return here.
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                    If you were just invited, your access may still be finishing setup —
+                    tap Refresh in a moment. If it keeps showing this, contact whoever
+                    invited you and they can re-send your invite.
                   </p>
                   {error && (
                     <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                       {error}
                     </p>
                   )}
-                  <button onClick={handleSignOut} className="btn-ghost mt-6">
-                    Sign out
-                  </button>
+                  <div className="mt-6 flex items-center justify-center gap-3">
+                    <button onClick={() => refreshProfile?.()} className="btn-primary">
+                      Refresh
+                    </button>
+                    <button onClick={handleSignOut} className="btn-ghost">
+                      Sign out
+                    </button>
+                  </div>
                 </>
               )}
             </div>
