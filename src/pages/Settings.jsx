@@ -54,14 +54,13 @@ import {
 import { TREATMENT_TYPES } from '../lib/treatments'
 import {
   PLAN_NAME,
-  PLAN_PRICE,
+  PLAN_PRICE_NUMERIC,
   statusMeta as subStatusMeta,
   trialDaysRemaining,
   isTrialExpired,
-  createCheckout,
-  getBillingStatus,
-  createPortalSession,
+  recordHelcimPayment,
 } from '../lib/billing'
+import HelcimCardForm from '../components/HelcimCardForm'
 
 const TABS = [
   { key: 'profile', label: 'Practice Profile', icon: Building2 },
@@ -143,12 +142,9 @@ export default function Settings() {
 
   // Billing
   const [searchParams, setSearchParams] = useSearchParams()
-  const [checkoutLoading, setCheckoutLoading] = useState(false)
-  const [checkoutError, setCheckoutError] = useState('')
   const [showSuccess, setShowSuccess] = useState(false)
 
-  // After returning from a Chargebee checkout, the webhook updates the
-  // practice asynchronously - refresh the profile and surface a confirmation.
+  // After a successful in-app charge we set ?success=true; surface a confirmation.
   useEffect(() => {
     if (searchParams.get('success') === 'true') {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -160,24 +156,6 @@ export default function Settings() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  async function startCheckout() {
-    if (!practice?.id) return
-    setCheckoutError('')
-    setCheckoutLoading(true)
-    try {
-      const { url } = await createCheckout({ practiceId: practice.id, email: practice.email })
-      window.location.href = url
-    } catch (e) {
-      const msg = e?.message || ''
-      setCheckoutError(
-        /chargebee|not configured/i.test(msg)
-          ? 'Online checkout isn’t available yet - billing isn’t fully configured. Please contact support@caselift.io.'
-          : msg || 'Could not start checkout. Please try again.',
-      )
-      setCheckoutLoading(false)
-    }
-  }
 
   // Seed the local form once the practice loads.
   useEffect(() => {
@@ -438,11 +416,9 @@ export default function Settings() {
             <BillingPanel
               practice={practice}
               showSuccess={showSuccess}
-              checkoutLoading={checkoutLoading}
-              checkoutError={checkoutError}
-              onActivate={startCheckout}
               onCancel={() => setShowCancel(true)}
               onResume={() => save({ subscription_status: 'active', pause_ends_at: null }, 'Subscription resumed')}
+              onRefresh={refreshProfile}
             />
           )}
 
@@ -577,51 +553,42 @@ function ActivateButton({ label, loading, onClick }) {
   )
 }
 
-function BillingPanel({ practice, showSuccess, checkoutLoading, checkoutError, onActivate, onCancel, onResume }) {
-  // Authoritative status from the edge function; falls back to the practice
-  // record so a fetch failure never blocks the page.
-  const [live, setLive] = useState(null)
-  useEffect(() => {
-    if (!practice?.id) return
-    let on = true
-    getBillingStatus(practice.id)
-      .then((d) => on && setLive(d))
-      .catch(() => {}) // non-blocking: keep using the practice record
-    return () => { on = false }
-  }, [practice?.id])
-
-  const eff = live
-    ? { ...practice, subscription_status: live.status, trial_ends_at: live.trial_ends_at }
-    : practice
-  const status = eff?.subscription_status || 'trial'
+function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) {
+  const status = practice?.subscription_status || 'trial'
   const meta = subStatusMeta(status)
   const isActive = status === 'active'
   const isTrial = status === 'trial'
   const isPaymentFailed = status === 'past_due' || status === 'unpaid'
-  const isCancelledOrExpired = status === 'cancelled' || status === 'canceled' || status === 'expired'
-  const trialExpired = isTrial && isTrialExpired(eff)
-  const daysLeft = trialDaysRemaining(eff)
+  const trialExpired = isTrial && isTrialExpired(practice)
+  const daysLeft = trialDaysRemaining(practice)
+  const planAmount = Number(practice?.plan_amount) > 0 ? Number(practice.plan_amount) : PLAN_PRICE_NUMERIC
+  const hasCard = Boolean(practice?.helcim_customer_code)
 
-  // Chargebee customer-portal (update payment method / manage subscription).
-  const [portalBusy, setPortalBusy] = useState(false)
-  const [portalErr, setPortalErr] = useState('')
-  async function openPortal() {
-    if (!practice?.id) return
-    setPortalBusy(true)
-    setPortalErr('')
+  // Native card capture via Helcim.js (modal). 'activate' charges the plan;
+  // 'update' captures a new card. (A verify-mode Helcim.js config can be wired
+  // later so 'update' never charges; today it re-runs the plan charge.)
+  const [payMode, setPayMode] = useState(null)
+  const [err, setErr] = useState('')
+
+  async function handleApproved(res) {
+    setErr('')
     try {
-      window.location.href = await createPortalSession(practice.id)
+      // Server-verified (helcim-checkout record_payment): confirms the charge with
+      // Helcim, records it, enrolls recurring, and activates — never trusts the client.
+      await recordHelcimPayment({
+        cardToken: res.cardToken,
+        amount: Number(res.amount) || planAmount,
+        date: res.date,
+        customerCode: res.customerCode,
+        cardLast4: res.cardNumberMasked,
+        cardType: res.cardType,
+      })
+      setPayMode(null)
+      await onRefresh?.()
     } catch (e) {
-      setPortalErr(e?.message || 'Could not open the billing portal. Please try again.')
-      setPortalBusy(false)
+      setErr(e?.message || 'Your card was processed but we could not update your account — please contact support.')
     }
   }
-  const PortalButton = ({ label = 'Update Payment Method' }) => (
-    <button onClick={openPortal} disabled={portalBusy} className="btn-primary">
-      {portalBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-      {label}
-    </button>
-  )
 
   return (
     <div className="space-y-6">
@@ -634,20 +601,15 @@ function BillingPanel({ practice, showSuccess, checkoutLoading, checkoutError, o
             <AlertCircle className="h-4 w-4 shrink-0" />
             Payment failed - update your payment method to restore access.
           </span>
-          <PortalButton />
+          <button onClick={() => setPayMode('update')} className="btn-primary"><CreditCard className="h-4 w-4" /> Update payment method</button>
         </div>
       )}
-      {portalErr && (
-        <p className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{portalErr}</p>
-      )}
+      {err && <p className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{err}</p>}
 
       {showSuccess && (
         <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
-            Payment received - thank you! Your subscription is being activated. This can take a few
-            moments to reflect here.
-          </span>
+          <span>Payment received - thank you! Your subscription is active.</span>
         </div>
       )}
 
@@ -655,97 +617,81 @@ function BillingPanel({ practice, showSuccess, checkoutLoading, checkoutError, o
       <div className="mt-4 rounded-xl border border-surface-700 bg-surface-800/50 p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Current plan
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current plan</p>
             <p className="mt-1 text-xl font-bold text-white">{PLAN_NAME}</p>
-            <p className="mt-0.5 text-sm text-slate-400">{PLAN_PRICE}</p>
+            <p className="mt-0.5 text-sm text-slate-400">${planAmount.toLocaleString()}/month</p>
           </div>
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${meta.classes}`}
-          >
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${meta.classes}`}>
             {meta.label}
           </span>
         </div>
 
-        {/* Status-specific detail line */}
         {isTrial && !trialExpired && (
           <p className="mt-4 text-sm text-slate-400">
-            Free trial -{' '}
-            <span className="font-medium text-slate-200">
-              {daysLeft} {daysLeft === 1 ? 'day' : 'days'} remaining
-            </span>
-            . Activate your subscription to keep access after the trial ends.
+            Free trial - <span className="font-medium text-slate-200">{daysLeft} {daysLeft === 1 ? 'day' : 'days'} remaining</span>. Activate your subscription to keep access after the trial ends.
           </p>
         )}
         {isTrial && trialExpired && (
-          <p className="mt-4 text-sm text-amber-300">
-            Your free trial has ended. Activate your subscription to restore full access.
-          </p>
+          <p className="mt-4 text-sm text-amber-300">Your free trial has ended. Activate your subscription to restore full access.</p>
         )}
         {isActive && (
-          <p className="mt-4 text-sm text-slate-400">
-            Next billing date:{' '}
-            <span className="text-slate-200">{formatDate(practice?.next_billing_date)}</span>
-          </p>
-        )}
-        {status === 'past_due' && (
-          <p className="mt-4 text-sm text-amber-300">
-            Your last payment failed. Please update your payment method to avoid losing access.
-          </p>
+          <div className="mt-4 space-y-1 text-sm text-slate-400">
+            <p>Next billing date: <span className="text-slate-200">{formatDate(practice?.next_billing_date) || 'tracked manually'}</span></p>
+            {hasCard && (
+              <p>
+                Card on file:{' '}
+                <span className="text-slate-200">
+                  {practice?.card_type ? `${practice.card_type} ` : ''}
+                  {practice?.card_last4 ? `•••• ${practice.card_last4}` : 'saved'}
+                </span>
+                {/* TODO: card update flow — capture a new card without re-charging (verify-mode Helcim.js config). */}
+              </p>
+            )}
+          </div>
         )}
         {(status === 'cancelled' || status === 'canceled') && (
           <p className="mt-4 text-sm text-rose-300">
-            Your subscription is cancelled
-            {practice?.next_billing_date
-              ? ` and access ends on ${formatDate(practice.next_billing_date)}.`
-              : '.'}{' '}
-            Reactivate any time to continue.
+            Your subscription is cancelled{practice?.next_billing_date ? ` and access ends on ${formatDate(practice.next_billing_date)}.` : '.'} Reactivate any time to continue.
           </p>
         )}
         {status === 'paused' && (
           <p className="mt-4 text-sm text-primary-300">
-            Your account is paused
-            {practice?.pause_ends_at ? ` until ${formatDate(practice.pause_ends_at)}` : ''}. No charges during the
-            pause - resume any time.
+            Your account is paused{practice?.pause_ends_at ? ` until ${formatDate(practice.pause_ends_at)}` : ''}. No charges during the pause - resume any time.
           </p>
         )}
       </div>
 
-      {checkoutError && (
-        <p className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
-          {checkoutError}
-        </p>
-      )}
-
       {/* Actions */}
       <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
         {(isActive || isPaymentFailed) && (
-          <button
-            onClick={onCancel}
-            className="mr-auto text-sm font-medium text-slate-500 transition hover:text-rose-300"
-          >
+          <button onClick={onCancel} className="mr-auto text-sm font-medium text-slate-500 transition hover:text-rose-300">
             Cancel subscription
           </button>
         )}
-
         {status === 'paused' ? (
           <ActivateButton label="Resume subscription" loading={false} onClick={onResume} />
         ) : isActive ? (
-          <PortalButton />
-        ) : isTrial ? (
-          <ActivateButton label="Activate subscription" loading={checkoutLoading} onClick={onActivate} />
-        ) : isPaymentFailed ? (
-          <PortalButton />
-        ) : isCancelledOrExpired ? (
-          <ActivateButton label="Reactivate subscription" loading={checkoutLoading} onClick={onActivate} />
+          <button onClick={() => setPayMode('update')} className="btn-primary"><CreditCard className="h-4 w-4" /> Update payment method</button>
         ) : (
-          <ActivateButton label="Activate subscription" loading={checkoutLoading} onClick={onActivate} />
+          <button onClick={() => setPayMode('activate')} className="btn-primary"><CreditCard className="h-4 w-4" /> {status === 'cancelled' || status === 'canceled' || status === 'expired' ? 'Reactivate subscription' : 'Activate subscription'}</button>
         )}
       </div>
     </div>
 
     <AddLocationCard practiceId={practice?.id} />
+
+    {payMode && (
+      <Modal title={payMode === 'activate' ? 'Activate subscription' : 'Update payment method'} onClose={() => setPayMode(null)} maxWidth="max-w-md">
+        {payMode === 'activate' && <p className="mb-3 text-sm text-slate-400">{PLAN_NAME} — ${planAmount.toLocaleString()}/month. Enter your card to activate.</p>}
+        <HelcimCardForm
+          amount={payMode === 'activate' ? planAmount : undefined}
+          submitLabel={payMode === 'activate' ? 'Activate' : 'Save card'}
+          onApproved={handleApproved}
+          onDeclined={(r) => setErr(r?.message || 'Your card was declined. Please try another card.')}
+          onError={(m) => setErr(m)}
+        />
+      </Modal>
+    )}
     </div>
   )
 }

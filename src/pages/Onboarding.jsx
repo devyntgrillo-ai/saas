@@ -11,7 +11,6 @@ import {
   Loader2,
   ArrowRight,
   CheckCircle2,
-  Lock,
   Mail,
   Play,
   Mic,
@@ -28,8 +27,9 @@ import {
   usePersistOnboardingStep,
   useCreateOnboardingAccount,
   useOnboardingTeamInvite,
-  useStartCheckout,
 } from '../lib/queries'
+import { recordHelcimPayment } from '../lib/billing'
+import HelcimCardForm from '../components/HelcimCardForm'
 import { REF_STORAGE_KEY } from '../components/ReferralRedirect'
 
 const HEARD_FROM_OPTIONS = ['Referral', 'Instagram', 'Facebook', 'Google', 'Podcast', 'Other']
@@ -75,8 +75,8 @@ export default function Onboarding() {
   const persistStepMutation = usePersistOnboardingStep()
   const createAccountMutation = useCreateOnboardingAccount()
   const teamInviteMutation = useOnboardingTeamInvite()
-  const checkoutMutation = useStartCheckout()
-  const saving = savePatchMutation.isPending || createAccountMutation.isPending || checkoutMutation.isPending
+  const [paying, setPaying] = useState(false)
+  const saving = paying || savePatchMutation.isPending || createAccountMutation.isPending
   const [saveError, setSaveError] = useState('')
 
   // Step 1 (pre-auth): create the account. Carries referral / multi-location /
@@ -116,7 +116,7 @@ export default function Onboarding() {
   }, [isAgencyUser, navigate])
 
   // Per-step completion, derived from the practice's own data so it stays correct
-  // across reloads and the Chargebee redirect round-trip.
+  // across reloads.
   const done = useMemo(() => {
     const p = practice || {}
     return {
@@ -131,8 +131,7 @@ export default function Onboarding() {
   const doneList = STEPS.map((s) => done[s.key])
 
   // Seed the form + open the right step once the practice loads. Prefer the
-  // saved onboarding_step; otherwise the first incomplete step. Returning from
-  // Chargebee (?success) refreshes and lands on payment.
+  // saved onboarding_step; otherwise the first incomplete step.
   useEffect(() => {
     if (!practice || seeded) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -221,19 +220,28 @@ export default function Onboarding() {
     if (ok) nextStep()
   }
 
-  async function startCheckout() {
-    setSaveError('')
+  // Helcim.js charged the card client-side and returned an approved result.
+  // Persist it to the practice (status → active) and advance.
+  async function handleCardApproved(res) {
+    setPaying(true); setSaveError('')
     try {
-      const { url } = await checkoutMutation.mutateAsync({
-        practiceId,
-        email: practice?.email,
-        planAmount: practice?.plan_amount,
-        redirectPath: '/onboarding?success=true',
+      // Server verifies the charge with Helcim, records it, and enrolls recurring
+      // billing. The practice is only marked active after that server-side check —
+      // we never trust the client-side approval flag alone.
+      await recordHelcimPayment({
+        cardToken: res.cardToken,
+        amount: Number(res.amount) || planAmount,
+        date: res.date,
+        customerCode: res.customerCode,
+        cardLast4: res.cardNumberMasked,
+        cardType: res.cardType,
       })
-      window.location.href = url
+      await refreshProfile()
+      nextStep()
     } catch (e) {
-      setSaveError(e?.message || 'Could not start checkout. Please try again.')
+      setSaveError(e?.message || 'Your card was charged but we could not confirm it — please contact support.')
     }
+    setPaying(false)
   }
 
   async function acceptBaa() {
@@ -458,10 +466,16 @@ export default function Onboarding() {
                       <li key={f} className="flex items-center gap-2"><Check className="h-4 w-4 shrink-0 text-emerald-400" /> {f}</li>
                     ))}
                   </ul>
-                  <button onClick={startCheckout} disabled={saving} className="btn-primary mt-6 w-full justify-center">
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Activate, secure checkout
-                  </button>
-                  <p className="mt-2 text-center text-[11px] text-slate-500">Powered by Chargebee. Cancel anytime.</p>
+                  <div className="mt-6">
+                    <HelcimCardForm
+                      amount={planPrice}
+                      submitLabel="Activate plan"
+                      onApproved={handleCardApproved}
+                      onDeclined={(r) => setSaveError(r?.message || 'Your card was declined. Please try another card.')}
+                      onError={(m) => setSaveError(m)}
+                    />
+                  </div>
+                  <p className="mt-2 text-center text-[11px] text-slate-500">Cancel anytime · no contract.</p>
                 </div>
               )}
 
