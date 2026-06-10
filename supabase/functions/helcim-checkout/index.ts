@@ -39,7 +39,7 @@ async function helcim(endpoint: string, method = "GET", body?: object) {
 // Actions any visitor may call (needed during signup, before an account exists).
 const PUBLIC_ACTIONS = new Set(["initialize_checkout", "create_customer"]);
 // Actions that self-authenticate against the caller's own practice (not super-admin).
-const SELF_AUTH_ACTIONS = new Set(["record_payment", "update_card", "manage_subscription", "start_trial"]);
+const SELF_AUTH_ACTIONS = new Set(["record_payment", "update_card", "manage_subscription", "start_trial", "upgrade_annual"]);
 
 // Resolve a signup offer server-side (the URL is never trusted for price/trial).
 // Returns { code, price, trial_days } only if the offer is active, unexpired,
@@ -393,6 +393,82 @@ Deno.serve(async (req: Request) => {
         const { error: upErr } = await admin.from("practices").update(localPatch).eq("id", practiceId);
         if (upErr) return json({ error: upErr.message }, 500);
         return json({ success: true });
+      }
+
+      // Upgrade monthly → annual: charge 10× the monthly rate once (2 months free)
+      // against the card on file, stop the monthly subscription, and cover 12 months.
+      case "upgrade_annual": {
+        const caller = await getCaller(req);
+        if (!caller?.userId) return json({ error: "Unauthorized" }, 401);
+        if (!caller.practiceId) return json({ error: "Your account is not linked to a practice." }, 409);
+
+        const admin = createClient(
+          Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+          { auth: { autoRefreshToken: false, persistSession: false } },
+        );
+        const { data: pr } = await admin.from("practices")
+          .select("helcim_customer_code, helcim_card_token, helcim_subscription_id, plan_amount, billing_interval")
+          .eq("id", caller.practiceId).maybeSingle();
+        if (!pr) return json({ error: "Practice not found." }, 404);
+        if (pr.billing_interval === "annual") return json({ error: "You're already on annual billing." }, 409);
+        if (!pr.helcim_card_token) return json({ error: "No card on file — add a card before upgrading to annual." }, 409);
+
+        const monthly = Number(pr.plan_amount) > 0 ? Number(pr.plan_amount) : 997;
+        const annualAmount = monthly * 10; // pay 10 months, get 12
+        const TEST_MODE = Deno.env.get("HELCIM_TEST_MODE") === "true";
+
+        // 1) Charge the annual amount once against the stored card.
+        const idem = crypto.randomUUID().replace(/-/g, "").slice(0, 25);
+        const payRes = await fetch(`${HELCIM_BASE}/payment/purchase`, {
+          method: "POST",
+          headers: { "api-token": HELCIM_API_KEY!, "idempotency-key": idem, "Content-Type": "application/json", accept: "application/json" },
+          body: JSON.stringify({
+            amount: annualAmount,
+            currency: "USD",
+            ipAddress: "0.0.0.0",
+            customerCode: pr.helcim_customer_code || undefined,
+            cardData: { cardToken: pr.helcim_card_token },
+          }),
+        });
+        const payData = await payRes.json().catch(() => ({}));
+        const approved = payRes.ok && String(payData.status ?? "").toUpperCase() === "APPROVED";
+        if (!approved && !TEST_MODE) {
+          console.error("upgrade_annual purchase failed:", payRes.status, JSON.stringify(payData).slice(0, 300));
+          return json({ error: "We couldn't process the annual charge on your card on file. Please update your card and try again." }, 402);
+        }
+        if (!approved) console.warn("upgrade_annual: TEST MODE — purchase not confirmed; proceeding.");
+        const txnId = (payData.transactionId ?? payData.id) || null;
+
+        // 2) Stop the monthly subscription so they aren't also billed monthly.
+        if (pr.helcim_subscription_id) {
+          try {
+            const idem2 = crypto.randomUUID().replace(/-/g, "").slice(0, 25);
+            await fetch(`${HELCIM_BASE}/subscriptions`, {
+              method: "PATCH",
+              headers: { "api-token": HELCIM_API_KEY!, "idempotency-key": idem2, "Content-Type": "application/json", accept: "application/json" },
+              body: JSON.stringify({ subscriptions: [{ id: Number(pr.helcim_subscription_id), status: "cancelled" }] }),
+            });
+          } catch (e) {
+            console.error("upgrade_annual: could not cancel monthly subscription:", (e as Error)?.message);
+          }
+        }
+
+        // 3) Cover the next 12 months. (Annual auto-renewal needs an annual Helcim
+        //    plan — tracked as a follow-up; this charge covers the year.)
+        const nextBilling = new Date(Date.now() + 365 * 86_400_000).toISOString();
+        const { error: upErr } = await admin.from("practices").update({
+          subscription_status: "active",
+          billing_status: "active",
+          billing_interval: "annual",
+          annual_amount: annualAmount,
+          annual_started_at: new Date().toISOString(),
+          next_billing_date: nextBilling,
+          helcim_subscription_id: null,
+          ...(txnId ? { helcim_transaction_id: txnId } : {}),
+        }).eq("id", caller.practiceId);
+        if (upErr) return json({ error: `Charged your annual amount but could not update your account — please contact support.` }, 500);
+
+        return json({ success: true, amount: annualAmount, nextBillingDate: nextBilling });
       }
 
       case "initialize_checkout": {
