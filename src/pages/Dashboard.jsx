@@ -114,6 +114,7 @@ export default function Dashboard() {
     messageOutcomes: [],
   }
   const implantApptsWeek = data?.implantApptsWeek ?? 0
+  const pmsUnscheduled = data?.pmsUnscheduled ?? { count: 0, value: 0 }
 
   const prodMetrics = useMemo(
     () =>
@@ -188,6 +189,12 @@ export default function Dashboard() {
       closeRate: closeRateThisMonth,
     }
   }, [consults, messages, activity, implantApptsWeek, dashExtras.inboundRepliesWeek, prodMetrics.roi, closeRateThisMonth])
+
+  // Prefer the PMS's own live unscheduled-treatment list when it's synced;
+  // otherwise fall back to the consult-based figures so the card always works.
+  const usePmsUnscheduled = pmsUnscheduled.count > 0
+  const unscheduledValue = usePmsUnscheduled ? pmsUnscheduled.value : kpis.unscheduledTxValue
+  const unscheduledCount = usePmsUnscheduled ? pmsUnscheduled.count : kpis.unscheduledTxPlans
 
   if (isAgencyUser && !practiceId) {
     return <Navigate to="/agency" replace />
@@ -273,7 +280,7 @@ export default function Dashboard() {
                 </p>
                 <p className="mt-0.5 text-xs text-slate-500">CaseLift-assisted</p>
               </div>
-              <KpiCard icon={ClipboardList} accent="primary" label="Unscheduled TX Plans" value={formatMoney(kpis.unscheduledTxValue)} sub={`${kpis.unscheduledTxPlans} unscheduled tx plans`} />
+              <KpiCard icon={ClipboardList} accent="primary" label="Unscheduled TX Plans" value={formatMoney(unscheduledValue)} sub={`${unscheduledCount} unscheduled tx plans`} />
               <KpiCard icon={Clock} accent="violet" label="Hours Saved" value={`${kpis.hoursSaved}h`} sub={`${kpis.messagesSent} auto follow-ups`} />
               <KpiCard icon={Award} accent="green" label="ROI This Month" value={kpis.roi ? `${kpis.roi}x ROI` : '-'} sub="Production ÷ Subscription" />
             </div>

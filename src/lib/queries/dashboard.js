@@ -31,7 +31,7 @@ export async function fetchDashboardBundle(practiceId) {
   const weekStart = startOfWeek()
   const weekStartIso = weekStart.toISOString()
 
-  const [{ data: consults, error: ce }, { data: messages, error: me }, convosRes, apptRes, extras] =
+  const [{ data: consults, error: ce }, { data: messages, error: me }, convosRes, apptRes, extras, pmsTxRes] =
     await Promise.all([
       supabase
         .from('consults')
@@ -51,9 +51,21 @@ export async function fetchDashboardBundle(practiceId) {
         .eq('is_implant_consult', true)
         .gte('appointment_time', weekStartIso),
       fetchDashboardExtras(practiceId, weekStartIso),
+      // Unscheduled treatment plans pulled live from the PMS. Tolerant: if the
+      // table doesn't exist yet / isn't synced, this resolves to an error we
+      // ignore and the dashboard falls back to the consult-based count.
+      supabase.from('pms_unscheduled_treatments').select('tx_value').eq('practice_id', practiceId),
     ])
 
   if (ce || me) throw ce || me
+
+  // Roll up the PMS unscheduled-treatment list (count + total value). Only used
+  // by the dashboard when there's at least one row; otherwise it falls back.
+  const pmsRows = pmsTxRes?.error ? [] : pmsTxRes?.data || []
+  const pmsUnscheduled = {
+    count: pmsRows.length,
+    value: pmsRows.reduce((sum, r) => sum + (Number(r.tx_value) || 0), 0),
+  }
 
   return {
     consults: consults || [],
@@ -61,6 +73,7 @@ export async function fetchDashboardBundle(practiceId) {
     dashExtras: extras,
     unreadConvos: (convosRes.data || []).filter((x) => (x.unread_count || 0) > 0).length,
     implantApptsWeek: apptRes.count || 0,
+    pmsUnscheduled,
   }
 }
 
