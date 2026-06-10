@@ -1,8 +1,13 @@
+import { useState } from 'react'
 import {
+  Bold,
   ChevronDown,
   FileText,
   Image,
+  Italic,
   Link2,
+  List,
+  ListOrdered,
   Loader2,
   Mail,
   Maximize2,
@@ -18,6 +23,38 @@ import {
   Zap,
 } from 'lucide-react'
 import ChannelToggle from './ChannelToggle'
+
+// Wrap/insert markdown around the textarea's current selection. The email send
+// path (mailgun-send) renders this markdown to HTML, so bold/italic/lists show
+// up formatted in the delivered email.
+function applyMarkdown(textareaRef, draft, onDraftChange, kind) {
+  const el = textareaRef?.current
+  const start = el?.selectionStart ?? draft.length
+  const end = el?.selectionEnd ?? draft.length
+  const selected = draft.slice(start, end)
+  const before = draft.slice(0, start)
+  const after = draft.slice(end)
+  const atLineStart = !before || before.endsWith('\n')
+  let insert
+  if (kind === 'bold') insert = `**${selected || 'bold text'}**`
+  else if (kind === 'italic') insert = `_${selected || 'italic text'}_`
+  else if (kind === 'bullet') {
+    const lines = (selected || 'List item').split('\n').map((l) => (l.trim() ? `- ${l.replace(/^[-\d.]+\s*/, '')}` : l))
+    insert = `${atLineStart ? '' : '\n'}${lines.join('\n')}`
+  } else if (kind === 'number') {
+    const lines = (selected || 'List item').split('\n').map((l, i) => (l.trim() ? `${i + 1}. ${l.replace(/^[-\d.]+\s*/, '')}` : l))
+    insert = `${atLineStart ? '' : '\n'}${lines.join('\n')}`
+  } else return
+  const next = before + insert + after
+  onDraftChange(next)
+  // Re-focus and place the cursor at the end of the inserted text.
+  requestAnimationFrame(() => {
+    if (!el) return
+    el.focus()
+    const pos = (before + insert).length
+    try { el.setSelectionRange(pos, pos) } catch { /* noop */ }
+  })
+}
 
 function ToolbarIcon({ title, onClick, disabled, active, children }) {
   return (
@@ -68,6 +105,8 @@ export default function EmailComposer({
   patientFirst,
   practiceDoctor,
 }) {
+  const [formatOpen, setFormatOpen] = useState(false)
+  const fmt = (kind) => { applyMarkdown(textareaRef, draft, onDraftChange, kind); setFormatOpen(false) }
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       {/* Tab bar */}
@@ -120,9 +159,23 @@ export default function EmailComposer({
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-2 py-1.5">
         <div className="relative flex flex-wrap items-center gap-0.5">
-          <ToolbarIcon title="Formatting (coming soon)" disabled>
-            <Type className="h-4 w-4" />
-          </ToolbarIcon>
+          <div className="relative">
+            <ToolbarIcon
+              title="Formatting"
+              active={formatOpen}
+              onClick={() => { setFormatOpen((v) => !v); onEmojiOpenChange(false); onSnippetsOpenChange(false) }}
+            >
+              <Type className="h-4 w-4" />
+            </ToolbarIcon>
+            {formatOpen && (
+              <div className="absolute bottom-full left-0 z-20 mb-2 flex items-center gap-0.5 rounded-xl border border-gray-200 bg-white p-1 shadow-lg">
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('bold')} title="Bold" className="rounded p-1.5 text-gray-600 transition hover:bg-gray-100"><Bold className="h-4 w-4" /></button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('italic')} title="Italic" className="rounded p-1.5 text-gray-600 transition hover:bg-gray-100"><Italic className="h-4 w-4" /></button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('bullet')} title="Bulleted list" className="rounded p-1.5 text-gray-600 transition hover:bg-gray-100"><List className="h-4 w-4" /></button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('number')} title="Numbered list" className="rounded p-1.5 text-gray-600 transition hover:bg-gray-100"><ListOrdered className="h-4 w-4" /></button>
+              </div>
+            )}
+          </div>
 
           <div className="relative">
             <ToolbarIcon
@@ -231,7 +284,7 @@ export default function EmailComposer({
               type="submit"
               disabled={!draft.trim() || sending || missingPatientEmail}
               onClick={onSubmit}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold !text-white transition hover:bg-blue-700 disabled:opacity-50"
             >
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </button>
@@ -239,7 +292,7 @@ export default function EmailComposer({
               type="button"
               disabled
               title="More send options (coming soon)"
-              className="border-l border-blue-500/50 px-1.5 text-white opacity-60"
+              className="border-l border-blue-500/50 px-1.5 !text-white opacity-60"
             >
               <ChevronDown className="h-4 w-4" />
             </button>

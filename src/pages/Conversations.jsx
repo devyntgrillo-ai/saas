@@ -1286,7 +1286,7 @@ export default function Conversations() {
               </div>
             )}
 
-            <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-white px-4 py-2">
+            <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-white px-4 pt-2 pb-5">
               {loadingThread ? (
                 <div className="py-8 text-center text-sm text-gray-500">Loading messages...</div>
               ) : (

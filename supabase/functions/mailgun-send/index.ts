@@ -133,7 +133,7 @@ Deno.serve(async (req: Request) => {
     const html =
       `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.6;color:#111827">` +
       `<p style="margin:0 0 12px;color:#6b7280;font-size:13px">${escapeHtml(fromName)}</p>` +
-      `<div style="white-space:pre-wrap">${escapeHtml(body)}</div></div>`;
+      `<div>${renderMarkdown(body)}</div></div>`;
 
     const platformFrom = mailgunFromAddress("noreply");
     const platformDomain = mailgunPlatformDomain();
@@ -246,5 +246,41 @@ Deno.serve(async (req: Request) => {
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Minimal, XSS-safe markdown → HTML for composed emails. Escapes first, then
+// applies the limited formatting the composer's toolbar produces: **bold**,
+// _italic_, bulleted (- ) and numbered (1. ) lists, links, and newlines.
+function renderMarkdown(raw: string): string {
+  let s = escapeHtml(raw);
+  s = s.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>');
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/_([^_\n]+)_/g, "<em>$1</em>");
+  const lines = s.split("\n");
+  let out = "";
+  let inUl = false;
+  let inOl = false;
+  const closeLists = () => {
+    if (inUl) { out += "</ul>"; inUl = false; }
+    if (inOl) { out += "</ol>"; inOl = false; }
+  };
+  for (const line of lines) {
+    const ul = line.match(/^\s*-\s+(.*)$/);
+    const ol = line.match(/^\s*\d+\.\s+(.*)$/);
+    if (ul) {
+      if (inOl) { out += "</ol>"; inOl = false; }
+      if (!inUl) { out += '<ul style="margin:0 0 12px;padding-left:22px">'; inUl = true; }
+      out += `<li>${ul[1]}</li>`;
+    } else if (ol) {
+      if (inUl) { out += "</ul>"; inUl = false; }
+      if (!inOl) { out += '<ol style="margin:0 0 12px;padding-left:22px">'; inOl = true; }
+      out += `<li>${ol[1]}</li>`;
+    } else {
+      closeLists();
+      out += line + "<br>";
+    }
+  }
+  closeLists();
+  return out;
 }
 

@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import {
-  Bell,
   ChevronDown,
   CornerUpLeft,
   Mail,
@@ -192,7 +191,7 @@ function ThreadMessageRow({
             <button
               type="button"
               onClick={() => onReply({ subject, body: message.body })}
-              className="mt-4 inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+              className="mt-4 inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold !text-white transition hover:bg-blue-700"
             >
               <CornerUpLeft className="h-4 w-4" />
               Reply
@@ -230,7 +229,7 @@ export default function ConversationThreadCard({
     : messages.length === 1
       ? 'Text message'
       : `Text conversation (${messages.length})`
-  const HeaderIcon = isEmail ? Bell : MessageSquare
+  const HeaderIcon = isEmail ? Mail : MessageSquare
   const subject = isEmail ? headerTitle : null
 
   const earlier = messages.slice(0, -1)
@@ -260,7 +259,7 @@ export default function ConversationThreadCard({
   return (
     <article className="w-full max-w-md overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className="flex items-center gap-2 border-b border-gray-200 bg-gray-100 px-3 py-2.5">
-        <HeaderIcon className={`h-4 w-4 shrink-0 ${isEmail ? 'text-amber-500' : 'text-emerald-600'}`} />
+        <HeaderIcon className={`h-4 w-4 shrink-0 ${isEmail ? 'text-blue-500' : 'text-emerald-600'}`} />
         <p className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800">{headerTitle}</p>
         <button
           type="button"
