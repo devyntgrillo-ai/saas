@@ -522,7 +522,7 @@ export default function Onboarding() {
           {stepKey === 'invite' && (
             <section>
               <h1 className="text-2xl font-bold tracking-tight text-white">Who will be recording consultations?</h1>
-              <p className="mt-1.5 text-sm text-slate-400">This could be you, a front desk team member, or anyone who sits in on consults.</p>
+              <p className="mt-1.5 text-sm text-slate-400">This could be you, a treatment coordinator, or anyone who sits in on consults.</p>
 
               <div className="mt-6 space-y-4">
                 <Field label="Name"><input className="input" value={inviteName} onChange={(e) => setInviteName(e.target.value)} placeholder="Alex Morgan" /></Field>
