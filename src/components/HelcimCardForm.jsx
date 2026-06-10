@@ -11,6 +11,9 @@ import { Loader2, Lock } from 'lucide-react'
 // Config token is a FRONTEND token (tied to a Helcim.js config); set it as
 // VITE_HELCIM_JS_TOKEN. Until then this renders a "not configured" notice.
 
+// TODO: TEST MODE ACTIVE — Helcim.js config 10465 has test:1. Flip to test:0 in the
+// Helcim dashboard before go-live.
+// TODO: enable amount hashing (enforceHashing) in Helcim dashboard config 10465 before go-live.
 const HELCIM_JS_TOKEN = import.meta.env.VITE_HELCIM_JS_TOKEN || ''
 
 function readHelcimResults() {
@@ -23,9 +26,10 @@ function readHelcimResults() {
     approved: String(response) === '1',
     response,
     message: get('responseMessage'),
-    transactionId: get('transactionId'),
+    transactionId: get('transactionId'), // NOTE: Helcim.js form id ≠ Payment-API transactionId; the server resolves the real one by cardToken
     cardToken: get('cardToken'),
     amount: get('amount'),
+    date: get('date'), // echoed transaction timestamp — used server-side to scope the verification window
     cardNumberMasked: get('cardNumber'),
     cardType: get('cardType'),
     approvalCode: get('approvalCode'),

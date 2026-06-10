@@ -79,15 +79,26 @@ export function planAmountFromUrl(search = window.location.search) {
   return ALLOWED_PLAN_AMOUNTS.includes(raw) ? raw : PLAN_PRICE_NUMERIC
 }
 
-// Persist a successful Helcim charge onto the practice (called after Helcim.js
-// returns an approved result client-side).
-export async function recordHelcimPayment({ practiceId, transactionId, customerCode, invoiceNumber } = {}) {
-  const patch = { subscription_status: 'active' }
-  if (transactionId) patch.helcim_transaction_id = transactionId
-  if (customerCode) patch.helcim_customer_code = customerCode
-  if (invoiceNumber) patch.helcim_invoice_number = invoiceNumber
-  const { error } = await supabase.from('practices').update(patch).eq('id', practiceId)
-  if (error) throw error
+// Record a Helcim.js charge — VERIFIED SERVER-SIDE. The browser is never trusted
+// to flip billing on: we hand the card token + amount + date to the
+// helcim-checkout edge function, which confirms an APPROVED transaction directly
+// with Helcim, records it, enrolls the recurring subscription, and only then
+// marks the practice active. Returns { success, subscriptionId, transactionId }.
+export async function recordHelcimPayment({ cardToken, amount, date, customerCode, cardLast4, cardType } = {}) {
+  const { data, error } = await supabase.functions.invoke('helcim-checkout', {
+    body: {
+      action: 'record_payment',
+      card_token: cardToken,
+      amount,
+      date,
+      customer_code: customerCode,
+      card_last4: cardLast4,
+      card_type: cardType,
+    },
+  })
+  if (error) throw new Error(await edgeErrorMessage(error))
+  if (!data?.success) throw new Error(data?.error || 'We could not confirm your payment. Please contact support.')
+  return data
 }
 
 // Create (or upsert) a Helcim customer record via the edge function.

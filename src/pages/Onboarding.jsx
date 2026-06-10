@@ -26,7 +26,7 @@ import {
   useCreateOnboardingAccount,
   useOnboardingTeamInvite,
 } from '../lib/queries'
-import { recordHelcimPayment, createHelcimCustomer } from '../lib/billing'
+import { recordHelcimPayment } from '../lib/billing'
 import HelcimCardForm from '../components/HelcimCardForm'
 import PhoneSetupWizard from '../components/PhoneSetupWizard'
 import { REF_STORAGE_KEY } from '../components/ReferralRedirect'
@@ -217,18 +217,21 @@ export default function Onboarding() {
   async function handleCardApproved(res) {
     setPaying(true); setSaveError('')
     try {
-      await recordHelcimPayment({ practiceId, transactionId: res.transactionId, customerCode: res.customerCode })
-      // Best-effort: also create a Helcim customer record for future billing.
-      createHelcimCustomer({
-        email: practice?.email,
-        name: [practice?.doctor_first, practice?.doctor_last].filter(Boolean).join(' ') || practice?.name,
-        practiceName: practice?.name,
-        phone: practice?.phone,
-      }).catch(() => {})
+      // Server verifies the charge with Helcim, records it, and enrolls recurring
+      // billing. The practice is only marked active after that server-side check —
+      // we never trust the client-side approval flag alone.
+      await recordHelcimPayment({
+        cardToken: res.cardToken,
+        amount: Number(res.amount) || planAmount,
+        date: res.date,
+        customerCode: res.customerCode,
+        cardLast4: res.cardNumberMasked,
+        cardType: res.cardType,
+      })
       await refreshProfile()
       nextStep()
     } catch (e) {
-      setSaveError(e?.message || 'Your card was charged but we could not update your account — please contact support.')
+      setSaveError(e?.message || 'Your card was charged but we could not confirm it — please contact support.')
     }
     setPaying(false)
   }

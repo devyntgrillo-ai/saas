@@ -573,7 +573,16 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
   async function handleApproved(res) {
     setErr('')
     try {
-      await recordHelcimPayment({ practiceId: practice.id, transactionId: res.transactionId, customerCode: res.customerCode })
+      // Server-verified (helcim-checkout record_payment): confirms the charge with
+      // Helcim, records it, enrolls recurring, and activates — never trusts the client.
+      await recordHelcimPayment({
+        cardToken: res.cardToken,
+        amount: Number(res.amount) || planAmount,
+        date: res.date,
+        customerCode: res.customerCode,
+        cardLast4: res.cardNumberMasked,
+        cardType: res.cardType,
+      })
       setPayMode(null)
       await onRefresh?.()
     } catch (e) {
@@ -626,10 +635,19 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
           <p className="mt-4 text-sm text-amber-300">Your free trial has ended. Activate your subscription to restore full access.</p>
         )}
         {isActive && (
-          <p className="mt-4 text-sm text-slate-400">
-            Next billing date: <span className="text-slate-200">{formatDate(practice?.next_billing_date) || 'tracked manually'}</span>
-            {hasCard && <span className="ml-2 text-slate-500">· card on file</span>}
-          </p>
+          <div className="mt-4 space-y-1 text-sm text-slate-400">
+            <p>Next billing date: <span className="text-slate-200">{formatDate(practice?.next_billing_date) || 'tracked manually'}</span></p>
+            {hasCard && (
+              <p>
+                Card on file:{' '}
+                <span className="text-slate-200">
+                  {practice?.card_type ? `${practice.card_type} ` : ''}
+                  {practice?.card_last4 ? `•••• ${practice.card_last4}` : 'saved'}
+                </span>
+                {/* TODO: card update flow — capture a new card without re-charging (verify-mode Helcim.js config). */}
+              </p>
+            )}
+          </div>
         )}
         {(status === 'cancelled' || status === 'canceled') && (
           <p className="mt-4 text-sm text-rose-300">
