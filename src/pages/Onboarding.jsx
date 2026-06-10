@@ -353,7 +353,7 @@ export default function Onboarding() {
 
       {/* ── Content panel ──────────────────────────────────────────────────── */}
       <main className="flex flex-1 items-start justify-center px-5 py-10 sm:px-10 lg:items-center lg:py-16">
-        <div className="w-full max-w-lg">
+        <div className="onboarding-form w-full max-w-lg">
           {saveError && (
             <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{saveError}</p>
           )}
