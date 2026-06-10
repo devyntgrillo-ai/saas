@@ -595,11 +595,6 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
 
       {/* Actions */}
       <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
-        {(isActive || isPaymentFailed) && (
-          <button onClick={onCancel} className="mr-auto text-sm font-medium text-slate-500 transition hover:text-rose-300">
-            Cancel subscription
-          </button>
-        )}
         {status === 'paused' ? (
           <ActivateButton label="Resume subscription" loading={false} onClick={onResume} />
         ) : isActive ? (
@@ -664,6 +659,15 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
           onError={(m) => setErr(m)}
         />
       </Modal>
+    )}
+
+    {/* Tucked into the bottom-right corner — intentionally low-key. */}
+    {(isActive || isPaymentFailed) && (
+      <div className="flex justify-end pt-2">
+        <button onClick={onCancel} className="text-xs text-slate-600 transition hover:text-rose-400">
+          Cancel subscription
+        </button>
+      </div>
     )}
     </div>
   )
