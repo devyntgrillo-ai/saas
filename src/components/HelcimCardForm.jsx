@@ -109,6 +109,11 @@ export default function HelcimCardForm({ amount, submitLabel = 'Pay', onApproved
           <div><label className="label">Exp. year</label><input type="text" id="cardExpiryYear" className="input" inputMode="numeric" placeholder="YY" maxLength={2} /></div>
           <div><label className="label">CVV</label><input type="text" id="cardCVV" className="input" inputMode="numeric" placeholder="•••" maxLength={4} /></div>
         </div>
+        {/* Required: both Helcim configs have allowNoAvs:0, so AVS (street + ZIP) is mandatory. */}
+        <div>
+          <label className="label">Billing address</label>
+          <input type="text" id="cardHolderAddress" className="input" autoComplete="address-line1" placeholder="123 Main St" />
+        </div>
         <div>
           <label className="label">Billing ZIP</label>
           <input type="text" id="cardHolderPostalCode" className="input" autoComplete="postal-code" />
