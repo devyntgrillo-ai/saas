@@ -559,48 +559,48 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
           </span>
         </div>
 
-        {isTrial && !trialExpired && (
-          <p className="mt-4 text-sm text-slate-400">
-            Free trial - <span className="font-medium text-slate-200">{daysLeft} {daysLeft === 1 ? 'day' : 'days'} remaining</span>. Activate your subscription to keep access after the trial ends.
-          </p>
-        )}
-        {isTrial && trialExpired && (
-          <p className="mt-4 text-sm text-amber-300">Your free trial has ended. Activate your subscription to restore full access.</p>
-        )}
-        {isActive && (
-          <div className="mt-4 space-y-1 text-sm text-slate-400">
-            {hasCard && (
-              <p>
+        {/* Status detail + action share one row so the button sits inline with
+            the plan text instead of adding an empty band below it. */}
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
+          <div className="text-sm">
+            {isTrial && !trialExpired && (
+              <p className="text-slate-400">
+                Free trial - <span className="font-medium text-slate-200">{daysLeft} {daysLeft === 1 ? 'day' : 'days'} remaining</span>. Activate your subscription to keep access after the trial ends.
+              </p>
+            )}
+            {isTrial && trialExpired && (
+              <p className="text-amber-300">Your free trial has ended. Activate your subscription to restore full access.</p>
+            )}
+            {isActive && hasCard && (
+              <p className="text-slate-400">
                 Card on file:{' '}
                 <span className="text-slate-200">
                   {practice?.card_type ? `${practice.card_type} ` : ''}
                   {practice?.card_last4 ? `•••• ${practice.card_last4}` : 'saved'}
                 </span>
-                {/* TODO: card update flow — capture a new card without re-charging (verify-mode Helcim.js config). */}
+              </p>
+            )}
+            {(status === 'cancelled' || status === 'canceled') && (
+              <p className="text-rose-300">
+                Your subscription is cancelled{practice?.next_billing_date ? ` and access ends on ${formatDate(practice.next_billing_date)}.` : '.'} Reactivate any time to continue.
+              </p>
+            )}
+            {status === 'paused' && (
+              <p className="text-primary-300">
+                Your account is paused{practice?.pause_ends_at ? ` until ${formatDate(practice.pause_ends_at)}` : ''}. No charges during the pause - resume any time.
               </p>
             )}
           </div>
-        )}
-        {(status === 'cancelled' || status === 'canceled') && (
-          <p className="mt-4 text-sm text-rose-300">
-            Your subscription is cancelled{practice?.next_billing_date ? ` and access ends on ${formatDate(practice.next_billing_date)}.` : '.'} Reactivate any time to continue.
-          </p>
-        )}
-        {status === 'paused' && (
-          <p className="mt-4 text-sm text-primary-300">
-            Your account is paused{practice?.pause_ends_at ? ` until ${formatDate(practice.pause_ends_at)}` : ''}. No charges during the pause - resume any time.
-          </p>
-        )}
 
-        {/* Actions */}
-        <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
-          {status === 'paused' ? (
-            <ActivateButton label="Resume subscription" loading={false} onClick={onResume} />
-          ) : isActive ? (
-            <button onClick={() => setPayMode('update')} className="btn-primary"><CreditCard className="h-4 w-4" /> Update payment method</button>
-          ) : (
-            <button onClick={() => setPayMode('activate')} className="btn-primary"><CreditCard className="h-4 w-4" /> {status === 'cancelled' || status === 'canceled' || status === 'expired' ? 'Reactivate subscription' : 'Activate subscription'}</button>
-          )}
+          <div className="shrink-0">
+            {status === 'paused' ? (
+              <ActivateButton label="Resume subscription" loading={false} onClick={onResume} />
+            ) : isActive ? (
+              <button onClick={() => setPayMode('update')} className="btn-primary"><CreditCard className="h-4 w-4" /> Update payment method</button>
+            ) : (
+              <button onClick={() => setPayMode('activate')} className="btn-primary"><CreditCard className="h-4 w-4" /> {status === 'cancelled' || status === 'canceled' || status === 'expired' ? 'Reactivate subscription' : 'Activate subscription'}</button>
+            )}
+          </div>
         </div>
       </div>
     </div>
