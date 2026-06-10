@@ -51,7 +51,6 @@ import {
   useResendInvitation,
   useUpdatePractice,
 } from '../lib/queries'
-import { TREATMENT_TYPES } from '../lib/treatments'
 import {
   PLAN_NAME,
   PLAN_PRICE_NUMERIC,
@@ -327,7 +326,6 @@ export default function Settings() {
                 </button>
               </div>
             </div>
-            <TreatmentDefaultsCard practice={practice} onSave={save} saving={saving} />
             <AppearanceCard />
             </div>
           )}
@@ -467,80 +465,6 @@ function AppearanceCard() {
           {isLight ? 'Light' : 'Dark'}
         </button>
       </div>
-    </div>
-  )
-}
-
-// Per-treatment fallback values used when the PMS doesn't supply an actual
-// treatment-plan value. Persisted as a JSONB object on practices.treatment_defaults,
-// keyed by treatment value (e.g. { dental_implants: 28000 }).
-function TreatmentDefaultsCard({ practice, onSave, saving }) {
-  const [values, setValues] = useState({})
-
-  useEffect(() => {
-    const defaults =
-      practice?.treatment_defaults && typeof practice.treatment_defaults === 'object'
-        ? practice.treatment_defaults
-        : {}
-    const next = {}
-    for (const type of TREATMENT_TYPES) {
-      const v = defaults[type.value]
-      next[type.value] = v == null ? '' : String(v)
-    }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setValues(next)
-  }, [practice])
-
-  function handleSave() {
-    const collected = {}
-    for (const type of TREATMENT_TYPES) {
-      const n = Number(values[type.value])
-      if (Number.isFinite(n) && n > 0) collected[type.value] = n
-    }
-    onSave({ treatment_defaults: collected }, 'Treatment values saved')
-  }
-
-  return (
-    <div className="card p-6">
-      <h2 className="text-base font-semibold text-white">Default Treatment Values</h2>
-      <p className="mt-2 text-sm text-slate-400">
-        Used when actual PMS values aren&apos;t available. Set your practice&apos;s typical treatment
-        plan values.
-      </p>
-
-      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {TREATMENT_TYPES.map((type) => (
-          <Field key={type.value} label={type.label}>
-            <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm text-slate-500">
-                $
-              </span>
-              <input
-                className="input pl-7"
-                type="number"
-                min="0"
-                inputMode="numeric"
-                value={values[type.value] ?? ''}
-                onChange={(e) =>
-                  setValues((prev) => ({ ...prev, [type.value]: e.target.value }))
-                }
-                placeholder={`e.g. ${type.avgValue}`}
-              />
-            </div>
-          </Field>
-        ))}
-      </div>
-
-      <div className="mt-6 flex justify-end">
-        <button onClick={handleSave} disabled={saving} className="btn-primary">
-          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-          Save
-        </button>
-      </div>
-
-      <p className="mt-4 text-xs text-slate-500">
-        These are fallbacks only. Connect your PMS for accurate real-time values.
-      </p>
     </div>
   )
 }
