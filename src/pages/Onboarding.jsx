@@ -34,6 +34,9 @@ import HelcimCardForm from '../components/HelcimCardForm'
 import { REF_STORAGE_KEY } from '../components/ReferralRedirect'
 
 const HEARD_FROM_OPTIONS = ['Referral', 'Instagram', 'Facebook', 'Google', 'Podcast', 'Other']
+// Persist the special-offer code so it survives the /signup → /onboarding route
+// change (which strips ?offer=) after the account is created.
+const OFFER_STORAGE_KEY = 'cl_signup_offer'
 
 function parsePlanAmount(searchParams) {
   const raw = Number(searchParams.get('plan'))
@@ -108,10 +111,15 @@ export default function Onboarding() {
   // Special-pricing / free-trial signup links (super-admin generated). The offer
   // code is the server-trusted source of price + trial; here we only resolve it
   // for display. Falls back to standard pricing if absent/expired.
-  const offerCode = useMemo(() => (searchParams.get('offer') || '').trim(), [searchParams])
+  const [offerCode] = useState(() => {
+    let stored = ''
+    try { stored = localStorage.getItem(OFFER_STORAGE_KEY) || '' } catch { /* storage unavailable */ }
+    return (searchParams.get('offer') || stored || '').trim()
+  })
   const [offer, setOffer] = useState(null)
   useEffect(() => {
     if (!offerCode) return
+    try { localStorage.setItem(OFFER_STORAGE_KEY, offerCode) } catch { /* noop */ }
     let on = true
     supabase.rpc('resolve_signup_offer', { p_code: offerCode }).then(({ data }) => {
       if (on && Array.isArray(data) && data[0]?.valid) setOffer(data[0])
@@ -253,6 +261,7 @@ export default function Onboarding() {
         cardType: res.cardType,
         offerCode: offer?.code,
       })
+      try { localStorage.removeItem(OFFER_STORAGE_KEY) } catch { /* noop */ }
       await refreshProfile()
       nextStep()
     } catch (e) {
@@ -273,6 +282,7 @@ export default function Onboarding() {
         cardLast4: res.cardNumberMasked,
         cardType: res.cardType,
       })
+      try { localStorage.removeItem(OFFER_STORAGE_KEY) } catch { /* noop */ }
       await refreshProfile()
       nextStep()
     } catch (e) {
