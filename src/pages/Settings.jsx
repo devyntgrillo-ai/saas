@@ -59,6 +59,7 @@ import {
   trialDaysRemaining,
   isTrialExpired,
   recordHelcimPayment,
+  updateHelcimCard,
 } from '../lib/billing'
 import HelcimCardForm from '../components/HelcimCardForm'
 
@@ -590,6 +591,19 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
     }
   }
 
+  // Update card on file (verify mode — no charge). The card was tokenized against
+  // the practice's Helcim customer; the edge function sets it as the default.
+  async function handleCardUpdated(res) {
+    setErr('')
+    try {
+      await updateHelcimCard({ cardToken: res.cardToken, cardLast4: res.cardNumberMasked, cardType: res.cardType })
+      setPayMode(null)
+      await onRefresh?.()
+    } catch (e) {
+      setErr(e?.message || 'Could not update your card on file — please try again.')
+    }
+  }
+
   return (
     <div className="space-y-6">
     <div className="card p-6">
@@ -682,11 +696,15 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
 
     {payMode && (
       <Modal title={payMode === 'activate' ? 'Activate subscription' : 'Update payment method'} onClose={() => setPayMode(null)} maxWidth="max-w-md">
-        {payMode === 'activate' && <p className="mb-3 text-sm text-slate-400">{PLAN_NAME} — ${planAmount.toLocaleString()}/month. Enter your card to activate.</p>}
+        {payMode === 'activate'
+          ? <p className="mb-3 text-sm text-slate-400">{PLAN_NAME} — ${planAmount.toLocaleString()}/month. Enter your card to activate.</p>
+          : <p className="mb-3 text-sm text-slate-400">Enter a new card. It replaces the card on file for future billing — you won't be charged now.</p>}
         <HelcimCardForm
+          verify={payMode === 'update'}
+          customerCode={payMode === 'update' ? practice?.helcim_customer_code : undefined}
           amount={payMode === 'activate' ? planAmount : undefined}
           submitLabel={payMode === 'activate' ? 'Activate' : 'Save card'}
-          onApproved={handleApproved}
+          onApproved={payMode === 'activate' ? handleApproved : handleCardUpdated}
           onDeclined={(r) => setErr(r?.message || 'Your card was declined. Please try another card.')}
           onError={(m) => setErr(m)}
         />
