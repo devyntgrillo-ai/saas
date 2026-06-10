@@ -54,10 +54,15 @@ export default function HelcimCardForm({ amount, submitLabel = 'Pay', onApproved
     const obs = new MutationObserver(() => {
       const res = readHelcimResults()
       if (!res) return
-      setProcessing(false)
-      if (res.approved) onApproved?.(res)
-      else onDeclined?.(res)
-      box.innerHTML = '' // reset so a retry can re-fire the observer
+      box.innerHTML = '' // reset first so a retry can re-fire and this won't double-run
+      if (!res.approved) {
+        setProcessing(false)
+        onDeclined?.(res)
+        return
+      }
+      // Approved: keep the button spinning through the parent's async work (server
+      // verify + activate) so there's no frozen gap before the redirect.
+      Promise.resolve(onApproved?.(res)).finally(() => setProcessing(false))
     })
     obs.observe(box, { childList: true, subtree: true })
     return () => obs.disconnect()
@@ -123,7 +128,7 @@ export default function HelcimCardForm({ amount, submitLabel = 'Pay', onApproved
 
         <button type="button" id="buttonProcess" onClick={pay} disabled={processing} className="btn-primary w-full justify-center">
           {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
-          {submitLabel}{showAmountInLabel && amount != null ? ` — $${Number(amount).toLocaleString()}` : ''}
+          {processing ? 'Processing…' : `${submitLabel}${showAmountInLabel && amount != null ? ` — $${Number(amount).toLocaleString()}` : ''}`}
         </button>
         {showSecureNote && (
           <p className="flex items-center justify-center gap-1 text-[11px] text-slate-500">
