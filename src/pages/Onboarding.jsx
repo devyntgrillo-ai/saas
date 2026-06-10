@@ -424,11 +424,9 @@ export default function Onboarding() {
                 <p className="font-semibold text-primary-200">
                   Invite-only offer{offer.label ? ` · ${offer.label}` : ''}
                 </p>
-                <p className="text-primary-200/80">
-                  {trialDays > 0
-                    ? `${trialDays}-day free trial, then $${Number(offer.price).toLocaleString()}/month.`
-                    : `Your special rate: $${Number(offer.price).toLocaleString()}/month (standard is $997).`}
-                </p>
+                {trialDays > 0 && (
+                  <p className="text-primary-200/80">{trialDays}-day free trial, then ${Number(offer.price).toLocaleString()}/month.</p>
+                )}
               </div>
             </div>
           )}
