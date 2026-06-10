@@ -20,6 +20,7 @@ import { resolveAuth } from "../_shared/auth.ts";
 import { callerRole, roleCanViewPHI } from "../_shared/roles.ts";
 import { sanitizeAIOutput } from "../_shared/sanitize.ts";
 import { computeScheduledFor, rulesFrom } from "../_shared/sequence.ts";
+import { applyTcSignoff, resolveTcFirstName } from "../_shared/tc-signoff.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -83,7 +84,7 @@ MESSAGE RULES:
 - email: personal subject (e.g. "Checking in, Robert" / "The financing option we discussed", never salesy). 150-300 words, ONE clear CTA, education woven in naturally, reference their specific objection, sign off from the TC by first name.
 - call: a reminder for the TC to call. Provide 3-4 call_script_bullets referencing their emotional anchor, primary objection, and financing if relevant. No body needed.
 - ALWAYS reference something specific to THIS patient (their name used naturally, their emotional anchor, a detail they shared, or their exact objection).
-- NEVER use placeholders like [FIRSTNAME], use the real name. Never mention AI, automation, or software.
+- NEVER use placeholders like [FIRSTNAME] or [TC First Name] — use the real patient name and the TC first name provided. Never mention AI, automation, or software.
 - NEVER use these phrases: "I hope this message finds you well", "as per our conversation", "don't hesitate to reach out", "I wanted to follow up", "just checking in", "excited to help you on your journey", "state-of-the-art facility", "revolutionary", "cutting-edge".
 - Weave in 1-2 of the practice USPs/financing options ONLY where naturally relevant to this patient's objection, not as a list or a pitch.`;
 
@@ -214,7 +215,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: consult } = await admin
       .from("consults")
-      .select("id, practice_id, transcript_deidentified, status, created_at, treatment_type, tx_plan_value, tx_plan_value_source, patient_first")
+      .select("id, practice_id, transcript_deidentified, status, created_at, treatment_type, tx_plan_value, tx_plan_value_source, patient_first, tc_name, outcome_set_by")
       .eq("id", consultId).maybeSingle();
     if (!consult) return json({ error: "Consult not found." }, 404);
     if (!ctx.isServiceRole) {
@@ -279,11 +280,14 @@ Deno.serve(async (req: Request) => {
 
     const treatmentHint = nn(consult.treatment_type) ?? "unknown (identify from the transcript)";
     const firstName = nn(consult.patient_first) ?? "the patient";
+    const tcFirst = await resolveTcFirstName(admin, consult) ?? "your coordinator";
+    const practiceName = nn(pr?.name) ?? "this practice";
     const userPrompt = `Generate the intelligence + a personalized follow-up sequence for this dental patient from the transcript below.
 
 Patient first name (use this exact name): ${firstName}
+TC first name for email/SMS sign-off (use this exact name, never a placeholder): ${tcFirst}
 Treatment hint (may be wrong, identify the real one): ${treatmentHint}
-Practice: ${nn(pr?.name) ?? "this practice"}
+Practice: ${practiceName}
 Practice USPs / financing / protocols / guarantees / testimonials (weave 1-2 in naturally where relevant):
 ${kbBlock}
 This practice's channel performance: ${channelHint}
@@ -417,8 +421,8 @@ ${deidentified}`;
           practice_id: practiceId,
           type: i === 0 ? "followup" : "nurture",
           channel,
-          subject: channel === "email" ? scrubBanned(nn(m.subject)) : null,
-          body: channel === "call" ? null : scrubBanned(nn(m.body)),
+          subject: channel === "email" ? applyTcSignoff(scrubBanned(nn(m.subject)), tcFirst, practiceName) : null,
+          body: channel === "call" ? null : applyTcSignoff(scrubBanned(nn(m.body)), tcFirst, practiceName),
           call_script: channel === "call" && bullets.length ? bullets : null,
           purpose: nn(m.purpose),
           tone: nn(m.tone),

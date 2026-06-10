@@ -21,14 +21,30 @@ const cors = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 
+function bearerToken(req: Request): string {
+  return (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+}
+
+/** Accept current project service_role JWTs even when a stale SUPABASE_SERVICE_ROLE_KEY secret is set. */
+function isServiceRoleBearer(token: string): boolean {
+  if (!token) return false;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  if (serviceKey && token === serviceKey) return true;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return payload.role === "service_role";
+  } catch {
+    return false;
+  }
+}
+
 async function verifyPracticeAccess(
   req: Request,
   practiceId: string,
   admin: ReturnType<typeof createClient>,
 ): Promise<{ ok: boolean; status: number; error?: string }> {
   const authHeader = req.headers.get("Authorization") || "";
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  if (authHeader.replace(/^Bearer\s+/i, "") === serviceKey) return { ok: true, status: 200 };
+  if (isServiceRoleBearer(bearerToken(req))) return { ok: true, status: 200 };
 
   if (!authHeader) return { ok: false, status: 401, error: "Unauthorized" };
 
@@ -71,6 +87,66 @@ Deno.serve(async (req: Request) => {
 
     const access = await verifyPracticeAccess(req, practiceId, admin);
     if (!access.ok) return json({ error: access.error }, access.status);
+
+    // Service-role only: detach number from messaging service + delete A2P campaign
+    // so the number can be re-registered under a different practice.
+    if (action === "admin-release-a2p") {
+      if (!isServiceRoleBearer(bearerToken(req))) return json({ error: "Forbidden" }, 403);
+
+      const { data: p } = await admin
+        .from("practices")
+        .select("twilio_phone_sid, twilio_messaging_service_sid, twilio_campaign_sid")
+        .eq("id", practiceId)
+        .maybeSingle();
+
+      const steps: string[] = [];
+      const mgSid = p?.twilio_messaging_service_sid as string | null;
+      const phoneSid = p?.twilio_phone_sid as string | null;
+      const campaignSid = p?.twilio_campaign_sid as string | null;
+
+      if (campaignSid && mgSid) {
+        try {
+          await twilioRequest(
+            cfg,
+            "messaging",
+            `/v1/Services/${mgSid}/Compliance/Usa2p/${campaignSid}`,
+            { method: "DELETE" },
+          );
+          steps.push("campaign_deleted");
+        } catch (e) {
+          const msg = String((e as Error).message || "");
+          if (msg.toLowerCase().includes("not found")) steps.push("campaign_already_gone");
+          else steps.push(`campaign_delete_error:${msg}`);
+        }
+      }
+
+      if (mgSid && phoneSid) {
+        try {
+          const list = await twilioRequest<{ phone_numbers: Array<{ sid: string; phone_number_sid: string }> }>(
+            cfg,
+            "messaging",
+            `/v1/Services/${mgSid}/PhoneNumbers`,
+            { method: "GET" },
+          );
+          const entry = (list.phone_numbers || []).find((x) => x.phone_number_sid === phoneSid);
+          if (entry) {
+            await twilioRequest(
+              cfg,
+              "messaging",
+              `/v1/Services/${mgSid}/PhoneNumbers/${entry.sid}`,
+              { method: "DELETE" },
+            );
+            steps.push("phone_detached_from_messaging_service");
+          } else {
+            steps.push("phone_not_on_messaging_service");
+          }
+        } catch (e) {
+          steps.push(`detach_error:${String((e as Error).message || "")}`);
+        }
+      }
+
+      return json({ ok: true, steps });
+    }
 
     if (action === "get-status") {
       const { data: p } = await admin

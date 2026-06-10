@@ -17,8 +17,8 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // Service-role; verify_jwt=false (internal job).
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "@supabase/supabase-js";
 import { requireServiceRole } from "../_shared/auth.ts";
+import { invokeEdgeFunction, serviceRoleClient } from "../_shared/service-role.ts";
 import { replaceTokens } from "../_shared/reactivationTokens.ts";
 
 const json = (b: unknown, s = 200) =>
@@ -63,9 +63,7 @@ Deno.serve(async (req: Request) => {
   const authErr = requireServiceRole(req);
   if (authErr) return authErr;
   try {
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const admin = serviceRoleClient(req);
     const force = (await req.json().catch(() => ({})))?.force === true;
 
     const now = new Date();
@@ -206,9 +204,14 @@ Deno.serve(async (req: Request) => {
         const subject = replaceTokens(step.subject, e, practice || {});
         let ok = true;
         try {
-          await admin.functions.invoke(transport, {
-            body: { practice_id: c.practice_id, to, subject, body, consult_id: e.consult_id, reactivation_campaign_id: c.id },
-          });
+          await invokeEdgeFunction(transport, {
+            practice_id: c.practice_id,
+            to,
+            subject,
+            body,
+            consult_id: e.consult_id,
+            reactivation_campaign_id: c.id,
+          }, req);
         } catch (err) {
           ok = false;
           // Best-effort in demo: log, but still advance so the drip progresses.

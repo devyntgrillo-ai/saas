@@ -13,6 +13,7 @@ import Layout from './components/Layout'
 import AdminShell from './components/admin/AdminShell'
 import LoadingScreen from './components/LoadingScreen'
 import SessionSecurity from './components/SessionSecurity'
+import AuthHashRedirect from './components/AuthHashRedirect'
 
 // ── Eagerly loaded: auth flow + the core routes a TC hits immediately on login
 //    (Dashboard shell, Consults, Conversations) so they paint without a chunk
@@ -75,6 +76,7 @@ export default function App() {
       <AuthProvider>
         <BrandingProvider>
           <BrowserRouter>
+            <AuthHashRedirect />
             <AppContent />
           </BrowserRouter>
         </BrandingProvider>

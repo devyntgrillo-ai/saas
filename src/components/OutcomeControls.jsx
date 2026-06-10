@@ -7,6 +7,8 @@ import { useAuth } from '../context/AuthContext'
 import { recordCloseAttribution } from '../lib/attribution'
 import { useSetConsultOutcome } from '../lib/queries'
 import { auditSequenceStarted, auditSequenceStopped } from '../lib/audit'
+import { scheduleConsultMessages } from '../lib/sequence'
+import { supabase } from '../lib/supabase'
 
 function fmtRemaining(ms) {
   if (ms <= 0) return 'now'
@@ -20,7 +22,15 @@ function fmtRemaining(ms) {
 // outcome guards the AI follow-up sequence from ever firing for patients who
 // accepted / aren't moving forward. `scheduledCount` is the number of not-yet-sent
 // follow-up messages, shown once the activation hold elapses and the sequence is live.
-export default function OutcomeControls({ consult, holdHours = 24, scheduledCount = 0, onUpdated }) {
+export default function OutcomeControls({
+  consult,
+  holdHours = 24,
+  scheduledCount = 0,
+  sequenceConfig,
+  practiceTimezone,
+  onUpdated,
+  onSequenceStarted,
+}) {
   const { user } = useAuth()
   const setOutcomeMutation = useSetConsultOutcome()
   const pending = setOutcomeMutation.isPending
@@ -36,10 +46,15 @@ export default function OutcomeControls({ consult, holdHours = 24, scheduledCoun
   const outcome = consult.outcome || 'pending'
   const seqStatus = consult.sequence_status || 'active'
   const paused = seqStatus === 'paused'
+  const sequenceStarted = Boolean(
+    consult.followup_approved_at ||
+      consult.sequence_activated_at ||
+      (outcome === 'pending' && consult.outcome_set_at),
+  )
   const firstSendAt = new Date(consult.created_at).getTime() + holdHours * 3600 * 1000
   const remaining = firstSendAt - now
-  const inHold = outcome === 'pending' && seqStatus === 'active' && remaining > 0
-  const active = outcome === 'pending' && seqStatus === 'active' && remaining <= 0
+  const inHold = sequenceStarted && outcome === 'pending' && seqStatus === 'active' && remaining > 0
+  const active = sequenceStarted && outcome === 'pending' && seqStatus === 'active' && remaining <= 0
 
   async function setOutcome(value, { noteText, reason } = {}) {
     if (!consult?.id || pending) return
@@ -55,12 +70,23 @@ export default function OutcomeControls({ consult, holdHours = 24, scheduledCoun
       patch.sequence_cancelled_reason = null
       patch.sequence_status = 'active'
       patch.sequence_paused_reason = null
+      if (!consult.followup_approved_at) patch.followup_approved_at = new Date().toISOString()
     } else if (cancelMessages) {
       patch.sequence_cancelled_at = new Date().toISOString()
       patch.sequence_cancelled_reason = reason || value
       patch.sequence_status = 'cancelled'
     }
     try {
+      if (value === 'pending' && !consult.followup_approved_at) {
+        await scheduleConsultMessages(supabase, {
+          consultId: consult.id,
+          createdAt: consult.created_at,
+          sequenceConfig,
+          practiceTimezone,
+          // Use practice touchpoints on manual start; consult preset is for AI draft only.
+          timingPreset: null,
+        })
+      }
       await setOutcomeMutation.mutateAsync({
         consultId: consult.id,
         patch,
@@ -76,6 +102,7 @@ export default function OutcomeControls({ consult, holdHours = 24, scheduledCoun
         auditSequenceStopped(consult.id, { reason: reason || value })
       }
       onUpdated?.({ ...patch, ...extra })
+      if (value === 'pending') onSequenceStarted?.()
     } catch {
       /* mutation surfaces via parent refresh */
     }
@@ -114,8 +141,15 @@ export default function OutcomeControls({ consult, holdHours = 24, scheduledCoun
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <OutcomeButton icon={CheckCircle2} label="Accepted Treatment" tone="emerald" selected={false}
           onClick={() => setOutcome('accepted')} loading={pending} />
-        <OutcomeButton icon={PlayCircle} label="Start Follow-Up Sequence" tone="brand" selected={!paused}
-          onClick={() => setOutcome('pending')} loading={pending} />
+        <OutcomeButton
+          icon={sequenceStarted ? CheckCircle2 : PlayCircle}
+          label={sequenceStarted ? 'Follow-Up Started' : 'Start Follow-Up Sequence'}
+          tone="brand"
+          selected={sequenceStarted && !paused}
+          disabled={sequenceStarted && !paused}
+          onClick={() => setOutcome('pending')}
+          loading={pending}
+        />
         <OutcomeButton icon={XCircle} label="Not a Fit" tone="slate" selected={false}
           onClick={() => { setNote(''); setShowNote(true) }} loading={pending} />
       </div>

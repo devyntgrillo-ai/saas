@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2, ShieldCheck, KeyRound } from 'lucide-react'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
 import { logAudit, AUDIT } from '../lib/audit'
-import { useUpdatePassword } from '../lib/queries'
+import { useAcceptInvitationToken, useUpdatePassword } from '../lib/queries'
 
-// Landing page for Supabase auth invite / recovery / magic links.
+// Landing page for every Supabase auth invite / recovery / magic link.
 // detectSessionInUrl establishes the session from the URL hash; the user sets
 // (or resets) their password here, then continues into the app.
 export default function AcceptInvite() {
-  const { session, loading } = useAuth()
+  const { session, loading, refreshProfile, refreshAgency } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const invitationToken = searchParams.get('invitation')
   const updatePassword = useUpdatePassword()
+  const acceptInvitation = useAcceptInvitationToken()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
@@ -23,6 +26,7 @@ export default function AcceptInvite() {
     return params.get('type') || 'invite'
   }, [])
   const isRecovery = linkType === 'recovery'
+  const mustSetPassword = isRecovery || linkType === 'invite' || linkType === 'signup' || Boolean(invitationToken)
 
   const [checked, setChecked] = useState(false)
   useEffect(() => {
@@ -41,6 +45,10 @@ export default function AcceptInvite() {
         resourceType: 'auth',
         details: { context: isRecovery ? 'password_reset' : 'invite_accept' },
       })
+      if (invitationToken) {
+        await acceptInvitation.mutateAsync({ token: invitationToken })
+        await Promise.all([refreshProfile?.(), refreshAgency?.()])
+      }
       navigate('/', { replace: true })
     } catch (err) {
       setError(err?.message || 'Could not update password.')
@@ -48,6 +56,7 @@ export default function AcceptInvite() {
   }
 
   const noSession = checked && !loading && !session
+  const busy = updatePassword.isPending || acceptInvitation.isPending
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface px-4 py-10">
@@ -81,7 +90,9 @@ export default function AcceptInvite() {
               <p className="mt-1 text-sm text-slate-400">
                 {isRecovery
                   ? 'Enter a new password for your account.'
-                  : 'Create a password to finish activating your account.'}
+                  : invitationToken
+                    ? 'Create a password to finish joining your team.'
+                    : 'Create a password to finish activating your account.'}
               </p>
 
               <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -101,13 +112,13 @@ export default function AcceptInvite() {
                     {error}
                   </p>
                 )}
-                <button type="submit" disabled={updatePassword.isPending || (checked && !session)} className="btn-primary w-full">
-                  {updatePassword.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {updatePassword.isPending ? 'Saving…' : isRecovery ? 'Update password & continue' : 'Set password & continue'}
+                <button type="submit" disabled={busy || (checked && !session)} className="btn-primary w-full">
+                  {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {busy ? 'Saving…' : isRecovery ? 'Update password & continue' : 'Set password & continue'}
                 </button>
               </form>
 
-              {!isRecovery && session && (
+              {!mustSetPassword && session && (
                 <button
                   type="button"
                   onClick={() => navigate('/', { replace: true })}

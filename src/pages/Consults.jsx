@@ -52,10 +52,10 @@ export default function Consults() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
 
-  const { data: dayData, isLoading: loading } = useConsultsDay(practiceId, date)
-  // Next 5 upcoming consults (tomorrow onward, any date), always shown so there's
+  const { data: dayData, isLoading: dayLoading } = useConsultsDay(practiceId, date)
+  // Next 5 upcoming consults (tomorrow onward, any date) — always shown so there's
   // a forward view and the Schedule is never an empty page.
-  const { data: nextConsults = [] } = useNextConsults(practiceId, 5)
+  const { data: nextConsults = [], isLoading: nextLoading } = useNextConsults(practiceId, 5)
 
   const appts = useMemo(() => dayData?.appts ?? [], [dayData])
   const allNote = dayData?.allNote ?? false
@@ -64,9 +64,10 @@ export default function Consults() {
   // Schedule while they belong to today; older ones live in the Recordings tab.
   const todayStartMs = useMemo(() => new Date(`${date}T00:00:00`).getTime(), [date])
 
-  const { data: processing = [] } = useProcessingConsults(practiceId)
+  const { data: processing = [], isLoading: processingLoading } = useProcessingConsults(practiceId)
   // Recently-completed consults (analysis done / errored).
-  const { data: recentDone = [] } = useRecentConsults(practiceId)
+  const { data: recentDone = [], isLoading: recentLoading } = useRecentConsults(practiceId)
+  const scheduleLoading = !practiceId || dayLoading || nextLoading || processingLoading || recentLoading
   useConsultsRealtime(practiceId)
   // Just-recorded consults (client-side) so the "analyzing" card shows instantly.
   const recentRecordings = useRecentRecordings(practiceId)
@@ -234,14 +235,14 @@ export default function Consults() {
         </section>
       )}
 
-      {!connected ? (
+      {scheduleLoading ? (
+        <div className="card flex justify-center py-16"><Clock className="h-6 w-6 animate-pulse text-slate-500" /></div>
+      ) : !connected ? (
         (procCards.length > 0 || doneCards.length > 0) ? null : (
           <EmptyCard icon={Plug} title="Connect your PMS to see your daily schedule here"
             sub="No PMS? You can still hit record for any walk-in consult."
             action={<Link to="/settings/pms" className="btn-primary mt-4">Connect your PMS</Link>} />
         )
-      ) : loading ? (
-        <div className="card flex justify-center py-16"><Clock className="h-6 w-6 animate-pulse text-slate-500" /></div>
       ) : appts.length === 0 ? (
         nextConsults.length > 0 ? (
           <p className="rounded-lg border border-surface-700 bg-surface-800/30 px-4 py-3 text-sm text-slate-400">
@@ -360,6 +361,7 @@ function ConsultArchive({ practiceId, navigate }) {
   }, [search])
 
   const { data, isLoading, isFetching } = useConsultArchive(practiceId, debounced, page)
+  const archiveLoading = !practiceId || isLoading
   const rows = data?.rows ?? []
   const total = data?.total ?? 0
   const pageCount = Math.max(1, Math.ceil(total / ARCHIVE_PAGE_SIZE))
@@ -378,7 +380,7 @@ function ConsultArchive({ practiceId, navigate }) {
         />
       </div>
 
-      {isLoading ? (
+      {archiveLoading ? (
         <div className="card flex justify-center py-16"><Clock className="h-6 w-6 animate-pulse text-slate-500" /></div>
       ) : rows.length === 0 ? (
         <EmptyCard

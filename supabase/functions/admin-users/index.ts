@@ -103,7 +103,7 @@ Deno.serve(async (req: Request) => {
       // Canonical production URLs for the email + sign-in link, never the
       // inviter's localhost dev origin (both helpers ignore a client origin).
       const appOrigin = appBaseUrl();
-      const redirectTo = acceptInviteRedirectUrl(body.app_origin as string | undefined);
+      const redirectTo = acceptInviteRedirectUrl();
 
       // If this email already belongs to a user (e.g. a previously deactivated
       // one), lift any ban FIRST so we can generate a sign-in link and reactivate

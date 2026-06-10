@@ -47,14 +47,14 @@ function startOfMonth() {
 }
 
 function CompareRow({ label, you, network, suffix = '' }) {
-  const better = you >= network
+  const hasYou = you != null
+  const better = hasYou && you >= network
   return (
     <div className="rounded-lg border border-surface-700 bg-surface-800/40 p-3">
       <p className="text-xs text-slate-500">{label}</p>
       <div className="mt-1 flex items-baseline justify-between gap-2">
-        <span className={`text-lg font-bold ${better ? 'text-emerald-400' : 'text-rose-400'}`}>
-          {you}
-          {suffix}
+        <span className={`text-lg font-bold ${!hasYou ? 'text-slate-500' : better ? 'text-emerald-400' : 'text-rose-400'}`}>
+          {hasYou ? `${you}${suffix}` : '-'}
         </span>
         <span className="text-xs text-slate-500">
           net {network}
@@ -285,7 +285,7 @@ export default function Dashboard() {
                 <RecordingRateCard practiceId={practiceId} />
               </Suspense>
 
-              {comparison && comparison.practice && (
+              {comparison && (
                 <div className="card p-5">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
                 <Network className="h-4 w-4 text-primary-400" /> You vs the network
@@ -295,30 +295,41 @@ export default function Dashboard() {
               </p>
 
               <div className="mt-4 rounded-xl border border-surface-700 bg-surface-800/50 p-4 text-center">
-                <p className="text-sm text-slate-400">Your sequences are performing</p>
-                <p
-                  className={`mt-1 text-3xl font-bold tracking-tight ${
-                    comparison.score >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                  }`}
-                >
-                  {comparison.score >= 0 ? '+' : ''}
-                  {comparison.score}%
-                </p>
-                <p className="text-sm text-slate-400">
-                  {comparison.score >= 0 ? 'above' : 'below'} similar practices
-                </p>
+                {comparison.hasData && comparison.score != null ? (
+                  <>
+                    <p className="text-sm text-slate-400">Your sequences are performing</p>
+                    <p
+                      className={`mt-1 text-3xl font-bold tracking-tight ${
+                        comparison.score >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                      }`}
+                    >
+                      {comparison.score >= 0 ? '+' : ''}
+                      {comparison.score}%
+                    </p>
+                    <p className="text-sm text-slate-400">
+                      {comparison.score >= 0 ? 'above' : 'below'} similar practices
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-slate-300">Not enough data yet</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Benchmarks appear after your first sequence messages go out.
+                    </p>
+                  </>
+                )}
               </div>
 
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <CompareRow
                   label="Reply rate"
-                  you={Math.round((comparison.practice.replyRate || 0) * 100)}
+                  you={comparison.hasData ? Math.round((comparison.practice.replyRate || 0) * 100) : null}
                   network={Math.round((comparison.network.replyRate || 0) * 100)}
                   suffix="%"
                 />
                 <CompareRow
                   label="Close rate"
-                  you={Math.round((comparison.practice.closeRate || 0) * 100)}
+                  you={comparison.hasData ? Math.round((comparison.practice.closeRate || 0) * 100) : null}
                   network={Math.round((comparison.network.closeRate || 0) * 100)}
                   suffix="%"
                 />

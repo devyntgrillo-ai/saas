@@ -56,7 +56,7 @@ export default function Login() {
     }
     setResetting(true)
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-      redirectTo: `${window.location.origin}/accept-invite`,
+      redirectTo: `${window.location.origin}/reset-password`,
     })
     setResetting(false)
     if (resetError) {

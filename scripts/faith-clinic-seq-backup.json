@@ -1,0 +1,35 @@
+{
+  "practice_id": "b070a386-0c56-4235-9b8c-4cc659d067d0",
+  "consult_id": "5229737f-0cb5-49b3-8414-db7a42b07c4e",
+  "saved_at": "2026-06-10T07:30:00.000Z",
+  "sequence_config": {
+    "rules": {
+      "quietEnd": "18:00",
+      "timezone": "America/Chicago",
+      "holdHours": 1,
+      "quietHours": false,
+      "quietStart": "08:00",
+      "stopOnReply": true,
+      "reengagement": false,
+      "stopOnBooking": true,
+      "weekendDelivery": false,
+      "stopOnNotConverting": true
+    },
+    "version": 2,
+    "touchpoints": [
+      { "day": 0, "channel": "sms", "enabled": true },
+      { "day": 3, "channel": "sms", "enabled": true },
+      { "day": 7, "channel": "email", "enabled": true },
+      { "day": 14, "channel": "sms", "enabled": true },
+      { "day": 30, "channel": "email", "enabled": true },
+      { "day": 60, "channel": "sms", "enabled": true },
+      { "day": 90, "channel": "email", "enabled": true },
+      { "day": 150, "channel": "sms", "enabled": true },
+      { "day": 180, "channel": "email", "enabled": true },
+      { "day": 240, "channel": "sms", "enabled": true },
+      { "day": 300, "channel": "email", "enabled": true },
+      { "day": 365, "channel": "sms", "enabled": true }
+    ]
+  },
+  "auto_start_followup": false
+}

@@ -7,8 +7,8 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // Secrets: MAILGUN_API_KEY, MAILGUN_PATIENT_MAIL_DOMAIN, MAILGUN_PATIENT_MAIL_ROOT
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "@supabase/supabase-js";
 import { checkPracticeAccess } from "../_shared/auth.ts";
+import { serviceRoleClient } from "../_shared/service-role.ts";
 import { resolveBrand } from "../_shared/brand.ts";
 import {
   isPatientMailConfigured,
@@ -22,6 +22,7 @@ import {
   ensurePracticeMailSubdomain,
   resolveConversationForEmail,
 } from "../_shared/mailgun-practice.ts";
+import { applyTcSignoff, resolveTcFirstName } from "../_shared/tc-signoff.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -60,18 +61,22 @@ Deno.serve(async (req: Request) => {
 
     const payload = (await req.json()) as Body;
     const to = String(payload.to || "").trim();
-    const body = String(payload.body || "").trim();
-    const subject = String(payload.subject || "Follow-up from your care team").trim();
+    let body = String(payload.body || "").trim();
+    let subject = String(payload.subject || "Follow-up from your care team").trim();
     if (!to || !body) return json({ error: "Missing to or body." }, 400);
 
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const admin = serviceRoleClient(req);
 
     let practiceId = payload.practice_id || null;
-    if (!practiceId && payload.consult_id) {
-      const { data: c } = await admin.from("consults").select("practice_id").eq("id", payload.consult_id).maybeSingle();
-      practiceId = c?.practice_id || null;
+    let consultRow: { practice_id?: string; tc_name?: string | null; outcome_set_by?: string | null } | null = null;
+    if (payload.consult_id) {
+      const { data: c } = await admin
+        .from("consults")
+        .select("practice_id, tc_name, outcome_set_by")
+        .eq("id", payload.consult_id)
+        .maybeSingle();
+      consultRow = c;
+      practiceId = practiceId || c?.practice_id || null;
     }
     if (!practiceId) return json({ error: "Could not resolve practice." }, 400);
 
@@ -86,6 +91,13 @@ Deno.serve(async (req: Request) => {
     if (!pr) return json({ error: "Practice not found." }, 404);
     if (pr.email_enabled === false) {
       return json({ error: "Email is disabled for this practice.", code: "email_disabled" }, 403);
+    }
+
+    if (consultRow) {
+      const tcFirst = await resolveTcFirstName(admin, consultRow);
+      const practiceName = pr.name ? String(pr.name).trim() : null;
+      body = applyTcSignoff(body, tcFirst, practiceName) || body;
+      subject = applyTcSignoff(subject, tcFirst, practiceName) || subject;
     }
 
     const mail = await ensurePracticeMailSubdomain(admin, pr);

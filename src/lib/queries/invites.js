@@ -53,18 +53,19 @@ export function useSendTeamInvite() {
         .select('token')
         .single()
       if (error) throw error
-      const inviteLink = `${window.location.origin}/invite/${data.token}`
       let emailSent = false
       let emailReason = ''
+      let inviteLink = null
       try {
         const { data: fnData, error: fnErr } = await supabase.functions.invoke('invite-team-member', {
-          body: { invitation_token: data.token, app_origin: window.location.origin },
+          body: { invitation_token: data.token },
         })
         if (fnErr) {
           emailReason = 'the email service errored'
         } else {
           emailSent = fnData?.email_sent === true
           emailReason = fnData?.reason ? `reason: ${fnData.reason}` : ''
+          inviteLink = fnData?.invite_link || null
         }
       } catch {
         emailReason = 'the email service is unreachable'

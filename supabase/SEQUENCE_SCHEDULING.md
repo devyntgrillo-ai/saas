@@ -12,13 +12,9 @@ Shared logic: `supabase/functions/_shared/sequence.ts` (mirrored in `src/lib/seq
 
 Migration `20260602130100_cron_sequence_jobs.sql` schedules `process-sequences` and `send-due-messages` every 5 minutes.
 
-You still must set database settings (once per project):
+**Preferred:** run `supabase/apply_cron.sql` in the SQL editor with your current `service_role` key inlined (see file header). Cron jobs pass that JWT in `Authorization`; edge functions use it for DB access and internal `mailgun-send` / `twilio-send` calls so sends keep working even if a stale `SUPABASE_SERVICE_ROLE_KEY` function secret exists.
 
-```sql
--- See apply_cron.sql for full setup including sync + reactivation jobs.
-alter database postgres set app.supabase_url = 'https://YOUR_PROJECT.supabase.co';
-alter database postgres set app.service_role_key = 'YOUR_SERVICE_ROLE_KEY';
-```
+**Do not** set a custom `SUPABASE_SERVICE_ROLE_KEY` in Edge Function secrets unless required — it can drift from the live API key after rotation. If one exists, delete it in Dashboard → Edge Functions → Secrets.
 
 ## Verify locally
 

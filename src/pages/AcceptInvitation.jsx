@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { Loader2, UserPlus, ShieldCheck, AlertTriangle } from 'lucide-react'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
@@ -105,6 +105,11 @@ export default function AcceptInvitation() {
                     {acceptInvitation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
                     Accept &amp; create account
                   </button>
+                  <p className="text-center text-xs text-slate-500">
+                    Already have an account?{' '}
+                    <Link to="/login" className="font-medium text-primary-400 hover:text-primary-300">Sign in</Link>
+                    {' '}to accept, or use the link from your latest invite email.
+                  </p>
                 </form>
               )}
 

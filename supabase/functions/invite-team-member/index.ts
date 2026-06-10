@@ -10,7 +10,7 @@ import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand } from "../_sh
 import { sendMailgunMessage } from "../_shared/mailgun.ts";
 import { isSuperAdminUser } from "../_shared/admin.ts";
 import { recordAuditFromReq } from "../_shared/audit.ts";
-import { appBaseUrl } from "../_shared/appUrl.ts";
+import { acceptInviteRedirectUrl } from "../_shared/invite.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -64,8 +64,6 @@ Deno.serve(async (req: Request) => {
     const role = body.role || "member";
     const accessLevel = body.access_level || "practice_member";
     const personalMessage = body.personal_message ?? null;
-    // Always the canonical production URL, never the inviter's browser origin.
-    const appOrigin = appBaseUrl();
 
     const admin = createClient(url, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -124,10 +122,27 @@ Deno.serve(async (req: Request) => {
     }
 
     const scopeName = practiceRow?.name || "your practice";
-    const inviteLink = `${appOrigin}/invite/${token}`;
+    if (!recipientEmail) return json({ error: "No recipient email" }, 400);
+    if (!token) return json({ error: "Invitation token missing" }, 500);
+
+    // Supabase auth invite → /accept-invite?invitation=… so every team member
+    // sets a password before accept_invitation grants access.
+    const redirectTo = acceptInviteRedirectUrl({ invitation: token });
+    async function makeLink(type: "invite" | "magiclink") {
+      const { data, error } = await admin.auth.admin.generateLink({
+        type,
+        email: recipientEmail,
+        options: { redirectTo },
+      });
+      if (error) console.warn(`invite-team-member: generateLink(${type}) failed:`, error.message);
+      return error || !data?.properties?.action_link ? null : data;
+    }
+    const linkData = (await makeLink("invite")) ?? (await makeLink("magiclink"));
+    if (!linkData) return json({ error: "Could not generate invite link" }, 502);
+    const inviteLink: string = linkData.properties.action_link;
+
     const brand = await resolveBrand(admin, practiceRow);
     const { subject, html, text } = buildTeamInviteEmail(brand, scopeName, inviteLink, personalMessage);
-    if (!recipientEmail) return json({ error: "No recipient email" }, 400);
 
     console.log(`invite-team-member: sending invite to ${recipientEmail} (practice="${scopeName}")`);
     const sendResult = await sendMailgunMessage({

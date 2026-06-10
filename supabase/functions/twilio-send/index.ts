@@ -10,8 +10,8 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // Optional: TWILIO_CALLER_ID (dev fallback only), TWILIO_WEBHOOK_BASE_URL.
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "@supabase/supabase-js";
 import { checkPracticeAccess } from "../_shared/auth.ts";
+import { serviceRoleClient } from "../_shared/service-role.ts";
 import { getTwilioConfig, phonesMatch, sendSms, toE164 } from "../_shared/twilio.ts";
 import { resolveTwilioSmsContext } from "../_shared/twilio-sms-context.ts";
 
@@ -55,9 +55,7 @@ Deno.serve(async (req: Request) => {
     const body = String(payload.body || "").trim();
     if (!to || !body) return json({ error: "Missing to or body." }, 400);
 
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const admin = serviceRoleClient(req);
 
     let practiceId = payload.practice_id || null;
     if (!practiceId && payload.consult_id) {

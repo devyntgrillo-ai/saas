@@ -556,7 +556,10 @@ export default function ConsultDetail() {
               consult={consult}
               holdHours={holdHours}
               scheduledCount={messages.filter((m) => ['draft', 'scheduled', 'pending'].includes(m.status)).length}
+              sequenceConfig={practice?.sequence_config}
+              practiceTimezone={practice?.timezone}
               onUpdated={(patch) => patchConsult(patch)}
+              onSequenceStarted={refreshConsult}
             />
           </div>
         </Card>
