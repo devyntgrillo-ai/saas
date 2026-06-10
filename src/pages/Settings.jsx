@@ -591,17 +591,17 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
             Your account is paused{practice?.pause_ends_at ? ` until ${formatDate(practice.pause_ends_at)}` : ''}. No charges during the pause - resume any time.
           </p>
         )}
-      </div>
 
-      {/* Actions */}
-      <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
-        {status === 'paused' ? (
-          <ActivateButton label="Resume subscription" loading={false} onClick={onResume} />
-        ) : isActive ? (
-          <button onClick={() => setPayMode('update')} className="btn-primary"><CreditCard className="h-4 w-4" /> Update payment method</button>
-        ) : (
-          <button onClick={() => setPayMode('activate')} className="btn-primary"><CreditCard className="h-4 w-4" /> {status === 'cancelled' || status === 'canceled' || status === 'expired' ? 'Reactivate subscription' : 'Activate subscription'}</button>
-        )}
+        {/* Actions */}
+        <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
+          {status === 'paused' ? (
+            <ActivateButton label="Resume subscription" loading={false} onClick={onResume} />
+          ) : isActive ? (
+            <button onClick={() => setPayMode('update')} className="btn-primary"><CreditCard className="h-4 w-4" /> Update payment method</button>
+          ) : (
+            <button onClick={() => setPayMode('activate')} className="btn-primary"><CreditCard className="h-4 w-4" /> {status === 'cancelled' || status === 'canceled' || status === 'expired' ? 'Reactivate subscription' : 'Activate subscription'}</button>
+          )}
+        </div>
       </div>
     </div>
 
