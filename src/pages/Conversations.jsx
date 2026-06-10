@@ -1001,7 +1001,7 @@ export default function Conversations() {
   if (!loadingList && conversations.length === 0) {
     return (
       <div className="h-full space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-100">Conversations</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-100">Inbox</h1>
         <EmptyState
           icon={MessagesSquare}
           title="No conversations yet"

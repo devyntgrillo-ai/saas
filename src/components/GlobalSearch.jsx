@@ -145,7 +145,7 @@ export default function GlobalSearch() {
                 <>
                   <Group label="Consults" icon={PhoneCall} items={results.consults} offset={0} />
                   <Group
-                    label="Conversations"
+                    label="Inbox"
                     icon={MessagesSquare}
                     items={results.conversations}
                     offset={results.consults.length}
