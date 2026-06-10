@@ -902,8 +902,8 @@ export default function Sequences() {
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
           {/* Column header (desktop) */}
           <div className="hidden border-b border-gray-200 px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-gray-500 lg:grid lg:grid-cols-12 lg:items-center lg:gap-4">
-            <span className="lg:col-span-4">Patient</span>
-            <span className="lg:col-span-2">Objection</span>
+            <span className="lg:col-span-3">Patient</span>
+            <span className="lg:col-span-3">Objection</span>
             <span className="lg:col-span-3">Progress</span>
             <span className="lg:col-span-2">Status</span>
             <span className="text-right lg:col-span-1">Toggle</span>
@@ -919,7 +919,7 @@ export default function Sequences() {
                 className={`grid grid-cols-1 gap-2 px-4 py-3 text-[13px] transition lg:grid-cols-12 lg:items-center lg:gap-4 ${canPHI ? 'cursor-pointer hover:bg-gray-50' : ''}`}
               >
                 {/* Patient */}
-                <div className="min-w-0 lg:col-span-4">
+                <div className="min-w-0 lg:col-span-3">
                   {canPHI ? (
                     <Link
                       to={`/consults/${r.id}`}
@@ -935,7 +935,7 @@ export default function Sequences() {
                 </div>
 
                 {/* Objection */}
-                <div className="lg:col-span-2">
+                <div className="lg:col-span-3">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <UrgencyBadge urgency={r.urgency} />
                     <ObjectionBadge objection={r.objection} label={r.objectionLabel} />
