@@ -10,8 +10,14 @@ export const REACTIVATION_TOKENS = [
   { token: '{{tx_plan_date}}', label: 'TX Plan Date' },
   { token: '{{practice_name}}', label: 'Practice Name' },
   { token: '{{doctor_name}}', label: 'Doctor Name' },
+  { token: '{{tc_name}}', label: 'Team / TC Name' },
   { token: '{{phone_number}}', label: 'Phone Number' },
 ]
+
+function resolveTcName(practice = {}) {
+  const fromDoctor = [practice.doctor_first, practice.doctor_last].filter(Boolean).join(' ').trim()
+  return (practice.sms_sender_name || '').trim() || fromDoctor || (practice.name || '').trim() || 'our team'
+}
 
 // Human-readable treatment phrasing for {{treatment_type}} in message bodies.
 const TREATMENT_PHRASE = {
@@ -36,14 +42,25 @@ export function formatTxDate(d) {
 // Replace {{tokens}} in a template with values from a patient + practice record.
 // Unknown tokens are left untouched. Used for the builder's live preview.
 export function replaceTokens(template, { patient = {}, practice = {} } = {}) {
+  const tcName = resolveTcName(practice)
+  const first = patient.first_name || patient.patient_first || 'there'
+  const last = patient.last_name || patient.patient_last || ''
   const map = {
-    first_name: patient.first_name || patient.patient_first || 'there',
-    last_name: patient.last_name || patient.patient_last || '',
+    first_name: first,
+    last_name: last,
     treatment_type: TREATMENT_PHRASE[patient.treatment_type] || 'your treatment',
-    tx_plan_date: formatTxDate(patient.tx_plan_date),
+    tx_plan_date: formatTxDate(patient.tx_plan_date || patient.created_at),
     practice_name: practice.name || 'our office',
     doctor_name: practice.doctor_last ? `Dr. ${practice.doctor_last}` : 'the doctor',
     phone_number: practice.phone || '',
+    tc_name: tcName,
   }
-  return String(template || '').replace(/\{\{(\w+)\}\}/g, (m, k) => (k in map ? map[k] : m))
+  let out = String(template || '')
+  out = out.replace(/\{\{(\w+)\}\}/gi, (_m, k) => map[k.toLowerCase()] ?? map[k] ?? '')
+  out = out.replace(/\[TC\s*Name\]/gi, tcName)
+  out = out.replace(/\[Name\]/gi, first)
+  out = out.replace(/\[Last\]/gi, last)
+  out = out.replace(/\{\{[^}]+\}\}/g, '')
+  out = out.replace(/\[[A-Za-z][^\]]*\]/g, '')
+  return out.replace(/\n{3,}/g, '\n\n').trim()
 }

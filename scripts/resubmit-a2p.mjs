@@ -155,6 +155,7 @@ async function main() {
   brandForm.set('Mock', 'false')
 
   let brandSid = null
+  let brandStatusRaw = ''
   let brandNote = ''
   try {
     const brand = await twilio('messaging.twilio.com', '/v1/a2p/BrandRegistrations', {
@@ -162,15 +163,18 @@ async function main() {
       body: brandForm.toString(),
     })
     brandSid = brand.sid
+    brandStatusRaw = String(brand.status || '').toUpperCase()
     console.log('Created brand:', brandSid, brand.status)
   } catch (e) {
     brandNote = String(e.message)
     console.warn('Brand submit:', brandNote)
   }
 
+  const brandApproved = ['APPROVED', 'VERIFIED', 'ACTIVE'].includes(brandStatusRaw)
+
   let campaignSid = null
   let campaignNote = ''
-  if (brandSid) {
+  if (brandSid && brandApproved) {
     const defaultSamples = [
       'Hi [name], following up on your implant consult. Any questions about your treatment plan? Reply STOP to opt out.',
       'Hi [name], just checking in after your visit. Happy to help schedule your next step. Reply STOP to opt out.',
@@ -199,6 +203,8 @@ async function main() {
       campaignNote = String(e.message)
       console.warn('Campaign submit:', campaignNote)
     }
+  } else if (brandSid && !brandApproved) {
+    console.log('Brand still vetting — campaign will be created after approval (poll-status or re-run this script).')
   }
 
   const failure = [brandNote, campaignNote].filter(Boolean).join(' | ')

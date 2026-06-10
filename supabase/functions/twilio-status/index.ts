@@ -10,7 +10,7 @@ import { createClient } from "@supabase/supabase-js";
 import { formDataToRecord, getTwilioConfig, twilioWebhookUrl, validateTwilioSignature } from "../_shared/twilio.ts";
 
 Deno.serve(async (req: Request) => {
-  if (req.method !== "POST") return new Response("", { status: 204 });
+  if (req.method !== "POST") return new Response(null, { status: 204 });
 
   try {
     const form = await req.formData();
@@ -18,7 +18,7 @@ Deno.serve(async (req: Request) => {
     const messageSid = String(params.MessageSid || "").trim();
     const messageStatus = String(params.MessageStatus || params.SmsStatus || "").trim();
 
-    if (!messageSid) return new Response("", { status: 204 });
+    if (!messageSid) return new Response(null, { status: 204 });
 
     const cfg = getTwilioConfig();
     const publicBase = Deno.env.get("TWILIO_WEBHOOK_BASE_URL") || cfg?.webhookBase || null;
@@ -46,10 +46,10 @@ Deno.serve(async (req: Request) => {
       }).eq("id", row.id);
     }
 
-    return new Response("", { status: 204 });
+    return new Response(null, { status: 204 });
   } catch (e) {
     await reportEdgeError("twilio-status", e);
     console.error("twilio-status error:", e);
-    return new Response("", { status: 204 });
+    return new Response(null, { status: 204 });
   }
 });

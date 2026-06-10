@@ -157,10 +157,61 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, practice: p });
     }
 
+    if (action === "inspect-webhooks") {
+      const { data: p } = await admin
+        .from("practices")
+        .select("twilio_phone_sid, twilio_phone_number, twilio_messaging_service_sid")
+        .eq("id", practiceId)
+        .maybeSingle();
+      if (!p?.twilio_phone_sid) {
+        return json({ error: "No Twilio number on file." }, 400);
+      }
+      const expectedSms = inboundWebhookUrlForPractice(practiceId);
+      const expectedVoice = inboundVoiceWebhookUrlForPractice(practiceId);
+      const phone = await twilioRequest<Record<string, string>>(
+        cfg,
+        "api",
+        `/Accounts/${cfg.accountSid}/IncomingPhoneNumbers/${p.twilio_phone_sid}.json`,
+        { method: "GET" },
+      );
+      let messaging: Record<string, unknown> | null = null;
+      if (p.twilio_messaging_service_sid) {
+        messaging = await twilioRequest<Record<string, unknown>>(
+          cfg,
+          "messaging",
+          `/v1/Services/${p.twilio_messaging_service_sid}`,
+          { method: "GET" },
+        );
+      }
+      const smsOk = phone.sms_url === expectedSms;
+      const voiceOk = phone.voice_url === expectedVoice;
+      const inboundOk = !messaging || messaging.inbound_request_url === expectedSms;
+      return json({
+        ok: smsOk && voiceOk && inboundOk,
+        practice_id: practiceId,
+        expected: { sms_url: expectedSms, voice_url: expectedVoice },
+        phone: {
+          number: phone.phone_number,
+          sms_url: phone.sms_url,
+          voice_url: phone.voice_url,
+          sms_ok: smsOk,
+          voice_ok: voiceOk,
+        },
+        messaging_service: messaging
+          ? {
+            sid: messaging.sid,
+            friendly_name: messaging.friendly_name,
+            inbound_request_url: messaging.inbound_request_url,
+            inbound_ok: inboundOk,
+          }
+          : null,
+      });
+    }
+
     if (action === "sync-inbound-webhook") {
       const { data: p } = await admin
         .from("practices")
-        .select("twilio_phone_sid, twilio_phone_number")
+        .select("twilio_phone_sid, twilio_phone_number, twilio_messaging_service_sid")
         .eq("id", practiceId)
         .maybeSingle();
       if (!p?.twilio_phone_sid) {
@@ -182,12 +233,25 @@ Deno.serve(async (req: Request) => {
         `/Accounts/${cfg.accountSid}/IncomingPhoneNumbers/${p.twilio_phone_sid}.json`,
         { method: "POST", body: form.toString() },
       );
+      let messagingSynced = false;
+      if (p.twilio_messaging_service_sid) {
+        const mgForm = new URLSearchParams();
+        mgForm.set("InboundRequestUrl", smsUrl);
+        mgForm.set("InboundMethod", "POST");
+        await twilioRequest(
+          cfg,
+          "messaging",
+          `/v1/Services/${p.twilio_messaging_service_sid}`,
+          { method: "POST", body: mgForm.toString() },
+        );
+        messagingSynced = true;
+      }
       if (p.twilio_phone_number) {
         await admin.from("practices").update({
           twilio_phone_e164: toE164(p.twilio_phone_number),
         }).eq("id", practiceId);
       }
-      return json({ ok: true, sms_url: smsUrl, voice_url: voiceUrl });
+      return json({ ok: true, sms_url: smsUrl, voice_url: voiceUrl, messaging_service_synced: messagingSynced });
     }
 
     if (action === "search-numbers") {

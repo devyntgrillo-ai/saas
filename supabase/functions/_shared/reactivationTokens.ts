@@ -30,19 +30,48 @@ export interface TokenPatient {
 }
 export interface TokenPractice {
   name?: string | null;
+  doctor_first?: string | null;
   doctor_last?: string | null;
   phone?: string | null;
+  sms_sender_name?: string | null;
+}
+
+function resolveTcName(practice: TokenPractice): string {
+  const fromDoctor = [practice.doctor_first, practice.doctor_last].filter(Boolean).join(" ").trim();
+  return (
+    (practice.sms_sender_name || "").trim() ||
+    fromDoctor ||
+    (practice.name || "").trim() ||
+    "our team"
+  );
 }
 
 export function replaceTokens(template: string | null | undefined, patient: TokenPatient, practice: TokenPractice): string {
+  const tcName = resolveTcName(practice);
+  const first = patient.patient_first || "there";
+  const last = patient.patient_last || "";
   const map: Record<string, string> = {
-    first_name: patient.patient_first || "there",
-    last_name: patient.patient_last || "",
+    first_name: first,
+    last_name: last,
     treatment_type: (patient.treatment_type && TREATMENT_PHRASE[patient.treatment_type]) || "your treatment",
     tx_plan_date: formatTxDate(patient.tx_plan_date),
     practice_name: practice.name || "our office",
     doctor_name: practice.doctor_last ? `Dr. ${practice.doctor_last}` : "the doctor",
     phone_number: practice.phone || "",
+    tc_name: tcName,
   };
-  return String(template || "").replace(/\{\{(\w+)\}\}/g, (m, k) => (k in map ? map[k] : m));
+
+  let out = String(template || "");
+  out = out.replace(/\{\{(\w+)\}\}/gi, (_m, k) => map[k.toLowerCase()] ?? map[k] ?? "");
+  // Legacy bracket placeholders from angle templates (not {{tokens}}).
+  out = out.replace(/\[TC\s*Name\]/gi, tcName);
+  out = out.replace(/\[TC\s*name\]/gi, tcName);
+  out = out.replace(/\[Name\]/gi, first);
+  out = out.replace(/\[name\]/gi, first);
+  out = out.replace(/\[Last\]/gi, last);
+  out = out.replace(/\[last\]/gi, last);
+  // Strip any remaining template cruft so patients never see raw placeholders.
+  out = out.replace(/\{\{[^}]+\}\}/g, "");
+  out = out.replace(/\[[A-Za-z][^\]]*\]/g, "");
+  return out.replace(/\n{3,}/g, "\n\n").trim();
 }

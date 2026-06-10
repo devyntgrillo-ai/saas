@@ -17,7 +17,7 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // Service-role; verify_jwt=false (internal job).
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { requireServiceRole } from "../_shared/auth.ts";
+import { isServiceRoleBearer, resolveAuth } from "../_shared/auth.ts";
 import { invokeEdgeFunction, serviceRoleClient } from "../_shared/service-role.ts";
 import { replaceTokens } from "../_shared/reactivationTokens.ts";
 
@@ -29,7 +29,21 @@ const hasText = (v: unknown) => Boolean((v ?? "").toString().trim());
 // Day offsets per step (Day 1 / Day 4 / Day 10 in the v2 design → 0/3/9 days
 // after launch). Steps beyond the 3rd fall back to ~3-day spacing.
 const DAY_OFFSETS = [0, 3, 9];
-const stepOffset = (i: number) => DAY_OFFSETS[i] ?? i * 3;
+const stepOffsetDays = (i: number) => DAY_OFFSETS[i] ?? i * 3;
+
+/** When step_interval_minutes is set on the campaign, due time is launch + idx * interval. */
+// deno-lint-ignore no-explicit-any
+function stepDueAt(launchedRef: string | Date, idx: number, c: any): Date {
+  const base = new Date(launchedRef).getTime();
+  const mins = Number(c.step_interval_minutes) || 0;
+  if (mins > 0) return new Date(base + idx * mins * 60_000);
+  return new Date(base + stepOffsetDays(idx) * 86_400_000);
+}
+
+// deno-lint-ignore no-explicit-any
+function isMinuteTestCampaign(c: any): boolean {
+  return Number(c.step_interval_minutes) > 0;
+}
 
 // Canonical ordered steps for a campaign row. v2 design = SMS 1, SMS 2, Email 3;
 // legacy email slots still supported.
@@ -60,11 +74,22 @@ const ANGLE_LABEL: Record<string, string> = {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok");
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
-  const authErr = requireServiceRole(req);
-  if (authErr) return authErr;
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const admin = serviceRoleClient(req);
+  const force = body.force === true;
+
+  // Cron uses service role with { tick: true } and no practice_id (all practices).
+  // Logged-in users may tick their own practice only.
+  let practiceFilter: string | undefined;
+  if (isServiceRoleBearer(req.headers.get("Authorization") || "")) {
+    practiceFilter = (body.practice_id as string) || undefined;
+  } else {
+    const { ctx, error: authErr } = await resolveAuth(req, body, true);
+    if (authErr) return authErr;
+    practiceFilter = ctx!.practiceId;
+  }
+
   try {
-    const admin = serviceRoleClient(req);
-    const force = (await req.json().catch(() => ({})))?.force === true;
 
     const now = new Date();
     const nowIso = now.toISOString();
@@ -80,10 +105,12 @@ Deno.serve(async (req: Request) => {
       .not("scheduled_start", "is", null)
       .lte("scheduled_start", nowIso);
 
-    const { data: campaigns, error } = await admin
+    let campaignQuery = admin
       .from("reactivation_campaigns")
       .select("*")
       .eq("status", "active");
+    if (practiceFilter) campaignQuery = campaignQuery.eq("practice_id", practiceFilter);
+    const { data: campaigns, error } = await campaignQuery;
     if (error) throw error;
 
     let sent = 0, replies = 0, completedCampaigns = 0;
@@ -95,7 +122,10 @@ Deno.serve(async (req: Request) => {
 
       // Practice fields for {{practice_name}} / {{doctor_name}} / {{phone_number}}.
       const { data: practice } = await admin
-        .from("practices").select("name, doctor_last, phone").eq("id", c.practice_id).maybeSingle();
+        .from("practices")
+        .select("name, doctor_first, doctor_last, phone, sms_sender_name")
+        .eq("id", c.practice_id)
+        .maybeSingle();
       const launchedRef = c.launched_at || c.started_at || c.created_at;
       let campSent = 0;
       let campReplies = 0;
@@ -160,28 +190,36 @@ Deno.serve(async (req: Request) => {
         campReplies++;
       }
 
-      // ── 3. Window + day-of-week gates ─────────────────────────────────────
+      const minuteTest = isMinuteTestCampaign(c);
+
+      // ── 3. Window + day-of-week gates (skipped for minute-interval test campaigns) ──
       const inWindow = hour >= (c.send_window_start ?? 9) && hour < (c.send_window_end ?? 17);
       const maxDow = c.send_days === "mon_sat" ? 6 : 5;
       const inDays = dow >= 1 && dow <= maxDow;
-      if (!force && (!inWindow || !inDays)) continue;
+      if (!force && !minuteTest && (!inWindow || !inDays)) continue;
 
       // ── 4. Daily cap + next-step sends ────────────────────────────────────
-      const { count: sentToday } = await admin
-        .from("reactivation_enrollments")
-        .select("id", { count: "exact", head: true })
-        .eq("campaign_id", c.id)
-        .gte("last_sent_at", startOfTodayIso);
-      let budget = (c.messages_per_day ?? 20) - (sentToday ?? 0);
-      if (budget <= 0) continue;
+      let budget = c.messages_per_day ?? 20;
+      if (!minuteTest) {
+        const { count: sentToday } = await admin
+          .from("reactivation_enrollments")
+          .select("id", { count: "exact", head: true })
+          .eq("campaign_id", c.id)
+          .gte("last_sent_at", startOfTodayIso);
+        budget = budget - (sentToday ?? 0);
+        if (budget <= 0) continue;
+      }
 
-      const { data: nextUp } = await admin
+      let nextQuery = admin
         .from("reactivation_enrollments")
         .select("*")
         .eq("campaign_id", c.id)
         .in("status", ["pending", "sending"])
-        .lt("messages_sent", stepCount)
-        .or(`last_sent_at.is.null,last_sent_at.lt.${startOfTodayIso}`)
+        .lt("messages_sent", stepCount);
+      if (!minuteTest) {
+        nextQuery = nextQuery.or(`last_sent_at.is.null,last_sent_at.lt.${startOfTodayIso}`);
+      }
+      const { data: nextUp } = await nextQuery
         .order("messages_sent", { ascending: true })
         .order("created_at", { ascending: true })
         .limit(budget);
@@ -191,10 +229,13 @@ Deno.serve(async (req: Request) => {
         const idx = e.messages_sent || 0;
         const step = steps[idx];
         if (!step) continue;
-        // Respect the per-step day offset (Day 1 / Day 4 / Day 10) from launch.
         if (!force && launchedRef) {
-          const dueAt = new Date(new Date(launchedRef).getTime() + stepOffset(idx) * 86400000);
+          const dueAt = stepDueAt(launchedRef, idx, c);
           if (now < dueAt) continue;
+          if (minuteTest && e.last_sent_at && idx > 0) {
+            const gapMs = Number(c.step_interval_minutes) * 60_000;
+            if (now.getTime() < new Date(e.last_sent_at).getTime() + gapMs) continue;
+          }
         }
         const to = step.channel === "email" ? e.patient_email : e.patient_phone;
         if (!to) continue;
@@ -234,10 +275,9 @@ Deno.serve(async (req: Request) => {
         budget--;
       }
 
-      // Keep the results-tab rollups current (cards read these columns).
-      if (campSent || campReplies) {
+      // Keep the results-tab rollups current (replies_count on campaign row).
+      if (campReplies) {
         await admin.from("reactivation_campaigns").update({
-          messages_sent: (c.messages_sent || 0) + campSent,
           replies_count: (c.replies_count || 0) + campReplies,
         }).eq("id", c.id);
       }

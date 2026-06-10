@@ -55,7 +55,11 @@ export default function ReactivationResults() {
                   </div>
                   <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_PILL[c.status] || STATUS_PILL.draft}`}>{c.status}</span>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">Launched {fmtDate(c.launched_at || c.started_at || c.created_at)}</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {c.launched_at || c.started_at
+                    ? `Launched ${fmtDate(c.launched_at || c.started_at)}`
+                    : `Created ${fmtDate(c.created_at)}`}
+                </p>
                 <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                   <Stat label="Patients" value={targeted} />
                   <Stat label="Sent" value={`${c.messages_sent || 0}/${totalMsgs}`} />
@@ -97,7 +101,20 @@ function CampaignDetail({ campaign, onBack }) {
   const [noteDraft, setNoteDraft] = useState('')
 
   const launched = campaign.launched_at || campaign.started_at
-  const schedFor = (i) => (launched ? new Date(new Date(launched).getTime() + (STEP_DAYS[i] - 1) * 86400000) : null)
+  const minuteInterval = Number(campaign.step_interval_minutes) || 0
+  const schedFor = (i) => {
+    if (!launched) return null
+    if (minuteInterval > 0) return new Date(new Date(launched).getTime() + i * minuteInterval * 60_000)
+    return new Date(new Date(launched).getTime() + (STEP_DAYS[i] - 1) * 86400000)
+  }
+  const schedLabel = (i) => {
+    if (!launched) return 'Pending'
+    if (minuteInterval > 0) {
+      const t = schedFor(i)
+      return i === 0 ? fmtDateTime(t) : `+${i * minuteInterval}m · ${fmtDateTime(t)}`
+    }
+    return fmtDate(schedFor(i))
+  }
 
   const stats = useMemo(() => {
     const sent = rows.reduce((s, r) => s + ['msg_1_status', 'msg_2_status', 'msg_3_status'].filter((k) => r[k] === 'sent').length, 0)
@@ -141,7 +158,9 @@ function CampaignDetail({ campaign, onBack }) {
           <button onClick={onBack} className="rounded-md p-1.5 text-gray-500 transition hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></button>
           <div>
             <h2 className="text-[18px] font-semibold tracking-tight text-gray-900">{campaign.campaign_name}</h2>
-            <p className="text-xs text-gray-500">Launched {fmtDate(launched || campaign.created_at)} · <span className="capitalize">{campaign.status}</span></p>
+            <p className="text-xs text-gray-500">
+              {launched ? `Launched ${fmtDate(launched)}` : `Created ${fmtDate(campaign.created_at)}`} · <span className="capitalize">{campaign.status}</span>
+            </p>
           </div>
         </div>
         <button onClick={exportCsv} className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-[13px] font-medium text-gray-600 transition hover:bg-gray-50"><Download className="h-3.5 w-3.5" /> Export CSV</button>
@@ -163,7 +182,9 @@ function CampaignDetail({ campaign, onBack }) {
             <thead className="border-b border-gray-200 bg-gray-50 text-left text-xs text-gray-500">
               <tr>
                 <th className="px-3 py-2">Name</th><th className="px-3 py-2">Treatment</th>
-                <th className="px-3 py-2">Msg 1 · D1</th><th className="px-3 py-2">Msg 2 · D4</th><th className="px-3 py-2">Msg 3 · D10</th>
+                <th className="px-3 py-2">{minuteInterval ? 'Email 1' : 'Msg 1 · D1'}</th>
+                <th className="px-3 py-2">{minuteInterval ? `Email 2 (+${minuteInterval}m)` : 'Msg 2 · D4'}</th>
+                <th className="px-3 py-2">{minuteInterval ? `Email 3 (+${minuteInterval * 2}m)` : 'Msg 3 · D10'}</th>
                 <th className="px-3 py-2">Notes</th><th className="px-3 py-2"></th>
               </tr>
             </thead>

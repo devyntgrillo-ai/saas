@@ -22,7 +22,7 @@ Deno.serve(async (req: Request) => {
   try {
     form = await req.formData();
   } catch {
-    return new Response("", { status: 204 });
+    return new Response(null, { status: 204 });
   }
 
   // Twilio signature verification, mirrors twilio-inbound guard.
@@ -82,10 +82,10 @@ Deno.serve(async (req: Request) => {
         }).catch((e) => console.error("transcribe-call-log trigger failed:", e));
       }
     }
-    return new Response("", { status: 204 });
+    return new Response(null, { status: 204 });
   } catch (e) {
     await reportEdgeError("twilio-recording-callback", e);
     console.error("twilio-recording-callback error:", e);
-    return new Response("", { status: 204 }); // always ack so Twilio doesn't retry-storm
+    return new Response(null, { status: 204 }); // always ack so Twilio doesn't retry-storm
   }
 });

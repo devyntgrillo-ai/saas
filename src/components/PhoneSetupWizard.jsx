@@ -29,6 +29,8 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
   const [brandApproved, setBrandApproved] = useState(false)
   const [resubmitMode, setResubmitMode] = useState(false)
   const [failureReason, setFailureReason] = useState('')
+  const [pollBrandStatus, setPollBrandStatus] = useState('pending')
+  const [pollCampaignStatus, setPollCampaignStatus] = useState('unregistered')
   const [areaCode, setAreaCode] = useState('')
   const [numbers, setNumbers] = useState([])
   const [searched, setSearched] = useState(false)
@@ -80,7 +82,9 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
           setStep(5)
         } else if (
           data.twilio_phone_number &&
-          (data.a2p_brand_status === 'pending' || data.a2p_campaign_status === 'pending')
+          (data.a2p_brand_status === 'pending' ||
+            data.a2p_campaign_status === 'pending' ||
+            (data.a2p_brand_status === 'approved' && data.a2p_campaign_status !== 'approved'))
         ) {
           setStep(4)
         } else if (data.twilio_phone_number) {
@@ -117,6 +121,8 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
       try {
         const res = await pollA2PStatus(practiceId)
         if (!active) return
+        setPollBrandStatus(res.brandStatus || 'pending')
+        setPollCampaignStatus(res.campaignStatus || 'unregistered')
         if (res.brandStatus === 'approved' && res.campaignStatus === 'approved') {
           onComplete?.()
           setStep(5)
@@ -474,16 +480,34 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
             </div>
             <h3 className="mt-4 text-lg font-bold text-white">Registration submitted</h3>
             <p className="mt-2 text-sm text-slate-400">
-              Your number is active for inbound texts. Outbound sequences unlock when carriers approve your brand and campaign (typically 1–7 business days).
+              Two-way texting isn&apos;t available yet. Outbound sequences and inbound patient replies unlock when carriers approve your brand and campaign (typically 1–7 business days).
             </p>
             <div className="mx-auto mt-5 max-w-sm space-y-2 text-left text-sm">
               <div className="flex items-center justify-between rounded-lg border border-surface-700 bg-surface-800/50 px-4 py-2.5">
                 <span className="text-slate-300">Brand registration</span>
-                <span className="text-amber-300">Pending</span>
+                <span className={pollBrandStatus === 'approved' ? 'text-emerald-300' : 'text-amber-300'}>
+                  {pollBrandStatus === 'approved' ? 'Approved' : 'Pending'}
+                </span>
               </div>
               <div className="flex items-center justify-between rounded-lg border border-surface-700 bg-surface-800/50 px-4 py-2.5">
                 <span className="text-slate-300">Campaign registration</span>
-                <span className="text-amber-300">Pending</span>
+                <span
+                  className={
+                    pollCampaignStatus === 'approved'
+                      ? 'text-emerald-300'
+                      : pollCampaignStatus === 'pending'
+                        ? 'text-amber-300'
+                        : 'text-slate-500'
+                  }
+                >
+                  {pollCampaignStatus === 'approved'
+                    ? 'Approved'
+                    : pollCampaignStatus === 'pending'
+                      ? 'Pending'
+                      : pollBrandStatus === 'approved'
+                        ? 'Submitting…'
+                        : 'Waiting on brand'}
+                </span>
               </div>
             </div>
             <button type="button" onClick={onClose} className="btn-secondary mt-6">

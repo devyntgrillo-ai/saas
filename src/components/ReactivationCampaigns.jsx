@@ -33,7 +33,7 @@ const ANGLES = [
     name: 'The Gentle Check-In',
     desc: 'Low pressure, relationship-first. Best for patients who went cold without a clear reason.',
     badge: 'Recommended for most patients',
-    msg1: "Hi {{first_name}}, it's [TC Name] from {{practice_name}}. I was reviewing some charts and thought of you, we talked about {{treatment_type}} back in {{tx_plan_date}}. Still something you're thinking about?",
+    msg1: "Hi {{first_name}}, it's {{tc_name}} from {{practice_name}}. I was reviewing some charts and thought of you, we talked about {{treatment_type}} back in {{tx_plan_date}}. Still something you're thinking about?",
     msg2: "{{first_name}}, just wanted to make sure my last text didn't get lost. No rush at all, just want to make sure you have everything you need if and when you're ready. Anything I can answer for you?",
     msg3Subject: 'Checking in, {{first_name}}',
     msg3Body: `Hi {{first_name}},
@@ -46,7 +46,7 @@ No pressure, but if you have any questions or just want to talk through your opt
 
 Would love to hear from you.
 
-[TC Name]
+{{tc_name}}
 {{practice_name}}, {{phone_number}}`,
   },
   {
@@ -54,7 +54,7 @@ Would love to hear from you.
     name: 'The Price Lock',
     desc: 'Creates soft urgency around pricing or availability. Best for patients whose main objection was cost or timing.',
     badge: 'Best for cost objections',
-    msg1: "Hi {{first_name}}, [TC Name] at {{practice_name}}. Quick heads up, we've had some patients ask about pricing recently and wanted to make sure you still had access to the same treatment plan we built for you in {{tx_plan_date}}. Worth a quick chat?",
+    msg1: "Hi {{first_name}}, {{tc_name}} at {{practice_name}}. Quick heads up, we've had some patients ask about pricing recently and wanted to make sure you still had access to the same treatment plan we built for you in {{tx_plan_date}}. Worth a quick chat?",
     msg2: "{{first_name}}, just following up on my last message. The plan we discussed for {{treatment_type}} is still on file. Happy to walk through the financing options again if that would help, a lot of patients are surprised by how manageable the monthly payment is. Want me to send the breakdown?",
     msg3Subject: 'Your {{treatment_type}} plan, still on file, {{first_name}}',
     msg3Body: `Hi {{first_name}},
@@ -67,7 +67,7 @@ If cost was part of what gave you pause, I'd love to spend 10 minutes walking yo
 
 Would that be worth a quick call?
 
-[TC Name]
+{{tc_name}}
 {{practice_name}}, {{phone_number}}`,
   },
   {
@@ -75,7 +75,7 @@ Would that be worth a quick call?
     name: 'The Clinical Update',
     desc: "Positions the follow-up as new information or a changed situation. Best for patients who wanted to 'wait and see'.",
     badge: 'Best for hesitant patients',
-    msg1: "Hi {{first_name}}, this is [TC Name] from {{practice_name}}. We chatted about {{treatment_type}} back in {{tx_plan_date}}, I wanted to reach out because we've had a few things change that might be relevant to your situation. Worth a quick conversation?",
+    msg1: "Hi {{first_name}}, this is {{tc_name}} from {{practice_name}}. We chatted about {{treatment_type}} back in {{tx_plan_date}}, I wanted to reach out because we've had a few things change that might be relevant to your situation. Worth a quick conversation?",
     msg2: "{{first_name}}, following up from my last message. I know timing wasn't quite right before, just wanted to check in and see if anything has changed on your end. {{doctor_name}} would love to reconnect when the time is right.",
     msg3Subject: 'A few things worth knowing, {{first_name}}',
     msg3Body: `Hi {{first_name}},
@@ -90,7 +90,7 @@ The longer a tooth or bone issue goes unaddressed, the more complex the treatmen
 
 Is there a good time this week to connect?
 
-[TC Name]
+{{tc_name}}
 {{practice_name}}, {{phone_number}}`,
   },
 ]
@@ -180,17 +180,18 @@ function TokenBar({ targetRef, setValue }) {
   )
 }
 
-function MessageEditor({ channel, day, subject, setSubject, body, setBody, onReset }) {
+function MessageEditor({ channel, day, dayLabel, subject, setSubject, body, setBody, onReset }) {
   const ref = useRef(null)
   const isSms = channel === 'sms'
   const count = isSms ? (body || '').length : (body || '').trim().split(/\s+/).filter(Boolean).length
+  const scheduleLabel = dayLabel ?? (day != null ? `Day ${day}` : null)
   return (
     <div className="rounded-xl border border-surface-700 bg-surface-800/40 p-4">
       <div className="mb-3 flex items-center gap-2">
         <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold ${isSms ? 'bg-sky-500/15 text-sky-300' : 'bg-violet-500/15 text-violet-300'}`}>
           {isSms ? <MessageSquare className="h-3 w-3" /> : <Mail className="h-3 w-3" />} {isSms ? 'SMS' : 'Email'}
         </span>
-        <span className="rounded-md bg-surface-700 px-2 py-0.5 text-[11px] font-semibold text-slate-300">Day {day}</span>
+        {scheduleLabel && <span className="rounded-md bg-surface-700 px-2 py-0.5 text-[11px] font-semibold text-slate-300">{scheduleLabel}</span>}
         {onReset && (
           <button type="button" onClick={onReset} className="ml-auto text-[11px] font-medium text-slate-400 transition hover:text-primary-300">Reset to default</button>
         )}

@@ -65,10 +65,10 @@ import { formatMoney } from '../lib/analytics'
 import { formatCallTime } from '../lib/voice'
 import { useVoice } from '../context/VoiceContext'
 import CallMessageBubble from '../components/CallMessageBubble'
-import EmailMessageBubble from '../components/EmailMessageBubble'
+import ConversationThreadCard from '../components/ConversationThreadCard'
 import EmailComposer from '../components/EmailComposer'
+import { buildThreadRenderList, renderItemTimestamp, threadStartedByPatient } from '../lib/conversationThread'
 import ChannelToggle from '../components/ChannelToggle'
-import ConvAttachment from '../components/ConvAttachment'
 
 function initials(first, last) {
   return `${(first || '?')[0]}${(last || '')[0] || ''}`.toUpperCase()
@@ -144,10 +144,6 @@ function cleanBody(text) {
   if (!text) return ''
   return String(text).replace(/\s*, \s*/g, ', ')
 }
-
-// Messages from the same sender within this window group into one cluster
-// (tighter spacing, single shared timestamp) like iMessage.
-const CLUSTER_GAP_MS = 5 * 60 * 1000
 
 // ---- Patient context panel -------------------------------------------------
 
@@ -686,6 +682,7 @@ export default function Conversations() {
     voice.hangup()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- end call when switching threads
   }, [activeId])
+  const threadRenderItems = useMemo(() => buildThreadRenderList(thread), [thread])
   const lastInbound = [...thread].reverse().find((m) => m.direction === 'inbound')
   const paused = lastInbound && (!thread.length || thread[thread.length - 1].direction === 'inbound')
   const consultPath = activeConv
@@ -1293,13 +1290,40 @@ export default function Conversations() {
               {loadingThread ? (
                 <div className="py-8 text-center text-sm text-gray-500">Loading messages...</div>
               ) : (
-                thread.map((m, i) => {
-                  const outbound = m.direction === 'outbound'
-                  const ts = m.sent_at || m.created_at
-                  const prev = thread[i - 1]
-                  const next = thread[i + 1]
-                  const prevTs = prev ? prev.sent_at || prev.created_at : null
+                threadRenderItems.map((item, ri) => {
+                  const ts = renderItemTimestamp(item)
+                  const prevTs = ri > 0 ? renderItemTimestamp(threadRenderItems[ri - 1]) : null
                   const newDay = !prevTs || new Date(ts).toDateString() !== new Date(prevTs).toDateString()
+
+                  if (item.type === 'thread') {
+                    const patientStarted = threadStartedByPatient(item.messages)
+                    return (
+                      <Fragment key={`thread-${item.channel}-${item.messages.map((msg) => msg.id).join('-')}`}>
+                        {newDay && (
+                          <div className="flex justify-center pb-2 pt-3">
+                            <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-medium text-gray-500">{dayLabel(ts)}</span>
+                          </div>
+                        )}
+                        <div className={`mt-3 flex ${patientStarted ? 'justify-start' : 'justify-end'}`}>
+                          <ConversationThreadCard
+                            channel={item.channel}
+                            messages={item.messages}
+                            activeConv={activeConv}
+                            practice={practice}
+                            user={user}
+                            tcName={tcName}
+                            avatarColor={avatarColor}
+                            emailInitials={emailInitials}
+                            initials={initials}
+                            onReply={item.channel === 'email' ? replyToEmail : undefined}
+                          />
+                        </div>
+                      </Fragment>
+                    )
+                  }
+
+                  const m = item.message
+                  const msgTs = m.sent_at || m.created_at
 
                   // Internal notes: amber, left-aligned, standalone block.
                   if (m.channel === 'note') {
@@ -1314,7 +1338,7 @@ export default function Conversations() {
                           <div className="max-w-[80%] rounded-[14px] border border-amber-200 bg-amber-50 px-3 py-2">
                             <p className="mb-0.5 text-[11px] font-semibold text-amber-700">📌 Internal note</p>
                             <p className="whitespace-pre-wrap text-sm leading-snug text-amber-900">{cleanBody(m.body)}</p>
-                            <p className="mt-1 text-[10px] text-amber-600/80">{messageTime(ts)}</p>
+                            <p className="mt-1 text-[10px] text-amber-600/80">{messageTime(msgTs)}</p>
                           </div>
                         </div>
                       </Fragment>
@@ -1337,7 +1361,7 @@ export default function Conversations() {
                         <div className={`mt-2.5 ${inbound ? '' : 'flex justify-end'}`}>
                           <CallMessageBubble
                             inbound={inbound}
-                            sentAt={ts}
+                            sentAt={msgTs}
                             callLogId={m.call_log_id}
                             hasRecording={hasRecording}
                             recordingDuration={recMeta?.duration_seconds}
@@ -1355,101 +1379,7 @@ export default function Conversations() {
                     )
                   }
 
-                  // Email messages: GHL-style cards (not SMS bubbles).
-                  if (m.channel === 'email') {
-                    const inbound = m.direction === 'inbound'
-                    const seed = inbound
-                      ? (activeConv.patient_email || `${activeConv.patient_first || ''}${activeConv.patient_last || ''}`)
-                      : `${practice?.name || tcName}`
-                    const senderName = inbound
-                      ? (`${activeConv.patient_first || ''} ${activeConv.patient_last || ''}`.trim() || activeConv.patient_email || 'Patient')
-                      : (practice?.name || tcName)
-                    const senderEmail = inbound ? activeConv.patient_email : (practice?.email || user?.email)
-                    const recipientEmail = inbound ? (practice?.email || user?.email) : activeConv.patient_email
-                    const senderInitials = inbound
-                      ? (activeConv.patient_email ? emailInitials(activeConv.patient_email) : initials(activeConv.patient_first, activeConv.patient_last))
-                      : emailInitials(practice?.email || user?.email || tcName)
-                    return (
-                      <Fragment key={m.id}>
-                        {newDay && (
-                          <div className="flex justify-center pb-2 pt-3">
-                            <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-medium text-gray-500">{dayLabel(ts)}</span>
-                          </div>
-                        )}
-                        <div className={`mt-3 flex ${inbound ? 'justify-start' : 'justify-end'}`}>
-                          <EmailMessageBubble
-                            inbound={inbound}
-                            subject={m.meta?.subject || m.subject}
-                            body={m.body}
-                            sentAt={ts}
-                            senderName={senderName}
-                            senderEmail={senderEmail}
-                            recipientEmail={recipientEmail}
-                            avatarClass={avatarColor(seed)}
-                            senderInitials={senderInitials}
-                            onReply={replyToEmail}
-                          />
-                        </div>
-                      </Fragment>
-                    )
-                  }
-
-                  const nextTs = next ? next.sent_at || next.created_at : null
-                  const nextNewDay = !nextTs || new Date(nextTs).toDateString() !== new Date(ts).toDateString()
-                  const gapBefore = prevTs ? new Date(ts) - new Date(prevTs) : Infinity
-                  const gapAfter = nextTs ? new Date(nextTs) - new Date(ts) : Infinity
-                  // Cluster = consecutive messages, same sender, within the gap window.
-                  const clusterStart = !prev || prev.direction !== m.direction || prev.channel === 'note' || prev.channel === 'email' || gapBefore > CLUSTER_GAP_MS || newDay
-                  const clusterEnd = !next || next.direction !== m.direction || next.channel === 'note' || next.channel === 'email' || gapAfter > CLUSTER_GAP_MS || nextNewDay
-                  // Tail (4px corner) on the first and last bubble of a cluster; middle bubbles are fully round.
-                  const tail = clusterStart || clusterEnd
-                  // Shared timestamp only after a cluster that's followed by a real time gap (or is the last message).
-                  const showTime = clusterEnd && (!next || gapAfter > CLUSTER_GAP_MS)
-                  const radius = outbound
-                    ? `rounded-[18px]${tail ? ' rounded-br-[4px]' : ''}`
-                    : `rounded-[18px]${tail ? ' rounded-bl-[4px]' : ''}`
-                  return (
-                    <Fragment key={m.id}>
-                      {newDay && (
-                        <div className="flex justify-center pb-2 pt-3">
-                          <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-medium text-gray-500">
-                            {dayLabel(ts)}
-                          </span>
-                        </div>
-                      )}
-                      <div className={`flex ${clusterStart && !newDay ? 'mt-2.5' : 'mt-[2px]'} ${outbound ? 'justify-end' : 'justify-start'}`}>
-                        <div className="max-w-[65%]">
-                          {/* Sender name above the first bubble of each cluster (GHL style). */}
-                          {clusterStart && (
-                            <p className={`mb-0.5 px-1 text-[11px] text-gray-400 ${outbound ? 'text-right' : 'text-left'}`}>
-                              {outbound ? tcName : (activeConv.patient_first || 'Patient')}
-                            </p>
-                          )}
-                          {/* Bubble bg is fixed in both themes, so set text via an arbitrary
-                              color utility - plain `text-white` gets flipped dark by the
-                              light-mode override in index.css. */}
-                          {m.meta?.attachment ? (
-                            <ConvAttachment attachment={m.meta.attachment} outbound={outbound} radius={radius} />
-                          ) : (
-                            <div className={`px-3.5 py-2 text-[15px] leading-snug ${radius} ${outbound ? 'bg-[var(--accent)] text-[#fff]' : 'bg-[var(--bg-elevated)] text-[var(--text-primary)]'}`}>
-                              <p className="whitespace-pre-wrap">{cleanBody(m.body)}</p>
-                            </div>
-                          )}
-                          {m.meta?.attachment && m.channel === 'sms' && (
-                            <p className={`mt-0.5 px-1 text-[10px] text-gray-400 ${outbound ? 'text-right' : 'text-left'}`}>(MMS - carrier charges may apply)</p>
-                          )}
-                        </div>
-                      </div>
-                      {showTime && (
-                        <div
-                          className="flex justify-center pb-0.5 pt-1.5 text-[11px] text-gray-500"
-                          title={outbound ? `CaseLift sent this message on ${dayLabel(ts)}` : undefined}
-                        >
-                          {messageTime(ts)}
-                        </div>
-                      )}
-                    </Fragment>
-                  )
+                  return null
                 })
               )}
             </div>

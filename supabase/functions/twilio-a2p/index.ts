@@ -103,6 +103,50 @@ function mergeA2pConfig(existing: unknown, biz: A2PBusiness, trustHub: TrustHubS
   return { ...base, ...biz, trust_hub: trustHub };
 }
 
+function bizFromPractice(practice: Record<string, unknown>): A2PBusiness {
+  const cfg = (practice.a2p_config && typeof practice.a2p_config === "object"
+    ? practice.a2p_config
+    : {}) as A2PBusiness;
+  return {
+    ...cfg,
+    legal_name: cfg.legal_name || String(practice.name || ""),
+    contact_email: cfg.contact_email || String(practice.email || ""),
+    contact_phone: cfg.contact_phone || String(practice.phone || ""),
+    address_street: cfg.address_street || String(practice.address || ""),
+  };
+}
+
+/** Submit campaign only after Twilio has approved the brand (not merely returned a brand SID). */
+async function ensureCampaignIfBrandReady(
+  cfg: ReturnType<typeof cfgOrThrow>,
+  admin: ReturnType<typeof createClient>,
+  practice: Record<string, unknown>,
+  brandStatus: "pending" | "approved" | "failed" | "unregistered",
+): Promise<string | null> {
+  const brandSid = practice.twilio_brand_sid as string | null;
+  const mgSid = practice.twilio_messaging_service_sid as string | null;
+  const existingCampaignSid = practice.twilio_campaign_sid as string | null;
+  if (brandStatus !== "approved" || !brandSid || !mgSid || existingCampaignSid) {
+    return existingCampaignSid;
+  }
+
+  const result = await submitCampaign(cfg, mgSid, brandSid, bizFromPractice(practice));
+  if (result.campaignSid) {
+    await admin.from("practices").update({
+      twilio_campaign_sid: result.campaignSid,
+      a2p_campaign_status: "pending",
+      a2p_failure_reason: null,
+    }).eq("id", practice.id);
+    return result.campaignSid;
+  }
+  if (result.reason) {
+    await admin.from("practices").update({
+      a2p_failure_reason: `Campaign: ${result.reason}`,
+    }).eq("id", practice.id);
+  }
+  return null;
+}
+
 function bearerToken(req: Request): string {
   return (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
 }
@@ -284,6 +328,7 @@ async function pollAndUpdate(
   let brandStatus = mapA2pStatus(p.a2p_brand_status);
   let campaignStatus = mapA2pStatus(p.a2p_campaign_status);
   let failureReason = p.a2p_failure_reason as string | null;
+  let campaignSid = p.twilio_campaign_sid as string | null;
 
   if (p.twilio_brand_sid) {
     try {
@@ -298,12 +343,17 @@ async function pollAndUpdate(
     } catch { /* keep stored status */ }
   }
 
-  if (p.twilio_campaign_sid && p.twilio_messaging_service_sid) {
+  // Brand must be approved before campaign can be created; poll is responsible for the handoff.
+  if (!campaignSid) {
+    campaignSid = await ensureCampaignIfBrandReady(cfg, admin, p, brandStatus);
+  }
+
+  if (campaignSid && p.twilio_messaging_service_sid) {
     try {
       const camp = await twilioRequest<{ campaign_status: string; errors?: Array<{ description: string }> }>(
         cfg,
         "messaging",
-        `/v1/Services/${p.twilio_messaging_service_sid}/Compliance/Usa2p/${p.twilio_campaign_sid}`,
+        `/v1/Services/${p.twilio_messaging_service_sid}/Compliance/Usa2p/${campaignSid}`,
         { method: "GET" },
       );
       campaignStatus = mapA2pStatus(camp.campaign_status);
@@ -311,6 +361,12 @@ async function pollAndUpdate(
         failureReason = camp.errors[0].description;
       }
     } catch { /* keep stored status */ }
+  } else if (!campaignSid) {
+    campaignStatus = "unregistered";
+    // Clear stale errors from the old "submit campaign before brand is ready" behavior.
+    if (brandStatus !== "approved" && failureReason?.startsWith("Campaign:")) {
+      failureReason = null;
+    }
   }
 
   const approved = brandStatus === "approved" && campaignStatus === "approved";
@@ -322,7 +378,7 @@ async function pollAndUpdate(
   };
 
   await admin.from("practices").update(patch).eq("id", practiceId);
-  return { brandStatus, campaignStatus, failureReason, sms_enabled: approved };
+  return { brandStatus, campaignStatus, failureReason, sms_enabled: approved, campaign_sid: campaignSid };
 }
 
 Deno.serve(async (req: Request) => {
@@ -381,10 +437,11 @@ Deno.serve(async (req: Request) => {
       );
       const nowIso = new Date().toISOString();
 
+      const awaitingNewBrand = !campaignOnly && (!campaignResubmit || brandCriticalChanged);
       const regPatch: Record<string, unknown> = {
         a2p_submitted_at: nowIso,
-        a2p_brand_status: (campaignOnly || campaignResubmit) ? "approved" : "pending",
-        a2p_campaign_status: "pending",
+        a2p_brand_status: (campaignOnly || (campaignResubmit && !brandCriticalChanged)) ? "approved" : "pending",
+        a2p_campaign_status: awaitingNewBrand ? "unregistered" : "pending",
         a2p_failure_reason: null,
         sms_enabled: false,
       };
@@ -418,7 +475,7 @@ Deno.serve(async (req: Request) => {
         const failedCampaignSid = practice.twilio_campaign_sid as string | null;
 
         if (brandCriticalChanged) {
-          // Website / legal name / EIN changed, delete failed campaign, refresh Trust Hub, new brand + campaign.
+          // Website / legal name / EIN changed — delete failed campaign, refresh Trust Hub, submit new brand.
           if (failedCampaignSid && mgSid) {
             await deleteFailedCampaign(cfg, mgSid, failedCampaignSid);
           }
@@ -456,6 +513,8 @@ Deno.serve(async (req: Request) => {
               await admin.from("practices").update({
                 twilio_brand_sid: brandSid,
                 a2p_brand_status: "pending",
+                twilio_campaign_sid: null,
+                a2p_campaign_status: "unregistered",
               }).eq("id", practiceId);
             } else if (brandResult.reason) {
               notes.push(`Brand: ${brandResult.reason}`);
@@ -463,10 +522,6 @@ Deno.serve(async (req: Request) => {
           } else {
             notes.push(`Trust Hub: ${bundles.reason}`);
           }
-
-          const campResult = await submitCampaign(cfg, mgSid!, brandSid, biz);
-          campaignSid = campResult.campaignSid;
-          if (campResult.reason) notes.push(`Campaign: ${campResult.reason}`);
         } else if (failedCampaignSid && mgSid) {
           // Campaign-only fix, PATCH the failed campaign in place (preferred by Twilio).
           const updated = await updateFailedCampaign(cfg, mgSid, failedCampaignSid, biz);
@@ -585,13 +640,12 @@ Deno.serve(async (req: Request) => {
       if (brandResult.skipped && brandResult.reason) notes.push(`Brand: ${brandResult.reason}`);
 
       if (brandSid) {
-        await admin.from("practices").update({ twilio_brand_sid: brandSid }).eq("id", practiceId);
-        const campResult = await submitCampaign(cfg, mgSid!, brandSid, biz);
-        if (campResult.campaignSid) {
-          await admin.from("practices").update({ twilio_campaign_sid: campResult.campaignSid }).eq("id", practiceId);
-        } else if (campResult.reason) {
-          notes.push(`Campaign: ${campResult.reason}`);
-        }
+        await admin.from("practices").update({
+          twilio_brand_sid: brandSid,
+          a2p_campaign_status: "unregistered",
+        }).eq("id", practiceId);
+      } else if (brandResult.reason) {
+        await admin.from("practices").update({ a2p_brand_status: "unregistered" }).eq("id", practiceId);
       }
 
       if (notes.length) {
@@ -600,7 +654,7 @@ Deno.serve(async (req: Request) => {
 
       const polled = await pollAndUpdate(cfg, admin, practiceId);
       return json({
-        ok: true,
+        ok: Boolean(brandSid),
         messaging_service_sid: mgSid,
         brand_sid: brandSid,
         customer_profile_bundle_sid: bundles.customerProfileBundleSid,

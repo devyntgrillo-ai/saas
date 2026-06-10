@@ -205,7 +205,7 @@ export default function PhoneMessaging() {
           <div>
             <p className="font-semibold text-amber-300">SMS registration pending</p>
             <p className="mt-0.5 leading-relaxed text-amber-300">
-              Your number can receive replies. Outbound follow-up texts unlock after US carrier approval (usually 1–7 business days).
+              Two-way texting isn&apos;t available yet. Outbound follow-ups and inbound patient replies unlock after US carrier registration is approved (usually 1–7 business days). Inbound voice calls still work if configured below.
             </p>
           </div>
         </div>
@@ -573,7 +573,9 @@ function PhoneNumberCard({ phoneNumber, hasNumber, provStatus, practice, onSetup
                     ? 'Active, SMS enabled'
                     : provStatus === 'campaign_needed'
                       ? 'Brand approved, finish campaign setup'
-                      : 'Number active, registration pending'}
+                      : provStatus === 'pending'
+                        ? 'Assigned — SMS pending approval'
+                        : 'Number assigned'}
                 </span>
               </div>
             </div>
