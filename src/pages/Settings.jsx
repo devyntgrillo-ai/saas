@@ -591,8 +591,8 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
           </span>
         </div>
 
-        {/* Action in the bottom-left of the box. */}
-        <div className="mt-4 flex">
+        {/* Action in the bottom-right of the box. */}
+        <div className="mt-4 flex justify-end">
           {status === 'paused' ? (
             <ActivateButton label="Resume subscription" loading={false} onClick={onResume} />
           ) : isActive ? (
