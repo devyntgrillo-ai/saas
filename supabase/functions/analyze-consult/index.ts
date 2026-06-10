@@ -141,6 +141,20 @@ const TOOL = {
           required: ["channel", "offset_hours", "purpose", "tone"],
         },
       },
+      // Durable, practice-level facts learned from this consult (knowledge-base
+      // candidates). NOT patient-specific. Filed as pending for human review.
+      practice_facts: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            category: { type: "string", enum: ["USP", "financing", "guarantee", "protocol", "team", "testimonial"] },
+            fact: STR,
+          },
+          required: ["category", "fact"],
+        },
+      },
     },
     required: [
       "treatment_type", "primary_objection", "secondary_objections", "fears",
@@ -230,7 +244,7 @@ Deno.serve(async (req: Request) => {
 
     // ── Knowledge base (Part 5): structured table + legacy JSONB sections. ──
     const { data: kbRows } = await admin
-      .from("practice_knowledge_base").select("category, content").eq("practice_id", practiceId).eq("is_active", true).limit(40);
+      .from("practice_knowledge_base").select("category, content").eq("practice_id", practiceId).eq("is_active", true).eq("status", "approved").limit(40);
     const { data: pr } = await admin
       .from("practices").select("sequence_config, auto_start_followup, timezone, knowledge_base_sections, name")
       .eq("id", practiceId).maybeSingle();
@@ -274,6 +288,7 @@ Practice USPs / financing / protocols / guarantees / testimonials (weave 1-2 in 
 ${kbBlock}
 This practice's channel performance: ${channelHint}
 ${note ? `\nExtra guidance from the treatment coordinator: ${note}\n` : ""}
+Also populate practice_facts with any NEW, durable facts about THIS PRACTICE that would help future follow-ups (e.g. services offered, financing/pricing norms, guarantees, scheduling or office policies, doctor specialties). STRICT RULES: practice-level only (NEVER patient-specific details), factual and durable only (no opinions, sentiment, or one-off chatter), and ONLY facts not already covered in the knowledge base listed above. If nothing qualifies, return an empty array.
 De-identified transcript:
 ${deidentified}`;
 
@@ -348,6 +363,40 @@ ${deidentified}`;
 
     const { error: upErr } = await admin.from("consults").update(record).eq("id", consultId);
     if (upErr) return json({ error: "Could not save the analysis.", detail: upErr.message }, 500);
+
+    // ── Knowledge-base review queue: file any durable practice facts the model
+    // surfaced as PENDING for human approval. Never auto-active; deduped against
+    // existing entries; capped so one consult can't flood the queue. Non-blocking. ──
+    try {
+      const facts = Array.isArray(a.practice_facts) ? a.practice_facts : [];
+      if (facts.length) {
+        const { data: existingKb } = await admin
+          .from("practice_knowledge_base").select("content").eq("practice_id", practiceId).limit(300);
+        const seen = new Set((existingKb || []).map((r) => String(r.content).trim().toLowerCase()));
+        const allowed = ["USP", "financing", "guarantee", "protocol", "team", "testimonial"];
+        const rows: Record<string, unknown>[] = [];
+        for (const f of facts.slice(0, 5)) {
+          const fact = nn((f as Record<string, unknown>)?.fact);
+          if (!fact) continue;
+          const key = fact.trim().toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const rawCat = String((f as Record<string, unknown>)?.category ?? "");
+          rows.push({
+            practice_id: practiceId,
+            category: allowed.includes(rawCat) ? rawCat : "protocol",
+            content: fact.trim(),
+            is_active: false,
+            source: "consult",
+            status: "pending",
+            source_consult_id: consultId,
+          });
+        }
+        if (rows.length) await admin.from("practice_knowledge_base").insert(rows);
+      }
+    } catch (e) {
+      console.error("KB fact extraction (non-blocking) failed:", (e as Error)?.message ?? e);
+    }
 
     if (regenerate) await admin.from("messages").delete().eq("consult_id", consultId).eq("status", "draft");
 

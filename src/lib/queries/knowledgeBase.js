@@ -119,6 +119,25 @@ export function useSaveKnowledgeBaseSections() {
   })
 }
 
+// Approve an auto-learned (pending) fact: mark it approved + active so the AI
+// starts using it. Dismissing a pending fact just uses useRemovePracticeKbItem.
+export function useApprovePracticeKbItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, practiceId }) => {
+      const { error } = await supabase
+        .from('practice_knowledge_base')
+        .update({ status: 'approved', is_active: true })
+        .eq('id', id)
+      if (error) throw error
+      return { id, practiceId }
+    },
+    onSuccess: ({ practiceId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.practiceKb(practiceId) })
+    },
+  })
+}
+
 export function useTogglePracticeKbItem() {
   const queryClient = useQueryClient()
   return useMutation({
