@@ -39,7 +39,7 @@ async function helcim(endpoint: string, method = "GET", body?: object) {
 // Actions any visitor may call (needed during signup, before an account exists).
 const PUBLIC_ACTIONS = new Set(["initialize_checkout", "create_customer"]);
 // Actions that self-authenticate against the caller's own practice (not super-admin).
-const SELF_AUTH_ACTIONS = new Set(["record_payment", "update_card"]);
+const SELF_AUTH_ACTIONS = new Set(["record_payment", "update_card", "manage_subscription"]);
 
 // Resolve the authenticated caller and their practice (never trust the body for identity).
 async function getCaller(req: Request): Promise<{ userId: string; practiceId: string | null; email: string | null } | null> {
@@ -183,6 +183,10 @@ Deno.serve(async (req: Request) => {
         const { error: upErr } = await admin.from("practices").update(patch).eq("id", caller.practiceId);
         if (upErr) return json({ error: `Verified your charge but could not update your account: ${upErr.message}` }, 500);
 
+        // Internal Slack alert on a new paid activation (replaces the old
+        // chargebee/ls-webhook trigger). Best-effort — never blocks activation.
+        admin.functions.invoke("notify-signup", { body: { practice_id: caller.practiceId } }).catch(() => {});
+
         return json({ success: true, subscriptionId, transactionId: realTxnId });
       }
 
@@ -233,6 +237,72 @@ Deno.serve(async (req: Request) => {
 
         return json({ success: true });
       }
+
+      // Cancel / pause / resume / downsell the Helcim recurring subscription AND
+      // reflect it locally. This is what actually stops/changes Helcim billing —
+      // previously the app only flipped the DB status, so cancelled/paused
+      // practices kept getting charged. Practice owners act on their own practice;
+      // super-admins may target any via practice_id.
+      case "manage_subscription": {
+        const op = String(params.op || "");
+        if (!["cancel", "pause", "resume", "set_amount"].includes(op)) return json({ error: "Unknown op" }, 400);
+
+        const superAdmin = await isSuperAdmin(req);
+        let practiceId: string | null = null;
+        if (superAdmin && params.practice_id) {
+          practiceId = String(params.practice_id);
+        } else {
+          const caller = await getCaller(req);
+          if (!caller?.userId) return json({ error: "Unauthorized" }, 401);
+          practiceId = caller.practiceId; // own practice only (body practice_id ignored for non-admins)
+        }
+        if (!practiceId) return json({ error: "No practice in context." }, 409);
+
+        const admin = createClient(
+          Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+          { auth: { autoRefreshToken: false, persistSession: false } },
+        );
+        const { data: pr } = await admin.from("practices").select("helcim_subscription_id").eq("id", practiceId).maybeSingle();
+        const subId = pr?.helcim_subscription_id as string | undefined;
+
+        // Map the op to the Helcim subscription patch + the local status change.
+        let helcimPatch: Record<string, unknown> | null = null;
+        const localPatch: Record<string, unknown> = {};
+        if (op === "cancel") { helcimPatch = { status: "cancelled" }; localPatch.subscription_status = "cancelled"; }
+        else if (op === "pause") { helcimPatch = { status: "paused" }; localPatch.subscription_status = "paused"; if (params.pause_ends_at) localPatch.pause_ends_at = params.pause_ends_at; }
+        else if (op === "resume") { helcimPatch = { status: "active" }; localPatch.subscription_status = "active"; localPatch.pause_ends_at = null; }
+        else if (op === "set_amount") {
+          const amt = Number(params.amount);
+          if (!(amt > 0)) return json({ error: "Invalid amount." }, 400);
+          helcimPatch = { recurringAmount: amt }; localPatch.subscription_status = "active"; localPatch.downsell_accepted_at = new Date().toISOString();
+        }
+
+        // Tell Helcim. If there's a live subscription and the patch fails for a
+        // cancel/pause, surface the error rather than falsely flipping local state
+        // (which would leave the customer still being billed).
+        if (subId && helcimPatch) {
+          const idem = crypto.randomUUID().replace(/-/g, "").slice(0, 25);
+          const res = await fetch(`${HELCIM_BASE}/subscriptions`, {
+            method: "PATCH",
+            headers: { "api-token": HELCIM_API_KEY!, "idempotency-key": idem, "Content-Type": "application/json", accept: "application/json" },
+            body: JSON.stringify({ subscriptions: [{ id: Number(subId), ...helcimPatch }] }),
+          });
+          if (!res.ok) {
+            const detail = await res.text();
+            console.error(`manage_subscription ${op} failed:`, res.status, detail);
+            if (op === "cancel" || op === "pause") {
+              return json({ error: `Could not ${op} the subscription at Helcim. Please try again or contact support.` }, 502);
+            }
+          }
+        } else if (!subId) {
+          console.warn(`manage_subscription: practice ${practiceId} has no helcim_subscription_id — applying local ${op} only.`);
+        }
+
+        const { error: upErr } = await admin.from("practices").update(localPatch).eq("id", practiceId);
+        if (upErr) return json({ error: upErr.message }, 500);
+        return json({ success: true });
+      }
+
       case "initialize_checkout": {
         let amount = Number(params.amount);
         if (!ALLOWED_AMOUNTS.includes(amount)) amount = 997; // never trust a client-supplied price

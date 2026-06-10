@@ -56,6 +56,7 @@ import {
   isTrialExpired,
   recordHelcimPayment,
   updateHelcimCard,
+  resumeSubscription,
 } from '../lib/billing'
 import HelcimCardForm from '../components/HelcimCardForm'
 
@@ -412,7 +413,13 @@ export default function Settings() {
               practice={practice}
               showSuccess={showSuccess}
               onCancel={() => setShowCancel(true)}
-              onResume={() => save({ subscription_status: 'active', pause_ends_at: null }, 'Subscription resumed')}
+              onResume={async () => {
+                try {
+                  await resumeSubscription(practice.id)
+                  setSavedFlash('Subscription resumed'); setTimeout(() => setSavedFlash(''), 2500)
+                  await refreshProfile()
+                } catch (e) { setSaveError(e?.message || 'Could not resume your subscription.') }
+              }}
               onRefresh={refreshProfile}
             />
           )}
