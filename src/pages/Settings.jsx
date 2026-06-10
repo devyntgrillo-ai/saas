@@ -56,6 +56,9 @@ import {
   isTrialExpired,
   recordHelcimPayment,
   updateHelcimCard,
+  resumeSubscription,
+  annualAmountFor,
+  upgradeToAnnual,
 } from '../lib/billing'
 import HelcimCardForm from '../components/HelcimCardForm'
 
@@ -412,7 +415,13 @@ export default function Settings() {
               practice={practice}
               showSuccess={showSuccess}
               onCancel={() => setShowCancel(true)}
-              onResume={() => save({ subscription_status: 'active', pause_ends_at: null }, 'Subscription resumed')}
+              onResume={async () => {
+                try {
+                  await resumeSubscription(practice.id)
+                  setSavedFlash('Subscription resumed'); setTimeout(() => setSavedFlash(''), 2500)
+                  await refreshProfile()
+                } catch (e) { setSaveError(e?.message || 'Could not resume your subscription.') }
+              }}
               onRefresh={refreshProfile}
             />
           )}
@@ -456,7 +465,24 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
   const trialExpired = isTrial && isTrialExpired(practice)
   const daysLeft = trialDaysRemaining(practice)
   const planAmount = Number(practice?.plan_amount) > 0 ? Number(practice.plan_amount) : PLAN_PRICE_NUMERIC
-  const hasCard = Boolean(practice?.helcim_customer_code)
+  const hasCard = Boolean(practice?.helcim_customer_code || practice?.helcim_card_token)
+  const isAnnual = practice?.billing_interval === 'annual'
+  const annualPrice = annualAmountFor(practice) // monthly × 10 (2 months free)
+  const [annualOpen, setAnnualOpen] = useState(false)
+  const [annualBusy, setAnnualBusy] = useState(false)
+  const [annualErr, setAnnualErr] = useState('')
+
+  async function confirmAnnual() {
+    setAnnualBusy(true); setAnnualErr('')
+    try {
+      await upgradeToAnnual()
+      setAnnualOpen(false)
+      await onRefresh?.()
+    } catch (e) {
+      setAnnualErr(e?.message || 'Could not upgrade to annual billing.')
+    }
+    setAnnualBusy(false)
+  }
 
   // Native card capture via Helcim.js (modal). 'activate' charges the plan;
   // 'update' captures a new card. (A verify-mode Helcim.js config can be wired
@@ -543,7 +569,7 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
         )}
         {isActive && (
           <div className="mt-4 space-y-1 text-sm text-slate-400">
-            <p>Next billing date: <span className="text-slate-200">{formatDate(practice?.next_billing_date) || 'tracked manually'}</span></p>
+            <p>{isAnnual ? 'Annual plan' : 'Monthly plan'} · {isAnnual ? 'renews' : 'next billing'}: <span className="text-slate-200">{formatDate(practice?.next_billing_date) || 'tracked manually'}</span></p>
             {hasCard && (
               <p>
                 Card on file:{' '}
@@ -584,6 +610,44 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
         )}
       </div>
     </div>
+
+    {isActive && !isAnnual && hasCard && (
+      <div className="card p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-white">Switch to annual billing</h2>
+              <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-300">2 months free</span>
+            </div>
+            <p className="mt-1.5 text-sm text-slate-400">
+              Pay for 10 months up front and you&apos;re covered for a full year —{' '}
+              <span className="font-medium text-slate-200">${annualPrice.toLocaleString()}</span> today instead of{' '}
+              <span className="text-slate-400">${(planAmount * 12).toLocaleString()}</span>.
+            </p>
+          </div>
+          <button onClick={() => { setAnnualErr(''); setAnnualOpen(true) }} className="btn-primary shrink-0">
+            <Sparkles className="h-4 w-4" /> Upgrade to annual
+          </button>
+        </div>
+      </div>
+    )}
+
+    {annualOpen && (
+      <Modal title="Switch to annual billing" onClose={() => { if (!annualBusy) setAnnualOpen(false) }} maxWidth="max-w-md">
+        <p className="text-sm text-slate-300">
+          We&apos;ll charge <span className="font-semibold text-white">${annualPrice.toLocaleString()}</span> to your card on file
+          {practice?.card_last4 ? ` (•••• ${practice.card_last4})` : ''} today — 10 months, with 2 months free. You&apos;re then
+          covered for a full year and monthly billing stops.
+        </p>
+        {annualErr && <p className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{annualErr}</p>}
+        <div className="mt-5 flex items-center justify-end gap-3">
+          <button onClick={() => setAnnualOpen(false)} disabled={annualBusy} className="btn-ghost">Cancel</button>
+          <button onClick={confirmAnnual} disabled={annualBusy} className="btn-primary">
+            {annualBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Pay ${annualPrice.toLocaleString()} &amp; switch
+          </button>
+        </div>
+      </Modal>
+    )}
 
     <AddLocationCard practiceId={practice?.id} />
 

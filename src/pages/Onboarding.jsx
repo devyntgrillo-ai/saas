@@ -15,6 +15,7 @@ import {
   Play,
   Mic,
   Sparkles,
+  Rocket,
 } from 'lucide-react'
 import Logo from '../components/Logo'
 import PasswordField from '../components/PasswordField'
@@ -28,11 +29,14 @@ import {
   useCreateOnboardingAccount,
   useOnboardingTeamInvite,
 } from '../lib/queries'
-import { recordHelcimPayment } from '../lib/billing'
+import { recordHelcimPayment, startTrialOffer } from '../lib/billing'
 import HelcimCardForm from '../components/HelcimCardForm'
 import { REF_STORAGE_KEY } from '../components/ReferralRedirect'
 
 const HEARD_FROM_OPTIONS = ['Referral', 'Instagram', 'Facebook', 'Google', 'Podcast', 'Other']
+// Persist the special-offer code so it survives the /signup → /onboarding route
+// change (which strips ?offer=) after the account is created.
+const OFFER_STORAGE_KEY = 'cl_signup_offer'
 
 function parsePlanAmount(searchParams) {
   const raw = Number(searchParams.get('plan'))
@@ -103,6 +107,26 @@ export default function Onboarding() {
     }, () => {})
     return () => { on = false }
   }, [refCode])
+
+  // Special-pricing / free-trial signup links (super-admin generated). The offer
+  // code is the server-trusted source of price + trial; here we only resolve it
+  // for display. Falls back to standard pricing if absent/expired.
+  const [offerCode] = useState(() => {
+    let stored = ''
+    try { stored = localStorage.getItem(OFFER_STORAGE_KEY) || '' } catch { /* storage unavailable */ }
+    return (searchParams.get('offer') || stored || '').trim()
+  })
+  const [offer, setOffer] = useState(null)
+  useEffect(() => {
+    if (!offerCode) return
+    try { localStorage.setItem(OFFER_STORAGE_KEY, offerCode) } catch { /* noop */ }
+    let on = true
+    supabase.rpc('resolve_signup_offer', { p_code: offerCode }).then(({ data }) => {
+      if (on && Array.isArray(data) && data[0]?.valid) setOffer(data[0])
+    }, () => {})
+    return () => { on = false }
+  }, [offerCode])
+  const trialDays = offer ? Number(offer.trial_days) : 0
 
   const [baaAgree, setBaaAgree] = useState(false)
   const [inviteName, setInviteName] = useState('')
@@ -230,16 +254,39 @@ export default function Onboarding() {
       // we never trust the client-side approval flag alone.
       await recordHelcimPayment({
         cardToken: res.cardToken,
-        amount: Number(res.amount) || planAmount,
+        amount: Number(res.amount) || planPrice,
         date: res.date,
         customerCode: res.customerCode,
         cardLast4: res.cardNumberMasked,
         cardType: res.cardType,
+        offerCode: offer?.code,
       })
+      try { localStorage.removeItem(OFFER_STORAGE_KEY) } catch { /* noop */ }
       await refreshProfile()
       nextStep()
     } catch (e) {
       setSaveError(e?.message || 'Your card was charged but we could not confirm it — please contact support.')
+    }
+    setPaying(false)
+  }
+
+  // Free-trial offer: card tokenized via verify (no charge), then the server
+  // starts the trial + schedules first billing for after it ends.
+  async function handleTrialStart(res) {
+    setPaying(true); setSaveError('')
+    try {
+      await startTrialOffer({
+        offerCode: offer?.code,
+        cardToken: res.cardToken,
+        customerCode: res.customerCode,
+        cardLast4: res.cardNumberMasked,
+        cardType: res.cardType,
+      })
+      try { localStorage.removeItem(OFFER_STORAGE_KEY) } catch { /* noop */ }
+      await refreshProfile()
+      nextStep()
+    } catch (e) {
+      setSaveError(e?.message || 'We could not start your trial — please try again.')
     }
     setPaying(false)
   }
@@ -274,7 +321,9 @@ export default function Onboarding() {
   }
 
   const stepKey = STEPS[active].key
-  const planPrice = Number(practice?.plan_amount) > 0 ? Number(practice.plan_amount) : 997
+  // Offer price (server-trusted) wins for a fresh signup; else the practice's
+  // stored plan amount; else standard $997.
+  const planPrice = offer ? Number(offer.price) : (Number(practice?.plan_amount) > 0 ? Number(practice.plan_amount) : 997)
 
   return (
     <div className="flex min-h-screen flex-col bg-surface lg:flex-row">
@@ -298,6 +347,7 @@ export default function Onboarding() {
                 { icon: Mic, title: 'Record in one tap', desc: 'In person or virtual, no hardware.' },
                 { icon: Sparkles, title: 'AI analyzes every consult', desc: 'Objections, sentiment, next best step.' },
                 { icon: MessageSquare, title: 'Follow-up that converts', desc: 'Personalized texts + emails on autopilot.' },
+                { icon: Rocket, title: 'Private 1-on-1 coaching', desc: 'Personal expert guidance to lift your case acceptance.' },
               ].map(({ icon: Icon, title, desc }) => (
                 <li key={title} className="flex gap-3">
                   <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-primary-300">
@@ -365,6 +415,22 @@ export default function Onboarding() {
       {/* ── Content panel ──────────────────────────────────────────────────── */}
       <main className="flex flex-1 items-start justify-center px-5 py-10 sm:px-10 lg:items-center lg:py-16">
         <div className="onboarding-form w-full max-w-lg">
+          {/* Invite-only special offer — shown across every step so the special
+              price/trial is clear from the start, not just at payment. */}
+          {offer && (
+            <div className="mb-6 flex items-center gap-3 rounded-xl border border-primary/40 bg-primary/10 px-4 py-3">
+              <Sparkles className="h-5 w-5 shrink-0 text-primary-300" />
+              <div className="text-sm">
+                <p className="font-semibold text-primary-200">
+                  Invite-only offer{offer.label ? ` · ${offer.label}` : ''}
+                </p>
+                {trialDays > 0 && (
+                  <p className="text-primary-200/80">{trialDays}-day free trial, then ${Number(offer.price).toLocaleString()}/month.</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {saveError && (
             <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{saveError}</p>
           )}
@@ -463,20 +529,39 @@ export default function Onboarding() {
                 </>
               ) : (
                 <div className="mt-6 rounded-2xl border border-surface-700 bg-surface-900 p-6">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-3xl font-bold text-white">${planPrice.toLocaleString()}</span>
-                    <span className="text-sm text-slate-400">/month</span>
-                  </div>
+                  {trialDays > 0 ? (
+                    <>
+                      <div className="text-3xl font-bold text-white">{trialDays}-day free trial</div>
+                      <p className="mt-1 text-sm text-slate-400">Then ${planPrice.toLocaleString()}/month. Add your card to start — you won't be charged until the trial ends.</p>
+                    </>
+                  ) : (
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-3xl font-bold text-white">${planPrice.toLocaleString()}</span>
+                      <span className="text-sm text-slate-400">/month</span>
+                    </div>
+                  )}
                   <div className="mt-6">
-                    <HelcimCardForm
-                      amount={planPrice}
-                      submitLabel="Activate Plan"
-                      showAmountInLabel={false}
-                      showSecureNote={false}
-                      onApproved={handleCardApproved}
-                      onDeclined={(r) => setSaveError(r?.message || 'Your card was declined. Please try another card.')}
-                      onError={(m) => setSaveError(m)}
-                    />
+                    {trialDays > 0 ? (
+                      <HelcimCardForm
+                        verify
+                        submitLabel="Start Free Trial"
+                        showAmountInLabel={false}
+                        showSecureNote={false}
+                        onApproved={handleTrialStart}
+                        onDeclined={(r) => setSaveError(r?.message || 'Your card could not be saved. Please try another card.')}
+                        onError={(m) => setSaveError(m)}
+                      />
+                    ) : (
+                      <HelcimCardForm
+                        amount={planPrice}
+                        submitLabel="Activate Plan"
+                        showAmountInLabel={false}
+                        showSecureNote={false}
+                        onApproved={handleCardApproved}
+                        onDeclined={(r) => setSaveError(r?.message || 'Your card was declined. Please try another card.')}
+                        onError={(m) => setSaveError(m)}
+                      />
+                    )}
                   </div>
                   <p className="mt-2 text-center text-[11px] text-slate-500">Cancel anytime · no contract.</p>
                 </div>

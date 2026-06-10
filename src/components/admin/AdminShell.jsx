@@ -17,6 +17,7 @@ const TABS = [
   { to: '/admin/chats', label: 'Chats' },
   { to: '/admin/team', label: 'Users' },
   { to: '/admin/billing', label: 'Billing' },
+  { to: '/admin/offers', label: 'Offers' },
   { to: '/admin/training', label: 'Training' },
   { to: '/admin/wins', label: 'Wins' },
   { to: '/admin/referrals', label: 'Referrals' },

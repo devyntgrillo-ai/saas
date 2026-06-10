@@ -12,7 +12,7 @@ export function isChunkLoadError(err) {
   const name = String(err?.name || '')
   return (
     name === 'ChunkLoadError' ||
-    /dynamically imported module|importing a module script failed|failed to fetch dynamically|error loading dynamically imported module|loading chunk \d+ failed|loading css chunk|module script failed/i.test(msg)
+    /dynamically imported module|importing a module script failed|failed to fetch dynamically|error loading dynamically imported module|loading chunk \d+ failed|loading css chunk|module script failed|expected a javascript module script|unable to preload/i.test(msg)
   )
 }
 
@@ -27,25 +27,20 @@ export function reloadForFreshBuild() {
   return true
 }
 
-// Drop-in replacement for React.lazy that survives stale chunks: retries the
-// import once (covers a transient network blip), then reloads to fetch the new
-// build instead of throwing to the error boundary. Non-chunk errors rethrow so
-// real bugs still surface.
+// Drop-in replacement for React.lazy that survives stale chunks: on a chunk-load
+// failure it reloads immediately to fetch the new build (no retry round-trip —
+// the chunk is genuinely gone after a deploy, so retrying just adds a second of
+// delay) and keeps Suspense's loader up meanwhile, so the user sees a normal
+// loading state, never an error. Non-chunk errors rethrow so real bugs surface.
 export function lazyWithReload(factory) {
   return lazy(async () => {
     try {
       return await factory()
     } catch (err) {
-      if (!isChunkLoadError(err)) throw err
-      try {
-        return await factory()
-      } catch {
-        if (reloadForFreshBuild()) {
-          // Reload is underway; keep Suspense's fallback up instead of erroring.
-          return new Promise(() => {})
-        }
-        throw err
+      if (isChunkLoadError(err) && reloadForFreshBuild()) {
+        return new Promise(() => {}) // reload underway; hold the Suspense loader
       }
+      throw err
     }
   })
 }

@@ -84,7 +84,7 @@ export function planAmountFromUrl(search = window.location.search) {
 // helcim-checkout edge function, which confirms an APPROVED transaction directly
 // with Helcim, records it, enrolls the recurring subscription, and only then
 // marks the practice active. Returns { success, subscriptionId, transactionId }.
-export async function recordHelcimPayment({ cardToken, amount, date, customerCode, cardLast4, cardType } = {}) {
+export async function recordHelcimPayment({ cardToken, amount, date, customerCode, cardLast4, cardType, offerCode } = {}) {
   const { data, error } = await supabase.functions.invoke('helcim-checkout', {
     body: {
       action: 'record_payment',
@@ -94,6 +94,7 @@ export async function recordHelcimPayment({ cardToken, amount, date, customerCod
       customer_code: customerCode,
       card_last4: cardLast4,
       card_type: cardType,
+      offer_code: offerCode || undefined, // server-trusted price override
     },
   })
   if (error) throw new Error(await edgeErrorMessage(error))
@@ -101,12 +102,22 @@ export async function recordHelcimPayment({ cardToken, amount, date, customerCod
   return data
 }
 
-// Create (or upsert) a Helcim customer record via the edge function.
-export async function createHelcimCustomer({ email, name, practiceName, phone } = {}) {
+// Start a FREE TRIAL from an offer link: the card was tokenized via Helcim.js
+// verify (no charge); the edge function enrolls a subscription that first bills
+// after the trial and puts the practice on trial. Returns { success, trialEndsAt }.
+export async function startTrialOffer({ offerCode, cardToken, customerCode, cardLast4, cardType } = {}) {
   const { data, error } = await supabase.functions.invoke('helcim-checkout', {
-    body: { action: 'create_customer', email, name, practice_name: practiceName, phone },
+    body: {
+      action: 'start_trial',
+      offer_code: offerCode,
+      card_token: cardToken,
+      customer_code: customerCode,
+      card_last4: cardLast4,
+      card_type: cardType,
+    },
   })
   if (error) throw new Error(await edgeErrorMessage(error))
+  if (!data?.success) throw new Error(data?.error || 'We could not start your trial. Please contact support.')
   return data
 }
 
@@ -119,6 +130,21 @@ export async function updateHelcimCard({ cardToken, cardLast4, cardType } = {}) 
   })
   if (error) throw new Error(await edgeErrorMessage(error))
   if (!data?.success) throw new Error(data?.error || 'Could not update your card. Please try again.')
+  return data
+}
+
+// Annual upgrade: pay 10× the monthly rate once (2 months free), covered 12
+// months. The edge function charges the card on file and stops monthly billing.
+export function annualAmountFor(practice) {
+  const monthly = Number(practice?.plan_amount) > 0 ? Number(practice.plan_amount) : PLAN_PRICE_NUMERIC
+  return monthly * 10
+}
+export async function upgradeToAnnual() {
+  const { data, error } = await supabase.functions.invoke('helcim-checkout', {
+    body: { action: 'upgrade_annual' },
+  })
+  if (error) throw new Error(await edgeErrorMessage(error))
+  if (!data?.success) throw new Error(data?.error || 'Could not upgrade to annual billing. Please try again.')
   return data
 }
 
@@ -190,28 +216,37 @@ export async function fetchCancellationImpact(practiceId) {
   }
 }
 
-// Pause: no charge, sequences paused, data preserved.
+// Pause: pauses the Helcim subscription (no charges during the pause) AND flips
+// local state. Routed through the edge function so it actually reaches Helcim.
 export async function pauseSubscription(practiceId, months) {
   const ends = new Date()
   ends.setMonth(ends.getMonth() + months)
   const iso = ends.toISOString()
-  const { error } = await supabase
-    .from('practices')
-    .update({ subscription_status: 'paused', pause_ends_at: iso })
-    .eq('id', practiceId)
-  if (error) throw error
+  const { data, error } = await supabase.functions.invoke('helcim-checkout', {
+    body: { action: 'manage_subscription', op: 'pause', practice_id: practiceId, pause_ends_at: iso },
+  })
+  if (error) throw new Error(await edgeErrorMessage(error))
+  if (!data?.success) throw new Error(data?.error || 'Could not pause your subscription.')
   return iso
 }
 
-// Downsell: keep them active and record the accepted retention offer. A real
-// retention discount can be applied at the next Helcim charge; we lock in
-// the intent here so the account stays active and the offer is auditable.
+// Resume a paused subscription (reactivates it at Helcim + locally).
+export async function resumeSubscription(practiceId) {
+  const { data, error } = await supabase.functions.invoke('helcim-checkout', {
+    body: { action: 'manage_subscription', op: 'resume', practice_id: practiceId },
+  })
+  if (error) throw new Error(await edgeErrorMessage(error))
+  if (!data?.success) throw new Error(data?.error || 'Could not resume your subscription.')
+}
+
+// Downsell: actually lowers the Helcim subscription's recurring amount to the
+// retention price and keeps the account active (was previously intent-only).
 export async function acceptDownsell(practiceId) {
-  const { error } = await supabase
-    .from('practices')
-    .update({ subscription_status: 'active', downsell_accepted_at: new Date().toISOString() })
-    .eq('id', practiceId)
-  if (error) throw error
+  const { data, error } = await supabase.functions.invoke('helcim-checkout', {
+    body: { action: 'manage_subscription', op: 'set_amount', practice_id: practiceId, amount: DOWNSELL.price },
+  })
+  if (error) throw new Error(await edgeErrorMessage(error))
+  if (!data?.success) throw new Error(data?.error || 'Could not apply the retention offer.')
 }
 
 export async function submitCancellationFeedback({ practiceId, reason, elaboration, impact }) {
@@ -227,12 +262,15 @@ export async function submitCancellationFeedback({ practiceId, reason, elaborati
   if (error) throw error
 }
 
-// Final cancel. Helcim has no recurring-subscription object to cancel (billing
-// is per-charge), so this is a direct status flip; access persists to the end
-// of the paid period via next_billing_date.
+// Final cancel. Cancels the Helcim recurring subscription (so billing actually
+// STOPS) and flips local state. Routed through the edge function; access can
+// persist to the end of the paid period via next_billing_date.
 export async function cancelSubscription(practiceId) {
-  const { error } = await supabase.from('practices').update({ subscription_status: 'cancelled' }).eq('id', practiceId)
-  if (error) throw error
+  const { data, error } = await supabase.functions.invoke('helcim-checkout', {
+    body: { action: 'manage_subscription', op: 'cancel', practice_id: practiceId },
+  })
+  if (error) throw new Error(await edgeErrorMessage(error))
+  if (!data?.success) throw new Error(data?.error || 'Could not cancel your subscription.')
   auditBillingAction('subscription_cancelled', { practiceId })
   return { ok: true }
 }
