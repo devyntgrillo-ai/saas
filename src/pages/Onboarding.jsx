@@ -405,6 +405,24 @@ export default function Onboarding() {
       {/* ── Content panel ──────────────────────────────────────────────────── */}
       <main className="flex flex-1 items-start justify-center px-5 py-10 sm:px-10 lg:items-center lg:py-16">
         <div className="onboarding-form w-full max-w-lg">
+          {/* Invite-only special offer — shown across every step so the special
+              price/trial is clear from the start, not just at payment. */}
+          {offer && (
+            <div className="mb-6 flex items-center gap-3 rounded-xl border border-primary/40 bg-primary/10 px-4 py-3">
+              <Sparkles className="h-5 w-5 shrink-0 text-primary-300" />
+              <div className="text-sm">
+                <p className="font-semibold text-primary-200">
+                  Invite-only offer{offer.label ? ` · ${offer.label}` : ''}
+                </p>
+                <p className="text-primary-200/80">
+                  {trialDays > 0
+                    ? `${trialDays}-day free trial, then $${Number(offer.price).toLocaleString()}/month.`
+                    : `Your special rate: $${Number(offer.price).toLocaleString()}/month (standard is $997).`}
+                </p>
+              </div>
+            </div>
+          )}
+
           {saveError && (
             <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{saveError}</p>
           )}
