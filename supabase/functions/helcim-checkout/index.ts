@@ -39,7 +39,7 @@ async function helcim(endpoint: string, method = "GET", body?: object) {
 // Actions any visitor may call (needed during signup, before an account exists).
 const PUBLIC_ACTIONS = new Set(["initialize_checkout", "create_customer"]);
 // Actions that self-authenticate against the caller's own practice (not super-admin).
-const SELF_AUTH_ACTIONS = new Set(["record_payment"]);
+const SELF_AUTH_ACTIONS = new Set(["record_payment", "update_card"]);
 
 // Resolve the authenticated caller and their practice (never trust the body for identity).
 async function getCaller(req: Request): Promise<{ userId: string; practiceId: string | null; email: string | null } | null> {
@@ -174,6 +174,54 @@ Deno.serve(async (req: Request) => {
         if (upErr) return json({ error: `Verified your charge but could not update your account: ${upErr.message}` }, 500);
 
         return json({ success: true, subscriptionId, transactionId: realTxnId });
+      }
+
+      // Update the card on file WITHOUT charging. The client tokenized a new card
+      // via Helcim.js verify mode (config 10472) attached to the practice's existing
+      // customer; here we make it that customer's DEFAULT, which is what the recurring
+      // subscription bills. No money moves.
+      case "update_card": {
+        const caller = await getCaller(req);
+        if (!caller?.userId) return json({ error: "Unauthorized" }, 401);
+        if (!caller.practiceId) return json({ error: "Your account is not linked to a practice." }, 409);
+
+        const cardToken = String(params.card_token || "");
+        if (!cardToken) return json({ error: "Missing card token." }, 400);
+
+        const admin = createClient(
+          Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+          { auth: { autoRefreshToken: false, persistSession: false } },
+        );
+        const { data: pr } = await admin.from("practices").select("helcim_customer_code").eq("id", caller.practiceId).maybeSingle();
+        const customerCode = (pr?.helcim_customer_code as string) || params.customer_code;
+        if (!customerCode) return json({ error: "No billing customer on file for this practice yet." }, 409);
+
+        // 1) Resolve the numeric customerId from the customerCode.
+        const custRes = await helcim(`/customers?customerCode=${encodeURIComponent(customerCode)}`);
+        const customers = Array.isArray(custRes.data) ? custRes.data : (custRes.data?.data ?? (custRes.data?.id ? [custRes.data] : []));
+        const customerId = customers?.[0]?.id;
+        if (!customerId) return json({ error: "Could not locate your billing customer at Helcim." }, 404);
+
+        // 2) Find the freshly-tokenized card on that customer (match by cardToken).
+        const cardsRes = await helcim(`/customers/${customerId}/cards`);
+        const cards = Array.isArray(cardsRes.data) ? cardsRes.data : (cardsRes.data?.data ?? []);
+        const card = cards.find((c: Record<string, unknown>) => String(c.cardToken) === cardToken) || cards[cards.length - 1];
+        if (!card?.id) return json({ error: "The new card was not found on your account. Please try again." }, 400);
+
+        // 3) Make it the default — the recurring subscription bills the default card.
+        const setDefault = await helcim(`/customers/${customerId}/cards/${card.id}/default`, "PATCH");
+        if (!setDefault.ok) return json({ error: "Could not set the new card as default. Please try again." }, 502);
+
+        // 4) Reflect it on the practice (last-4 from cardF6L4; no full card data stored).
+        const f6l4 = String(card.cardF6L4 || "");
+        const last4 = f6l4.replace(/\D/g, "").slice(-4) || (params.card_last4 ? String(params.card_last4).replace(/\D/g, "").slice(-4) : null);
+        await admin.from("practices").update({
+          helcim_card_token: cardToken,
+          card_last4: last4,
+          card_type: params.card_type || null,
+        }).eq("id", caller.practiceId);
+
+        return json({ success: true });
       }
       case "initialize_checkout": {
         let amount = Number(params.amount);

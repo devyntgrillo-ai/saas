@@ -110,6 +110,18 @@ export async function createHelcimCustomer({ email, name, practiceName, phone } 
   return data
 }
 
+// Update the card on file WITHOUT charging: the card was tokenized via Helcim.js
+// verify mode (attached to the practice's customer); the edge function makes it the
+// customer's default, which is what the recurring subscription bills. { success }.
+export async function updateHelcimCard({ cardToken, cardLast4, cardType } = {}) {
+  const { data, error } = await supabase.functions.invoke('helcim-checkout', {
+    body: { action: 'update_card', card_token: cardToken, card_last4: cardLast4, card_type: cardType },
+  })
+  if (error) throw new Error(await edgeErrorMessage(error))
+  if (!data?.success) throw new Error(data?.error || 'Could not update your card. Please try again.')
+  return data
+}
+
 // Super-admin only (enforced server-side): refund a transaction.
 export async function helcimRefund({ transactionId, amount } = {}) {
   const { data, error } = await supabase.functions.invoke('helcim-checkout', {

@@ -15,6 +15,9 @@ import { Loader2, Lock } from 'lucide-react'
 // Helcim dashboard before go-live.
 // TODO: enable amount hashing (enforceHashing) in Helcim dashboard config 10465 before go-live.
 const HELCIM_JS_TOKEN = import.meta.env.VITE_HELCIM_JS_TOKEN || ''
+// Verify-mode config (transactionType: Verify) — tokenizes a card at $0 WITHOUT
+// charging, used for "update card on file". Set as VITE_HELCIM_JS_VERIFY_TOKEN.
+const HELCIM_JS_VERIFY_TOKEN = import.meta.env.VITE_HELCIM_JS_VERIFY_TOKEN || ''
 
 function readHelcimResults() {
   const box = document.getElementById('helcimResults')
@@ -37,9 +40,12 @@ function readHelcimResults() {
   }
 }
 
-export default function HelcimCardForm({ amount, submitLabel = 'Pay', onApproved, onDeclined, onError, showAmountInLabel = true, showSecureNote = true }) {
+export default function HelcimCardForm({ amount, submitLabel = 'Pay', onApproved, onDeclined, onError, showAmountInLabel = true, showSecureNote = true, verify = false, customerCode }) {
   const [processing, setProcessing] = useState(false)
-  const configured = Boolean(HELCIM_JS_TOKEN)
+  // Verify mode tokenizes the card at $0 (no charge) for card-on-file updates;
+  // otherwise it's a purchase. The chosen config token decides which Helcim does.
+  const token = verify ? HELCIM_JS_VERIFY_TOKEN : HELCIM_JS_TOKEN
+  const configured = Boolean(token)
 
   useEffect(() => {
     if (!configured) return
@@ -74,7 +80,7 @@ export default function HelcimCardForm({ amount, submitLabel = 'Pay', onApproved
   if (!configured) {
     return (
       <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
-        Card processing isn't configured yet. Set <code>VITE_HELCIM_JS_TOKEN</code> (your Helcim.js config token) to enable checkout.
+        Card processing isn't configured yet. Set <code>{verify ? 'VITE_HELCIM_JS_VERIFY_TOKEN' : 'VITE_HELCIM_JS_TOKEN'}</code> to enable {verify ? 'card updates' : 'checkout'}.
       </div>
     )
   }
@@ -84,9 +90,11 @@ export default function HelcimCardForm({ amount, submitLabel = 'Pay', onApproved
       {/* form.submit() (if Helcim.js triggers it) posts into this sink, never navigating. */}
       <iframe name="helcim-sink" title="helcim-sink" style={{ display: 'none' }} />
       <form id="helcimForm" method="POST" action="about:blank" target="helcim-sink" onSubmit={(e) => e.preventDefault()} className="space-y-3">
-        <input type="hidden" id="token" defaultValue={HELCIM_JS_TOKEN} />
+        <input type="hidden" id="token" defaultValue={token} />
         <input type="hidden" id="language" defaultValue="en" />
-        {amount != null && <input type="hidden" id="amount" defaultValue={Number(amount).toFixed(2)} />}
+        {/* Attach the (verify) tokenized card to the existing Helcim customer so its default can be switched. */}
+        {customerCode && <input type="hidden" id="customerCode" defaultValue={customerCode} />}
+        {!verify && amount != null && <input type="hidden" id="amount" defaultValue={Number(amount).toFixed(2)} />}
 
         <div>
           <label className="label">Name on card</label>
