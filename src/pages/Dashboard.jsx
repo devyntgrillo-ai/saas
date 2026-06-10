@@ -2,12 +2,12 @@ import { lazy, Suspense, useMemo } from 'react'
 import {
   Clock,
   Award,
-  TrendingUp,
   Network,
   Plug,
   DollarSign,
   Info,
   ArrowRight,
+  ClipboardList,
 } from 'lucide-react'
 import { Link, Navigate } from 'react-router-dom'
 import AILearningFeed from '../components/AILearningFeed'
@@ -149,8 +149,11 @@ export default function Dashboard() {
 
   const kpis = useMemo(() => {
     const monthStart = startOfMonth()
-    const avgSetting = Number(practice?.avg_case_value) || 30000
-    const pipelineValue = activity.active * avgSetting
+    // Unscheduled treatment plans = recorded consults whose plan was presented
+    // but not yet scheduled/accepted (outcome 'pending'). This is the app's
+    // canonical "unscheduled treatment plan" (same definition the Reactivation
+    // campaign audience uses).
+    const unscheduledTxPlans = consults.filter((c) => c.outcome === 'pending').length
     const minPerFollowup = 5
     const messagesSent = countSentMessages(messages)
     const hoursSaved = Math.round((messagesSent * minPerFollowup / 60) * 10) / 10
@@ -165,7 +168,7 @@ export default function Dashboard() {
       : 0
 
     return {
-      pipelineValue,
+      unscheduledTxPlans,
       hoursSaved,
       messagesSent,
       minPerFollowup,
@@ -175,7 +178,7 @@ export default function Dashboard() {
       replyRate,
       closeRate: closeRateThisMonth,
     }
-  }, [consults, messages, activity, practice, implantApptsWeek, dashExtras.inboundRepliesWeek, prodMetrics.roi, closeRateThisMonth])
+  }, [consults, messages, activity, implantApptsWeek, dashExtras.inboundRepliesWeek, prodMetrics.roi, closeRateThisMonth])
 
   if (isAgencyUser && !practiceId) {
     return <Navigate to="/agency" replace />
@@ -259,7 +262,7 @@ export default function Dashboard() {
                 </p>
                 <p className="mt-0.5 text-xs text-slate-500">CaseLift-assisted</p>
               </div>
-              <KpiCard icon={TrendingUp} accent="primary" label="Pipeline Value" value={formatMoney(kpis.pipelineValue)} sub={`${activity.active} patients nurtured`} />
+              <KpiCard icon={ClipboardList} accent="primary" label="Unscheduled TX Plans" value={`${kpis.unscheduledTxPlans}`} sub="unscheduled tx plans in your PMS" />
               <KpiCard icon={Clock} accent="violet" label="Hours Saved" value={`${kpis.hoursSaved}h`} sub={`${kpis.messagesSent} auto follow-ups`} />
               <KpiCard icon={Award} accent="green" label="ROI This Month" value={kpis.roi ? `${kpis.roi}x ROI` : '-'} sub="Production ÷ Subscription" />
             </div>
