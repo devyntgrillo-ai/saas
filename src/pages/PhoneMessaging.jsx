@@ -177,8 +177,6 @@ export default function PhoneMessaging() {
     }
   }
 
-  // SMS sender shown to patients - fall back to a sensible default in the preview.
-  const previewSender = (smsSender || practice?.name || 'Your Practice').slice(0, 11)
   const patientFrom = practiceFromAddress(practice)
 
   return (
@@ -322,7 +320,7 @@ export default function PhoneMessaging() {
           />
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="mt-5 max-w-md">
           <Field
             label="SMS sender name"
             hint="Appears before the message. Max 11 characters - this is the business name patients see."
@@ -336,17 +334,6 @@ export default function PhoneMessaging() {
             />
             <p className="mt-1.5 text-right text-xs text-slate-500">{smsSender.length}/11</p>
           </Field>
-
-          {/* Live iPhone SMS preview */}
-          <div>
-            <label className="label">Preview</label>
-            <PhonePreview
-              sender={previewSender}
-              body={`Hi Margaret, it's ${
-                practice?.doctor_first || 'Sarah'
-              } from ${previewSender}. Great meeting you about your treatment - any questions come up since your visit?`}
-            />
-          </div>
         </div>
 
         {smsFullyActive && hasNumber && (
@@ -627,43 +614,6 @@ function PhoneNumberCard({ phoneNumber, hasNumber, provStatus, practice, onSetup
           </button>
         </div>
       )}
-    </div>
-  )
-}
-
-// ── Live iPhone SMS bubble preview ──────────────────────────────────────────
-function PhonePreview({ sender, body }) {
-  return (
-    <div className="mx-auto w-full max-w-[260px] rounded-[2rem] border border-surface-700 bg-black p-2 shadow-lg">
-      <div className="overflow-hidden rounded-[1.6rem] bg-surface-900">
-        {/* status bar */}
-        <div className="flex items-center justify-between px-4 pt-2 text-[10px] font-semibold text-slate-300">
-          <span>9:41</span>
-          <span className="flex items-center gap-1">
-            <Signal className="h-3 w-3" />
-            <Wifi className="h-3 w-3" />
-            <BatteryFull className="h-3 w-3" />
-          </span>
-        </div>
-        {/* contact header */}
-        <div className="flex flex-col items-center border-b border-surface-800 px-4 pb-2.5 pt-1.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-700 text-xs font-semibold text-slate-200">
-            {(sender || '?').slice(0, 1).toUpperCase()}
-          </span>
-          <span className="mt-1 max-w-full truncate text-xs font-semibold text-slate-200">
-            {sender || 'Sender name'}
-          </span>
-        </div>
-        {/* thread */}
-        <div className="space-y-2 px-3 py-3">
-          <p className="text-center text-[9px] text-slate-600">Text Message · Today 9:41 AM</p>
-          <div className="flex">
-            <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-surface-700 px-3 py-2 text-[11px] leading-snug text-slate-100">
-              {body}
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
