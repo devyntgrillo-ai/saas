@@ -89,7 +89,7 @@ export default function App() {
 // with a 1.2s minimum so it never flashes. Impersonation / route guards use
 // contextLoading locally without unmounting the whole tree.
 function AppContent() {
-  const { appShellLoading } = useAuth()
+  const { appShellLoading, user } = useAuth()
   const [minDone, setMinDone] = useState(false)
   useEffect(() => {
     const t = setTimeout(() => setMinDone(true), 1200)
@@ -102,9 +102,11 @@ function AppContent() {
     <Suspense fallback={<LoadingScreen />}>
             <Routes>
               {/* get.caselift.io root → signup funnel (preserving ?plan=/?ref=).
-                  Defined first so it wins the "/" match; otherwise the gated app
-                  shell matches "/" and ProtectedRoute bounces visitors to /login. */}
-              {ON_GO_SUBDOMAIN && (
+                  ONLY for logged-out visitors: a signed-in user's "/" must render
+                  their Dashboard (otherwise the Dashboard tab on get.caselift.io
+                  loops back into /signup). Auth is already resolved here because
+                  appShellLoading gates this whole tree above. */}
+              {ON_GO_SUBDOMAIN && !user && (
                 <Route
                   path="/"
                   element={
