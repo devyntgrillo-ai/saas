@@ -547,7 +547,7 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
       )}
 
       {/* Current plan card */}
-      <div className="mt-4 rounded-xl border border-surface-700 bg-surface-800/50 p-5">
+      <div className="mt-4 rounded-xl border border-surface-700 bg-surface-800/50 p-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current plan</p>
@@ -561,7 +561,7 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
 
         {/* Status detail + action share one row so the button sits inline with
             the plan text instead of adding an empty band below it. */}
-        <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
+        <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
           <div className="text-sm">
             {isTrial && !trialExpired && (
               <p className="text-slate-400">
