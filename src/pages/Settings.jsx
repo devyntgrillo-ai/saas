@@ -585,19 +585,21 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
             </div>
           </div>
 
-          {/* Right: status badge with the action tucked directly beneath it. */}
-          <div className="flex shrink-0 flex-col items-end gap-3">
-            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${meta.classes}`}>
-              {meta.label}
-            </span>
-            {status === 'paused' ? (
-              <ActivateButton label="Resume subscription" loading={false} onClick={onResume} />
-            ) : isActive ? (
-              <button onClick={() => setPayMode('update')} className="btn-primary"><CreditCard className="h-4 w-4" /> Update payment method</button>
-            ) : (
-              <button onClick={() => setPayMode('activate')} className="btn-primary"><CreditCard className="h-4 w-4" /> {status === 'cancelled' || status === 'canceled' || status === 'expired' ? 'Reactivate subscription' : 'Activate subscription'}</button>
-            )}
-          </div>
+          {/* Right: status badge. */}
+          <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${meta.classes}`}>
+            {meta.label}
+          </span>
+        </div>
+
+        {/* Action in the bottom-left of the box. */}
+        <div className="mt-4 flex">
+          {status === 'paused' ? (
+            <ActivateButton label="Resume subscription" loading={false} onClick={onResume} />
+          ) : isActive ? (
+            <button onClick={() => setPayMode('update')} className="btn-primary"><CreditCard className="h-4 w-4" /> Update payment method</button>
+          ) : (
+            <button onClick={() => setPayMode('activate')} className="btn-primary"><CreditCard className="h-4 w-4" /> {status === 'cancelled' || status === 'canceled' || status === 'expired' ? 'Reactivate subscription' : 'Activate subscription'}</button>
+          )}
         </div>
       </div>
     </div>
