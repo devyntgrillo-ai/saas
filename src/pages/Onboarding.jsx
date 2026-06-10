@@ -29,7 +29,7 @@ import {
   useCreateOnboardingAccount,
   useOnboardingTeamInvite,
 } from '../lib/queries'
-import { recordHelcimPayment } from '../lib/billing'
+import { recordHelcimPayment, startTrialOffer } from '../lib/billing'
 import HelcimCardForm from '../components/HelcimCardForm'
 import { REF_STORAGE_KEY } from '../components/ReferralRedirect'
 
@@ -104,6 +104,21 @@ export default function Onboarding() {
     }, () => {})
     return () => { on = false }
   }, [refCode])
+
+  // Special-pricing / free-trial signup links (super-admin generated). The offer
+  // code is the server-trusted source of price + trial; here we only resolve it
+  // for display. Falls back to standard pricing if absent/expired.
+  const offerCode = useMemo(() => (searchParams.get('offer') || '').trim(), [searchParams])
+  const [offer, setOffer] = useState(null)
+  useEffect(() => {
+    if (!offerCode) return
+    let on = true
+    supabase.rpc('resolve_signup_offer', { p_code: offerCode }).then(({ data }) => {
+      if (on && Array.isArray(data) && data[0]?.valid) setOffer(data[0])
+    }, () => {})
+    return () => { on = false }
+  }, [offerCode])
+  const trialDays = offer ? Number(offer.trial_days) : 0
 
   const [baaAgree, setBaaAgree] = useState(false)
   const [inviteName, setInviteName] = useState('')
@@ -231,8 +246,29 @@ export default function Onboarding() {
       // we never trust the client-side approval flag alone.
       await recordHelcimPayment({
         cardToken: res.cardToken,
-        amount: Number(res.amount) || planAmount,
+        amount: Number(res.amount) || planPrice,
         date: res.date,
+        customerCode: res.customerCode,
+        cardLast4: res.cardNumberMasked,
+        cardType: res.cardType,
+        offerCode: offer?.code,
+      })
+      await refreshProfile()
+      nextStep()
+    } catch (e) {
+      setSaveError(e?.message || 'Your card was charged but we could not confirm it — please contact support.')
+    }
+    setPaying(false)
+  }
+
+  // Free-trial offer: card tokenized via verify (no charge), then the server
+  // starts the trial + schedules first billing for after it ends.
+  async function handleTrialStart(res) {
+    setPaying(true); setSaveError('')
+    try {
+      await startTrialOffer({
+        offerCode: offer?.code,
+        cardToken: res.cardToken,
         customerCode: res.customerCode,
         cardLast4: res.cardNumberMasked,
         cardType: res.cardType,
@@ -240,7 +276,7 @@ export default function Onboarding() {
       await refreshProfile()
       nextStep()
     } catch (e) {
-      setSaveError(e?.message || 'Your card was charged but we could not confirm it — please contact support.')
+      setSaveError(e?.message || 'We could not start your trial — please try again.')
     }
     setPaying(false)
   }
@@ -275,7 +311,9 @@ export default function Onboarding() {
   }
 
   const stepKey = STEPS[active].key
-  const planPrice = Number(practice?.plan_amount) > 0 ? Number(practice.plan_amount) : 997
+  // Offer price (server-trusted) wins for a fresh signup; else the practice's
+  // stored plan amount; else standard $997.
+  const planPrice = offer ? Number(offer.price) : (Number(practice?.plan_amount) > 0 ? Number(practice.plan_amount) : 997)
 
   return (
     <div className="flex min-h-screen flex-col bg-surface lg:flex-row">
@@ -465,20 +503,44 @@ export default function Onboarding() {
                 </>
               ) : (
                 <div className="mt-6 rounded-2xl border border-surface-700 bg-surface-900 p-6">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-3xl font-bold text-white">${planPrice.toLocaleString()}</span>
-                    <span className="text-sm text-slate-400">/month</span>
-                  </div>
+                  {offer?.label && (
+                    <p className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary-300">
+                      Special offer: {offer.label}
+                    </p>
+                  )}
+                  {trialDays > 0 ? (
+                    <>
+                      <div className="text-3xl font-bold text-white">{trialDays}-day free trial</div>
+                      <p className="mt-1 text-sm text-slate-400">Then ${planPrice.toLocaleString()}/month. Add your card to start — you won't be charged until the trial ends.</p>
+                    </>
+                  ) : (
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-3xl font-bold text-white">${planPrice.toLocaleString()}</span>
+                      <span className="text-sm text-slate-400">/month</span>
+                    </div>
+                  )}
                   <div className="mt-6">
-                    <HelcimCardForm
-                      amount={planPrice}
-                      submitLabel="Activate Plan"
-                      showAmountInLabel={false}
-                      showSecureNote={false}
-                      onApproved={handleCardApproved}
-                      onDeclined={(r) => setSaveError(r?.message || 'Your card was declined. Please try another card.')}
-                      onError={(m) => setSaveError(m)}
-                    />
+                    {trialDays > 0 ? (
+                      <HelcimCardForm
+                        verify
+                        submitLabel="Start Free Trial"
+                        showAmountInLabel={false}
+                        showSecureNote={false}
+                        onApproved={handleTrialStart}
+                        onDeclined={(r) => setSaveError(r?.message || 'Your card could not be saved. Please try another card.')}
+                        onError={(m) => setSaveError(m)}
+                      />
+                    ) : (
+                      <HelcimCardForm
+                        amount={planPrice}
+                        submitLabel="Activate Plan"
+                        showAmountInLabel={false}
+                        showSecureNote={false}
+                        onApproved={handleCardApproved}
+                        onDeclined={(r) => setSaveError(r?.message || 'Your card was declined. Please try another card.')}
+                        onError={(m) => setSaveError(m)}
+                      />
+                    )}
                   </div>
                   <p className="mt-2 text-center text-[11px] text-slate-500">Cancel anytime · no contract.</p>
                 </div>

@@ -60,6 +60,7 @@ const AdminTraining = lazyWithReload(() => import('./pages/admin/TrainingAdmin')
 const AdminWins = lazyWithReload(() => import('./pages/admin/Wins'))
 const AdminReferrals = lazyWithReload(() => import('./pages/admin/Referrals'))
 const AdminCommissions = lazyWithReload(() => import('./pages/admin/Commissions'))
+const AdminOffers = lazyWithReload(() => import('./pages/admin/Offers'))
 const AdminChats = lazyWithReload(() => import('./pages/admin/AdminChats'))
 const Chat = lazyWithReload(() => import('./pages/Chat'))
 const Launchpad = lazyWithReload(() => import('./pages/Launchpad'))
@@ -165,6 +166,7 @@ function AppContent() {
                   <Route path="wins" element={<AdminWins />} />
                   <Route path="referrals" element={<AdminReferrals />} />
                   <Route path="commissions" element={<AdminCommissions />} />
+                  <Route path="offers" element={<AdminOffers />} />
                   <Route path="chats" element={<AdminChats />} />
                 </Route>
 

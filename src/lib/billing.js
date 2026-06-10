@@ -84,7 +84,7 @@ export function planAmountFromUrl(search = window.location.search) {
 // helcim-checkout edge function, which confirms an APPROVED transaction directly
 // with Helcim, records it, enrolls the recurring subscription, and only then
 // marks the practice active. Returns { success, subscriptionId, transactionId }.
-export async function recordHelcimPayment({ cardToken, amount, date, customerCode, cardLast4, cardType } = {}) {
+export async function recordHelcimPayment({ cardToken, amount, date, customerCode, cardLast4, cardType, offerCode } = {}) {
   const { data, error } = await supabase.functions.invoke('helcim-checkout', {
     body: {
       action: 'record_payment',
@@ -94,10 +94,30 @@ export async function recordHelcimPayment({ cardToken, amount, date, customerCod
       customer_code: customerCode,
       card_last4: cardLast4,
       card_type: cardType,
+      offer_code: offerCode || undefined, // server-trusted price override
     },
   })
   if (error) throw new Error(await edgeErrorMessage(error))
   if (!data?.success) throw new Error(data?.error || 'We could not confirm your payment. Please contact support.')
+  return data
+}
+
+// Start a FREE TRIAL from an offer link: the card was tokenized via Helcim.js
+// verify (no charge); the edge function enrolls a subscription that first bills
+// after the trial and puts the practice on trial. Returns { success, trialEndsAt }.
+export async function startTrialOffer({ offerCode, cardToken, customerCode, cardLast4, cardType } = {}) {
+  const { data, error } = await supabase.functions.invoke('helcim-checkout', {
+    body: {
+      action: 'start_trial',
+      offer_code: offerCode,
+      card_token: cardToken,
+      customer_code: customerCode,
+      card_last4: cardLast4,
+      card_type: cardType,
+    },
+  })
+  if (error) throw new Error(await edgeErrorMessage(error))
+  if (!data?.success) throw new Error(data?.error || 'We could not start your trial. Please contact support.')
   return data
 }
 
