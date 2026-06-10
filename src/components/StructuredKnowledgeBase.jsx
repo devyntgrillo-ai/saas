@@ -13,7 +13,7 @@ import {
 // USPs, financing options, testimonials, protocols, guarantees, team facts, the
 // generator weaves 1-2 of these into messages where relevant.
 const CATEGORIES = [
-  { key: 'USP', label: 'What makes us unique (USP)', hint: 'e.g. We do same-day implants in one visit' },
+  { key: 'USP', label: 'What makes us unique', hint: 'e.g. We do same-day implants in one visit' },
   { key: 'financing', label: 'Financing option', hint: 'e.g. 0% for 18 months through Cherry, no credit check' },
   { key: 'testimonial', label: 'Result / testimonial', hint: 'e.g. Robert got his full arch and was eating steak in a week' },
   { key: 'protocol', label: 'Treatment protocol', hint: 'e.g. We use guided surgery for precise, less invasive placement' },
@@ -75,7 +75,7 @@ export default function StructuredKnowledgeBase({ practiceId }) {
     <div className="card border-primary/30 p-6">
       <div className="flex items-center gap-2">
         <Sparkles className="h-4 w-4 text-primary-300" />
-        <h2 className="text-base font-semibold text-white">Learned from your consults, review</h2>
+        <h2 className="text-base font-semibold text-white">Learned from your consults</h2>
         {pending.length > 0 && <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary-300">{pending.length}</span>}
       </div>
       <p className="mt-1 text-sm text-slate-400">As you record consultations, CaseLift surfaces durable facts about your practice here. Approve the accurate ones and the AI will start using them; dismiss anything that's off. Nothing is used until you approve it.</p>
