@@ -15,6 +15,7 @@ import {
   Play,
   Mic,
   Sparkles,
+  Rocket,
 } from 'lucide-react'
 import Logo from '../components/Logo'
 import PasswordField from '../components/PasswordField'
@@ -298,6 +299,7 @@ export default function Onboarding() {
                 { icon: Mic, title: 'Record in one tap', desc: 'In person or virtual, no hardware.' },
                 { icon: Sparkles, title: 'AI analyzes every consult', desc: 'Objections, sentiment, next best step.' },
                 { icon: MessageSquare, title: 'Follow-up that converts', desc: 'Personalized texts + emails on autopilot.' },
+                { icon: Rocket, title: 'Private 1-on-1 coaching', desc: 'Personal expert guidance to lift your case acceptance.' },
               ].map(({ icon: Icon, title, desc }) => (
                 <li key={title} className="flex gap-3">
                   <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-primary-300">
