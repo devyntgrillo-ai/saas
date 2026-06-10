@@ -6,6 +6,7 @@ import {
   CreditCard,
   ShieldCheck,
   UserPlus,
+  MessageSquare,
   Check,
   Loader2,
   ArrowRight,
@@ -266,64 +267,93 @@ export default function Onboarding() {
 
   return (
     <div className="flex min-h-screen flex-col bg-surface lg:flex-row">
-      {/* ── Sidebar: brand + stage list (no "step N of 5" anywhere) ─────────── */}
-      <aside className="shrink-0 border-b border-surface-700 bg-surface-900 px-6 py-6 lg:w-80 lg:border-b-0 lg:border-r lg:py-8">
-        {/* Onboarding (incl. activate-plan + BAA) is always CaseLift-branded. */}
-        <Logo forceDefault />
-        <p className="mt-6 hidden text-sm font-medium text-slate-300 lg:block">Welcome to CaseLift</p>
-        <p className="mt-0.5 hidden text-xs text-slate-500 lg:block">A few quick steps and you’re in. You can leave and pick up right where you left off.</p>
+      {/* ── Brand panel: premium left rail (gradient wash + value props + proof) ─ */}
+      <aside className="relative flex shrink-0 flex-col overflow-hidden border-b border-surface-700 bg-surface-900 px-6 py-8 lg:w-[440px] lg:border-b-0 lg:border-r lg:px-10 lg:py-12">
+        {/* Ambient brand glow — fills the rail so it reads as a designed panel. */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/[0.14] via-transparent to-transparent" />
+        <div className="pointer-events-none absolute -left-28 -top-28 h-72 w-72 rounded-full bg-primary/20 blur-[120px]" />
 
-        {/* Compact progress — a slim segmented bar + the current step, instead of a
-            long list of grayed-out tasks (which reads as intimidating up front). */}
-        <div className="mt-6">
-          <div className="flex items-center gap-1.5">
-            {STEPS.map((s, i) => {
-              const isDone = doneList[i]
-              const isActive = i === active
-              const reachable = Boolean(practiceId) || i === 0
-              return (
-                <button
-                  key={s.key}
-                  type="button"
-                  onClick={() => reachable && goTo(i)}
-                  disabled={!reachable}
-                  aria-label={s.label}
-                  title={s.label}
-                  className={`h-1.5 flex-1 rounded-full transition ${
-                    isDone ? 'bg-emerald-500' : isActive ? 'bg-primary' : 'bg-surface-700'
-                  } ${reachable ? 'cursor-pointer' : 'cursor-default'}`}
-                />
-              )
-            })}
+        <div className="relative flex flex-1 flex-col">
+          {/* Onboarding (incl. activate-plan + BAA) is always CaseLift-branded. */}
+          <Logo forceDefault />
+
+          {/* Marketing block — desktop only; mobile keeps it compact. */}
+          <div className="mt-10 hidden lg:block">
+            <h1 className="text-[26px] font-bold leading-[1.15] tracking-tight text-white">Turn every consult into recovered revenue.</h1>
+            <p className="mt-3.5 text-sm leading-relaxed text-slate-400">CaseLift records your consultations, pinpoints what held each patient back, and runs the perfect follow-up — automatically.</p>
+
+            <ul className="mt-8 space-y-4">
+              {[
+                { icon: Mic, title: 'Record in one tap', desc: 'In person or virtual — no hardware.' },
+                { icon: Sparkles, title: 'AI analyzes every consult', desc: 'Objections, sentiment, next best step.' },
+                { icon: MessageSquare, title: 'Follow-up that converts', desc: 'Personalized texts + emails on autopilot.' },
+              ].map(({ icon: Icon, title, desc }) => (
+                <li key={title} className="flex gap-3">
+                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-primary-300">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{title}</p>
+                    <p className="text-xs text-slate-500">{desc}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <figure className="mt-9 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <blockquote className="text-sm leading-relaxed text-slate-200">“We recovered <span className="font-semibold text-white">$63,000</span> in our first two months — without lifting a finger.”</blockquote>
+              <figcaption className="mt-2 text-xs text-slate-500">Dr. Maria Chen · Pinnacle Dental</figcaption>
+            </figure>
           </div>
-          <div className="mt-4 flex items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary-300">
-              {(() => { const Icon = STEPS[active].icon; return <Icon className="h-4 w-4" /> })()}
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-white">{STEPS[active].label}</p>
-              <p className="truncate text-[11px] text-slate-500">{STEPS[active].blurb}</p>
+
+          {/* Progress + trust pinned to the bottom of the rail. */}
+          <div className="mt-auto pt-10">
+            <div className="flex items-center gap-1.5">
+              {STEPS.map((s, i) => {
+                const isDone = doneList[i]
+                const isActive = i === active
+                const reachable = Boolean(practiceId) || i === 0
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => reachable && goTo(i)}
+                    disabled={!reachable}
+                    aria-label={s.label}
+                    title={s.label}
+                    className={`h-1.5 flex-1 rounded-full transition ${
+                      isDone ? 'bg-emerald-500' : isActive ? 'bg-primary' : 'bg-surface-700'
+                    } ${reachable ? 'cursor-pointer' : 'cursor-default'}`}
+                  />
+                )
+              })}
             </div>
+            <div className="mt-3.5 flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary-300">
+                  {(() => { const Icon = STEPS[active].icon; return <Icon className="h-4 w-4" /> })()}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-white">{STEPS[active].label}</p>
+                  <p className="truncate text-[11px] text-slate-500">{doneList.filter(Boolean).length} of {STEPS.length} complete</p>
+                </div>
+              </div>
+              {practiceId && (
+                <button type="button" onClick={() => navigate('/', { replace: true })} className="shrink-0 text-xs font-medium text-slate-500 transition hover:text-slate-300">
+                  Finish later
+                </button>
+              )}
+            </div>
+            <p className="mt-5 flex items-center gap-1.5 text-[11px] text-slate-500">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400/80" /> HIPAA-secure · BAA included
+            </p>
           </div>
-          {doneList.filter(Boolean).length > 0 && (
-            <p className="mt-3 text-[11px] text-slate-500">{doneList.filter(Boolean).length} of {STEPS.length} done</p>
-          )}
         </div>
-
-        {practiceId && (
-          <button
-            type="button"
-            onClick={() => navigate('/', { replace: true })}
-            className="mt-6 text-xs font-medium text-slate-500 transition hover:text-slate-300"
-          >
-            I’ll finish later
-          </button>
-        )}
       </aside>
 
       {/* ── Content panel ──────────────────────────────────────────────────── */}
-      <main className="flex flex-1 items-start justify-center px-4 py-8 sm:px-8 lg:py-14">
-        <div className="w-full max-w-xl">
+      <main className="flex flex-1 items-start justify-center px-5 py-10 sm:px-10 lg:items-center lg:py-16">
+        <div className="w-full max-w-lg">
           {saveError && (
             <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{saveError}</p>
           )}
