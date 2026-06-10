@@ -529,11 +529,6 @@ export default function Onboarding() {
                 </>
               ) : (
                 <div className="mt-6 rounded-2xl border border-surface-700 bg-surface-900 p-6">
-                  {offer?.label && (
-                    <p className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary-300">
-                      Special offer: {offer.label}
-                    </p>
-                  )}
                   {trialDays > 0 ? (
                     <>
                       <div className="text-3xl font-bold text-white">{trialDays}-day free trial</div>
