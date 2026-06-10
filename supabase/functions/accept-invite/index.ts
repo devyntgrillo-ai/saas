@@ -76,18 +76,18 @@ Deno.serve(async (req: Request) => {
       userId = created.user.id;
     }
 
-    // Grant the invitation's access (idempotent).
+    // Grant the invitation's access (idempotent). Only set access fields the
+    // invitation actually carries — NEVER overwrite an existing practice link /
+    // access_level with null (that would un-link a user who already had access).
     const role = mapRole(inv.role as string | null);
-    await admin.from("users").upsert(
-      {
-        id: userId,
-        email,
-        practice_id: (inv.practice_id as string | null) ?? null,
-        role,
-        access_level: (inv.access_level as string | null) ?? null,
-      },
-      { onConflict: "id" },
-    );
+    // deno-lint-ignore no-explicit-any
+    const userPatch: Record<string, any> = { id: userId, email };
+    if (inv.practice_id) {
+      userPatch.practice_id = inv.practice_id;
+      userPatch.role = role;
+    }
+    if (inv.access_level) userPatch.access_level = inv.access_level;
+    await admin.from("users").upsert(userPatch, { onConflict: "id" });
     if (inv.agency_id) {
       await admin.from("agency_members").upsert(
         {
