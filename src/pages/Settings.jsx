@@ -549,50 +549,47 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
       {/* Current plan card */}
       <div className="mt-4 rounded-xl border border-surface-700 bg-surface-800/50 p-4">
         <div className="flex items-start justify-between gap-4">
+          {/* Left: plan + status text, all stacked tightly. */}
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current plan</p>
             <p className="mt-1 text-xl font-bold text-white">{PLAN_NAME}</p>
             <p className="mt-0.5 text-sm text-slate-400">${planAmount.toLocaleString()}/month</p>
-          </div>
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${meta.classes}`}>
-            {meta.label}
-          </span>
-        </div>
-
-        {/* Status detail + action share one row so the button sits inline with
-            the plan text instead of adding an empty band below it. */}
-        <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-          <div className="text-sm">
-            {isTrial && !trialExpired && (
-              <p className="text-slate-400">
-                Free trial - <span className="font-medium text-slate-200">{daysLeft} {daysLeft === 1 ? 'day' : 'days'} remaining</span>. Activate your subscription to keep access after the trial ends.
-              </p>
-            )}
-            {isTrial && trialExpired && (
-              <p className="text-amber-300">Your free trial has ended. Activate your subscription to restore full access.</p>
-            )}
-            {isActive && hasCard && (
-              <p className="text-slate-400">
-                Card on file:{' '}
-                <span className="text-slate-200">
-                  {practice?.card_type ? `${practice.card_type} ` : ''}
-                  {practice?.card_last4 ? `•••• ${practice.card_last4}` : 'saved'}
-                </span>
-              </p>
-            )}
-            {(status === 'cancelled' || status === 'canceled') && (
-              <p className="text-rose-300">
-                Your subscription is cancelled{practice?.next_billing_date ? ` and access ends on ${formatDate(practice.next_billing_date)}.` : '.'} Reactivate any time to continue.
-              </p>
-            )}
-            {status === 'paused' && (
-              <p className="text-primary-300">
-                Your account is paused{practice?.pause_ends_at ? ` until ${formatDate(practice.pause_ends_at)}` : ''}. No charges during the pause - resume any time.
-              </p>
-            )}
+            <div className="mt-2 text-sm">
+              {isTrial && !trialExpired && (
+                <p className="text-slate-400">
+                  Free trial - <span className="font-medium text-slate-200">{daysLeft} {daysLeft === 1 ? 'day' : 'days'} remaining</span>. Activate your subscription to keep access after the trial ends.
+                </p>
+              )}
+              {isTrial && trialExpired && (
+                <p className="text-amber-300">Your free trial has ended. Activate your subscription to restore full access.</p>
+              )}
+              {isActive && hasCard && (
+                <p className="text-slate-400">
+                  Card on file:{' '}
+                  <span className="text-slate-200">
+                    {practice?.card_type ? `${practice.card_type} ` : ''}
+                    {practice?.card_last4 ? `•••• ${practice.card_last4}` : 'saved'}
+                  </span>
+                </p>
+              )}
+              {(status === 'cancelled' || status === 'canceled') && (
+                <p className="text-rose-300">
+                  Your subscription is cancelled{practice?.next_billing_date ? ` and access ends on ${formatDate(practice.next_billing_date)}.` : '.'} Reactivate any time to continue.
+                </p>
+              )}
+              {status === 'paused' && (
+                <p className="text-primary-300">
+                  Your account is paused{practice?.pause_ends_at ? ` until ${formatDate(practice.pause_ends_at)}` : ''}. No charges during the pause - resume any time.
+                </p>
+              )}
+            </div>
           </div>
 
-          <div className="shrink-0">
+          {/* Right: status badge with the action tucked directly beneath it. */}
+          <div className="flex shrink-0 flex-col items-end gap-3">
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${meta.classes}`}>
+              {meta.label}
+            </span>
             {status === 'paused' ? (
               <ActivateButton label="Resume subscription" loading={false} onClick={onResume} />
             ) : isActive ? (
