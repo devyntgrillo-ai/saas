@@ -271,44 +271,44 @@ export default function Onboarding() {
         {/* Onboarding (incl. activate-plan + BAA) is always CaseLift-branded. */}
         <Logo forceDefault />
         <p className="mt-6 hidden text-sm font-medium text-slate-300 lg:block">Welcome to CaseLift</p>
-        <p className="mt-0.5 hidden text-xs text-slate-500 lg:block">Let’s get your practice set up. You can leave and pick up right where you left off.</p>
+        <p className="mt-0.5 hidden text-xs text-slate-500 lg:block">A few quick steps and you’re in. You can leave and pick up right where you left off.</p>
 
-        <ol className="mt-6 space-y-1">
-          {STEPS.map((s, i) => {
-            const Icon = s.icon
-            const isActive = i === active
-            const isDone = doneList[i]
-            const locked = !practiceId && i > 0
-            return (
-              <li key={s.key}>
+        {/* Compact progress — a slim segmented bar + the current step, instead of a
+            long list of grayed-out tasks (which reads as intimidating up front). */}
+        <div className="mt-6">
+          <div className="flex items-center gap-1.5">
+            {STEPS.map((s, i) => {
+              const isDone = doneList[i]
+              const isActive = i === active
+              const reachable = Boolean(practiceId) || i === 0
+              return (
                 <button
+                  key={s.key}
                   type="button"
-                  onClick={() => goTo(i)}
-                  disabled={locked}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
-                    locked ? 'cursor-not-allowed opacity-50' : isActive ? 'bg-surface-800' : 'hover:bg-surface-800/60'
-                  }`}
-                >
-                  <span
-                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs transition ${
-                      isDone
-                        ? 'border-emerald-500 bg-emerald-500 !text-white'
-                        : isActive
-                          ? 'border-primary bg-primary/15 text-primary-300'
-                          : 'border-surface-600 bg-surface-800 text-slate-500'
-                    }`}
-                  >
-                    {isDone ? <Check className="h-3.5 w-3.5" /> : locked ? <Lock className="h-3 w-3" /> : <Icon className="h-3.5 w-3.5" />}
-                  </span>
-                  <span className="min-w-0">
-                    <span className={`block truncate text-sm font-medium ${isActive || isDone ? 'text-slate-100' : 'text-slate-400'}`}>{s.label}</span>
-                    <span className="block truncate text-[11px] text-slate-500">{isDone ? 'Completed' : s.blurb}</span>
-                  </span>
-                </button>
-              </li>
-            )
-          })}
-        </ol>
+                  onClick={() => reachable && goTo(i)}
+                  disabled={!reachable}
+                  aria-label={s.label}
+                  title={s.label}
+                  className={`h-1.5 flex-1 rounded-full transition ${
+                    isDone ? 'bg-emerald-500' : isActive ? 'bg-primary' : 'bg-surface-700'
+                  } ${reachable ? 'cursor-pointer' : 'cursor-default'}`}
+                />
+              )
+            })}
+          </div>
+          <div className="mt-4 flex items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary-300">
+              {(() => { const Icon = STEPS[active].icon; return <Icon className="h-4 w-4" /> })()}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">{STEPS[active].label}</p>
+              <p className="truncate text-[11px] text-slate-500">{STEPS[active].blurb}</p>
+            </div>
+          </div>
+          {doneList.filter(Boolean).length > 0 && (
+            <p className="mt-3 text-[11px] text-slate-500">{doneList.filter(Boolean).length} of {STEPS.length} done</p>
+          )}
+        </div>
 
         {practiceId && (
           <button
