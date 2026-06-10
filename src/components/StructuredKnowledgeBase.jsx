@@ -70,16 +70,20 @@ export default function StructuredKnowledgeBase({ practiceId }) {
 
     {/* Review queue — facts CaseLift learned from recorded consults. Nothing here
         is used by the AI until approved. */}
-    {pending.length > 0 && (
-      <div className="card border-primary/30 p-6">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary-300" />
-          <h2 className="text-base font-semibold text-white">Learned from your consults — review</h2>
-          <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary-300">{pending.length}</span>
-        </div>
-        <p className="mt-1 text-sm text-slate-400">CaseLift picked these up from recorded consultations. Approve the ones that are accurate and the AI will start using them; dismiss anything that's off.</p>
-        <div className="mt-5 space-y-2">
-          {pending.map((it) => {
+    {/* Always visible so the feature is discoverable; shows an empty state until
+        recorded consults surface facts to review. */}
+    <div className="card border-primary/30 p-6">
+      <div className="flex items-center gap-2">
+        <Sparkles className="h-4 w-4 text-primary-300" />
+        <h2 className="text-base font-semibold text-white">Learned from your consults — review</h2>
+        {pending.length > 0 && <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary-300">{pending.length}</span>}
+      </div>
+      <p className="mt-1 text-sm text-slate-400">As you record consultations, CaseLift surfaces durable facts about your practice here. Approve the accurate ones and the AI will start using them; dismiss anything that's off. Nothing is used until you approve it.</p>
+      <div className="mt-5 space-y-2">
+        {pending.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-surface-700 px-4 py-6 text-center text-sm text-slate-500">Nothing to review yet — record a consult and any practice facts CaseLift learns will show up here for approval.</p>
+        ) : (
+          pending.map((it) => {
             const approving = isMutating(approveMutation, (v) => v.id === it.id)
             const dismissing = isMutating(removeMutation, (v) => v.id === it.id)
             return (
@@ -94,10 +98,10 @@ export default function StructuredKnowledgeBase({ practiceId }) {
                 </button>
               </div>
             )
-          })}
-        </div>
+          })
+        )}
       </div>
-    )}
+    </div>
 
     <div className="card p-6">
       <h2 className="text-base font-semibold text-white">Selling points the AI uses in follow-ups</h2>
