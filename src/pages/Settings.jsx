@@ -19,14 +19,11 @@ import {
   Send,
   Phone,
   MessageSquare,
-  Sun,
-  Moon,
   BookOpen,
   Gift,
   UserRound,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { useTheme } from '../context/ThemeContext'
 import { supabase } from '../lib/supabase'
 import { auditUserRoleChanged } from '../lib/audit'
 import { formatDate } from '../lib/consults'
@@ -326,7 +323,6 @@ export default function Settings() {
                 </button>
               </div>
             </div>
-            <AppearanceCard />
             </div>
           )}
 
@@ -438,33 +434,6 @@ function HipaaBadge() {
     <div className="flex shrink-0 items-center gap-1.5 px-3 py-2 text-xs font-normal text-slate-500 lg:mt-2 lg:border-t lg:border-surface-700 lg:pt-3">
       <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
       CaseLift is HIPAA Compliant
-    </div>
-  )
-}
-
-// Appearance - light/dark theme toggle (mirrors the sidebar control).
-function AppearanceCard() {
-  const { isLight, toggleTheme } = useTheme()
-  return (
-    <div className="card p-6">
-      <h2 className="text-base font-semibold text-white">Appearance</h2>
-      <p className="mt-2 text-sm text-slate-400">Choose how CaseLift looks on this device.</p>
-      <div className="mt-4 flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-medium text-slate-200">Theme</p>
-          <p className="text-xs text-slate-500">{isLight ? 'Light mode' : 'Dark mode'}</p>
-        </div>
-        <button
-          type="button"
-          onClick={toggleTheme}
-          title={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
-          aria-label={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
-          className="btn-ghost"
-        >
-          {isLight ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          {isLight ? 'Light' : 'Dark'}
-        </button>
-      </div>
     </div>
   )
 }
