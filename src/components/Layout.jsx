@@ -131,7 +131,7 @@ export default function Layout() {
   })()
 
   // Reseller portal: ANY /agency route, OR a viewer in reseller context with no
-  // specific practice selected — an agency user at home, or a super-admin
+  // specific practice selected, an agency user at home, or a super-admin
   // impersonating a reseller (both covered by isAgencyView; isAgencyUser alone is
   // false for an impersonating super-admin). Determined first so the practice
   // nav, Record button, and Settings link are suppressed in the reseller portal

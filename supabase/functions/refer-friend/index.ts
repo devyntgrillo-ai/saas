@@ -34,7 +34,7 @@ Deno.serve(async (req: Request) => {
     const customSubject = String(body.subject || "").trim();
     const customMessage = String(body.message || "").trim();
     // The referral link is emailed to a third party, so it must point at the
-    // canonical production app — never the referrer's browser origin (localhost
+    // canonical production app, never the referrer's browser origin (localhost
     // in dev). app_origin from the body is ignored for link construction.
     const appOrigin = appBaseUrl();
     if (!isEmail(friendEmail)) return json({ error: "A valid friend email is required." }, 400);

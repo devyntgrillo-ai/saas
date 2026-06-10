@@ -64,7 +64,7 @@ Deno.serve(async (req: Request) => {
     const role = body.role || "member";
     const accessLevel = body.access_level || "practice_member";
     const personalMessage = body.personal_message ?? null;
-    // Always the canonical production URL — never the inviter's browser origin.
+    // Always the canonical production URL, never the inviter's browser origin.
     const appOrigin = appBaseUrl();
 
     const admin = createClient(url, serviceKey, {

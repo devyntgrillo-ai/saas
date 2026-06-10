@@ -1,12 +1,12 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
-// helcim-checkout — all Helcim payment operations. The API key lives ONLY here
+// helcim-checkout, all Helcim payment operations. The API key lives ONLY here
 // (Supabase secret HELCIM_API_KEY), never in the client bundle.
 //
 // Auth model (verify_jwt=false so unauthenticated signup can start a checkout):
 //   • Public (no session): initialize_checkout (amount validated server-side),
-//     create_customer — these are needed before a practice account exists.
+//     create_customer, these are needed before a practice account exists.
 //   • Super-admin only: get_customer, get_transaction, create_invoice, charge,
-//     refund, connection_test — money movement + data lookups.
+//     refund, connection_test, money movement + data lookups.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 
@@ -107,7 +107,7 @@ Deno.serve(async (req: Request) => {
           notes: params.notes || "CaseLift subscription",
           customerId: params.customer_id,
           currency: "USD",
-          lineItems: [{ description: params.description || "CaseLift — Monthly Subscription", quantity: 1, price: params.amount, total: params.amount }],
+          lineItems: [{ description: params.description || "CaseLift, Monthly Subscription", quantity: 1, price: params.amount, total: params.amount }],
         });
         return json(data);
       }

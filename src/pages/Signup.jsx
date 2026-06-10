@@ -161,7 +161,7 @@ export default function Signup() {
     }
 
     // Multi-location: link this new location to the parent owner's account so it
-    // shows up in their practice switcher. Runs server-side (service role) — RLS
+    // shows up in their practice switcher. Runs server-side (service role), RLS
     // blocks a user from self-inserting memberships. Non-fatal if it fails.
     if (parentPracticeId) {
       try {
@@ -197,7 +197,7 @@ export default function Signup() {
     } catch (e) {
       setError(
         /not configured/i.test(e?.message || '')
-          ? 'Online checkout isn’t available yet — please contact support@caselift.io.'
+          ? 'Online checkout isn’t available yet, please contact support@caselift.io.'
           : e?.message || 'Could not start checkout. Please try again.',
       )
       setLoading(false)
@@ -250,7 +250,7 @@ export default function Signup() {
               <span>
                 Adding a new location to your account at the discounted{' '}
                 <span className="font-semibold">${planAmount.toLocaleString()}/mo</span> rate
-                {locationCount > 1 ? ` — set up the first of ${locationCount} locations below.` : '.'}
+                {locationCount > 1 ? `, set up the first of ${locationCount} locations below.` : '.'}
               </span>
             </div>
           )}
@@ -259,7 +259,7 @@ export default function Signup() {
             <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary-200">
               <Gift className="mt-0.5 h-4 w-4 shrink-0" />
               <span>
-                You were referred by <span className="font-semibold">{referrer.practice_name}</span> — welcome to
+                You were referred by <span className="font-semibold">{referrer.practice_name}</span>, welcome to
                 CaseLift.
               </span>
             </div>
@@ -336,7 +336,7 @@ export default function Signup() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Order summary</p>
-                    <p className="mt-1 text-base font-semibold text-white">CaseLift — Month 1</p>
+                    <p className="mt-1 text-base font-semibold text-white">CaseLift, Month 1</p>
                     <p className="mt-0.5 text-sm text-slate-400">Billed monthly · cancel anytime</p>
                   </div>
                   <p className="text-2xl font-bold text-white">${planAmount.toLocaleString()}</p>

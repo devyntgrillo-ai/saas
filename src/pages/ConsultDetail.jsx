@@ -65,7 +65,7 @@ import {
 
 // ── Small presentational helpers ────────────────────────────────────────────
 
-// Light card chrome — hairline border, generous padding, subtle shadow. Kept
+// Light card chrome, hairline border, generous padding, subtle shadow. Kept
 // intentionally low-contrast so the page reads as a calm summary, not a grid of
 // competing boxes.
 function Card({ className = '', children }) {
@@ -93,7 +93,7 @@ function SkeletonLines({ lines = 3, className = '' }) {
   )
 }
 
-// A label / value row used in the analysis list — replaces the old boxed grid so
+// A label / value row used in the analysis list, replaces the old boxed grid so
 // the analysis reads as a clean, scannable list.
 function AnalysisRow({ label, children }) {
   return (
@@ -141,7 +141,7 @@ function fmtRemaining(ms) {
   return `${h}h ${m}m`
 }
 
-// One labeled contact/detail line in the Patient card — the single place contact
+// One labeled contact/detail line in the Patient card, the single place contact
 // info lives (it used to be duplicated in the header).
 function InfoRow({ icon: Icon, label, value }) {
   return (
@@ -243,7 +243,7 @@ export default function ConsultDetail() {
   const triggeredRef = useRef(false)
 
   // Compact follow-up-sequence status (badge + one-liner). The full message
-  // editor lives at /sequences — this page only summarizes. Memoized so the
+  // editor lives at /sequences, this page only summarizes. Memoized so the
   // current-time check stays out of the render path.
   const seqInfo = useMemo(() => {
     const status = consult?.sequence_status || 'active'
@@ -393,7 +393,7 @@ export default function ConsultDetail() {
           <ArrowLeft className="h-4 w-4" /> Consults
         </Link>
 
-        {/* ── Header (borderless — name, status, primary action) ──────────── */}
+        {/* ── Header (borderless, name, status, primary action) ──────────── */}
         <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
@@ -477,7 +477,7 @@ export default function ConsultDetail() {
             <div className="min-w-0">
               <p className="text-sm font-semibold text-amber-800">Transcription failed</p>
               <p className="mt-0.5 text-sm text-amber-700">{consult.transcript_error || 'Failed to send a request to the Edge Function'}</p>
-              <p className="mt-1 text-xs text-amber-600">The consult was saved but couldn’t be transcribed. This is recoverable — retry to generate the transcript, analysis, and follow-up messages.</p>
+              <p className="mt-1 text-xs text-amber-600">The consult was saved but couldn’t be transcribed. This is recoverable, retry to generate the transcript, analysis, and follow-up messages.</p>
               <button
                 onClick={retryTranscription}
                 disabled={retryingTranscription}
@@ -561,9 +561,9 @@ export default function ConsultDetail() {
           </div>
         </Card>
 
-        {/* ── Main content — summary/analysis (left) + sidebar (right) ────── */}
+        {/* ── Main content, summary/analysis (left) + sidebar (right) ────── */}
         <div className="mt-6 grid gap-6 lg:grid-cols-3">
-          {/* LEFT — the read */}
+          {/* LEFT, the read */}
           <div className="space-y-6 lg:col-span-2">
             {/* What happened */}
             <Card>
@@ -653,9 +653,9 @@ export default function ConsultDetail() {
             </Card>
           </div>
 
-          {/* RIGHT — the facts */}
+          {/* RIGHT, the facts */}
           <div className="space-y-6">
-            {/* Patient — the single home for contact info */}
+            {/* Patient, the single home for contact info */}
             <Card>
               <div className="flex items-center justify-between gap-2">
                 <SectionLabel icon={User}>Patient</SectionLabel>
@@ -752,7 +752,7 @@ export default function ConsultDetail() {
             <div className="rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-sm">
               <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-400" />
               <p className="mt-3 text-sm font-medium text-gray-700">Transcript is being generated…</p>
-              <p className="mt-1 text-xs text-gray-500">This updates automatically — you can leave and come back.</p>
+              <p className="mt-1 text-xs text-gray-500">This updates automatically, you can leave and come back.</p>
             </div>
           ) : (
             <TranscriptViewer

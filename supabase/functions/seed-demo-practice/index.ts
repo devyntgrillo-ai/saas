@@ -48,7 +48,7 @@ function bizTsFuture(inDays: number, hourMst = 10, minute = 0): string {
   d.setUTCHours(hourMst + 7, minute, 0, 0);
   return d.toISOString();
 }
-// Today at a Mountain-Standard business hour (no weekend shift — these demo
+// Today at a Mountain-Standard business hour (no weekend shift, these demo
 // appointments must always read as "today"). A daily cron keeps them current.
 function bizTsToday(hourMst = 10, minute = 0): string {
   const d = new Date();
@@ -93,7 +93,7 @@ const CONSULTS: Consult[] = [
     key: "robert", first: "Robert", last: "Martinez", phone: "(480) 555-0110",
     treatment: "full_arch", caseValue: 42000, daysAgo: 35, kind: "active",
     objection: "Monthly payment amount", objectionType: "price",
-    exitIntent: "Warm — requested time to discuss with wife", exitLevel: "warm",
+    exitIntent: "Warm, requested time to discuss with wife", exitLevel: "warm",
     seqStartDaysAgo: 6,
     summary: "Patient expressed strong interest in full arch restoration. Primary concern was financing. Wife present, supportive. Pre-approved at $580/month through Sunbit. Close probability high.",
     coaching: "Robert is ready to move forward. Follow up within 48 hours with the financing breakdown you promised. Reference the conversation about his daughter's wedding in June.",
@@ -135,7 +135,7 @@ const CONSULTS: Consult[] = [
     key: "thomas", first: "Thomas", last: "Wilson", phone: "(480) 555-0118",
     treatment: "full_arch", caseValue: 46000, daysAgo: 9, kind: "active",
     objection: "Fear of surgery", objectionType: "fear",
-    exitIntent: "Warm — very interested", exitLevel: "hot", seqStartDaysAgo: 7,
+    exitIntent: "Warm, very interested", exitLevel: "hot", seqStartDaysAgo: 7,
     coaching: "Thomas has been wanting this for 3 years. His fear is valid but addressable. Lead with sedation options and patient testimonials from anxious patients who had great experiences.",
   },
   {
@@ -152,20 +152,20 @@ const CONSULTS: Consult[] = [
     key: "jennifer", first: "Jennifer", last: "Taylor", phone: "(480) 555-0121",
     treatment: "full_arch", caseValue: 47000, daysAgo: 2, kind: "active",
     objection: "Needs to think about it", objectionType: "timing",
-    exitIntent: "Very warm — asked about surgery date", exitLevel: "hot", seqStartDaysAgo: 2,
-    coaching: "Jennifer is ready. She asked about surgery dates unprompted — that is a buying signal. The follow-up sequence should reference her specific timeline concern about healing before her son's graduation in May.",
+    exitIntent: "Very warm, asked about surgery date", exitLevel: "hot", seqStartDaysAgo: 2,
+    coaching: "Jennifer is ready. She asked about surgery dates unprompted, that is a buying signal. The follow-up sequence should reference her specific timeline concern about healing before her son's graduation in May.",
   },
 ];
 
 // 7-touch sequence template. send_day drives the schedule from activation.
 const SEQ_TEMPLATE = [
-  { day: 1, channel: "sms", subject: null as string | null, body: (n: string) => `Hi ${n}, this is the team following up after your consult. We really enjoyed meeting you — any questions we can help with as you think it over?` },
-  { day: 3, channel: "email", subject: "Your financing options + a patient story", body: (n: string) => `Hi ${n},\n\nI put together a quick breakdown of the financing options we discussed — most patients are surprised how manageable the monthly number is. I also wanted to share a short story from a patient who was in your exact position last year and is thrilled with the result.\n\nHappy to walk through any of it whenever works for you.` },
-  { day: 5, channel: "sms", subject: null, body: (n: string) => `Hi ${n}, just checking in — did the financing breakdown make sense? Glad to answer anything.` },
-  { day: 7, channel: "email", subject: "Still here whenever you're ready", body: (n: string) => `Hi ${n},\n\nNo pressure at all — just wanted you to know we're here when you're ready to move forward. Here's a testimonial from a patient who had the same hesitation and is so glad they did it.` },
+  { day: 1, channel: "sms", subject: null as string | null, body: (n: string) => `Hi ${n}, this is the team following up after your consult. We really enjoyed meeting you, any questions we can help with as you think it over?` },
+  { day: 3, channel: "email", subject: "Your financing options + a patient story", body: (n: string) => `Hi ${n},\n\nI put together a quick breakdown of the financing options we discussed, most patients are surprised how manageable the monthly number is. I also wanted to share a short story from a patient who was in your exact position last year and is thrilled with the result.\n\nHappy to walk through any of it whenever works for you.` },
+  { day: 5, channel: "sms", subject: null, body: (n: string) => `Hi ${n}, just checking in, did the financing breakdown make sense? Glad to answer anything.` },
+  { day: 7, channel: "email", subject: "Still here whenever you're ready", body: (n: string) => `Hi ${n},\n\nNo pressure at all, just wanted you to know we're here when you're ready to move forward. Here's a testimonial from a patient who had the same hesitation and is so glad they did it.` },
   { day: 14, channel: "sms", subject: null, body: (n: string) => `Hi ${n}, hope you're doing well! Wanted to check in and see if now is a better time to talk through next steps.` },
-  { day: 21, channel: "email", subject: "Holding your treatment plan pricing", body: (n: string) => `Hi ${n},\n\nWe're able to hold your current treatment-plan pricing for a little longer, and our surgical calendar is filling up for the season. If you'd like, I can pencil you in tentatively — no commitment.` },
-  { day: 30, channel: "sms", subject: null, body: (n: string) => `Hi ${n}, last check-in from me for now — we'd love to help you get this done. Reply anytime and we'll pick right back up.` },
+  { day: 21, channel: "email", subject: "Holding your treatment plan pricing", body: (n: string) => `Hi ${n},\n\nWe're able to hold your current treatment-plan pricing for a little longer, and our surgical calendar is filling up for the season. If you'd like, I can pencil you in tentatively, no commitment.` },
+  { day: 30, channel: "sms", subject: null, body: (n: string) => `Hi ${n}, last check-in from me for now, we'd love to help you get this done. Reply anytime and we'll pick right back up.` },
 ];
 
 // Human-readable treatment labels + appointment types.
@@ -188,7 +188,7 @@ const APPT_TYPE: Record<string, string> = {
 const OBJECTION_PACK: Record<string, { secondary: string; downsell: string; tc: string }> = {
   price: {
     secondary: "Wanted to compare against another office's quote",
-    downsell: "Phased treatment — start with the arch causing the most pain, finance the rest",
+    downsell: "Phased treatment, start with the arch causing the most pain, finance the rest",
     tc: "Re-send the Sunbit pre-approval and the monthly breakdown; lead with the per-day cost framing.",
   },
   fear: {
@@ -210,7 +210,7 @@ const OBJECTION_PACK: Record<string, { secondary: string; downsell: string; tc: 
 const DEFAULT_PACK = { secondary: "No major secondary objection", downsell: "Offer a phased plan to fit their budget", tc: "Follow up within 48 hours with the requested details." };
 
 const PERSONAL_DETAIL: Record<string, string> = {
-  robert: "Daughter's wedding in June — wants to feel confident smiling in photos.",
+  robert: "Daughter's wedding in June, wants to feel confident smiling in photos.",
   sandra: "Recently retired; finally prioritizing herself.",
   james: "Avid golfer; lost the tooth in a weekend accident.",
   patricia: "Comparing two offices; very detail-oriented.",
@@ -221,7 +221,7 @@ const PERSONAL_DETAIL: Record<string, string> = {
   thomas: "Has wanted this for 3 years; high dental anxiety.",
   nancy: "Big family reunion this fall she wants to look great for.",
   christopher: "New to the area; financing is the main hurdle.",
-  jennifer: "Son's graduation in May — wants to be healed in time.",
+  jennifer: "Son's graduation in May, wants to be healed in time.",
 };
 
 // A realistic TC↔patient transcript so the detail page reads as a real consult.
@@ -229,13 +229,13 @@ function genTranscript(c: Consult): string {
   const tx = TREATMENT_LABEL[c.treatment] || "treatment";
   const obj = (c.objection || "the investment").toLowerCase();
   return [
-    `TC: Thanks for coming in today, ${c.first}. Dr. Torres walked you through the ${tx} plan — how are you feeling about everything?`,
+    `TC: Thanks for coming in today, ${c.first}. Dr. Torres walked you through the ${tx} plan, how are you feeling about everything?`,
     `${c.first}: Honestly, really good. I've been thinking about this for a while. My main hesitation is ${obj}.`,
     `TC: Totally understandable, and you're not alone there. A lot of our patients feel the same before they see the full picture. Can I show you how the numbers actually break down month to month?`,
     `${c.first}: Yeah, that would help.`,
     `TC: Your plan comes to ${"$" + c.caseValue.toLocaleString()}. With Sunbit financing, most patients in your range land around a comfortable monthly payment with no big upfront cost. We can also phase the treatment if that's easier.`,
     `${c.first}: Okay, that's more manageable than I expected. I do want to talk it over before I commit.`,
-    `TC: Of course — this is a big decision and I want you to feel 100% confident. How about I send you the full breakdown and a couple of stories from patients who were right where you are? Then we can pick a date whenever you're ready.`,
+    `TC: Of course, this is a big decision and I want you to feel 100% confident. How about I send you the full breakdown and a couple of stories from patients who were right where you are? Then we can pick a date whenever you're ready.`,
     `${c.first}: That sounds great, thank you.`,
     `TC: My pleasure, ${c.first}. You're going to love the result.`,
   ].join("\n\n");
@@ -264,11 +264,11 @@ const KB_SECTIONS: Record<string, string> = {
   practice_overview:
     "Demo Dental is a Scottsdale, AZ implant and cosmetic practice led by Dr. Michael Torres. We focus on full-arch restoration (All-on-4/All-on-X), single implants, and smile makeovers. Our differentiator is a same-week surgical timeline, in-house CBCT, and IV sedation for anxious patients. The treatment coordinator owns every consult follow-up.",
   pricing:
-    "Full arch (per arch): $38,000–$47,000. Single implant + crown: $4,500–$5,200. Dental implants (multiple): $11,000–$15,000. Invisalign: $5,500–$6,500. Cosmetic veneers: $8,000–$12,000. Financing through Sunbit and Cherry — most full-arch patients land $550–$620/mo with $0 down. We can phase treatment arch-by-arch.",
+    "Full arch (per arch): $38,000–$47,000. Single implant + crown: $4,500–$5,200. Dental implants (multiple): $11,000–$15,000. Invisalign: $5,500–$6,500. Cosmetic veneers: $8,000–$12,000. Financing through Sunbit and Cherry, most full-arch patients land $550–$620/mo with $0 down. We can phase treatment arch-by-arch.",
   what_works:
     "Reframing total cost as a per-day number over the life of the implants. Showing before/after photos of patients the same age. Bringing the doctor in for 2 minutes on fear objections. Holding a tentative surgical date to create gentle momentum. Pre-approving financing during the consult, not after.",
   what_not:
-    "Leading with the full price before establishing value. Pushing for a same-day decision on full-arch cases. Emailing a generic quote with no context. Saying 'let me know if you have questions' and waiting — always set the next step.",
+    "Leading with the full price before establishing value. Pushing for a same-day decision on full-arch cases. Emailing a generic quote with no context. Saying 'let me know if you have questions' and waiting, always set the next step.",
   coaching_notes:
     "TC reminders: every consult gets a personal SMS within 24 hours. Reference one specific personal detail from the visit. Send financing breakdown as an image, not a wall of text. Call (don't just text) any warm full-arch lead that goes quiet for 5 days.",
   doctor_style:
@@ -277,10 +277,10 @@ const KB_SECTIONS: Record<string, string> = {
     "Surgical days: Tuesday and Thursday. Typical wait from yes to surgery: 1–2 weeks. Consults available Mon–Fri. Healing/integration window communicated up front so patients can plan around events.",
 };
 const KB_STORIES = [
-  { category: "price_overcome", title: "Robert — $42k full arch", text: "Hesitant on the monthly payment. Pre-approved at $580/mo through Sunbit during the consult; reframed as less than his daily coffee + lunch. Moved forward within a week." },
-  { category: "fear_overcome", title: "Thomas — surgery fear", text: "Wanted implants for 3 years but terrified of surgery. Doctor spent 2 minutes on IV sedation + showed an anxious-patient testimonial. Booked once fear was addressed." },
-  { category: "spouse_converted", title: "Karen — needed spouse buy-in", text: "Decision hinged on her husband. Did a 10-minute joint call with a one-page summary they could review together. Converted after the spouse felt included." },
-  { category: "other", title: "Jennifer — timeline-driven", text: "Wanted to heal before her son's May graduation. Anchored a tentative surgical date around the milestone — the deadline made the decision easy." },
+  { category: "price_overcome", title: "Robert, $42k full arch", text: "Hesitant on the monthly payment. Pre-approved at $580/mo through Sunbit during the consult; reframed as less than his daily coffee + lunch. Moved forward within a week." },
+  { category: "fear_overcome", title: "Thomas, surgery fear", text: "Wanted implants for 3 years but terrified of surgery. Doctor spent 2 minutes on IV sedation + showed an anxious-patient testimonial. Booked once fear was addressed." },
+  { category: "spouse_converted", title: "Karen, needed spouse buy-in", text: "Decision hinged on her husband. Did a 10-minute joint call with a one-page summary they could review together. Converted after the spouse felt included." },
+  { category: "other", title: "Jennifer, timeline-driven", text: "Wanted to heal before her son's May graduation. Anchored a tentative surgical date around the milestone, the deadline made the decision easy." },
 ];
 
 Deno.serve(async (req: Request) => {
@@ -659,7 +659,7 @@ Deno.serve(async (req: Request) => {
           type: "followup",
           channel,
           subject: channel === "email" ? "Following up on your treatment plan" : null,
-          body: `Hi ${c.first}, just following up on your treatment plan — let us know if any questions came up. We're excited to help you move forward!`,
+          body: `Hi ${c.first}, just following up on your treatment plan, let us know if any questions came up. We're excited to help you move forward!`,
           send_day: k + 1,
           status: "sent",
           sent_at: iso,
@@ -699,11 +699,11 @@ Deno.serve(async (req: Request) => {
     // end of today and whose consult has a phone number. Seed a few warm leads
     // so the dialer opens with a live call list.
     const callTaskSpecs = [
-      { key: "thomas", note: "Call Thomas — address surgery fear, lead with sedation options. Very warm." },
-      { key: "lisa", note: "Call Lisa — re-frame cost as monthly; she said too expensive but is engaged." },
-      { key: "christopher", note: "Call Christopher — walk through financing options. Warm." },
-      { key: "karen", note: "Call Karen — offer a joint call with her husband to align on the decision." },
-      { key: "robert", note: "Call Robert back — ready to schedule, confirm surgical date." },
+      { key: "thomas", note: "Call Thomas, address surgery fear, lead with sedation options. Very warm." },
+      { key: "lisa", note: "Call Lisa, re-frame cost as monthly; she said too expensive but is engaged." },
+      { key: "christopher", note: "Call Christopher, walk through financing options. Warm." },
+      { key: "karen", note: "Call Karen, offer a joint call with her husband to align on the decision." },
+      { key: "robert", note: "Call Robert back, ready to schedule, confirm surgical date." },
     ];
     const callTaskRows = callTaskSpecs.map((t, i) => {
       const c = CONSULTS.find((x) => x.key === t.key)!;
@@ -943,9 +943,9 @@ Deno.serve(async (req: Request) => {
     const robertConv = await makeConversation(
       robert,
       [
-        { dir: "outbound", channel: "sms", body: "Hi Robert, this is the team following up after your consult — any questions as you and your wife think it over?", daysAgo: 5, hour: 10 },
+        { dir: "outbound", channel: "sms", body: "Hi Robert, this is the team following up after your consult, any questions as you and your wife think it over?", daysAgo: 5, hour: 10 },
         { dir: "inbound", channel: "sms", body: "Hi, yes we are still interested. Can you send me the financing details again?", daysAgo: 3, hour: 13 },
-        { dir: "outbound", channel: "sms", body: "Absolutely! Just emailed you the full financing breakdown — you're pre-approved at $580/mo through Sunbit. Want me to hold a surgical date?", daysAgo: 3, hour: 14 },
+        { dir: "outbound", channel: "sms", body: "Absolutely! Just emailed you the full financing breakdown, you're pre-approved at $580/mo through Sunbit. Want me to hold a surgical date?", daysAgo: 3, hour: 14 },
         { dir: "inbound", channel: "sms", body: "Perfect, thank you. Let me talk to my wife tonight and I'll call you tomorrow.", daysAgo: 2, hour: 17 },
       ],
       1,
@@ -954,19 +954,19 @@ Deno.serve(async (req: Request) => {
     await addCall(robertConv.id, consultIdByName.get(`${robert.first} ${robert.last}`)!, {
       inbound: false, daysAgo: 4, hour: 11, duration: 372, disposition: "Connected", outcome: "Connected", phone: robert.phone,
       note: "Walked through the financing breakdown; sending Sunbit pre-approval.",
-      transcript: "TC: Hi Robert, it's the team from Pinnacle Dental — is now a good time?\nRobert: Sure, go ahead.\nTC: Great. I wanted to walk you through the financing so the number feels real. You're pre-approved at $580 a month with nothing down.\nRobert: That's better than I thought. Let me talk it over with my wife.\nTC: Of course — I'll send the breakdown by text. Want me to pencil in a tentative surgery date?\nRobert: Yeah, let's do that.\nTC: Perfect, I'll text you the options. Thanks Robert!",
+      transcript: "TC: Hi Robert, it's the team from Pinnacle Dental, is now a good time?\nRobert: Sure, go ahead.\nTC: Great. I wanted to walk you through the financing so the number feels real. You're pre-approved at $580 a month with nothing down.\nRobert: That's better than I thought. Let me talk it over with my wife.\nTC: Of course, I'll send the breakdown by text. Want me to pencil in a tentative surgery date?\nRobert: Yeah, let's do that.\nTC: Perfect, I'll text you the options. Thanks Robert!",
     });
     await addCall(robertConv.id, consultIdByName.get(`${robert.first} ${robert.last}`)!, {
-      inbound: true, daysAgo: 2, hour: 16, duration: 144, disposition: "Connected", outcome: "Inbound — ready to schedule", phone: robert.phone,
+      inbound: true, daysAgo: 2, hour: 16, duration: 144, disposition: "Connected", outcome: "Inbound, ready to schedule", phone: robert.phone,
       note: "Robert called back ready to move forward.",
-      transcript: "Robert: Hi, it's Robert Martinez — my wife and I talked it over and we want to move forward.\nTC: That's wonderful, Robert! I'm so glad. Let's get your surgical date locked in.\nRobert: Sounds good. The earlier the better before our daughter's wedding.\nTC: Absolutely — I'll get you scheduled this week.",
+      transcript: "Robert: Hi, it's Robert Martinez, my wife and I talked it over and we want to move forward.\nTC: That's wonderful, Robert! I'm so glad. Let's get your surgical date locked in.\nRobert: Sounds good. The earlier the better before our daughter's wedding.\nTC: Absolutely, I'll get you scheduled this week.",
     });
 
     const karen = CONSULTS.find((c) => c.key === "karen")!;
     const karenConv = await makeConversation(
       karen,
       [
-        { dir: "outbound", channel: "sms", body: "Hi Karen, following up on your full-arch consult — happy to answer anything you and your husband are weighing.", daysAgo: 10, hour: 11 },
+        { dir: "outbound", channel: "sms", body: "Hi Karen, following up on your full-arch consult, happy to answer anything you and your husband are weighing.", daysAgo: 10, hour: 11 },
         { dir: "outbound", channel: "email", subject: "Your full arch treatment plan and financing options", body: "Hi Karen,\n\nGreat meeting you and your husband today. As promised, here is the full breakdown of your full arch treatment plan along with the financing options we discussed. Most patients are surprised how manageable the monthly number ends up being, and I included a couple of before and after results from patients who were in a similar spot.\n\nWhenever you two are ready, I can hold a surgical date for you. No pressure at all.\n\nWarmly,\nThe Pinnacle Dental team", daysAgo: 6, hour: 9 },
         { dir: "inbound", channel: "email", subject: "Re: Your full arch treatment plan and financing options", body: "Thank you so much for sending this over. The monthly option actually looks doable. I am going to talk it through with my husband this weekend and should have an answer for you Monday. Really appreciate how patient you have been with us.", daysAgo: 1, hour: 15 },
       ],
@@ -976,14 +976,14 @@ Deno.serve(async (req: Request) => {
     await addCall(karenConv.id, consultIdByName.get(`${karen.first} ${karen.last}`)!, {
       inbound: false, daysAgo: 5, hour: 13, duration: 41, disposition: "Left voicemail", outcome: "Voicemail", phone: karen.phone,
       note: "Left a warm voicemail offering a joint call with her husband.",
-      transcript: "TC: Hi Karen, it's the team at Pinnacle Dental Implants. No rush at all — I just wanted to offer a quick call with you and your husband together so you can both ask questions. Give me a ring back whenever works. Thanks Karen!",
+      transcript: "TC: Hi Karen, it's the team at Pinnacle Dental Implants. No rush at all, I just wanted to offer a quick call with you and your husband together so you can both ask questions. Give me a ring back whenever works. Thanks Karen!",
     });
 
     const jennifer = CONSULTS.find((c) => c.key === "jennifer")!;
     const jenniferConv = await makeConversation(
       jennifer,
       [
-        { dir: "outbound", channel: "sms", body: "Hi Jennifer! Great meeting you today. You mentioned wanting to heal before your son's graduation in May — I can walk you through surgical dates whenever you're ready.", daysAgo: 2, hour: 16 },
+        { dir: "outbound", channel: "sms", body: "Hi Jennifer! Great meeting you today. You mentioned wanting to heal before your son's graduation in May, I can walk you through surgical dates whenever you're ready.", daysAgo: 2, hour: 16 },
         { dir: "outbound", channel: "email", subject: "Your timeline to be ready by graduation", body: "Hi Jennifer,\n\nYou mentioned wanting to feel confident for your son's graduation in May, so I wanted to put the timeline in writing. If we start within the next two weeks, you will be fully healed and smiling for the photos. I attached a simple month by month schedule and the financing summary.\n\nWant me to pencil in a tentative surgery date this week?\n\nTalk soon,\nThe Pinnacle Dental team", daysAgo: 1, hour: 10 },
       ],
       0,
@@ -1016,10 +1016,10 @@ Deno.serve(async (req: Request) => {
 
     // ----- 8b. Call logs (Power Dialer / call history) -----------------------
     const callSpecs = [
-      { key: "robert", status: "completed", disposition: "Connected — sending financing", dur: 372, daysAgo: 5 },
+      { key: "robert", status: "completed", disposition: "Connected, sending financing", dur: 372, daysAgo: 5 },
       { key: "karen", status: "completed", disposition: "Left voicemail", dur: 38, daysAgo: 6 },
-      { key: "thomas", status: "completed", disposition: "Connected — discussed sedation", dur: 511, daysAgo: 9 },
-      { key: "jennifer", status: "completed", disposition: "Connected — booking surgery date", dur: 248, daysAgo: 1 },
+      { key: "thomas", status: "completed", disposition: "Connected, discussed sedation", dur: 511, daysAgo: 9 },
+      { key: "jennifer", status: "completed", disposition: "Connected, booking surgery date", dur: 248, daysAgo: 1 },
       { key: "lisa", status: "no_answer", disposition: "No answer", dur: 0, daysAgo: 7 },
     ];
     const callRows = callSpecs.map((cs) => {
@@ -1060,7 +1060,7 @@ Deno.serve(async (req: Request) => {
 
     // Training progress is per-USER, not per-practice. When the super admin
     // clicks into the demo via impersonation they're still themselves, so seed
-    // their user too — that's what makes the TC Certification page show as
+    // their user too, that's what makes the TC Certification page show as
     // completed inside the demo. (Also seeded on the demo user.)
     let superAdminId: string | null = null;
     if (sql) {

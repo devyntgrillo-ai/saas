@@ -1,4 +1,4 @@
-/** Platform super-admin — must match AuthContext SUPER_ADMIN_EMAIL and DB migration. */
+/** Platform super-admin, must match AuthContext SUPER_ADMIN_EMAIL and DB migration. */
 export const SUPER_ADMIN_EMAIL = "devyntgrillo@gmail.com";
 
 export function isSuperAdminUser(

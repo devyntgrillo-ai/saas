@@ -334,7 +334,7 @@ export function useUploadConversationAttachment() {
         .eq('id', conversationId)
       if (channel === 'sms' && patientPhone) {
         try {
-          // Twilio fetches MMS media over HTTP — hand it a short-lived signed URL.
+          // Twilio fetches MMS media over HTTP, hand it a short-lived signed URL.
           const mediaUrl = await resolveAttachmentUrl('conversation-attachments', path, { ttl: 3600 })
           await invokeEdgeFunction('twilio-send', {
             practice_id: practiceId,

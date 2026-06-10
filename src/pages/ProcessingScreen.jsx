@@ -167,14 +167,14 @@ export default function ProcessingScreen() {
       const byTime = Math.min(95, ((Date.now() - start) / ESTIMATED_MS) * 95)
       const ceiling = STATUS_CEIL[statusRef.current] ?? 85
       const target = Math.min(byTime, ceiling)
-      setProgress((p) => (target > p ? target : p)) // monotonic — never goes backward
+      setProgress((p) => (target > p ? target : p)) // monotonic, never goes backward
     }
     const t = setInterval(tick, 250)
     return () => clearInterval(t)
   }, [])
 
-  // Hold here until the consult is FULLY generated — transcript, AI analysis, and
-  // the drafted follow-up messages — then open the detail page. Lifecycle:
+  // Hold here until the consult is FULLY generated, transcript, AI analysis, and
+  // the drafted follow-up messages, then open the detail page. Lifecycle:
   // analyzing → transcribed → analyzed (analyze-consult drafts the messages, then
   // flips to 'analyzed'). Analysis is client-triggered, so we kick it off here at
   // 'transcribed'; otherwise we'd wait forever.
@@ -203,7 +203,7 @@ export default function ProcessingScreen() {
         return
       }
 
-      // Transcript ready but analysis hasn't run — kick it off (it drafts the
+      // Transcript ready but analysis hasn't run, kick it off (it drafts the
       // follow-up messages and then flips status to 'analyzed'). Keep waiting.
       if (status === 'transcribed' && !triggeredAnalysisRef.current) {
         triggeredAnalysisRef.current = true
@@ -260,7 +260,7 @@ export default function ProcessingScreen() {
 
       {/* Info box */}
       <div className="mt-7 max-w-[400px] rounded-xl border border-white/[0.07] bg-surface-800/60 px-5 py-4 text-sm text-slate-400">
-        You can leave this page — we'll keep working in the background. Check back to see your
+        You can leave this page, we'll keep working in the background. Check back to see your
         transcript, coaching insights, and follow-up status.
         {willFollowUp && (
           <span className="mt-3 block border-t border-white/[0.07] pt-3 font-medium text-primary-300">

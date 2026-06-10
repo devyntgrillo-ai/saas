@@ -8,8 +8,8 @@ import { StatCard, Badge, money } from '../../components/admin/ui'
 
 // Manual monthly commission payout sheet: active referred practices grouped by
 // agency, count × the agency's commission_rate. Read off here to pay by ACH.
-// The amount comes from agency.commission_rate — the same field the "new
-// referral" email reads — so the two can never drift.
+// The amount comes from agency.commission_rate, the same field the "new
+// referral" email reads, so the two can never drift.
 export default function Commissions() {
   const { data, loading } = useAdmin()
   const navigate = useNavigate()
@@ -53,7 +53,7 @@ export default function Commissions() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-white">Commissions</h1>
-          <p className="text-sm text-slate-500">Monthly referral payouts — active practices × each agency's rate. Pay manually by ACH.</p>
+          <p className="text-sm text-slate-500">Monthly referral payouts, active practices × each agency's rate. Pay manually by ACH.</p>
         </div>
         <button onClick={exportCsv} disabled={!groups.length} className="btn-ghost">
           <Download className="h-4 w-4" /> Export CSV

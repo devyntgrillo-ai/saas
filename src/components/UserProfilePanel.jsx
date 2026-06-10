@@ -65,7 +65,7 @@ export default function UserProfilePanel() {
     <div className="card p-6">
       <h2 className="text-base font-semibold text-white">Your Profile</h2>
       <p className="mt-1 text-sm text-slate-400">
-        Your name and photo appear across CaseLift — in the coaching channel, your team list, and the sidebar.
+        Your name and photo appear across CaseLift, in the coaching channel, your team list, and the sidebar.
       </p>
       {error && <p className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
 

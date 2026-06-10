@@ -79,7 +79,7 @@ export default function MfaSetup() {
     })
     setBusy(false)
     if (enrollError) {
-      // Supabase Pro feature — surface a clear message if MFA isn't enabled on the project.
+      // Supabase Pro feature, surface a clear message if MFA isn't enabled on the project.
       setError(
         /not enabled|disabled|unsupported/i.test(enrollError.message)
           ? 'Two-factor authentication is not enabled on this project yet. Enable TOTP MFA in the Supabase dashboard (Auth → Sign In / Providers → Multi-Factor).'
@@ -245,7 +245,7 @@ export default function MfaSetup() {
                   className="h-48 w-48 rounded-lg bg-white p-2"
                 />
               ) : (
-                <p className="text-sm text-slate-500">QR code unavailable — use the key below.</p>
+                <p className="text-sm text-slate-500">QR code unavailable, use the key below.</p>
               )}
             </div>
 
@@ -323,7 +323,7 @@ export default function MfaSetup() {
         </Modal>
       )}
 
-      {/* Disable confirmation — requires the account password */}
+      {/* Disable confirmation, requires the account password */}
       {showDisable && (
         <DisableMfaModal busy={busy} onCancel={() => setShowDisable(false)} onConfirm={disableMfa} />
       )}

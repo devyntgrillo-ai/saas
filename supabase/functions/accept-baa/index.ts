@@ -1,4 +1,4 @@
-// accept-baa — records a Business Associate Agreement acceptance as a hardened,
+// accept-baa, records a Business Associate Agreement acceptance as a hardened,
 // legally-defensible event: server-side timestamp, the signer's validated
 // identity (from their JWT, not the request body), the real client IP /
 // user-agent, an immutable baa_acceptances ledger row, and an audit_logs entry.
@@ -29,7 +29,7 @@ Deno.serve(async (req: Request) => {
     const token = authHeader.replace(/^Bearer\s+/i, "");
     if (!token || token === ANON) return json({ error: "Unauthorized" }, 401);
 
-    // Resolve the signer from their token — never trust the body for identity.
+    // Resolve the signer from their token, never trust the body for identity.
     const scoped = createClient(SUPABASE_URL, ANON, { global: { headers: { Authorization: authHeader } } });
     const { data: { user } } = await scoped.auth.getUser(token);
     if (!user) return json({ error: "Unauthorized" }, 401);

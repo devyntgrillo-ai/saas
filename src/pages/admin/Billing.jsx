@@ -119,9 +119,9 @@ export default function AdminBilling() {
     const amount = Number(r.plan_amount) || 997
     return [
       <span className="font-medium text-slate-100">{r.name}</span>,
-      contactName(r) || <span className="text-slate-500">—</span>,
-      r.email ? <span className="text-slate-300">{r.email}</span> : <span className="text-slate-500">—</span>,
-      r.pms_type || <span className="text-slate-500">—</span>,
+      contactName(r) || <span className="text-slate-500">, </span>,
+      r.email ? <span className="text-slate-300">{r.email}</span> : <span className="text-slate-500">, </span>,
+      r.pms_type || <span className="text-slate-500">, </span>,
       <span className={`font-semibold ${planAmountClass(amount)}`}>{money(amount)}</span>,
       <Badge className={meta.classes}>{meta.label}</Badge>,
       r.created_at ? new Date(r.created_at).toLocaleDateString() : '-',

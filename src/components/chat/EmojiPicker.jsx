@@ -7,7 +7,7 @@ import { useTheme } from '../../context/ThemeContext'
 const QUICK = ['👍', '❤️', '😂', '🎉', '🔥', '✅']
 
 // Floating reaction picker: a quick row of 6 common emoji + a "+" that expands
-// the full emoji-mart picker (vanilla core, mounted into a host div — avoids the
+// the full emoji-mart picker (vanilla core, mounted into a host div, avoids the
 // @emoji-mart/react wrapper which caps at React 18). Closes on outside click/Esc.
 export default function EmojiPicker({ onSelect, onClose, align = 'left' }) {
   const { isLight } = useTheme()

@@ -103,7 +103,7 @@ export default function AccountSwitcher() {
     navigate('/')
   }
 
-  // Show the switcher for admins, resellers, and ALL practice users — even those
+  // Show the switcher for admins, resellers, and ALL practice users, even those
   // with a single location. A solo practice still sees the dropdown (listing their
   // one account), so it's clear they can add more locations/accounts later. Hidden
   // only if a practice user has no accessible practice loaded yet.

@@ -1,3 +1,3 @@
-# Twilio hits this for TwiML Voice app callbacks — no Supabase JWT.
+# Twilio hits this for TwiML Voice app callbacks, no Supabase JWT.
 [functions.twilio-voice-twiml]
 verify_jwt = false

@@ -1,6 +1,6 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
-// link-location — multi-location signup. When an owner clicks "Add another
+// link-location, multi-location signup. When an owner clicks "Add another
 // location" in Billing, they're sent to /signup?parent_practice=<id>. After the
 // new account + practice are created, the client calls this with the parent
 // practice id. We record a practice_members row for the NEW user against the

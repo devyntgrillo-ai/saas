@@ -7,7 +7,7 @@
 // dashboard / dev console.
 //
 // IMPORTANT: a Supabase *cloud* project URL is `https://<project-ref>.supabase.co`
-// — the ref is opaque and does NOT encode the region. So the URL alone cannot
+//, the ref is opaque and does NOT encode the region. So the URL alone cannot
 // prove the region. The authoritative source is the dashboard
 // (Project Settings → General → Region), recorded here via VITE_SUPABASE_REGION.
 // This check validates that recorded value and, for self-hosted/region-style
@@ -57,7 +57,7 @@ export function verifySupabaseRegion(url = import.meta.env.VITE_SUPABASE_URL) {
   if (!region) {
     // Can't confirm from the URL (expected for cloud URLs). Tell the dev how.
     console.warn(
-      '[CaseLift] Supabase region: UNKNOWN — cloud project URLs do not encode the region. ' +
+      '[CaseLift] Supabase region: UNKNOWN, cloud project URLs do not encode the region. ' +
         'Set VITE_SUPABASE_REGION to the value shown in the Supabase dashboard ' +
         '(Project Settings → General → Region), e.g. "us-west-2", to enable the data-residency check.',
     )
@@ -65,16 +65,16 @@ export function verifySupabaseRegion(url = import.meta.env.VITE_SUPABASE_URL) {
   }
 
   if (!isUS) {
-    // Non-US region is a compliance problem — always warn, in every environment.
+    // Non-US region is a compliance problem, always warn, in every environment.
     console.warn(
       `[CaseLift] ⚠️ Supabase region: ${label} (${region}) is NOT a US region. ` +
-        'PHI data-residency policy requires a US region — verify the project in the Supabase dashboard.',
+        'PHI data-residency policy requires a US region, verify the project in the Supabase dashboard.',
     )
     return result
   }
 
   if (isDev) {
-    console.info(`[CaseLift] Supabase region: ${label} (${region}) — US ✓ [source: ${source}]`)
+    console.info(`[CaseLift] Supabase region: ${label} (${region}), US ✓ [source: ${source}]`)
   }
   return result
 }

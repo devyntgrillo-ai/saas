@@ -12,7 +12,7 @@ const cors = {
 }
 const json = (b, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, 'Content-Type': 'application/json' } })
 
-const PROMPT = (kb, stats) => `You maintain a living practice intelligence file for a dental implant practice. Current context: ${kb || '(empty)'}. Recent follow-up performance for THIS practice: ${stats}. Update the context by folding in only what this practice is actually learning: which CTAs are getting replies, which tone is working, and which objection handling is landing. Add genuinely new insights, strengthen repeating patterns, and remove one-off noise. Hard limit 400 words. Plain text paragraphs only. No bullets, headers, or markdown. Never use em dashes (—) in any generated content. Use short sentences, commas, or periods instead. Return only the updated context.`
+const PROMPT = (kb, stats) => `You maintain a living practice intelligence file for a dental implant practice. Current context: ${kb || '(empty)'}. Recent follow-up performance for THIS practice: ${stats}. Update the context by folding in only what this practice is actually learning: which CTAs are getting replies, which tone is working, and which objection handling is landing. Add genuinely new insights, strengthen repeating patterns, and remove one-off noise. Hard limit 400 words. Plain text paragraphs only. No bullets, headers, or markdown. Never use em dashes (, ) in any generated content. Use short sentences, commas, or periods instead. Return only the updated context.`
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })

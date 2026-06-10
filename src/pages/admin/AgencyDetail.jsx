@@ -227,7 +227,7 @@ function AssignPracticeModal({ agency, practices, onClose, onSaved }) {
 
   return (
     <Modal
-      title={`Assign a practice — ${agency.name}`}
+      title={`Assign a practice, ${agency.name}`}
       onClose={onClose}
       maxWidth="max-w-md"
       footer={

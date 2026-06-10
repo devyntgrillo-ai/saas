@@ -8,7 +8,7 @@
 //   • at least one number
 //   • not on a basic common-password blocklist
 //
-// This is a UX guardrail only — the authoritative check happens in Supabase Auth
+// This is a UX guardrail only, the authoritative check happens in Supabase Auth
 // (config.toml: minimum_password_length + password_requirements). Keep the two in
 // sync so the server never rejects a password the UI marked as valid.
 // ============================================================================
@@ -39,7 +39,7 @@ export function checkPasswordRules(pw = '') {
     uppercase: /[A-Z]/.test(pw),
     lowercase: /[a-z]/.test(pw),
     number: /[0-9]/.test(pw),
-    // Empty string isn't "common" — it just hasn't been typed yet.
+    // Empty string isn't "common", it just hasn't been typed yet.
     notCommon: pw.length === 0 || !COMMON_PASSWORDS.has(pw.toLowerCase()),
   }
 }
@@ -63,13 +63,13 @@ export function validatePassword(pw = '') {
   if (!rules.uppercase) errors.push(PASSWORD_RULE_LABELS.uppercase)
   if (!rules.lowercase) errors.push(PASSWORD_RULE_LABELS.lowercase)
   if (!rules.number) errors.push(PASSWORD_RULE_LABELS.number)
-  if (pw.length > 0 && !rules.notCommon) errors.push('That password is too common — choose a less guessable one.')
+  if (pw.length > 0 && !rules.notCommon) errors.push('That password is too common, choose a less guessable one.')
   return { valid: errors.length === 0, errors, rules }
 }
 
 /**
  * A rough 0–4 strength score for the visual indicator. This is intentionally
- * simple (rule coverage + length + symbol bonus) — it gates nothing; validate()
+ * simple (rule coverage + length + symbol bonus), it gates nothing; validate()
  * is the real check.
  * @returns {{ score: 0|1|2|3|4, label: string, percent: number }}
  */

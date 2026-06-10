@@ -66,7 +66,7 @@ export default function MessageList({
     return out
   }, [messages, previousReadAt, myId])
 
-  // "Seen by" — other users whose last read is at/after the latest message.
+  // "Seen by", other users whose last read is at/after the latest message.
   const lastMsg = rows.length ? rows[rows.length - 1].m : null
   const seenBy = lastMsg
     ? reads.filter((r) => r.user_id !== myId && new Date(r.last_read_at) >= new Date(lastMsg.created_at))

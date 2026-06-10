@@ -45,7 +45,7 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (!p) return json({ error: "Practice not found" }, 404);
 
-    const contact = [p.doctor_first, p.doctor_last].filter(Boolean).join(" ").trim() || "—";
+    const contact = [p.doctor_first, p.doctor_last].filter(Boolean).join(" ").trim() || ", ";
     const amount = Number(p.plan_amount ?? 997).toLocaleString();
     const when = new Date().toLocaleString("en-US", {
       dateStyle: "medium",
@@ -55,11 +55,11 @@ Deno.serve(async (req: Request) => {
 
     const text =
       `🎉 New CaseLift signup!\n` +
-      `Practice: ${p.name || "—"}\n` +
-      `Contact: ${contact} — ${p.email || "—"}\n` +
-      `Phone: ${p.phone || "—"}\n` +
-      `PMS: ${p.pms_type || "—"}\n` +
-      `Heard from: ${p.heard_from || "—"}\n` +
+      `Practice: ${p.name || ", "}\n` +
+      `Contact: ${contact}, ${p.email || ", "}\n` +
+      `Phone: ${p.phone || ", "}\n` +
+      `PMS: ${p.pms_type || ", "}\n` +
+      `Heard from: ${p.heard_from || ", "}\n` +
       `Plan amount: $${amount}\n` +
       `Time: ${when}`;
 

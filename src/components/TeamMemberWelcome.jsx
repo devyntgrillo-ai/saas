@@ -7,7 +7,7 @@ import { useRecorder } from '../context/RecorderContext'
 const HELP_VIDEO_URL = 'https://www.youtube.com/results?search_query=caselift+how+to+record+a+consult'
 
 // One-time, role-appropriate welcome for someone invited to RECORD consults
-// (a team member / recorder — not necessarily a treatment coordinator). Shown
+// (a team member / recorder, not necessarily a treatment coordinator). Shown
 // once per user via localStorage. Owners/admins/agency/super-admins never see it.
 export default function TeamMemberWelcome() {
   const { user, profile, practice, practiceId, isAgencyView, isSuperAdmin } = useAuth()
@@ -65,7 +65,7 @@ export default function TeamMemberWelcome() {
 
         <div className="mt-6 flex flex-col gap-2 sm:flex-row">
           <a href={HELP_VIDEO_URL} target="_blank" rel="noreferrer" onClick={dismiss} className="btn-ghost justify-center sm:flex-1">
-            <PlayCircle className="h-4 w-4" /> Watch how to record — 60 seconds
+            <PlayCircle className="h-4 w-4" /> Watch how to record, 60 seconds
           </a>
           <button onClick={startRecording} className="btn-primary justify-center sm:flex-1">
             <Mic className="h-4 w-4" /> Start recording now

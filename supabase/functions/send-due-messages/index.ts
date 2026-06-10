@@ -33,7 +33,7 @@ Deno.serve(async (req: Request) => {
     const nowMs = Date.now();
 
     // HIPAA audit: record each successful send as a PHI transmission. IDs +
-    // metadata only — NEVER the subject/body content. Best-effort (service role
+    // metadata only, NEVER the subject/body content. Best-effort (service role
     // bypasses RLS); a logging failure must not stop the sender.
     // deno-lint-ignore no-explicit-any
     const auditSent = async (mm: any, cc: any) => {
@@ -116,7 +116,7 @@ Deno.serve(async (req: Request) => {
         }).then(() => {}, () => {});
       };
 
-      // Call reminders are NOT outbound sends — they notify the TC with a script (Part 3).
+      // Call reminders are NOT outbound sends, they notify the TC with a script (Part 3).
       if (m.channel === "call") {
         const who = c.patient_first || c.patient_name || "the patient";
         const bullets = Array.isArray(m.call_script) ? m.call_script : [];

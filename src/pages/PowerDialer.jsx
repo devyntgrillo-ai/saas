@@ -97,7 +97,7 @@ function UpNextPreview({ lead, practice, countdown, paused, compact = false }) {
       )}
       <p className="mt-3 text-xs text-slate-500">
         {paused
-          ? 'Paused — resume when ready'
+          ? 'Paused, resume when ready'
           : countdown != null
             ? `Dialing in ${countdown}s · review talking points below`
             : 'Review talking points below'}
@@ -473,7 +473,7 @@ export default function PowerDialer() {
               ) : (
                 <div className="flex items-center justify-center gap-2 py-6 text-sm text-slate-300">
                   <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
-                  {paused ? 'Paused — resume to continue' : 'Placing call…'}
+                  {paused ? 'Paused, resume to continue' : 'Placing call…'}
                 </div>
               )}
               <p className="mt-2 text-center text-[11px] text-slate-500">Calls are placed and recorded in-app via Twilio.</p>
@@ -487,7 +487,7 @@ export default function PowerDialer() {
               <a href={`tel:${c?.patient_phone}`} className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-4 text-lg font-bold !text-white transition hover:bg-primary-700">
                 <Phone className="h-5 w-5" /> {c?.patient_phone}
               </a>
-              <p className="mt-2 text-center text-[11px] text-amber-300/80">In-app auto-dial isn’t available — use your device dialer, then log the outcome below.</p>
+              <p className="mt-2 text-center text-[11px] text-amber-300/80">In-app auto-dial isn’t available, use your device dialer, then log the outcome below.</p>
             </>
           )}
 
@@ -505,9 +505,9 @@ export default function PowerDialer() {
         </div>
       )}
 
-      {/* Outcome logging (optional — auto-advances when the call ends) */}
+      {/* Outcome logging (optional, auto-advances when the call ends) */}
       <div className="card p-5">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Log outcome (optional — advances automatically when the call ends)</p>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Log outcome (optional, advances automatically when the call ends)</p>
         <div className="flex flex-wrap gap-2">
           {DISPOSITIONS.map((d) => (
             <button key={d.key} onClick={() => disposition(d)} disabled={completeLeadMutation.isPending}

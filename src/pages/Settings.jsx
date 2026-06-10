@@ -78,7 +78,7 @@ const TABS = [
   { key: 'audit-log', label: 'Audit Log', icon: ScrollText, adminOnly: true },
   // Reachable via Integrations cards / deep links, hidden from the tab rail.
   { key: 'pms', label: 'PMS Integration', icon: Plug, hidden: true },
-  // Legacy deep link — redirects to messaging.
+  // Legacy deep link, redirects to messaging.
   { key: 'phone', label: 'Messaging', icon: Phone, hidden: true },
 ]
 
@@ -124,13 +124,13 @@ export default function Settings() {
   const setTab = (key) => navigate(key === 'profile' ? '/settings' : `/settings/${key}`)
 
   // Deep-linking to a restricted tab (billing/team/audit-log) is blocked even
-  // though the chip is hidden — members/viewers get Access Restricted (logged).
+  // though the chip is hidden, members/viewers get Access Restricted (logged).
   const tabBlocked =
     (tab === 'billing' && !perms.canViewBilling) ||
     (tab === 'team' && !perms.canViewTeam) ||
     (tab === 'audit-log' && !isAdmin)
 
-  // Legacy tab URLs — keep old links working.
+  // Legacy tab URLs, keep old links working.
   useEffect(() => {
     if (tabParam === 'recording') navigate('/settings/integrations', { replace: true })
     if (tabParam === 'phone') navigate('/settings/messaging', { replace: true })
@@ -362,7 +362,7 @@ export default function Settings() {
           {/* PMS Integration (deep-linked from Integrations) */}
           {tab === 'pms' && <PMSIntegration />}
 
-          {/* Messaging — Twilio SMS, Mailgun email, A2P, phone number */}
+          {/* Messaging, Twilio SMS, Mailgun email, A2P, phone number */}
           {(tab === 'messaging' || tab === 'phone') && <PhoneMessaging />}
 
           {/* GHL Integration */}
@@ -820,7 +820,7 @@ function AddLocationCard({ practiceId }) {
 
           <div className="mt-5 flex justify-end">
             <span className="btn-primary">
-              <Plus className="h-4 w-4" /> Add {count === 1 ? 'Location' : 'Locations'} — ${total.toLocaleString()}/mo
+              <Plus className="h-4 w-4" /> Add {count === 1 ? 'Location' : 'Locations'}, ${total.toLocaleString()}/mo
             </span>
           </div>
         </div>
@@ -843,7 +843,7 @@ function AddLocationCard({ practiceId }) {
           footer={
             <>
               <button onClick={() => setConfirmOpen(false)} className="btn-ghost">Cancel</button>
-              <button onClick={proceed} className="btn-primary">Continue — ${total.toLocaleString()}/mo</button>
+              <button onClick={proceed} className="btn-primary">Continue, ${total.toLocaleString()}/mo</button>
             </>
           }
         >

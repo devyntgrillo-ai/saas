@@ -90,7 +90,7 @@ Deno.serve(async (req: Request) => {
 
     const mail = await ensurePracticeMailSubdomain(admin, pr);
     const brand = await resolveBrand(admin, pr);
-    // Practice name first — patient mail should not show "CaseLift" unless the practice has no name.
+    // Practice name first, patient mail should not show "CaseLift" unless the practice has no name.
     const fromName =
       (pr.email_from_name && String(pr.email_from_name).trim()) ||
       (pr.name && String(pr.name).trim()) ||
@@ -125,7 +125,7 @@ Deno.serve(async (req: Request) => {
 
     const platformFrom = mailgunFromAddress("noreply");
     const platformDomain = mailgunPlatformDomain();
-    /** Legacy sandbox mode — force platform From (hello@…). Default: per-practice subdomain (Option 2). */
+    /** Legacy sandbox mode, force platform From (hello@…). Default: per-practice subdomain (Option 2). */
     const forcePlatformOnly = Deno.env.get("MAILGUN_PATIENT_DELIVER_VIA_PLATFORM") === "true";
 
     let result: Awaited<ReturnType<typeof sendMailgunMessage>>;

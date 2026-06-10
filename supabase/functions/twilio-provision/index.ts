@@ -1,6 +1,6 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
-// twilio-provision — search & purchase US local SMS numbers per practice.
+// twilio-provision, search & purchase US local SMS numbers per practice.
 // Actions: search-numbers, purchase-number, get-status
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";

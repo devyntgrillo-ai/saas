@@ -34,7 +34,7 @@ export default function LaunchpadCard() {
         <ClipboardList className="h-5 w-5" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-white">📋 Setup in progress — {count} of {LAUNCHPAD_TOTAL} steps complete</p>
+        <p className="text-sm font-semibold text-white">📋 Setup in progress, {count} of {LAUNCHPAD_TOTAL} steps complete</p>
         <div className="mt-2 h-1.5 w-full max-w-md overflow-hidden rounded-full bg-surface-800">
           <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${pct}%` }} />
         </div>

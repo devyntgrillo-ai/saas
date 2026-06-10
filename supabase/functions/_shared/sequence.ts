@@ -36,7 +36,7 @@ export const DEFAULT_RULES: SequenceRules = {
   timezone: "America/Chicago",
 };
 
-/** Smart-timing presets — days/channels used when consult.sequence_timing_preset is set. */
+/** Smart-timing presets, days/channels used when consult.sequence_timing_preset is set. */
 export const TIMING_PRESETS: Record<string, { label: string; days: number[]; channels: string[] }> = {
   hot: { label: "Hot", days: [0, 1, 3, 5, 7, 14], channels: ["sms", "email", "sms", "sms", "email", "sms"] },
   warm: { label: "Warm", days: [0, 3, 7, 14, 30, 60], channels: ["sms", "email", "sms", "email", "sms", "email"] },

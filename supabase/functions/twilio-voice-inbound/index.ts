@@ -1,6 +1,6 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
-// twilio-voice-inbound — Twilio Voice webhook when a patient calls the
+// twilio-voice-inbound, Twilio Voice webhook when a patient calls the
 // practice's Twilio number. Finds/creates the conversation, logs an inbound
 // call, then rings the browser (Twilio Client) and/or a configured forward
 // phone number with dual-channel recording.
@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
     const dialStatus = String(params.DialCallStatus || "").trim();
     const dialDuration = Number(params.DialCallDuration || params.CallDuration || 0) || 0;
 
-    // Dial action callback — update call log + conversation message when the ring group ends.
+    // Dial action callback, update call log + conversation message when the ring group ends.
     if (phase === "complete") {
       if (callSid) {
         const status =

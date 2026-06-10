@@ -136,7 +136,7 @@ export async function logAuthEvent(action, { email = null, details = null } = {}
 // ── Semantic convenience wrappers used across the app ──
 // A blocked access attempt. resource describes what was being reached (e.g.
 // 'consult', 'conversation', 'settings:billing'); details carry the reason +
-// the path. phi_accessed stays false — access was denied, no PHI was shown.
+// the path. phi_accessed stays false, access was denied, no PHI was shown.
 export const auditAccessDenied = (resource, resourceId = null, details = null) =>
   logAudit(AUDIT.ACCESS_DENIED, { resourceType: resource, resourceId, details, phiAccessed: false })
 

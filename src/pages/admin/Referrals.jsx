@@ -114,7 +114,7 @@ export default function AdminReferrals() {
             {p.paid_at ? new Date(p.paid_at).toLocaleDateString() : 'Paid'}
           </span>
         ) : (
-          <span className="text-xs text-slate-600">—</span>
+          <span className="text-xs text-slate-600">, </span>
         )}
       </div>,
     ]

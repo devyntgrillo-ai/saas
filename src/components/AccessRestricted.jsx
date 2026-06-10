@@ -5,7 +5,7 @@ import { auditAccessDenied } from '../lib/audit'
 
 // Shown when a lower-privileged user reaches content their role can't see.
 // Logs the blocked attempt to audit_logs on mount (HIPAA: record attempted
-// access, not just successful access). Pure UI otherwise — no PHI is rendered.
+// access, not just successful access). Pure UI otherwise, no PHI is rendered.
 export default function AccessRestricted({
   resource = 'restricted',
   resourceId = null,

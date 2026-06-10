@@ -62,7 +62,7 @@ export default function KnowledgeBaseQuickForm({ onClose, onSaved }) {
       }
     >
       <div className="space-y-4">
-        <p className="text-sm text-slate-400">These few details help CaseLift write follow-up messages that sound like your practice. All optional — anything you add helps.</p>
+        <p className="text-sm text-slate-400">These few details help CaseLift write follow-up messages that sound like your practice. All optional, anything you add helps.</p>
 
         <div>
           <label className="label">What makes your practice different?</label>

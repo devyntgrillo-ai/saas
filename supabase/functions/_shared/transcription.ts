@@ -103,7 +103,7 @@ export function formatSegments(segments: TranscriptSegment[]): string {
 }
 
 // Use a cheap LLM pass to turn timestamped segments into a two-speaker dialogue
-// (TC vs Patient), one line per turn, formatted "[TC] m:ss — text". Input should
+// (TC vs Patient), one line per turn, formatted "[TC] m:ss, text". Input should
 // already be de-identified. Throws on any failure so callers can fall back to
 // formatSegments().
 export async function diarizeSegments(apiKey: string, segments: TranscriptSegment[]): Promise<string> {
@@ -115,7 +115,7 @@ export async function diarizeSegments(apiKey: string, segments: TranscriptSegmen
     "who is speaking in each segment: the TC explains treatment, cost, financing, and scheduling and asks qualifying " +
     "questions; the Patient asks questions and raises concerns or objections. Merge consecutive segments from the same " +
     "speaker into a single turn, using the timestamp of that turn's first segment. Output ONLY the dialogue, one line " +
-    "per turn, in EXACTLY this format with no extra commentary:\n[TC] m:ss — text\n[Patient] m:ss — text\n" +
+    "per turn, in EXACTLY this format with no extra commentary:\n[TC] m:ss, text\n[Patient] m:ss, text\n" +
     "Keep the wording verbatim. Never use em dashes inside the spoken text; use commas or periods instead.";
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",

@@ -52,9 +52,9 @@ function buildHtml(p: any, d: any, brand: Brand) {
     tiles.push({ label: "Cases Won", value: String(d.conversions), accent: "#34d399" });
   }
   const win = (d.recoveredValue || 0) > 0
-    ? winBox(`💰 <strong style="color:#fff">${money(d.recoveredValue)}</strong> in production recovered this week — nice work.`)
+    ? winBox(`💰 <strong style="color:#fff">${money(d.recoveredValue)}</strong> in production recovered this week, nice work.`)
     : d.conversions > 0
-      ? winBox(`🎉 <strong style="color:#fff">${d.conversions}</strong> case${d.conversions === 1 ? "" : "s"} won this week — keep it going.`)
+      ? winBox(`🎉 <strong style="color:#fff">${d.conversions}</strong> case${d.conversions === 1 ? "" : "s"} won this week, keep it going.`)
       : "";
   return renderBrandedEmail(brand, {
     heading: `Here's what ${brand.companyName} did for you this week.`,
@@ -127,7 +127,7 @@ Deno.serve(async (req: Request) => {
       if (to.length) {
         send = await sendMailgunToMany({
           to: to as string[],
-          subject: `Your ${brand.companyName} Weekly Report — ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`,
+          subject: `Your ${brand.companyName} Weekly Report, ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`,
           html: buildHtml(p, d, brand),
           fromName: brand.fromName,
           replyTo: brand.supportEmail,

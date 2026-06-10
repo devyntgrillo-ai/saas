@@ -33,7 +33,7 @@ function normSpeaker(raw) {
 
 // Parse a stored transcript into speaker turns. Handles several shapes so older
 // plain-prose transcripts still render instead of showing blank:
-//   [TC] 0:12 — text   |   [Patient] text   |   [0:12] text   |   TC: text
+//   [TC] 0:12, text   |   [Patient] text   |   [0:12] text   |   TC: text
 // When nothing structured is found we fall back to rendering the raw prose.
 function parseTranscript(raw) {
   if (!raw) return { notice: null, lines: [], prose: '' }
@@ -42,7 +42,7 @@ function parseTranscript(raw) {
   const body = all.filter((l) => l !== notice)
   const lines = []
   for (const l of body) {
-    let m = l.match(/^\[(TC|Patient|Doctor|Speaker\s*\d*)\]\s*(\d{1,2}:\d{2})?\s*[—–-]?\s*(.*)$/i)
+    let m = l.match(/^\[(TC|Patient|Doctor|Speaker\s*\d*)\]\s*(\d{1,2}:\d{2})?\s*[, –-]?\s*(.*)$/i)
     if (m && m[3]) { lines.push({ speaker: normSpeaker(m[1]), ts: m[2] || '', text: m[3] }); continue }
     m = l.match(/^\[(\d{1,2}:\d{2})\]\s*(.*)$/) // [m:ss] text, no speaker
     if (m && m[2]) { lines.push({ speaker: '', ts: m[1], text: m[2] }); continue }

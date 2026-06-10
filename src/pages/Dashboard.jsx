@@ -197,7 +197,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      {/* Setup-in-progress nudge — disappears once the Launchpad is complete. */}
+      {/* Setup-in-progress nudge, disappears once the Launchpad is complete. */}
       <LaunchpadCard />
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-white">
@@ -208,7 +208,7 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Live "being analyzed" notice — hidden when nothing is processing. */}
+      {/* Live "being analyzed" notice, hidden when nothing is processing. */}
       {analyzingCount > 0 && (
         <Link
           to="/consults"
@@ -354,7 +354,7 @@ export default function Dashboard() {
         </>
       )}
 
-      {/* Learning-system insight (Part 6) — what's getting replies. Placed at the
+      {/* Learning-system insight (Part 6), what's getting replies. Placed at the
           bottom so it sits below the fold under the main metrics. */}
       {practice?.channel_performance?.top_insight && (
         <div className="flex items-start gap-2.5 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm">

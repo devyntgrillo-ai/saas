@@ -204,7 +204,7 @@ export async function sendMailgunMessage(opts: {
   return postMailgun(domain, key, form);
 }
 
-/** Multiple recipients — platform mail only. */
+/** Multiple recipients, platform mail only. */
 export async function sendMailgunToMany(opts: {
   to: string[];
   subject: string;

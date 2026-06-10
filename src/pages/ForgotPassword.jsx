@@ -7,7 +7,7 @@ import { AUDIT, logAuthEvent } from '../lib/audit'
 
 // Step 1 of the secure password reset: request a reset email. Uses Supabase's
 // built-in resetPasswordForEmail, which sends a one-time recovery link (the link
-// / OTP expires after 1 hour — see otp_expiry in supabase/config.toml). The
+// / OTP expires after 1 hour, see otp_expiry in supabase/config.toml). The
 // redirect lands on /reset-password, where the user sets a new password.
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')

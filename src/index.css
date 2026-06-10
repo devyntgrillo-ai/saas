@@ -422,7 +422,7 @@
 :root.dark .border-blue-500 {
   border-color: rgb(var(--primary-500));
 }
-/* Pale -100 / fractional status fills not caught by the -50 rules — give them the
+/* Pale -100 / fractional status fills not caught by the -50 rules, give them the
    same dark treatment so badges (Analyzed/Analyzing/Won/Auto-synced), the coaching
    callout, and transcript highlights read as subtle tints on dark surfaces instead
    of glowing as bright light chips. */

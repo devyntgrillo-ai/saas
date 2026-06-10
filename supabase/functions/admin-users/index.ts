@@ -100,7 +100,7 @@ Deno.serve(async (req: Request) => {
       if (access === "practice" && !practiceId) return json({ error: "Select a subaccount for practice access" }, 400);
 
       const { access_level, userRole, practiceScoped, agencyScoped } = resolveAccess(access, role);
-      // Canonical production URLs for the email + sign-in link — never the
+      // Canonical production URLs for the email + sign-in link, never the
       // inviter's localhost dev origin (both helpers ignore a client origin).
       const appOrigin = appBaseUrl();
       const redirectTo = acceptInviteRedirectUrl(body.app_origin as string | undefined);

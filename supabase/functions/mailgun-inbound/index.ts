@@ -1,6 +1,6 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
-// mailgun-inbound — patient email replies (reply+{conversation_id}@inbound host).
+// mailgun-inbound, patient email replies (reply+{conversation_id}@inbound host).
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";

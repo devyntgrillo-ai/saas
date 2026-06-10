@@ -142,7 +142,7 @@ function dayLabel(ts) {
 // before rendering, replacing with a comma so the sentence still reads cleanly.
 function cleanBody(text) {
   if (!text) return ''
-  return String(text).replace(/\s*—\s*/g, ', ')
+  return String(text).replace(/\s*, \s*/g, ', ')
 }
 
 // Messages from the same sender within this window group into one cluster
@@ -806,7 +806,7 @@ export default function Conversations() {
     })
     if (!started) {
       window.open(`tel:${phone}`)
-      showToast('Could not place call — try your phone app')
+      showToast('Could not place call, try your phone app')
     }
   }
 
@@ -947,7 +947,7 @@ export default function Conversations() {
             consult_id: activeConv?.consult_id,
           })
         } catch (e) {
-          showToast(e?.message || 'Could not send — check messaging settings.')
+          showToast(e?.message || 'Could not send, check messaging settings.')
           await supabase
             .from('conversation_messages')
             .update({

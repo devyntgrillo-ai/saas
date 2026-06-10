@@ -25,7 +25,7 @@ export default function ImpersonationBanner() {
       <div className="flex items-center justify-between gap-3 bg-amber-500 px-4 py-2 text-sm text-amber-950">
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate">
-            👁 Impersonating <span className="font-semibold">{target?.name}</span> — you are viewing as this reseller
+            👁 Impersonating <span className="font-semibold">{target?.name}</span>, you are viewing as this reseller
           </span>
         </span>
         <button
@@ -45,7 +45,7 @@ export default function ImpersonationBanner() {
         <span className="flex min-w-0 items-center gap-2">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span className="truncate font-medium">
-            ⚠️ This account is archived — you are viewing as {isSuperAdmin ? 'Super Admin' : 'an administrator'}
+            ⚠️ This account is archived, you are viewing as {isSuperAdmin ? 'Super Admin' : 'an administrator'}
           </span>
         </span>
         <button

@@ -3,7 +3,7 @@
 // predates the backend fix still renders cleanly in the UI.
 export function stripEmDashes(text) {
   if (typeof text !== 'string') return text
-  return text.replace(/—/g, '-').replace(/–/g, '-')
+  return text.replace(/, /g, '-').replace(/–/g, '-')
 }
 
 // Unwrap square-bracketed labels the model sometimes echoes from its prompt

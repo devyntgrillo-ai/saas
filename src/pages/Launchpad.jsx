@@ -90,7 +90,7 @@ export default function Launchpad() {
           <ul className="mx-auto mt-5 max-w-md space-y-2 text-left text-sm text-slate-300">
             {[
               'Record consults and CaseLift transcribes + analyzes each one automatically.',
-              'Personalized follow-up sequences go out by text and email — no manual work.',
+              'Personalized follow-up sequences go out by text and email, no manual work.',
               'You’ll get notified the moment a patient replies, right here and by email.',
               'Recovered cases show up on your Dashboard so you can see the ROI.',
             ].map((t) => (

@@ -1,5 +1,5 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
-// approve-pms-sync — practice admin approves consult sync rules and triggers backfill.
+// approve-pms-sync, practice admin approves consult sync rules and triggers backfill.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { getAppCreds } from "../_shared/sikka.ts";
@@ -39,7 +39,7 @@ Deno.serve(async (req: Request) => {
   try {
     getAppCreds();
   } catch {
-    return json({ error: "PMS sync unavailable — Sikka app credentials are not set.", code: "sikka_not_configured" }, 503);
+    return json({ error: "PMS sync unavailable, Sikka app credentials are not set.", code: "sikka_not_configured" }, 503);
   }
 
   let practiceIdForReset: string | null = null;
@@ -76,7 +76,7 @@ Deno.serve(async (req: Request) => {
 
     const draft = practice.pms_sync_rules as PmsSyncRules | null;
     if (!draft?.clusters?.length) {
-      return json({ error: "Run discovery first — no sync rules to approve.", code: "no_rules" }, 409);
+      return json({ error: "Run discovery first, no sync rules to approve.", code: "no_rules" }, 409);
     }
 
     const historyYears = clampYears(body.history_years ?? draft.history_years ?? practice.pms_history_years ?? 1);

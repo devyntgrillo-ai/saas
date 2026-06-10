@@ -27,7 +27,7 @@ export function AdminProvider({ children }) {
   )
 
   // Reseller-level impersonation: view the reseller's OWN dashboard (/agency)
-  // scoped + branded as them — not a jump into one of their practices.
+  // scoped + branded as them, not a jump into one of their practices.
   const impersonateAgency = useCallback(
     (agency) => {
       if (!agency?.id) return

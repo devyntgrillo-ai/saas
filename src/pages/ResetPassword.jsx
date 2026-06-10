@@ -64,7 +64,7 @@ export default function ResetPassword() {
     const { error: updateError } = await supabase.auth.updateUser({ password })
     if (updateError) {
       setLoading(false)
-      setError(updateError.message || 'Could not update your password. The link may have expired — request a new one.')
+      setError(updateError.message || 'Could not update your password. The link may have expired, request a new one.')
       return
     }
 
@@ -113,7 +113,7 @@ export default function ResetPassword() {
               </div>
               <h1 className="mt-4 text-2xl font-bold text-white">Link expired or invalid</h1>
               <p className="mt-2 text-sm text-slate-400">
-                This password reset link is no longer valid. Reset links expire after 1 hour — request a new one.
+                This password reset link is no longer valid. Reset links expire after 1 hour, request a new one.
               </p>
               <Link to="/forgot-password" className="btn-primary mt-5 w-full justify-center">
                 Request a new link

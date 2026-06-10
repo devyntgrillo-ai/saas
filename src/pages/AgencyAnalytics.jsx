@@ -284,7 +284,7 @@ export default function AgencyAnalytics() {
             )}
           </div>
 
-          {/* Your referred practices — moved from the old SaaS Mode active-clients list */}
+          {/* Your referred practices, moved from the old SaaS Mode active-clients list */}
           <div>
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-300">
               <Building2 className="h-4 w-4 text-slate-400" /> Your referred practices

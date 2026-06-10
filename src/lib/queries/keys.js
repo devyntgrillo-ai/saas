@@ -1,4 +1,4 @@
-/** Central query keys — always include practiceId (and conversationId for threads). */
+/** Central query keys, always include practiceId (and conversationId for threads). */
 export const queryKeys = {
   admin: {
     all: ['admin'],

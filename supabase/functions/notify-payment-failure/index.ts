@@ -66,7 +66,7 @@ Deno.serve(async (req: Request) => {
     const brand = await resolveBrand(admin, practice);
 
     const buildEmail = (b: Brand) => {
-      const subject = `Action required — payment issue with ${b.companyName}`;
+      const subject = `Action required, payment issue with ${b.companyName}`;
       const text =
         `There was an issue with your payment.\n\n` +
         `We weren't able to process your last payment for ${name} on ${failedOn}. ` +

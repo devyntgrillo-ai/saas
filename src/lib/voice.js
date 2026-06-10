@@ -76,7 +76,7 @@ export async function loadRecordingUrl(callLogId) {
 
 /**
  * Browser Twilio Voice device for Conversations / Power Dialer.
- * @param {{ enabled?: boolean }} opts — when true, pre-warms the device (token + register).
+ * @param {{ enabled?: boolean }} opts, when true, pre-warms the device (token + register).
  */
 export function useTwilioVoiceDevice({ enabled = true } = {}) {
   const deviceRef = useRef(null)

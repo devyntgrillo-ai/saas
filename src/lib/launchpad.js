@@ -1,4 +1,4 @@
-// Launchpad setup checklist — step metadata + status computation.
+// Launchpad setup checklist, step metadata + status computation.
 //
 // Most steps are auto-completed by inspecting existing practice data; a couple
 // (invite, record) also get checked off the moment the user performs the action.

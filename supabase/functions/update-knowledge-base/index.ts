@@ -19,7 +19,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
 
 const KB_PROMPT = (knowledgeBase: string, analysis: string) =>
-  `You maintain a living practice intelligence file. Current context: ${knowledgeBase}. New consult analysis: ${analysis}. Update the context by adding only genuinely new insights, strengthening patterns that repeat, and removing one-off noise. Hard limit 400 words. Plain text paragraphs only. No bullets, headers, or markdown. Never use em dashes (—) in any generated content. Use short sentences, commas, or periods instead. Return only the updated context.`
+  `You maintain a living practice intelligence file. Current context: ${knowledgeBase}. New consult analysis: ${analysis}. Update the context by adding only genuinely new insights, strengthening patterns that repeat, and removing one-off noise. Hard limit 400 words. Plain text paragraphs only. No bullets, headers, or markdown. Never use em dashes (, ) in any generated content. Use short sentences, commas, or periods instead. Return only the updated context.`
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })

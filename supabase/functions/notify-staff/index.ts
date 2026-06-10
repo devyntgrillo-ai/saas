@@ -56,14 +56,14 @@ function build(event: string, p: any, practiceName: string): Built {
   const rawName = String(p?.patient_name ?? "A patient");
   // Initials only for low-trust sinks (Slack channels, email subject lines that
   // transit/log externally). The in-app bell, email body, and staff SMS keep the
-  // full name — that's the practice viewing its own patients (treatment ops).
+  // full name, that's the practice viewing its own patients (treatment ops).
   const initials = patientInitials(rawName);
   switch (event) {
     case "patient_replied": {
       const prev = String(p?.message_preview ?? "").slice(0, 100);
       const link = p?.conversation_url || `${APP}/conversations`;
       return {
-        // Generic subject — no patient identifier in the email header (it transits
+        // Generic subject, no patient identifier in the email header (it transits
         // and is logged/previewed externally). The name stays in the body, which
         // is the practice viewing its own patient (treatment ops).
         subject: `New patient reply`,
@@ -83,10 +83,10 @@ function build(event: string, p: any, practiceName: string): Built {
     }
     case "case_converted": {
       const amount = money(p?.case_value);
-      const tx = p?.treatment_type ? escapeHtml(String(p.treatment_type)) : "—";
+      const tx = p?.treatment_type ? escapeHtml(String(p.treatment_type)) : ", ";
       const link = p?.consult_id ? `${APP}/consults/${p.consult_id}` : `${APP}/`;
       return {
-        subject: `🏆 Case converted — ${amount}`,
+        subject: `🏆 Case converted, ${amount}`,
         heading: "Case converted",
         bodyHtml:
           `<p style="margin:0">A case was just marked as converted in CaseLift.</p>` +
@@ -95,8 +95,8 @@ function build(event: string, p: any, practiceName: string): Built {
           `<strong style="color:#e2e8f0">Case Value:</strong> ${amount}</p>`,
         button: { label: "View Dashboard", url: `${APP}/` },
         smsText: `CaseLift Win 🏆 ${rawName} just converted. ${amount} case. app.caselift.io`,
-        slackText: `🏆 *Case Converted*\nPractice: ${practiceName}\nPatient: ${initials}\nTreatment: ${p?.treatment_type ?? "—"}\nValue: ${amount}`,
-        bellTitle: `🏆 Case converted — ${amount}`,
+        slackText: `🏆 *Case Converted*\nPractice: ${practiceName}\nPatient: ${initials}\nTreatment: ${p?.treatment_type ?? ", "}\nValue: ${amount}`,
+        bellTitle: `🏆 Case converted, ${amount}`,
         bellMessage: `${rawName} · ${p?.treatment_type ?? ""}`.trim(),
         link,
       };
@@ -134,7 +134,7 @@ function build(event: string, p: any, practiceName: string): Built {
           `which is below your average of <strong style="color:#e2e8f0">${avg}</strong>.</p>` +
           `<p style="margin:14px 0 0">Make sure your TC is recording every consultation to get the most out of CaseLift.</p>`,
         button: { label: "View Consults", url: `${APP}/consults` },
-        smsText: `CaseLift: recording rate down — ${wk} consults this week (avg ${avg}). app.caselift.io/consults`,
+        smsText: `CaseLift: recording rate down, ${wk} consults this week (avg ${avg}). app.caselift.io/consults`,
         slackText: `📉 *Low Recording Rate*\nPractice: ${practiceName}\n${wk} consults this week (avg ${avg})`,
         bellTitle: "Recording rate is down this week",
         bellMessage: `${wk} this week · avg ${avg}`,
@@ -253,7 +253,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 4) Slack — CaseLift's internal channel ONLY (global env webhook). We do not
+    // 4) Slack, CaseLift's internal channel ONLY (global env webhook). We do not
     // route to per-practice Slack workspaces: PHI must stay inside our own
     // BAA-covered Slack, never a workspace we can't verify is HIPAA-configured.
     if (prefs.slack) {

@@ -28,7 +28,7 @@ export interface TwilioConfig {
   /** API key auth (preferred for production). */
   apiKeySid: string | null;
   apiKeySecret: string | null;
-  /** Account auth token — enough for SMS send + webhook signature validation. */
+  /** Account auth token, enough for SMS send + webhook signature validation. */
   authToken: string | null;
   callerIdFallback: string | null;
   webhookBase: string | null;

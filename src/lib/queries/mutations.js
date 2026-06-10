@@ -92,7 +92,7 @@ export function useSetConsultOutcome() {
     },
     onSuccess: ({ consultId, practiceId }) => {
       // Sequence start/stop is audited at the call site (OutcomeControls), which
-      // has the precise reason/context — not here, to avoid double-logging.
+      // has the precise reason/context, not here, to avoid double-logging.
       queryClient.invalidateQueries({ queryKey: queryKeys.consult(consultId) })
       if (practiceId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(practiceId) })

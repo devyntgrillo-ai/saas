@@ -11,7 +11,7 @@ export const PROCESSING_STATUSES = ['analyzing', 'transcribed']
 // A healthy consult goes analyzing → transcribed → analyzed within minutes.
 // Anything still "processing" after this window is an abandoned recording (the
 // placeholder row created at record-start whose upload/transcription never
-// finished) — age it out of the processing cards/dashboard so it doesn't show
+// finished), age it out of the processing cards/dashboard so it doesn't show
 // as "being analyzed" forever. The row still appears in the normal Consults
 // list; it just stops claiming to be in progress.
 export const PROCESSING_MAX_AGE_MS = 2 * 60 * 60 * 1000 // 2 hours
@@ -56,7 +56,7 @@ export async function fetchUnlinkedConsults(practiceId) {
   return data || []
 }
 
-// Consult-type appointments over the next `days` days (starting tomorrow) —
+// Consult-type appointments over the next `days` days (starting tomorrow), 
 // powers the "Upcoming" section of the Schedule tab. Today is handled separately
 // by fetchDayAppointments so its allNote fallback stays intact.
 export async function fetchUpcomingAppointments(practiceId, days = 7) {
@@ -139,7 +139,7 @@ export function useUnlinkedConsults(practiceId) {
   })
 }
 
-// Consults currently being transcribed/analyzed for this practice — surfaced as
+// Consults currently being transcribed/analyzed for this practice, surfaced as
 // "processing" cards at the top of the Consults list and as the dashboard count.
 export async function fetchProcessingConsults(practiceId) {
   if (!practiceId) return []
@@ -167,7 +167,7 @@ export function useProcessingConsults(practiceId) {
   })
 }
 
-// A consult whose analysis just finished — surfaced as a "complete" card in the
+// A consult whose analysis just finished, surfaced as a "complete" card in the
 // Consults list so a freshly-recorded consult doesn't vanish when it leaves the
 // processing state. 'analyzed' = ready to review; 'transcription_error' = failed.
 // (Once the user approves/activates the sequence the consult moves on to the
@@ -199,7 +199,7 @@ export function useRecentConsults(practiceId) {
   })
 }
 
-// The persistent, searchable archive of every recorded consult for a practice —
+// The persistent, searchable archive of every recorded consult for a practice, 
 // powers the paginated "Recordings" list on the Consults page. Excludes the
 // in-progress / empty placeholder states (those live in the processing cards).
 export const ARCHIVE_PAGE_SIZE = 20
@@ -250,7 +250,7 @@ export function useConsultsRealtime(practiceId) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'consults', filter: `practice_id=eq.${practiceId}` },
         () => {
-          // A consult changed status — refresh every view that renders one so a
+          // A consult changed status, refresh every view that renders one so a
           // processing card transitions to its "complete" state (and the real
           // sequence row appears) without a manual reload.
           queryClient.invalidateQueries({ queryKey: queryKeys.processingConsults(practiceId) })

@@ -28,7 +28,7 @@ const DEFAULT_BRANDING = {
   isWhiteLabeled: false,
 }
 
-const DEFAULT_TITLE = 'CaseLift — We Do The Heavy Lifting'
+const DEFAULT_TITLE = 'CaseLift, We Do The Heavy Lifting'
 const CACHE_KEY = 'ciq_brand'
 
 const BrandingContext = createContext(DEFAULT_BRANDING)

@@ -1,6 +1,6 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
-// twilio-a2p — A2P 10DLC via Trust Hub (ISV API) + brand/campaign registration.
+// twilio-a2p, A2P 10DLC via Trust Hub (ISV API) + brand/campaign registration.
 // Actions: register, poll-status
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -58,7 +58,7 @@ function policyUrls(biz: A2PBusiness): { privacy: string | null; terms: string |
   return { privacy: `${site}/privacy`, terms: `${site}/terms` };
 }
 
-/** Message flow with website + policy links — required for campaign vetting (error 30907). */
+/** Message flow with website + policy links, required for campaign vetting (error 30907). */
 function buildMessageFlow(biz: A2PBusiness): string {
   const base = biz.opt_in_description?.trim() ||
     "Patients provide their mobile number during the in-office consult and consent to follow-up texts about their treatment plan.";
@@ -407,7 +407,7 @@ Deno.serve(async (req: Request) => {
 
       const notes: string[] = [];
 
-      // Brand approved + campaign failed — resubmit with corrected details.
+      // Brand approved + campaign failed, resubmit with corrected details.
       if (campaignResubmit && practice.twilio_brand_sid) {
         await admin.from("practices").update({
           a2p_config: mergeA2pConfig(practice.a2p_config, biz, trustHubExisting),
@@ -418,7 +418,7 @@ Deno.serve(async (req: Request) => {
         const failedCampaignSid = practice.twilio_campaign_sid as string | null;
 
         if (brandCriticalChanged) {
-          // Website / legal name / EIN changed — delete failed campaign, refresh Trust Hub, new brand + campaign.
+          // Website / legal name / EIN changed, delete failed campaign, refresh Trust Hub, new brand + campaign.
           if (failedCampaignSid && mgSid) {
             await deleteFailedCampaign(cfg, mgSid, failedCampaignSid);
           }
@@ -468,7 +468,7 @@ Deno.serve(async (req: Request) => {
           campaignSid = campResult.campaignSid;
           if (campResult.reason) notes.push(`Campaign: ${campResult.reason}`);
         } else if (failedCampaignSid && mgSid) {
-          // Campaign-only fix — PATCH the failed campaign in place (preferred by Twilio).
+          // Campaign-only fix, PATCH the failed campaign in place (preferred by Twilio).
           const updated = await updateFailedCampaign(cfg, mgSid, failedCampaignSid, biz);
           if (updated.ok) {
             campaignSid = failedCampaignSid;
@@ -504,7 +504,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Brand already approved — only attach a campaign to the messaging service.
+      // Brand already approved, only attach a campaign to the messaging service.
       if (campaignOnly && practice.twilio_brand_sid) {
         await admin.from("practices").update({
           a2p_config: mergeA2pConfig(practice.a2p_config, biz, trustHubExisting),
@@ -560,7 +560,7 @@ Deno.serve(async (req: Request) => {
       if (!bundles.ok) {
         const legacy = Deno.env.get("TWILIO_A2P_BUNDLE_SID");
         const hint = legacy
-          ? "TWILIO_A2P_BUNDLE_SID alone is not enough — set TWILIO_CUSTOMER_PROFILE_BUNDLE_SID and TWILIO_A2P_PROFILE_BUNDLE_SID, or configure Trust Hub secrets."
+          ? "TWILIO_A2P_BUNDLE_SID alone is not enough, set TWILIO_CUSTOMER_PROFILE_BUNDLE_SID and TWILIO_A2P_PROFILE_BUNDLE_SID, or configure Trust Hub secrets."
           : "";
         await admin.from("practices").update({
           a2p_config: mergeA2pConfig(practice.a2p_config, biz, trustHubExisting),

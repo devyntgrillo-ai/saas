@@ -53,7 +53,7 @@ export default function Consults() {
   const [search, setSearch] = useState('')
 
   const { data: dayData, isLoading: loading } = useConsultsDay(practiceId, date)
-  // Next 5 upcoming consults (tomorrow onward, any date) — always shown so there's
+  // Next 5 upcoming consults (tomorrow onward, any date), always shown so there's
   // a forward view and the Schedule is never an empty page.
   const { data: nextConsults = [] } = useNextConsults(practiceId, 5)
 
@@ -71,7 +71,7 @@ export default function Consults() {
   // Just-recorded consults (client-side) so the "analyzing" card shows instantly.
   const recentRecordings = useRecentRecordings(practiceId)
 
-  // Consult ids tied to a today appointment — those render as rows in the
+  // Consult ids tied to a today appointment, those render as rows in the
   // schedule table (Record → Processing → green Ready), never as cards.
   const apptConsultIds = useMemo(
     () => new Set(appts.filter((a) => a.consult_id).map((a) => a.consult_id)),
@@ -79,7 +79,7 @@ export default function Consults() {
   )
 
   // Walk-in (no appointment) consults: analyzing → animated card, done → green
-  // complete card. Appointment-linked ones are excluded — they live in the table.
+  // complete card. Appointment-linked ones are excluded, they live in the table.
   const procCards = useMemo(() => {
     const map = new Map()
     processing.forEach((c) => map.set(c.id, c))
@@ -90,7 +90,7 @@ export default function Consults() {
   }, [processing, recentRecordings, apptConsultIds])
   const procCardIds = useMemo(() => new Set(procCards.map((c) => c.id)), [procCards])
 
-  // Today's completed walk-ins only — older completed consults live in Recordings.
+  // Today's completed walk-ins only, older completed consults live in Recordings.
   const doneCards = useMemo(
     () =>
       recentDone.filter(
@@ -129,7 +129,7 @@ export default function Consults() {
     const q = search.trim().toLowerCase()
     return appts.filter((a) => {
       if (statusFilter !== 'all' && statusOf(a) !== statusFilter) return false
-      // Name search is gated to PHI roles — a viewer must not be able to probe
+      // Name search is gated to PHI roles, a viewer must not be able to probe
       // for a patient by typing their name.
       if (q && canPHI && !fullName(a).toLowerCase().includes(q)) return false
       return true
@@ -168,7 +168,7 @@ export default function Consults() {
           <p className="mt-1 text-sm text-slate-500">
             {view === 'schedule'
               ? `${niceDate} · ${counts.all} consult${counts.all === 1 ? '' : 's'} · ${counts.recorded} recorded · ${counts.needs} to record`
-              : 'Every recorded consult — search and open any past recording.'}
+              : 'Every recorded consult, search and open any past recording.'}
           </p>
         </div>
       </div>
@@ -298,7 +298,7 @@ function ProcessingCard({ c, onOpen }) {
       <div className="flex items-start justify-between gap-3 pl-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-slate-100">{name}</p>
-          <p className="mt-0.5 text-xs text-slate-400">Consultation recorded — analysis in progress</p>
+          <p className="mt-0.5 text-xs text-slate-400">Consultation recorded, analysis in progress</p>
         </div>
         <span key={bi} className="pc-badge shrink-0 rounded-full border border-amber-400/30 bg-amber-400/15 px-2.5 py-1 text-[11px] font-medium text-amber-300">
           {PROC_BADGES[bi]}
@@ -309,7 +309,7 @@ function ProcessingCard({ c, onOpen }) {
   )
 }
 
-// A consult whose analysis just finished — keeps it visible (and clickable into
+// A consult whose analysis just finished, keeps it visible (and clickable into
 // the detail page) instead of disappearing the moment it leaves "processing".
 function CompleteCard({ c, onOpen }) {
   const canPHI = usePermissions().canViewPHI
@@ -329,7 +329,7 @@ function CompleteCard({ c, onOpen }) {
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-slate-100">{name}</p>
           <p className="mt-0.5 text-xs text-slate-400">
-            {failed ? 'Transcription failed — tap to review' : 'Analysis complete — sequence ready to review'}
+            {failed ? 'Transcription failed, tap to review' : 'Analysis complete, sequence ready to review'}
           </p>
         </div>
         <span

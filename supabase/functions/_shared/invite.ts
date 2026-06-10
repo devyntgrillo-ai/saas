@@ -1,6 +1,6 @@
 // Auth/invite redirect origins. Delegates to appUrl.ts, which IGNORES a
 // caller-supplied localhost/dev origin in favour of the canonical production URL
-// — so invites emailed from a dev server still point at production. (The previous
+//, so invites emailed from a dev server still point at production. (The previous
 // implementation trusted app_origin first, which sent real invitees to localhost.)
 import { appBaseUrl } from "./appUrl.ts";
 

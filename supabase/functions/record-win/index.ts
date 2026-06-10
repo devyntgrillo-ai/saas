@@ -1,9 +1,9 @@
 // ============================================================================
-// record-win — records an "assisted win" and posts a Slack alert when a consult
+// record-win, records an "assisted win" and posts a Slack alert when a consult
 // is closed AND CaseLift actually sent follow-up for it.
 //
 // A win counts only if >= 1 sequence message (messages.status='sent') exists for
-// the consult — patients who closed without any CaseLift follow-up are skipped.
+// the consult, patients who closed without any CaseLift follow-up are skipped.
 // Deduped per consult_id (unique index). Invoked by the PMS webhook
 // (source: 'pms_webhook') and the in-app "Mark as Won" button (source: 'manual').
 //
@@ -91,7 +91,7 @@ Deno.serve(async (req: Request) => {
     if (mErr) throw mErr;
     const messagesSent = sent?.length ?? 0;
     if (messagesSent === 0) {
-      // Patient closed with no CaseLift follow-up — not an assisted win.
+      // Patient closed with no CaseLift follow-up, not an assisted win.
       return json({ ok: true, recorded: false, reason: "no_sequence_messages" });
     }
     const firstSentAt = sent
@@ -133,7 +133,7 @@ Deno.serve(async (req: Request) => {
     const firstContact = firstSentAt ? new Date(firstSentAt).toISOString().slice(0, 10) : "unknown";
 
     const text = [
-      `🏆 *CaseLift Win — ${practiceName}*`,
+      `🏆 *CaseLift Win, ${practiceName}*`,
       "",
       `💰 *Case Value:* ${money(caseValue)}`,
       `🦷 *Treatment:* ${prettyTreatment(treatment)}`,

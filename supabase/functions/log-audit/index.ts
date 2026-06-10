@@ -1,4 +1,4 @@
-// log-audit — thin HTTP endpoint for audit events that originate in the browser
+// log-audit, thin HTTP endpoint for audit events that originate in the browser
 // but may have NO active session (e.g. a failed login). verify_jwt=false so it
 // accepts anon calls; it captures the real client IP / user-agent and writes via
 // the service-role key. When a valid user token IS present, the event is stamped
@@ -62,7 +62,7 @@ Deno.serve(async (req: Request) => {
           practiceId = (prof?.practice_id as string) ?? null;
         }
       } catch {
-        // ignore — fall back to anon attribution
+        // ignore, fall back to anon attribution
       }
     }
 

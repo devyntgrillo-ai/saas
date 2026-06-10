@@ -1,7 +1,7 @@
 // Shared role resolution for edge-function "minimum necessary" enforcement.
 //
 // A practice_viewer (read-only, e.g. office manager) must never receive PHI from
-// the API — no transcripts, no patient contact info, no message bodies — even if
+// the API, no transcripts, no patient contact info, no message bodies, even if
 // the UI is bypassed. This is the server-side counterpart to lib/permissions.js.
 
 import { createClient } from "@supabase/supabase-js";
@@ -13,9 +13,9 @@ interface RoleCtx {
 }
 
 // Effective role of the caller:
-//   'service_role'         — trusted internal call (cron / server)
-//   'unknown'              — authenticated but no users row resolved (fail closed)
-//   access_level || role   — e.g. 'super_admin', 'owner', 'member', 'viewer'
+//   'service_role', trusted internal call (cron / server)
+//   'unknown', authenticated but no users row resolved (fail closed)
+//   access_level || role, e.g. 'super_admin', 'owner', 'member', 'viewer'
 export async function callerRole(ctx: RoleCtx): Promise<string> {
   if (ctx.isServiceRole) return "service_role";
   if (!ctx.userId) return "unknown";

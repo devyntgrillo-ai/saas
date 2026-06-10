@@ -25,7 +25,7 @@ Deno.serve(async (req: Request) => {
     return new Response("", { status: 204 });
   }
 
-  // Twilio signature verification — mirrors twilio-inbound guard.
+  // Twilio signature verification, mirrors twilio-inbound guard.
   const cfg = getTwilioConfig();
   const publicBase = Deno.env.get("TWILIO_WEBHOOK_BASE_URL") || cfg?.webhookBase || null;
   if (cfg?.authToken) {

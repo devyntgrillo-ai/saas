@@ -94,7 +94,7 @@ function CallRecordingPlayer({ callLogId, durationHint }) {
         await el.play()
       }
     } catch {
-      setError('Playback failed — try again')
+      setError('Playback failed, try again')
       setPlaying(false)
     }
   }, [playing, status, audioSrc])

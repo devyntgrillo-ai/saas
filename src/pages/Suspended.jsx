@@ -4,7 +4,7 @@ import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
 
 // Standalone lockout screen for users whose practice has been archived. No
-// sidebar / nav — ProtectedRoute routes suspended users straight here.
+// sidebar / nav, ProtectedRoute routes suspended users straight here.
 export default function Suspended() {
   const { practice, signOut } = useAuth()
   const navigate = useNavigate()
