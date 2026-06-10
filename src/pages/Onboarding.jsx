@@ -461,15 +461,12 @@ export default function Onboarding() {
                     <span className="text-3xl font-bold text-white">${planPrice.toLocaleString()}</span>
                     <span className="text-sm text-slate-400">/month</span>
                   </div>
-                  <ul className="mt-4 space-y-2 text-sm text-slate-300">
-                    {['AI consult analysis on every recording', 'Automated SMS + email follow-up sequences', 'Your own dedicated phone number', 'Unlimited team members'].map((f) => (
-                      <li key={f} className="flex items-center gap-2"><Check className="h-4 w-4 shrink-0 text-emerald-400" /> {f}</li>
-                    ))}
-                  </ul>
                   <div className="mt-6">
                     <HelcimCardForm
                       amount={planPrice}
-                      submitLabel="Activate plan"
+                      submitLabel="Activate Plan"
+                      showAmountInLabel={false}
+                      showSecureNote={false}
                       onApproved={handleCardApproved}
                       onDeclined={(r) => setSaveError(r?.message || 'Your card was declined. Please try another card.')}
                       onError={(m) => setSaveError(m)}
