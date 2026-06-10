@@ -39,7 +39,22 @@ async function helcim(endpoint: string, method = "GET", body?: object) {
 // Actions any visitor may call (needed during signup, before an account exists).
 const PUBLIC_ACTIONS = new Set(["initialize_checkout", "create_customer"]);
 // Actions that self-authenticate against the caller's own practice (not super-admin).
-const SELF_AUTH_ACTIONS = new Set(["record_payment", "update_card", "manage_subscription"]);
+const SELF_AUTH_ACTIONS = new Set(["record_payment", "update_card", "manage_subscription", "start_trial"]);
+
+// Resolve a signup offer server-side (the URL is never trusted for price/trial).
+// Returns { code, price, trial_days } only if the offer is active, unexpired,
+// and under its usage cap — otherwise null.
+// deno-lint-ignore no-explicit-any
+async function resolveOffer(admin: any, code?: string): Promise<{ code: string; price: number; trial_days: number } | null> {
+  if (!code) return null;
+  const { data } = await admin.from("signup_offers")
+    .select("code, price, trial_days, active, expires_at, max_uses, uses").eq("code", code).maybeSingle();
+  if (!data) return null;
+  const valid = data.active
+    && (!data.expires_at || new Date(data.expires_at) > new Date())
+    && (data.max_uses == null || data.uses < data.max_uses);
+  return valid ? { code: data.code, price: Number(data.price), trial_days: Number(data.trial_days) } : null;
+}
 
 // Resolve the authenticated caller and their practice (never trust the body for identity).
 async function getCaller(req: Request): Promise<{ userId: string; practiceId: string | null; email: string | null } | null> {
@@ -105,7 +120,15 @@ Deno.serve(async (req: Request) => {
 
         const cardToken = String(params.card_token || "");
         if (!cardToken) return json({ error: "Missing card token." }, 400);
-        const expectedAmount = ALLOWED_AMOUNTS.includes(Number(params.amount)) ? Number(params.amount) : 997;
+
+        const admin = createClient(
+          Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+          { auth: { autoRefreshToken: false, persistSession: false } },
+        );
+        // A signup offer code (server-trusted) overrides the preset price list.
+        const offer = await resolveOffer(admin, params.offer_code ? String(params.offer_code) : undefined);
+        if (params.offer_code && !offer) return json({ error: "This offer link is no longer valid." }, 400);
+        const expectedAmount = offer ? offer.price : (ALLOWED_AMOUNTS.includes(Number(params.amount)) ? Number(params.amount) : 997);
 
         // 1) Verify with Helcim. The Helcim.js form transactionId is NOT the
         //    Payment-API id, so look the charge up by cardToken in a date window
@@ -134,11 +157,6 @@ Deno.serve(async (req: Request) => {
         const realTxnId = (match?.transactionId ?? match?.id ?? params.transaction_id) || null;
         const customerCode = (match?.customerCode || params.customer_code) || null;
         const last4 = String(params.card_last4 || match?.cardNumber || "").replace(/\D/g, "").slice(-4) || null;
-
-        const admin = createClient(
-          Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-          { auth: { autoRefreshToken: false, persistSession: false } },
-        );
 
         // 2) Enroll the recurring monthly subscription (best-effort — a verified
         //    charge already happened, so a recurring hiccup must not block access).
@@ -177,17 +195,91 @@ Deno.serve(async (req: Request) => {
           helcim_customer_code: customerCode,
           card_last4: last4,
           card_type: params.card_type || null,
+          plan_amount: expectedAmount,
         };
         if (subscriptionId) patch.helcim_subscription_id = subscriptionId;
         if (nextBilling) patch.next_billing_date = nextBilling;
         const { error: upErr } = await admin.from("practices").update(patch).eq("id", caller.practiceId);
         if (upErr) return json({ error: `Verified your charge but could not update your account: ${upErr.message}` }, 500);
 
+        if (offer) await admin.rpc("increment_signup_offer_use", { p_code: offer.code }).then(() => {}, () => {});
+
         // Internal Slack alert on a new paid activation (replaces the old
         // chargebee/ls-webhook trigger). Best-effort — never blocks activation.
         admin.functions.invoke("notify-signup", { body: { practice_id: caller.practiceId } }).catch(() => {});
 
         return json({ success: true, subscriptionId, transactionId: realTxnId });
+      }
+
+      // Free-trial signup: the card was tokenized via Helcim.js verify (no charge),
+      // attached to a new Helcim customer. We enroll a recurring subscription that
+      // FIRST bills after the trial (dateActivated = trial end) at the offer price,
+      // and put the practice on trial. No money moves now.
+      case "start_trial": {
+        const caller = await getCaller(req);
+        if (!caller?.userId) return json({ error: "Unauthorized" }, 401);
+        if (!caller.practiceId) return json({ error: "Your account is not linked to a practice." }, 409);
+
+        const cardToken = String(params.card_token || "");
+        if (!cardToken) return json({ error: "Missing card token." }, 400);
+
+        const admin = createClient(
+          Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+          { auth: { autoRefreshToken: false, persistSession: false } },
+        );
+        const offer = await resolveOffer(admin, params.offer_code ? String(params.offer_code) : undefined);
+        if (!offer || !(offer.trial_days > 0)) return json({ error: "This trial offer is no longer valid." }, 400);
+
+        const price = offer.price;
+        const trialDays = offer.trial_days;
+        const customerCode = (params.customer_code || null) as string | null;
+        const last4 = String(params.card_last4 || "").replace(/\D/g, "").slice(-4) || null;
+        const trialEndsAt = new Date(Date.now() + trialDays * 86_400_000);
+        const dateActivated = trialEndsAt.toISOString().slice(0, 10); // first charge after the trial
+
+        // Enroll the recurring subscription to begin AFTER the trial (best-effort).
+        let subscriptionId: string | null = null;
+        try {
+          if (customerCode) {
+            const plansRes = await helcim(`/payment-plans`);
+            const plans = Array.isArray(plansRes.data) ? plansRes.data : (plansRes.data?.data ?? []);
+            const plan = plans.find((p: Record<string, unknown>) => Math.round(Number(p.recurringAmount)) === Math.round(price)) || plans[0];
+            if (plan?.id) {
+              const idem = crypto.randomUUID().replace(/-/g, "").slice(0, 25);
+              const subRes = await fetch(`${HELCIM_BASE}/subscriptions`, {
+                method: "POST",
+                headers: { "api-token": HELCIM_API_KEY!, "idempotency-key": idem, "Content-Type": "application/json", accept: "application/json" },
+                body: JSON.stringify({ subscriptions: [{ customerCode, paymentPlanId: plan.id, recurringAmount: price, paymentMethod: "card", dateActivated }] }),
+              });
+              const subData = await subRes.json().catch(() => ({}));
+              const created = Array.isArray(subData) ? subData[0] : (subData?.data?.[0] ?? subData?.[0] ?? subData);
+              subscriptionId = (created?.id ?? created?.subscriptionId) || null;
+            } else {
+              console.error(`start_trial: no Helcim $${price}/mo plan found — trial set without a subscription. Create the plan in the Helcim dashboard.`);
+            }
+          }
+        } catch (e) {
+          console.error("start_trial: subscription enrollment failed:", (e as Error)?.message);
+        }
+
+        const patch: Record<string, unknown> = {
+          subscription_status: "trial",
+          trial_ends_at: trialEndsAt.toISOString(),
+          plan_amount: price,
+          helcim_card_token: cardToken,
+          helcim_customer_code: customerCode,
+          card_last4: last4,
+          card_type: params.card_type || null,
+          next_billing_date: trialEndsAt.toISOString(),
+        };
+        if (subscriptionId) patch.helcim_subscription_id = subscriptionId;
+        const { error: upErr } = await admin.from("practices").update(patch).eq("id", caller.practiceId);
+        if (upErr) return json({ error: `Could not start your trial: ${upErr.message}` }, 500);
+
+        await admin.rpc("increment_signup_offer_use", { p_code: offer.code }).then(() => {}, () => {});
+        admin.functions.invoke("notify-signup", { body: { practice_id: caller.practiceId } }).catch(() => {});
+
+        return json({ success: true, trial: true, trialEndsAt: trialEndsAt.toISOString(), subscriptionId });
       }
 
       // Update the card on file WITHOUT charging. The client tokenized a new card
