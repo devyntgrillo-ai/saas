@@ -1,4 +1,5 @@
-import { lazy, Suspense, useMemo } from 'react'
+import { Suspense, useMemo } from 'react'
+import { lazyWithReload } from '../lib/lazyWithReload'
 import {
   Clock,
   Award,
@@ -14,8 +15,8 @@ import AILearningFeed from '../components/AILearningFeed'
 import LaunchpadCard from '../components/LaunchpadCard'
 import TodaysAppointmentsSnapshot from '../components/TodaysAppointmentsSnapshot'
 import { SkeletonStatGrid } from '../components/Skeleton'
-const RecordingRateCard = lazy(() => import('../components/RecordingRateCard'))
-const PerformanceInsights = lazy(() => import('../components/PerformanceInsights'))
+const RecordingRateCard = lazyWithReload(() => import('../components/RecordingRateCard'))
+const PerformanceInsights = lazyWithReload(() => import('../components/PerformanceInsights'))
 import ErrorState, { friendlyError } from '../components/ErrorState'
 import { useAuth } from '../context/AuthContext'
 import { formatMoney } from '../lib/analytics'

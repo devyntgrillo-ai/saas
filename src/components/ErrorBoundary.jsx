@@ -1,6 +1,7 @@
 import { Component } from 'react'
-import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { AlertTriangle, RefreshCw, Loader2 } from 'lucide-react'
 import { reportError } from '../lib/errorReporting'
+import { isChunkLoadError, reloadForFreshBuild } from '../lib/lazyWithReload'
 
 // App-wide error boundary: catches uncaught React render errors, reports them to
 // Slack (#caselift-errors), and shows a recovery screen instead of a blank page.
@@ -10,11 +11,18 @@ export default class ErrorBoundary extends Component {
     this.state = { hasError: false }
   }
 
-  static getDerivedStateFromError() {
-    return { hasError: true }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
   }
 
   componentDidCatch(error, info) {
+    // A stale-chunk failure after a deploy is not a real bug: the user is on an
+    // old build whose hashed chunks are gone. Reload to the new build instead of
+    // reporting noise and showing the scary error screen.
+    if (isChunkLoadError(error)) {
+      reloadForFreshBuild()
+      return
+    }
     console.error('[CaseLift] render error', error, info)
     reportError(error, {
       extra: `React render error${info?.componentStack ? ` · ${info.componentStack.trim().split('\n')[1]?.trim() || ''}` : ''}`,
@@ -23,6 +31,17 @@ export default class ErrorBoundary extends Component {
 
   render() {
     if (this.state.hasError) {
+      // Stale-chunk error → a reload is already underway; show a calm "updating"
+      // state rather than the alarming error card.
+      if (isChunkLoadError(this.state.error)) {
+        return (
+          <div className="flex min-h-screen items-center justify-center bg-surface p-6">
+            <div className="flex items-center gap-3 text-sm text-slate-400">
+              <Loader2 className="h-5 w-5 animate-spin" /> Updating to the latest version…
+            </div>
+          </div>
+        )
+      }
       return (
         <div className="flex min-h-screen items-center justify-center bg-surface p-6">
           <div className="card max-w-md p-8 text-center">

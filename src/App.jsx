@@ -1,5 +1,6 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Outlet, Navigate } from 'react-router-dom'
+import { lazyWithReload } from './lib/lazyWithReload'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { BrandingProvider } from './context/BrandingContext'
 import { ThemeProvider } from './context/ThemeContext'
@@ -41,27 +42,27 @@ import { isNative } from './lib/nativeRecorder'
 // ── Lazily loaded: secondary routes (settings, training, agency, and the whole
 //    admin portal). These pull in heavier deps (recharts on the analytics/admin
 //    pages) and aren't needed on first paint, so they're code-split. ──
-const Settings = lazy(() => import('./pages/Settings'))
-const Training = lazy(() => import('./pages/Training'))
-const Community = lazy(() => import('./pages/Community'))
-const Agency = lazy(() => import('./pages/Agency'))
-const AgencyAnalytics = lazy(() => import('./pages/AgencyAnalytics'))
-const AgencyKnowledgeBase = lazy(() => import('./pages/AgencyKnowledgeBase'))
-const AgencyTeam = lazy(() => import('./pages/AgencyTeam'))
-const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'))
-const AdminAgencies = lazy(() => import('./pages/admin/Agencies'))
-const AdminAgencyDetail = lazy(() => import('./pages/admin/AgencyDetail'))
-const AdminPractices = lazy(() => import('./pages/admin/Practices'))
-const AdminPracticeDetail = lazy(() => import('./pages/admin/PracticeDetail'))
-const AdminTeam = lazy(() => import('./pages/admin/Team'))
-const AdminBilling = lazy(() => import('./pages/admin/Billing'))
-const AdminTraining = lazy(() => import('./pages/admin/TrainingAdmin'))
-const AdminWins = lazy(() => import('./pages/admin/Wins'))
-const AdminReferrals = lazy(() => import('./pages/admin/Referrals'))
-const AdminCommissions = lazy(() => import('./pages/admin/Commissions'))
-const AdminChats = lazy(() => import('./pages/admin/AdminChats'))
-const Chat = lazy(() => import('./pages/Chat'))
-const Launchpad = lazy(() => import('./pages/Launchpad'))
+const Settings = lazyWithReload(() => import('./pages/Settings'))
+const Training = lazyWithReload(() => import('./pages/Training'))
+const Community = lazyWithReload(() => import('./pages/Community'))
+const Agency = lazyWithReload(() => import('./pages/Agency'))
+const AgencyAnalytics = lazyWithReload(() => import('./pages/AgencyAnalytics'))
+const AgencyKnowledgeBase = lazyWithReload(() => import('./pages/AgencyKnowledgeBase'))
+const AgencyTeam = lazyWithReload(() => import('./pages/AgencyTeam'))
+const AdminDashboard = lazyWithReload(() => import('./pages/admin/Dashboard'))
+const AdminAgencies = lazyWithReload(() => import('./pages/admin/Agencies'))
+const AdminAgencyDetail = lazyWithReload(() => import('./pages/admin/AgencyDetail'))
+const AdminPractices = lazyWithReload(() => import('./pages/admin/Practices'))
+const AdminPracticeDetail = lazyWithReload(() => import('./pages/admin/PracticeDetail'))
+const AdminTeam = lazyWithReload(() => import('./pages/admin/Team'))
+const AdminBilling = lazyWithReload(() => import('./pages/admin/Billing'))
+const AdminTraining = lazyWithReload(() => import('./pages/admin/TrainingAdmin'))
+const AdminWins = lazyWithReload(() => import('./pages/admin/Wins'))
+const AdminReferrals = lazyWithReload(() => import('./pages/admin/Referrals'))
+const AdminCommissions = lazyWithReload(() => import('./pages/admin/Commissions'))
+const AdminChats = lazyWithReload(() => import('./pages/admin/AdminChats'))
+const Chat = lazyWithReload(() => import('./pages/Chat'))
+const Launchpad = lazyWithReload(() => import('./pages/Launchpad'))
 
 // get.caselift.io is a signup landing host: visiting its root sends people
 // straight into the signup funnel. Hostname is stable per page load, so this is
