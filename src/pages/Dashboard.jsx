@@ -153,7 +153,14 @@ export default function Dashboard() {
     // but not yet scheduled/accepted (outcome 'pending'). This is the app's
     // canonical "unscheduled treatment plan" (same definition the Reactivation
     // campaign audience uses).
-    const unscheduledTxPlans = consults.filter((c) => c.outcome === 'pending').length
+    const unscheduledPlans = consults.filter((c) => c.outcome === 'pending')
+    const unscheduledTxPlans = unscheduledPlans.length
+    // Total dollar value of those unscheduled plans (PMS/recorded tx plan value,
+    // falling back to the consult's case value).
+    const unscheduledTxValue = unscheduledPlans.reduce(
+      (sum, c) => sum + (Number(c.tx_plan_value) || Number(c.case_value) || 0),
+      0,
+    )
     const minPerFollowup = 5
     const messagesSent = countSentMessages(messages)
     const hoursSaved = Math.round((messagesSent * minPerFollowup / 60) * 10) / 10
@@ -169,6 +176,7 @@ export default function Dashboard() {
 
     return {
       unscheduledTxPlans,
+      unscheduledTxValue,
       hoursSaved,
       messagesSent,
       minPerFollowup,
@@ -262,7 +270,7 @@ export default function Dashboard() {
                 </p>
                 <p className="mt-0.5 text-xs text-slate-500">CaseLift-assisted</p>
               </div>
-              <KpiCard icon={ClipboardList} accent="primary" label="Unscheduled TX Plans" value={`${kpis.unscheduledTxPlans}`} sub="unscheduled tx plans in your PMS" />
+              <KpiCard icon={ClipboardList} accent="primary" label="Unscheduled TX Plans" value={formatMoney(kpis.unscheduledTxValue)} sub={`${kpis.unscheduledTxPlans} unscheduled tx plans`} />
               <KpiCard icon={Clock} accent="violet" label="Hours Saved" value={`${kpis.hoursSaved}h`} sub={`${kpis.messagesSent} auto follow-ups`} />
               <KpiCard icon={Award} accent="green" label="ROI This Month" value={kpis.roi ? `${kpis.roi}x ROI` : '-'} sub="Production ÷ Subscription" />
             </div>
