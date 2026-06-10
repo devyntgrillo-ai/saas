@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { cancelSubscription, createPortalSession } from '../billing'
+import { cancelSubscription } from '../billing'
 import { insertAgencyAccount, loadAdminData } from '../admin'
 import { fetchAttributionByPractice } from '../attribution'
 import { fetchUnlinkedRegistrations, saveSikkaConfig } from '../pms'
@@ -37,7 +37,7 @@ export async function fetchAdminBilling() {
   const { data, error } = await supabase
     .from('practices')
     .select(
-      'id, name, doctor_first, doctor_last, email, phone, pms_type, plan_amount, subscription_status, next_billing_date, trial_ends_at, created_at, chargebee_customer_id, agency:agency_accounts(name)',
+      'id, name, doctor_first, doctor_last, email, phone, pms_type, plan_amount, subscription_status, next_billing_date, trial_ends_at, created_at, helcim_customer_code, helcim_transaction_id, agency:agency_accounts(name)',
     )
     .is('archived_at', null)
     .order('created_at', { ascending: false })
@@ -304,16 +304,6 @@ export function useMarkReferralPayoutPaid() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.admin.referrals() })
-    },
-  })
-}
-
-export function useSendBillingPortalLink() {
-  return useMutation({
-    mutationFn: async ({ practiceId }) => {
-      const url = await createPortalSession(practiceId)
-      try { await navigator.clipboard.writeText(url) } catch { /* clipboard unavailable */ }
-      return { practiceId, url }
     },
   })
 }

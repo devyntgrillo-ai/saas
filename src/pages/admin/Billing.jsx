@@ -1,29 +1,16 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { DollarSign, CheckCircle2, AlertCircle, Clock, ExternalLink, Link2, Ban, CalendarPlus, Loader2, Eye, Building2 } from 'lucide-react'
+import { DollarSign, CheckCircle2, AlertCircle, Clock, ExternalLink, RotateCcw, Ban, CalendarPlus, Loader2, Eye, Building2 } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 import { useAdmin } from '../../context/AdminContext'
-import {
-  useAdminBilling,
-  useExtendPracticeTrial,
-  useSendBillingPortalLink,
-  useCancelPracticeSubscription,
-  queryKeys,
-  isMutating,
-} from '../../lib/queries'
+import { useAdminBilling, queryKeys } from '../../lib/queries'
 import { agencyStatusMeta } from '../../lib/admin'
 import { timeAgo } from '../../lib/consults'
-import { statusMeta as subStatusMeta } from '../../lib/billing'
+import { statusMeta as subStatusMeta, cancelSubscription, helcimRefund } from '../../lib/billing'
 import { StatCard, Table, Badge, Avatar, money, stop } from '../../components/admin/ui'
 
-// Deep-link to a customer in the Chargebee dashboard. Needs the site name
-// (VITE_CHARGEBEE_SITE); falls back to the Chargebee login if it isn't set.
-const CHARGEBEE_SITE = import.meta.env.VITE_CHARGEBEE_SITE || ''
-function chargebeeCustomerUrl(customerId) {
-  if (!CHARGEBEE_SITE) return 'https://app.chargebee.com'
-  const base = `https://${CHARGEBEE_SITE}.chargebee.com`
-  return customerId ? `${base}/d/customers/${customerId}` : base
-}
+const HELCIM_DASHBOARD = 'https://myhelcim.com/dashboard'
 
 // Color-code the monthly plan amount: green for full price, amber for a
 // discounted tier, gray for anything lower (or missing).
@@ -42,9 +29,7 @@ export default function AdminBilling() {
   const { data: ctx, impersonateAgency } = useAdmin()
   const agencies = ctx?.agencies || []
   const { data: rows = [], isLoading: loading, refetch } = useAdminBilling()
-  const portalMutation = useSendBillingPortalLink()
-  const cancelMutation = useCancelPracticeSubscription()
-  const extendTrialMutation = useExtendPracticeTrial()
+  const [busyId, setBusyId] = useState(null)
   const [flash, setFlash] = useState('')
 
   const reload = () => {
@@ -70,55 +55,60 @@ export default function AdminBilling() {
     setTimeout(() => setFlash(''), 4000)
   }
 
-  function sendPortalLink(r) {
-    portalMutation.mutate(
-      { practiceId: r.id },
-      {
-        onSuccess: () => note(`Portal link generated for ${r.name} - copied to clipboard.`),
-        onError: (e) => note(e?.message || 'Could not generate a portal link.'),
-      },
-    )
+  // Refund the practice's last recorded Helcim transaction (super-admin only;
+  // enforced server-side in the helcim-checkout function).
+  async function refundLast(r) {
+    if (!r.helcim_transaction_id) { note(`No Helcim transaction on file for ${r.name}.`); return }
+    const amount = Number(r.plan_amount) || 997
+    if (!confirm(`Refund ${money(amount)} to ${r.name} (transaction ${r.helcim_transaction_id})?`)) return
+    setBusyId(r.id)
+    try {
+      const res = await helcimRefund({ transactionId: r.helcim_transaction_id, amount })
+      if (res?.error) throw new Error(res.error)
+      note(`Refund issued to ${r.name}.`)
+      await reload()
+    } catch (e) {
+      note(e?.message || 'Refund failed.')
+    } finally {
+      setBusyId(null)
+    }
   }
 
-  function cancelSub(r) {
+  async function cancelSub(r) {
     if (!confirm(`Cancel the subscription for ${r.name}? They keep access until the end of the paid period.`)) return
-    cancelMutation.mutate(
-      { practiceId: r.id },
-      {
-        onSuccess: async () => {
-          note(`Subscription cancelled for ${r.name}.`)
-          await reload()
-        },
-        onError: (e) => note(e?.message || 'Cancel failed.'),
-      },
-    )
+    setBusyId(r.id)
+    try {
+      await cancelSubscription(r.id)
+      note(`Subscription cancelled for ${r.name}.`)
+      await reload()
+    } catch (e) {
+      note(e?.message || 'Cancel failed.')
+    } finally {
+      setBusyId(null)
+    }
   }
 
-  function extendTrial(r, days) {
+  async function extendTrial(r, days) {
+    setBusyId(r.id)
     const base = r.trial_ends_at && new Date(r.trial_ends_at) > new Date() ? new Date(r.trial_ends_at) : new Date()
     base.setDate(base.getDate() + days)
-    extendTrialMutation.mutate(
-      { practiceId: r.id, trialEndsAt: base.toISOString() },
-      {
-        onSuccess: async () => {
-          note(`Extended ${r.name}'s trial by ${days} days.`)
-          await reload()
-        },
-        onError: (e) => note(e.message),
-      },
-    )
+    const { error } = await supabase.from('practices').update({ trial_ends_at: base.toISOString() }).eq('id', r.id)
+    if (error) note(error.message)
+    else { note(`Extended ${r.name}'s trial by ${days} days.`); await reload() }
+    setBusyId(null)
   }
 
   const head = ['Practice', 'Contact', 'Email', 'PMS', 'Plan', 'Status', 'Signup', 'Actions']
   const tableRows = rows.map((r) => {
     const status = r.subscription_status || 'trial'
     const meta = subStatusMeta(status)
-    const busy = isMutating(portalMutation, (v) => v.practiceId === r.id)
-      || isMutating(cancelMutation, (v) => v.practiceId === r.id)
-      || isMutating(extendTrialMutation, (v) => v.practiceId === r.id)
+    const busy = busyId === r.id
     const amount = Number(r.plan_amount) || 997
     return [
-      <span className="font-medium text-slate-100">{r.name}</span>,
+      <div className="leading-tight">
+        <span className="font-medium text-slate-100">{r.name}</span>
+        {r.helcim_customer_code && <div className="text-[11px] text-slate-500">{r.helcim_customer_code}</div>}
+      </div>,
       contactName(r) || <span className="text-slate-500">—</span>,
       r.email ? <span className="text-slate-300">{r.email}</span> : <span className="text-slate-500">—</span>,
       r.pms_type || <span className="text-slate-500">—</span>,
@@ -127,8 +117,8 @@ export default function AdminBilling() {
       r.created_at ? new Date(r.created_at).toLocaleDateString() : '-',
       <div className="flex flex-wrap items-center gap-1.5" onClick={stop}>
         {busy && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />}
-        <button onClick={() => sendPortalLink(r)} disabled={busy} title="Generate + copy a customer portal link" className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-slate-300 transition hover:bg-surface-700">
-          <Link2 className="mr-1 inline h-3.5 w-3.5" />Portal
+        <button onClick={() => refundLast(r)} disabled={busy || !r.helcim_transaction_id} title="Refund last Helcim charge" className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-amber-300 transition hover:bg-surface-700 disabled:opacity-40">
+          <RotateCcw className="mr-1 inline h-3.5 w-3.5" />Refund
         </button>
         <button onClick={() => cancelSub(r)} disabled={busy} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-rose-300 transition hover:bg-surface-700">
           <Ban className="mr-1 inline h-3.5 w-3.5" />Cancel
@@ -138,10 +128,10 @@ export default function AdminBilling() {
         </button>
         <button onClick={() => extendTrial(r, 14)} disabled={busy} className="rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs text-slate-300 transition hover:bg-surface-700" title="Extend trial 14 days">+14</button>
         <a
-          href={chargebeeCustomerUrl(r.chargebee_customer_id)}
+          href={HELCIM_DASHBOARD}
           target="_blank" rel="noopener noreferrer"
-          className={`rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs transition hover:bg-surface-700 ${r.chargebee_customer_id ? 'text-slate-300' : 'text-slate-600'}`}
-          title="View in Chargebee"
+          className={`rounded-md border border-surface-700 bg-surface-800 px-2 py-1 text-xs transition hover:bg-surface-700 ${r.helcim_customer_code ? 'text-slate-300' : 'text-slate-600'}`}
+          title="View in Helcim"
         >
           <ExternalLink className="h-3.5 w-3.5" />
         </a>

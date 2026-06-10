@@ -4,8 +4,6 @@ import {
   acceptDownsell,
   submitCancellationFeedback,
   cancelSubscription,
-  createPortalSession,
-  createCheckout,
 } from '../billing'
 import { supabase } from '../supabase'
 import { queryKeys } from './keys'
@@ -46,24 +44,6 @@ export function useCancelSubscriptionFlow() {
     },
     onSuccess: (_, { practiceId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.practice(practiceId) })
-    },
-  })
-}
-
-export function useStartCheckout() {
-  return useMutation({
-    mutationFn: async ({ practiceId, email, planAmount, redirectPath }) => {
-      const { url } = await createCheckout({ practiceId, email, planAmount, redirectPath })
-      return { url }
-    },
-  })
-}
-
-export function useOpenBillingPortal() {
-  return useMutation({
-    mutationFn: async ({ practiceId }) => {
-      const url = await createPortalSession(practiceId)
-      return { url }
     },
   })
 }
