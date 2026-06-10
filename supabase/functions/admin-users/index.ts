@@ -103,7 +103,19 @@ Deno.serve(async (req: Request) => {
       // Canonical production URLs for the email + sign-in link, never the
       // inviter's localhost dev origin (both helpers ignore a client origin).
       const appOrigin = appBaseUrl();
-      const redirectTo = acceptInviteRedirectUrl();
+      // Carry an invitation token so /accept-invite can complete server-side even
+      // if the Supabase one-time link gets consumed by an email scanner or expires.
+      const { data: inviteRow } = await admin.from("invitations").insert({
+        email,
+        role: role ?? userRole,
+        access_level,
+        practice_id: practiceScoped ? (practiceId ?? null) : null,
+        agency_id: agencyScoped ? (agencyId ?? null) : null,
+        invited_by_user_id: user.id,
+      }).select("token").single();
+      const redirectTo = inviteRow?.token
+        ? acceptInviteRedirectUrl({ invitation: inviteRow.token as string })
+        : acceptInviteRedirectUrl();
 
       // If this email already belongs to a user (e.g. a previously deactivated
       // one), lift any ban FIRST so we can generate a sign-in link and reactivate
