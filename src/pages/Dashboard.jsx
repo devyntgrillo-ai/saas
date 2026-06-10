@@ -273,7 +273,7 @@ export default function Dashboard() {
                 </p>
                 <p className="mt-0.5 text-xs text-slate-500">CaseLift-assisted</p>
               </div>
-              <KpiCard icon={ClipboardList} accent="primary" label="Unscheduled TX Plans" value={formatMoney(kpis.unscheduledTxValue)} sub={`${kpis.unscheduledTxPlans} unscheduled tx plans`} />
+              <KpiCard icon={ClipboardList} accent="primary" label="Pipeline Value" value={formatMoney(kpis.unscheduledTxValue)} sub={`${kpis.unscheduledTxPlans} unscheduled tx plans`} />
               <KpiCard icon={Clock} accent="violet" label="Hours Saved" value={`${kpis.hoursSaved}h`} sub={`${kpis.messagesSent} auto follow-ups`} />
               <KpiCard icon={Award} accent="green" label="ROI This Month" value={kpis.roi ? `${kpis.roi}x ROI` : '-'} sub="Production ÷ Subscription" />
             </div>
