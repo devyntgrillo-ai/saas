@@ -79,7 +79,6 @@ Deno.serve(async (req: Request) => {
     const email: string | undefined = body.email;
     const doctorFirst: string | null = body.doctor_first ?? null;
     const doctorLast: string | null = body.doctor_last ?? null;
-    const redirectTo = acceptInviteRedirectUrl();
 
     if (!agencyId || !practiceName || !email) {
       return json({ error: "agency_id, practice_name, and email are required" }, 400);
@@ -115,6 +114,18 @@ Deno.serve(async (req: Request) => {
       .single();
     if (practiceErr) throw practiceErr;
     const practiceId = practice.id;
+
+    // Invitation token so /accept-invite can finish server-side even if the
+    // Supabase one-time link is consumed by an email scanner or expires.
+    const { data: inviteRow } = await admin.from("invitations").insert({
+      email,
+      role: "member",
+      practice_id: practiceId,
+      invited_by_user_id: user.id,
+    }).select("token").single();
+    const redirectTo = inviteRow?.token
+      ? acceptInviteRedirectUrl({ invitation: inviteRow.token as string })
+      : acceptInviteRedirectUrl();
 
     await recordAuditFromReq(admin, req, {
       action: "practice.created",
