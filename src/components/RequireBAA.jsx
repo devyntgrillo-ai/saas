@@ -19,7 +19,7 @@ export default function RequireBAA({ children }) {
     baaAccepted,
     accessLevel,
     isSuperAdmin,
-    user,
+    isAgencyUser,
   } = useAuth()
   const location = useLocation()
 
@@ -43,12 +43,15 @@ export default function RequireBAA({ children }) {
     return children
   }
 
-  // Signed up with email confirmation but never finished practice provisioning.
-  // Only after profile load confirms there is still no practice_id.
-  if (user?.user_metadata?.practice_name) {
-    stashBaaReturnPath(location.pathname, location.search)
-    return <Navigate to="/baa" replace state={{ from: location }} />
-  }
+  // Agency-level users manage accounts rather than owning a practice of their
+  // own, so a missing practice_id is expected — let them through.
+  if (isAgencyUser) return children
 
-  return children
+  // Anything reaching here is a signed-in user with NO workspace: either a signup
+  // still provisioning (carries practice_name metadata) or an INVITED user whose
+  // account never got linked to a practice. Never drop them into the app — every
+  // practice-scoped page renders broken (the "account not linked" error). Send
+  // them to the clean setup / "workspace not ready" screen at /baa instead.
+  stashBaaReturnPath(location.pathname, location.search)
+  return <Navigate to="/baa" replace state={{ from: location }} />
 }
