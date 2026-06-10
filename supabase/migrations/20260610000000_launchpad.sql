@@ -11,6 +11,8 @@
 
 alter table public.practices add column if not exists launchpad_completed_at timestamptz;
 alter table public.practices add column if not exists launchpad_dismissed_at timestamptz;
+-- Captured on the streamlined Welcome step (1-2 / 3-5 / 6-10 / 10+).
+alter table public.practices add column if not exists consults_per_week text;
 
 create table if not exists public.practice_launchpad_steps (
   id           uuid primary key default gen_random_uuid(),

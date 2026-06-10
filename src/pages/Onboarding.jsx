@@ -5,7 +5,6 @@ import {
   Building2,
   CreditCard,
   ShieldCheck,
-  MessageSquare,
   UserPlus,
   Check,
   Loader2,
@@ -13,6 +12,9 @@ import {
   CheckCircle2,
   Lock,
   Mail,
+  Play,
+  Mic,
+  Sparkles,
 } from 'lucide-react'
 import Logo from '../components/Logo'
 import PasswordField from '../components/PasswordField'
@@ -27,7 +29,6 @@ import {
   useOnboardingTeamInvite,
   useStartCheckout,
 } from '../lib/queries'
-import PhoneSetupWizard from '../components/PhoneSetupWizard'
 import { REF_STORAGE_KEY } from '../components/ReferralRedirect'
 
 const HEARD_FROM_OPTIONS = ['Referral', 'Instagram', 'Facebook', 'Google', 'Podcast', 'Other']
@@ -39,14 +40,19 @@ function parsePlanAmount(searchParams) {
 // Steps are intentionally NOT labeled "Step 1 of 5" anywhere — the sidebar just
 // lists the named stages with quiet completion ticks (Asana/ClickUp feel). Each
 // stage saves independently so a practice can leave and resume any time.
+// Public signup handles account + payment; the in-app onboarding starts at the
+// BAA (required) and then the streamlined Welcome → Invite → Demo steps.
 const STEPS = [
   { key: 'account', label: 'Create your account', icon: UserCircle, blurb: 'A few details to get started.' },
-  { key: 'profile', label: 'Practice details', icon: Building2, blurb: 'Tell us about your practice.' },
   { key: 'payment', label: 'Activate your plan', icon: CreditCard, blurb: 'Start your subscription.' },
   { key: 'baa', label: 'Sign the BAA', icon: ShieldCheck, blurb: 'HIPAA business associate agreement.' },
-  { key: 'a2p', label: 'Carrier registration', icon: MessageSquare, blurb: 'Get SMS approved fast.' },
-  { key: 'team', label: 'Invite your team', icon: UserPlus, blurb: 'Bring in your coordinators.' },
+  { key: 'welcome', label: 'Welcome', icon: Building2, blurb: 'A couple quick details.' },
+  { key: 'invite', label: 'Invite your team', icon: UserPlus, blurb: 'Who will record consults?' },
+  { key: 'demo', label: 'See how it works', icon: Play, blurb: 'A quick walkthrough.' },
 ]
+
+const CONSULTS_PER_WEEK = ['1-2', '3-5', '6-10', '10+']
+const INVITE_ROLES = ['Owner/Doctor', 'Front Desk', 'Office Manager', 'Other']
 
 function Field({ label, children }) {
   return (
@@ -85,7 +91,7 @@ export default function Onboarding() {
   const [acct, setAcct] = useState({ practiceName: '', phone: '', contactName: '', email: '', password: '', heardFrom: '' })
   const setA = (k) => (e) => setAcct((f) => ({ ...f, [k]: e.target.value }))
 
-  const [form, setForm] = useState({ name: '', doctor_first: '', doctor_last: '', phone: '', address: '' })
+  const [form, setForm] = useState({ name: '', doctor_first: '', doctor_last: '', phone: '', address: '', consults_per_week: '' })
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
   useEffect(() => {
@@ -98,8 +104,9 @@ export default function Onboarding() {
   }, [refCode])
 
   const [baaAgree, setBaaAgree] = useState(false)
+  const [inviteName, setInviteName] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState('member')
+  const [inviteRole, setInviteRole] = useState(INVITE_ROLES[0])
   const [invited, setInvited] = useState([])
 
   // Agency users manage clients elsewhere — they never see practice onboarding.
@@ -113,11 +120,11 @@ export default function Onboarding() {
     const p = practice || {}
     return {
       account: Boolean(practiceId),
-      profile: Boolean((p.name || '').trim() && (p.phone || '').trim()),
       payment: p.subscription_status === 'active',
       baa: Boolean(p.baa_accepted_at),
-      a2p: Boolean(p.a2p_submitted_at) || (p.a2p_brand_status && p.a2p_brand_status !== 'unregistered') || Boolean(p.twilio_phone_e164 || p.twilio_phone_number),
-      team: Boolean(p.onboarding_completed) || invited.length > 0,
+      welcome: Boolean((p.name || '').trim() && p.consults_per_week),
+      invite: Boolean(p.onboarding_completed) || invited.length > 0,
+      demo: Boolean(p.onboarding_completed),
     }
   }, [practice, practiceId, invited.length])
   const doneList = STEPS.map((s) => done[s.key])
@@ -134,6 +141,7 @@ export default function Onboarding() {
       doctor_last: practice.doctor_last || '',
       phone: practice.phone || '',
       address: practice.address || practice.location || '',
+      consults_per_week: practice.consults_per_week || '',
     })
     const firstIncomplete = STEPS.findIndex((s) => !done[s.key])
     const fromUrl = searchParams.get('step')
@@ -207,8 +215,8 @@ export default function Onboarding() {
     }
   }
 
-  async function saveProfile() {
-    const ok = await savePatch({ name: form.name, doctor_first: form.doctor_first, doctor_last: form.doctor_last, phone: form.phone, address: form.address })
+  async function saveWelcome() {
+    const ok = await savePatch({ name: form.name, doctor_first: form.doctor_first, consults_per_week: form.consults_per_week || null })
     if (ok) nextStep()
   }
 
@@ -234,24 +242,23 @@ export default function Onboarding() {
   }
 
   async function sendInvite() {
-    // Allow inviting several people at once — split on commas / spaces /
-    // semicolons / newlines, keep valid + not-already-invited emails.
     const isEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)
-    const candidates = inviteEmail.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean)
-    const fresh = [...new Set(candidates.filter(isEmail))].filter((e) => !invited.includes(e))
-    if (!fresh.length) return
-    for (const email of fresh) {
-      try {
-        await teamInviteMutation.mutateAsync({ practiceId, email, role: inviteRole })
-      } catch { /* treat as queued */ }
-    }
-    setInvited((prev) => [...prev, ...fresh])
-    setInviteEmail('')
+    const email = inviteEmail.trim().toLowerCase()
+    if (!isEmail(email)) { setSaveError('Enter a valid email address.'); return }
+    setSaveError('')
+    try {
+      // All onboarding invitees are recorders/team members (access role 'member');
+      // the role dropdown captures their job for context, not access level.
+      await teamInviteMutation.mutateAsync({ practiceId, email, role: 'member', name: inviteName.trim() || undefined })
+    } catch { /* treat as queued */ }
+    setInvited((prev) => [...new Set([...prev, email])])
+    setInviteName(''); setInviteEmail('')
+    nextStep() // → demo
   }
 
-  async function finish() {
+  async function finish({ record = false } = {}) {
     const ok = await savePatch({ onboarding_completed: true })
-    if (ok) navigate('/', { replace: true })
+    if (ok) navigate(record ? '/?record=1' : '/', { replace: true })
   }
 
   const stepKey = STEPS[active].key
@@ -367,27 +374,26 @@ export default function Onboarding() {
             )
           )}
 
-          {/* 2. Practice details */}
-          {stepKey === 'profile' && (
+          {/* Welcome — only 3 quick things (≈2 min). */}
+          {stepKey === 'welcome' && (
             <section>
-              <h1 className="text-2xl font-bold tracking-tight text-white">Tell us about your practice</h1>
-              <p className="mt-1.5 text-sm text-slate-400">This personalizes the follow-ups your patients receive.</p>
-              <form
-                className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2"
-                onSubmit={(e) => { e.preventDefault(); if (!saving && form.name.trim()) saveProfile() }}
-              >
-                <div className="sm:col-span-2">
-                  <Field label="Practice name"><input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Pinnacle Dental" /></Field>
-                </div>
-                <Field label="Doctor first name"><input className="input" value={form.doctor_first} onChange={(e) => set('doctor_first', e.target.value)} /></Field>
-                <Field label="Doctor last name"><input className="input" value={form.doctor_last} onChange={(e) => set('doctor_last', e.target.value)} /></Field>
-                <Field label="Office phone"><input className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="(480) 555-0142" /></Field>
-                <div className="sm:col-span-2">
-                  <Field label="Address"><input className="input" value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="123 Main St, Phoenix, AZ 85001" /></Field>
-                </div>
-                <div className="sm:col-span-2 mt-2 flex justify-end">
-                  <button type="submit" disabled={saving || !form.name.trim()} className="btn-primary">
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save &amp; continue <ArrowRight className="h-4 w-4" />
+              <h1 className="text-2xl font-bold tracking-tight text-white">Welcome to CaseLift{form.doctor_first ? `, ${form.doctor_first}` : ''}!</h1>
+              <p className="mt-1.5 text-sm text-slate-400">Just confirm a couple details and you’re in.</p>
+              <form className="mt-6 space-y-4" onSubmit={(e) => { e.preventDefault(); if (!saving) saveWelcome() }}>
+                <Field label="Practice name"><input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Pinnacle Dental" /></Field>
+                <Field label="Doctor / owner first name"><input className="input" value={form.doctor_first} onChange={(e) => set('doctor_first', e.target.value)} placeholder="Jordan" /></Field>
+                <Field label="How many consults per week, on average?">
+                  <select className="input" value={form.consults_per_week} onChange={(e) => set('consults_per_week', e.target.value)}>
+                    <option value="" disabled>Select one</option>
+                    {CONSULTS_PER_WEEK.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </Field>
+                <div className="pt-2">
+                  <button type="submit" disabled={saving} className="btn-primary w-full justify-center text-base">
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Let’s go <ArrowRight className="h-4 w-4" />
+                  </button>
+                  <button type="button" onClick={nextStep} className="mt-3 block w-full text-center text-xs font-medium text-slate-500 hover:text-slate-300">
+                    You can fill in the rest later
                   </button>
                 </div>
               </form>
@@ -466,35 +472,20 @@ export default function Onboarding() {
             </section>
           )}
 
-          {/* 4. A2P / carrier registration — reuse the working phone+A2P wizard */}
-          {stepKey === 'a2p' && (
+          {/* Invite — who will record consultations (skippable) */}
+          {stepKey === 'invite' && (
             <section>
-              <h1 className="text-2xl font-bold tracking-tight text-white">Get your texting approved</h1>
-              <p className="mt-1.5 text-sm text-slate-400">Carriers require a quick one-time registration before SMS can send. Doing it now means it’s approved by the time you’re recording consults.</p>
-              <div className="mt-6">
-                <PhoneSetupWizard practiceId={practiceId} practiceName={practice?.name} embedded onComplete={() => refreshProfile()} />
-              </div>
-              <div className="mt-6 flex justify-end">
-                <button onClick={nextStep} className="btn-ghost">Continue <ArrowRight className="h-4 w-4" /></button>
-              </div>
-            </section>
-          )}
+              <h1 className="text-2xl font-bold tracking-tight text-white">Who will be recording consultations?</h1>
+              <p className="mt-1.5 text-sm text-slate-400">This could be you, a front desk team member, or anyone who sits in on consults.</p>
 
-          {/* 5. Invite team */}
-          {stepKey === 'team' && (
-            <section>
-              <h1 className="text-2xl font-bold tracking-tight text-white">Invite your team</h1>
-              <p className="mt-1.5 text-sm text-slate-400">Add your treatment coordinators and front desk. They’ll get an email to join your account. Invite as many as you like — separate multiple emails with commas.</p>
-
-              <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-                <input className="input flex-1" type="text" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="alex@yourpractice.com, sam@yourpractice.com" />
-                <select className="input sm:w-36" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
-                  <option value="member">Team member</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <button onClick={sendInvite} disabled={teamInviteMutation.isPending || !inviteEmail.trim()} className="btn-primary shrink-0">
-                  {teamInviteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Send invites
-                </button>
+              <div className="mt-6 space-y-4">
+                <Field label="Name"><input className="input" value={inviteName} onChange={(e) => setInviteName(e.target.value)} placeholder="Alex Morgan" /></Field>
+                <Field label="Email"><input className="input" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="alex@yourpractice.com" /></Field>
+                <Field label="Role">
+                  <select className="input" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
+                    {INVITE_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </Field>
               </div>
 
               {invited.length > 0 && (
@@ -508,11 +499,55 @@ export default function Onboarding() {
                 </ul>
               )}
 
-              <div className="mt-8 flex items-center justify-between">
-                <span className="text-xs text-slate-500">{invited.length ? `${invited.length} invite${invited.length === 1 ? '' : 's'} sent` : 'You can always invite people later in Settings.'}</span>
-                <button onClick={finish} disabled={saving} className="btn-primary">
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Finish setup
+              <div className="mt-8 flex items-center justify-between gap-4">
+                <button type="button" onClick={nextStep} className="text-sm font-medium text-slate-400 hover:text-slate-200">
+                  Skip — I’ll record myself
                 </button>
+                <button onClick={sendInvite} disabled={teamInviteMutation.isPending || !inviteEmail.trim()} className="btn-primary">
+                  {teamInviteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Send Invite
+                </button>
+              </div>
+            </section>
+          )}
+
+          {/* See how it works — a simulated walkthrough (skippable, no live record) */}
+          {stepKey === 'demo' && (
+            <section>
+              <div className="flex items-center gap-2 text-primary-300"><Sparkles className="h-5 w-5" /><span className="text-xs font-semibold uppercase tracking-wide">See CaseLift in action</span></div>
+              <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">Watch how a consult becomes a follow-up sequence</h1>
+              <p className="mt-1.5 text-sm text-slate-400">Here’s a real example from Pinnacle Dental — how one recorded consultation gets analyzed and turned into a personalized follow-up.</p>
+
+              <ol className="mt-6 space-y-3">
+                {[
+                  { n: 1, t: 'A consult is recorded', d: '“…I love the idea of the implants, I just need to talk to my husband about the $28,000 before we commit.”', tag: 'Transcript' },
+                  { n: 2, t: 'CaseLift analyzes it', d: 'Primary objection: cost / spouse approval. Sentiment: warm. Recommended: financing reassurance + spouse-friendly recap.', tag: 'AI analysis' },
+                  { n: 3, t: 'It builds the follow-up sequence', d: 'Day 1 text: financing options · Day 3 email: spouse-friendly treatment recap · Day 7 text: gentle check-in.', tag: 'Sequence' },
+                  { n: 4, t: 'The patient replies', d: '“We talked it over — the monthly number works. When can we get on the schedule?”', tag: 'Patient reply' },
+                ].map((s) => (
+                  <li key={s.n} className="flex gap-3 rounded-2xl border border-surface-700 bg-surface-900 p-4">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary-300">{s.n}</span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-white">{s.t}</p>
+                        <span className="rounded-full bg-surface-800 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">{s.tag}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-400">{s.d}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+
+              <div className="mt-7 rounded-2xl border border-primary/30 bg-primary/[0.06] p-5 text-center">
+                <p className="text-sm font-semibold text-white">Ready to record your first real consult?</p>
+                <p className="mt-1 text-xs text-slate-400">No rush — even a couple consults a week is plenty to start recovering cases.</p>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
+                  <button onClick={() => finish({ record: true })} disabled={saving} className="btn-primary justify-center">
+                    <Mic className="h-4 w-4" /> Record Now
+                  </button>
+                  <button onClick={() => finish()} disabled={saving} className="btn-ghost justify-center">
+                    I’ll do this later — go to dashboard
+                  </button>
+                </div>
               </div>
             </section>
           )}

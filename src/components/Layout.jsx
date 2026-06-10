@@ -1,4 +1,4 @@
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import PageLoader from './PageLoader'
 import {
@@ -27,7 +27,7 @@ import RecordConsultButton from './RecordConsultButton'
 import TeamMemberWelcome from './TeamMemberWelcome'
 import AccountSwitcher from './AccountSwitcher'
 import ImpersonationBanner from './ImpersonationBanner'
-import { RecorderProvider } from '../context/RecorderContext'
+import { RecorderProvider, useRecorder } from '../context/RecorderContext'
 import { VoiceProvider } from '../context/VoiceContext'
 import VoiceCallBar from './VoiceCallBar'
 import { useAuth } from '../context/AuthContext'
@@ -66,6 +66,22 @@ const navItemClass = ({ isActive }) =>
       ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-15)] font-medium text-[var(--brand-primary)]'
       : 'border-transparent text-slate-400 hover:bg-surface-800 hover:text-slate-200',
   ].join(' ')
+
+// Opens the recorder when we land with ?record=1 (e.g. "Record Now" at the end
+// of onboarding), then strips the param. Lives inside RecorderProvider.
+function RecordParamTrigger() {
+  const { openRecorder } = useRecorder()
+  const [params, setParams] = useSearchParams()
+  useEffect(() => {
+    if (params.get('record') === '1') {
+      openRecorder()
+      const next = new URLSearchParams(params)
+      next.delete('record')
+      setParams(next, { replace: true })
+    }
+  }, [params, openRecorder, setParams])
+  return null
+}
 
 export default function Layout() {
   const {
@@ -362,6 +378,7 @@ export default function Layout() {
       </div>
       </div>
       <VoiceCallBar />
+      <RecordParamTrigger />
       {/* One-time welcome for invited recorders (gates itself by role). */}
       {showPracticeNav && <TeamMemberWelcome />}
       </VoiceProvider>
