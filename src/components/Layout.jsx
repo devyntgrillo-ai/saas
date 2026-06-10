@@ -41,7 +41,7 @@ import { needsPaywall } from '../lib/billing'
 const practiceNav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/consults', label: 'Consults', icon: CalendarCheck },
-  { to: '/conversations', label: 'Conversations', icon: MessageSquare },
+  { to: '/conversations', label: 'Inbox', icon: MessageSquare },
   { to: '/sequences', label: 'Sequences', icon: GitBranch },
   { to: '/training', label: 'Training', icon: GraduationCap },
   { to: '/chat', label: 'Coaching', icon: Rocket },
