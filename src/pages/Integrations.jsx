@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import {
   Mic, Video, Smartphone, Plug, Copy, Check,
   Loader2, CheckCircle2, Lock, ChevronDown,
-  RefreshCw, SlidersHorizontal,
+  RefreshCw,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { usePlaudLastSync, useUpdatePractice } from '../lib/queries'
-import { plaudAutoflowEmail, AUDIO_QUALITY, MIC_PREF_KEY, listMicrophones } from '../lib/recording'
+import { plaudAutoflowEmail } from '../lib/recording'
 import { timeAgo } from '../lib/consults'
 
 function Badge({ tone, children }) {
@@ -146,81 +146,6 @@ function PlaudCard({ practice, save, saving }) {
   )
 }
 
-// Recording Settings card - audio quality + microphone, plus capture toggles.
-function RecordingSettingsCard({ practice, save }) {
-  const [mics, setMics] = useState([])
-  const [mic, setMic] = useState(() => localStorage.getItem(MIC_PREF_KEY) || '')
-  const [quality, setQuality] = useState(practice?.audio_quality || 'standard')
-  const [retention, setRetention] = useState(practice?.audio_retention_days ?? 30)
-
-  useEffect(() => { listMicrophones().then(setMics) }, [])
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setQuality(practice?.audio_quality || 'standard') }, [practice?.audio_quality])
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setRetention(practice?.audio_retention_days ?? 30) }, [practice?.audio_retention_days])
-
-  function chooseMic(id) {
-    setMic(id)
-    if (id) localStorage.setItem(MIC_PREF_KEY, id); else localStorage.removeItem(MIC_PREF_KEY)
-  }
-
-  return (
-    <div className="card mt-3 p-5">
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-600 !text-white"><SlidersHorizontal className="h-5 w-5" /></div>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-white">Recording Settings</h3>
-          <p className="mt-1 text-sm text-slate-400">Applies to every recording method.</p>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="label">Audio quality</label>
-              <select className="input" value={quality}
-                onChange={(e) => { setQuality(e.target.value); save({ audio_quality: e.target.value }, 'rec') }}>
-                {Object.entries(AUDIO_QUALITY).map(([k, v]) => <option key={k} value={k}>{v.label} - {v.hint}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">Microphone</label>
-              <select className="input" value={mic} onChange={(e) => chooseMic(e.target.value)}>
-                <option value="">Default microphone</option>
-                {mics.map((m) => <option key={m.deviceId} value={m.deviceId}>{m.label || `Microphone ${m.deviceId.slice(0, 6)}`}</option>)}
-              </select>
-            </div>
-          </div>
-          {mics.filter((m) => m.label).length === 0 && (
-            <p className="mt-1.5 text-xs text-slate-500">Start a recording once and allow mic access to see your device names here.</p>
-          )}
-          <div className="mt-4">
-            <label className="label">Audio retention period</label>
-            <select
-              className="input sm:max-w-xs"
-              value={retention}
-              onChange={(e) => { setRetention(Number(e.target.value)); save({ audio_retention_days: Number(e.target.value) }, 'rec') }}
-            >
-              <option value={0}>Immediately after transcription (no playback)</option>
-              <option value={7}>7 days</option>
-              <option value={30}>30 days</option>
-              <option value={60}>60 days</option>
-              <option value={90}>90 days</option>
-            </select>
-            <p className="mt-1.5 text-xs text-slate-500">
-              How long the raw recording is kept before automatic deletion. “Immediately” deletes it as
-              soon as the transcript is saved (HIPAA-friendly, but no playback). Transcripts and analysis are kept permanently.
-            </p>
-          </div>
-          <div className="mt-4 border-t border-surface-700 pt-1">
-            <Toggle
-              label="Auto-start follow-up after analysis"
-              description="When off, the TC reviews and approves before any sequence sends."
-              checked={Boolean(practice?.auto_start_followup)} onChange={(v) => save({ auto_start_followup: v }, 'rec')}
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function Integrations() {
   const { practice, refreshProfile } = useAuth()
   const navigate = useNavigate()
@@ -285,7 +210,6 @@ export default function Integrations() {
           </IntegrationCard>
         </div>
 
-        <RecordingSettingsCard practice={practice} save={save} />
       </div>
     </div>
   )
