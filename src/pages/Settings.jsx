@@ -569,7 +569,6 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
         )}
         {isActive && (
           <div className="mt-4 space-y-1 text-sm text-slate-400">
-            <p>{isAnnual ? 'Annual plan' : 'Monthly plan'} · {isAnnual ? 'renews' : 'next billing'}: <span className="text-slate-200">{formatDate(practice?.next_billing_date) || 'tracked manually'}</span></p>
             {hasCard && (
               <p>
                 Card on file:{' '}
@@ -620,9 +619,8 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
               <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-300">2 months free</span>
             </div>
             <p className="mt-1.5 text-sm text-slate-400">
-              Pay for 10 months up front and you&apos;re covered for a full year —{' '}
-              <span className="font-medium text-slate-200">${annualPrice.toLocaleString()}</span> today instead of{' '}
-              <span className="text-slate-400">${(planAmount * 12).toLocaleString()}</span>.
+              Pay for 10 months and get 2 months <span className="font-medium text-slate-200">FREE</span>{' '}
+              (Save ${(planAmount * 2).toLocaleString()} plus a tax writeoff)
             </p>
           </div>
           <button onClick={() => { setAnnualErr(''); setAnnualOpen(true) }} className="btn-primary shrink-0">
