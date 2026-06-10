@@ -38,7 +38,7 @@ function parsePlanAmount(searchParams) {
   const raw = Number(searchParams.get('plan'))
   return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 997
 }
-// Steps are intentionally NOT labeled "Step 1 of 5" anywhere — the sidebar just
+// Steps are intentionally NOT labeled "Step 1 of 5" anywhere, the sidebar just
 // lists the named stages with quiet completion ticks (Asana/ClickUp feel). Each
 // stage saves independently so a practice can leave and resume any time.
 // Public signup handles account + payment; the in-app onboarding starts at the
@@ -110,7 +110,7 @@ export default function Onboarding() {
   const [inviteRole, setInviteRole] = useState(INVITE_ROLES[0])
   const [invited, setInvited] = useState([])
 
-  // Agency users manage clients elsewhere — they never see practice onboarding.
+  // Agency users manage clients elsewhere, they never see practice onboarding.
   useEffect(() => {
     if (isAgencyUser) navigate('/agency', { replace: true })
   }, [isAgencyUser, navigate])
@@ -272,7 +272,7 @@ export default function Onboarding() {
     <div className="flex min-h-screen flex-col bg-surface lg:flex-row">
       {/* ── Brand panel: premium left rail (gradient wash + value props + proof) ─ */}
       <aside className="relative flex shrink-0 flex-col overflow-hidden border-b border-surface-700 bg-surface-900 px-6 py-8 lg:w-[440px] lg:border-b-0 lg:border-r lg:px-10 lg:py-12">
-        {/* Ambient brand glow — fills the rail so it reads as a designed panel. */}
+        {/* Ambient brand glow, fills the rail so it reads as a designed panel. */}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/[0.14] via-transparent to-transparent" />
         <div className="pointer-events-none absolute -left-28 -top-28 h-72 w-72 rounded-full bg-primary/20 blur-[120px]" />
 
@@ -280,14 +280,14 @@ export default function Onboarding() {
           {/* Onboarding (incl. activate-plan + BAA) is always CaseLift-branded. */}
           <Logo forceDefault />
 
-          {/* Marketing block — desktop only; mobile keeps it compact. */}
+          {/* Marketing block, desktop only; mobile keeps it compact. */}
           <div className="mt-10 hidden lg:block">
             <h1 className="text-[26px] font-bold leading-[1.15] tracking-tight text-white">Turn every consult into recovered revenue.</h1>
-            <p className="mt-3.5 text-sm leading-relaxed text-slate-400">CaseLift records your consultations, pinpoints what held each patient back, and runs the perfect follow-up — automatically.</p>
+            <p className="mt-3.5 text-sm leading-relaxed text-slate-400">CaseLift records your consultations, pinpoints what held each patient back, and runs the perfect follow-up, automatically.</p>
 
             <ul className="mt-8 space-y-4">
               {[
-                { icon: Mic, title: 'Record in one tap', desc: 'In person or virtual — no hardware.' },
+                { icon: Mic, title: 'Record in one tap', desc: 'In person or virtual, no hardware.' },
                 { icon: Sparkles, title: 'AI analyzes every consult', desc: 'Objections, sentiment, next best step.' },
                 { icon: MessageSquare, title: 'Follow-up that converts', desc: 'Personalized texts + emails on autopilot.' },
               ].map(({ icon: Icon, title, desc }) => (
@@ -304,7 +304,7 @@ export default function Onboarding() {
             </ul>
 
             <figure className="mt-9 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-              <blockquote className="text-sm leading-relaxed text-slate-200">“We recovered <span className="font-semibold text-white">$63,000</span> in our first two months — without lifting a finger.”</blockquote>
+              <blockquote className="text-sm leading-relaxed text-slate-200">“We recovered <span className="font-semibold text-white">$63,000</span> in our first two months, without lifting a finger.”</blockquote>
               <figcaption className="mt-2 text-xs text-slate-500">Dr. Maria Chen · Pinnacle Dental</figcaption>
             </figure>
           </div>
@@ -407,7 +407,7 @@ export default function Onboarding() {
             )
           )}
 
-          {/* Welcome — only 3 quick things (≈2 min). */}
+          {/* Welcome, only 3 quick things (≈2 min). */}
           {stepKey === 'welcome' && (
             <section>
               <h1 className="text-2xl font-bold tracking-tight text-white">Welcome to CaseLift{form.doctor_first ? `, ${form.doctor_first}` : ''}!</h1>
@@ -459,7 +459,7 @@ export default function Onboarding() {
                     ))}
                   </ul>
                   <button onClick={startCheckout} disabled={saving} className="btn-primary mt-6 w-full justify-center">
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Activate — secure checkout
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Activate, secure checkout
                   </button>
                   <p className="mt-2 text-center text-[11px] text-slate-500">Powered by Chargebee. Cancel anytime.</p>
                 </div>
@@ -505,7 +505,7 @@ export default function Onboarding() {
             </section>
           )}
 
-          {/* Invite — who will record consultations (skippable) */}
+          {/* Invite, who will record consultations (skippable) */}
           {stepKey === 'invite' && (
             <section>
               <h1 className="text-2xl font-bold tracking-tight text-white">Who will be recording consultations?</h1>
@@ -534,7 +534,7 @@ export default function Onboarding() {
 
               <div className="mt-8 flex items-center justify-between gap-4">
                 <button type="button" onClick={nextStep} className="text-sm font-medium text-slate-400 hover:text-slate-200">
-                  Skip — I’ll record myself
+                  Skip, I’ll record myself
                 </button>
                 <button onClick={sendInvite} disabled={teamInviteMutation.isPending || !inviteEmail.trim()} className="btn-primary">
                   {teamInviteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Send Invite
@@ -543,19 +543,19 @@ export default function Onboarding() {
             </section>
           )}
 
-          {/* See how it works — a simulated walkthrough (skippable, no live record) */}
+          {/* See how it works, a simulated walkthrough (skippable, no live record) */}
           {stepKey === 'demo' && (
             <section>
               <div className="flex items-center gap-2 text-primary-300"><Sparkles className="h-5 w-5" /><span className="text-xs font-semibold uppercase tracking-wide">See CaseLift in action</span></div>
               <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">Watch how a consult becomes a follow-up sequence</h1>
-              <p className="mt-1.5 text-sm text-slate-400">Here’s a real example from Pinnacle Dental — how one recorded consultation gets analyzed and turned into a personalized follow-up.</p>
+              <p className="mt-1.5 text-sm text-slate-400">Here’s a real example from Pinnacle Dental, how one recorded consultation gets analyzed and turned into a personalized follow-up.</p>
 
               <ol className="mt-6 space-y-3">
                 {[
                   { n: 1, t: 'A consult is recorded', d: '“…I love the idea of the implants, I just need to talk to my husband about the $28,000 before we commit.”', tag: 'Transcript' },
                   { n: 2, t: 'CaseLift analyzes it', d: 'Primary objection: cost / spouse approval. Sentiment: warm. Recommended: financing reassurance + spouse-friendly recap.', tag: 'AI analysis' },
                   { n: 3, t: 'It builds the follow-up sequence', d: 'Day 1 text: financing options · Day 3 email: spouse-friendly treatment recap · Day 7 text: gentle check-in.', tag: 'Sequence' },
-                  { n: 4, t: 'The patient replies', d: '“We talked it over — the monthly number works. When can we get on the schedule?”', tag: 'Patient reply' },
+                  { n: 4, t: 'The patient replies', d: '“We talked it over, the monthly number works. When can we get on the schedule?”', tag: 'Patient reply' },
                 ].map((s) => (
                   <li key={s.n} className="flex gap-3 rounded-2xl border border-surface-700 bg-surface-900 p-4">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary-300">{s.n}</span>
@@ -572,13 +572,13 @@ export default function Onboarding() {
 
               <div className="mt-7 rounded-2xl border border-primary/30 bg-primary/[0.06] p-5 text-center">
                 <p className="text-sm font-semibold text-white">Ready to record your first real consult?</p>
-                <p className="mt-1 text-xs text-slate-400">No rush — even a couple consults a week is plenty to start recovering cases.</p>
+                <p className="mt-1 text-xs text-slate-400">No rush, even a couple consults a week is plenty to start recovering cases.</p>
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
                   <button onClick={() => finish({ record: true })} disabled={saving} className="btn-primary justify-center">
                     <Mic className="h-4 w-4" /> Record Now
                   </button>
                   <button onClick={() => finish()} disabled={saving} className="btn-ghost justify-center">
-                    I’ll do this later — go to dashboard
+                    I’ll do this later, go to dashboard
                   </button>
                 </div>
               </div>
