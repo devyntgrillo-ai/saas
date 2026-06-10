@@ -465,7 +465,7 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
   const trialExpired = isTrial && isTrialExpired(practice)
   const daysLeft = trialDaysRemaining(practice)
   const planAmount = Number(practice?.plan_amount) > 0 ? Number(practice.plan_amount) : PLAN_PRICE_NUMERIC
-  const hasCard = Boolean(practice?.helcim_customer_code)
+  const hasCard = Boolean(practice?.helcim_customer_code || practice?.helcim_card_token)
   const isAnnual = practice?.billing_interval === 'annual'
   const annualPrice = annualAmountFor(practice) // monthly × 10 (2 months free)
   const [annualOpen, setAnnualOpen] = useState(false)
