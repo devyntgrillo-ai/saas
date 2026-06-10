@@ -115,7 +115,7 @@ export default function ReferralsPanel({ practice }) {
 
   return (
     <div className="relative">
-      {/* Page content — blurred and non-interactive behind the Coming Soon overlay. */}
+      {/* Page content, blurred and non-interactive behind the Coming Soon overlay. */}
       <div className="space-y-6 select-none blur-[4px] [filter:blur(4px)] pointer-events-none" aria-hidden="true">
       {/* Header */}
       <div>
@@ -125,7 +125,7 @@ export default function ReferralsPanel({ practice }) {
         </p>
       </div>
 
-      {/* Section 1 — referral link */}
+      {/* Section 1, referral link */}
       <div className="card p-6">
         <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
           <Link2 className="h-4 w-4 text-primary-300" /> Your referral link
@@ -170,7 +170,7 @@ export default function ReferralsPanel({ practice }) {
             Email template
           </p>
           <p className="mt-1 text-xs text-slate-500">
-            Edit before sending — the link is already included in the message.
+            Edit before sending, the link is already included in the message.
           </p>
           <div className="mt-3 space-y-3">
             <div>
@@ -198,7 +198,7 @@ export default function ReferralsPanel({ practice }) {
         </div>
       </div>
 
-      {/* Section 2 — earnings */}
+      {/* Section 2, earnings */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Active referrals" value={stats.activeCount} icon={Users} />
         <StatCard
@@ -211,7 +211,7 @@ export default function ReferralsPanel({ practice }) {
         <StatCard label="Pending payout" value={money(stats.pending)} icon={Clock} />
       </div>
 
-      {/* Section 3 — referral history */}
+      {/* Section 3, referral history */}
       <div className="card overflow-hidden">
         <div className="border-b border-surface-700 px-5 py-3 text-sm font-semibold text-white">
           Referral history
@@ -261,7 +261,7 @@ export default function ReferralsPanel({ practice }) {
                             {money(REFERRAL_AMOUNT)}/mo
                           </span>
                         ) : (
-                          <span className="text-slate-500">—</span>
+                          <span className="text-slate-500">, </span>
                         )}
                       </td>
                     </tr>
@@ -273,14 +273,14 @@ export default function ReferralsPanel({ practice }) {
         )}
       </div>
 
-      {/* Section 4 — how it works */}
+      {/* Section 4, how it works */}
       <div className="px-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">How it works</p>
         <ol className="mt-3 space-y-2 text-xs text-slate-500">
           <li>1. Share your unique link with another implant practice.</li>
           <li>2. They sign up and start their free trial.</li>
           <li>
-            3. You earn ${REFERRAL_AMOUNT}/month for every month they stay active — paid monthly.
+            3. You earn ${REFERRAL_AMOUNT}/month for every month they stay active, paid monthly.
           </li>
         </ol>
         <p className="mt-4 max-w-2xl text-xs leading-relaxed text-slate-600">
@@ -290,7 +290,7 @@ export default function ReferralsPanel({ practice }) {
       </div>
       </div>
 
-      {/* Coming Soon overlay — sits above the blurred content; the wrapper above
+      {/* Coming Soon overlay, sits above the blurred content; the wrapper above
           is pointer-events-none so nothing behind it is interactive. */}
       <div className="absolute inset-0 z-10 flex items-start justify-center px-6 pt-24">
         <div className="flex flex-col items-center text-center">

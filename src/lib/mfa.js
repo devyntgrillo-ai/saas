@@ -1,15 +1,15 @@
 // ============================================================================
-// MFA helpers — backup (recovery) code generation + hashing.
+// MFA helpers, backup (recovery) code generation + hashing.
 //
 // Supabase TOTP MFA does not issue recovery codes natively, so we generate them
 // client-side, show them to the user once, and persist only SHA-256 HASHES in the
 // user's auth metadata (never the plaintext). The plaintext is shown exactly once
-// at setup time and never retrievable again — standard backup-code UX.
+// at setup time and never retrievable again, standard backup-code UX.
 //
 // NOTE: redeeming a backup code at sign-in (when the authenticator is lost)
 // requires a server-side verification step that validates the entered code
 // against these stored hashes and then issues an aal2 session. That belongs in an
-// edge function and is out of scope for this client change — the hashes are
+// edge function and is out of scope for this client change, the hashes are
 // stored here so that server step has something to verify against.
 // ============================================================================
 

@@ -25,7 +25,7 @@ const REACTIVATION_TREATMENTS = [
 
 const SMS_MAX = 320
 
-// Three pre-built sequence angles. Each is a starting point — every message is
+// Three pre-built sequence angles. Each is a starting point, every message is
 // fully editable after the angle is chosen.
 const ANGLES = [
   {
@@ -33,65 +33,65 @@ const ANGLES = [
     name: 'The Gentle Check-In',
     desc: 'Low pressure, relationship-first. Best for patients who went cold without a clear reason.',
     badge: 'Recommended for most patients',
-    msg1: "Hi {{first_name}}, it's [TC Name] from {{practice_name}}. I was reviewing some charts and thought of you — we talked about {{treatment_type}} back in {{tx_plan_date}}. Still something you're thinking about?",
-    msg2: "{{first_name}}, just wanted to make sure my last text didn't get lost. No rush at all — just want to make sure you have everything you need if and when you're ready. Anything I can answer for you?",
+    msg1: "Hi {{first_name}}, it's [TC Name] from {{practice_name}}. I was reviewing some charts and thought of you, we talked about {{treatment_type}} back in {{tx_plan_date}}. Still something you're thinking about?",
+    msg2: "{{first_name}}, just wanted to make sure my last text didn't get lost. No rush at all, just want to make sure you have everything you need if and when you're ready. Anything I can answer for you?",
     msg3Subject: 'Checking in, {{first_name}}',
     msg3Body: `Hi {{first_name}},
 
-I wanted to reach out one more time about the {{treatment_type}} plan we put together for you. I know life gets busy and these decisions take time — completely understand.
+I wanted to reach out one more time about the {{treatment_type}} plan we put together for you. I know life gets busy and these decisions take time, completely understand.
 
 I just want you to know that your file is still here, {{doctor_name}} remembers your case, and we're happy to pick up right where we left off whenever you're ready.
 
-No pressure — but if you have any questions or just want to talk through your options, I'm easy to reach.
+No pressure, but if you have any questions or just want to talk through your options, I'm easy to reach.
 
 Would love to hear from you.
 
 [TC Name]
-{{practice_name}} — {{phone_number}}`,
+{{practice_name}}, {{phone_number}}`,
   },
   {
     key: 'price_lock',
     name: 'The Price Lock',
     desc: 'Creates soft urgency around pricing or availability. Best for patients whose main objection was cost or timing.',
     badge: 'Best for cost objections',
-    msg1: "Hi {{first_name}}, [TC Name] at {{practice_name}}. Quick heads up — we've had some patients ask about pricing recently and wanted to make sure you still had access to the same treatment plan we built for you in {{tx_plan_date}}. Worth a quick chat?",
-    msg2: "{{first_name}}, just following up on my last message. The plan we discussed for {{treatment_type}} is still on file. Happy to walk through the financing options again if that would help — a lot of patients are surprised by how manageable the monthly payment is. Want me to send the breakdown?",
-    msg3Subject: 'Your {{treatment_type}} plan — still on file, {{first_name}}',
+    msg1: "Hi {{first_name}}, [TC Name] at {{practice_name}}. Quick heads up, we've had some patients ask about pricing recently and wanted to make sure you still had access to the same treatment plan we built for you in {{tx_plan_date}}. Worth a quick chat?",
+    msg2: "{{first_name}}, just following up on my last message. The plan we discussed for {{treatment_type}} is still on file. Happy to walk through the financing options again if that would help, a lot of patients are surprised by how manageable the monthly payment is. Want me to send the breakdown?",
+    msg3Subject: 'Your {{treatment_type}} plan, still on file, {{first_name}}',
     msg3Body: `Hi {{first_name}},
 
 I wanted to reach out before too much more time passes. The {{treatment_type}} treatment plan {{doctor_name}} put together for you is still on file, and I want to make sure you have the full picture before making any decisions.
 
 A lot of patients are surprised to learn that treatment like this can often be broken down into payments that are less than a car payment. We work with several financing partners and can usually find something that fits.
 
-If cost was part of what gave you pause, I'd love to spend 10 minutes walking you through the options — no commitment, just information.
+If cost was part of what gave you pause, I'd love to spend 10 minutes walking you through the options, no commitment, just information.
 
 Would that be worth a quick call?
 
 [TC Name]
-{{practice_name}} — {{phone_number}}`,
+{{practice_name}}, {{phone_number}}`,
   },
   {
     key: 'clinical',
     name: 'The Clinical Update',
     desc: "Positions the follow-up as new information or a changed situation. Best for patients who wanted to 'wait and see'.",
     badge: 'Best for hesitant patients',
-    msg1: "Hi {{first_name}}, this is [TC Name] from {{practice_name}}. We chatted about {{treatment_type}} back in {{tx_plan_date}} — I wanted to reach out because we've had a few things change that might be relevant to your situation. Worth a quick conversation?",
-    msg2: "{{first_name}}, following up from my last message. I know timing wasn't quite right before — just wanted to check in and see if anything has changed on your end. {{doctor_name}} would love to reconnect when the time is right.",
+    msg1: "Hi {{first_name}}, this is [TC Name] from {{practice_name}}. We chatted about {{treatment_type}} back in {{tx_plan_date}}, I wanted to reach out because we've had a few things change that might be relevant to your situation. Worth a quick conversation?",
+    msg2: "{{first_name}}, following up from my last message. I know timing wasn't quite right before, just wanted to check in and see if anything has changed on your end. {{doctor_name}} would love to reconnect when the time is right.",
     msg3Subject: 'A few things worth knowing, {{first_name}}',
     msg3Body: `Hi {{first_name}},
 
-When we last spoke about {{treatment_type}}, I know there were some things you wanted to think through. That's completely fair — and I respect that.
+When we last spoke about {{treatment_type}}, I know there were some things you wanted to think through. That's completely fair, and I respect that.
 
 I wanted to share a couple of things that might be helpful as you consider your options:
 
-The longer a tooth or bone issue goes unaddressed, the more complex the treatment can become — and in some cases, more costly. This isn't meant to create pressure, just something worth knowing as you weigh the timing.
+The longer a tooth or bone issue goes unaddressed, the more complex the treatment can become, and in some cases, more costly. This isn't meant to create pressure, just something worth knowing as you weigh the timing.
 
 {{doctor_name}} has helped a lot of patients in similar situations find a path that worked for their timeline and budget. If you're open to it, even a 15-minute phone call might help clarify things.
 
 Is there a good time this week to connect?
 
 [TC Name]
-{{practice_name}} — {{phone_number}}`,
+{{practice_name}}, {{phone_number}}`,
   },
 ]
 const ANGLE_BY_KEY = Object.fromEntries(ANGLES.map((a) => [a.key, a]))
@@ -296,7 +296,7 @@ function CampaignBuilder({ practiceId, onClose, onLaunched }) {
     matches.filter((m) => selected.has(m.id)).forEach((m) => { const t = m.treatment_type || 'other'; counts[t] = (counts[t] || 0) + 1 })
     const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]
     const label = top ? treatmentLabel(top[0]) : 'Treatment Plan'
-    return `${label} Reactivation — ${monthYearLabel()}`
+    return `${label} Reactivation, ${monthYearLabel()}`
   }, [matches, selected])
 
   // Live preview filled with the first selected patient (or a sample).
@@ -369,7 +369,7 @@ function CampaignBuilder({ practiceId, onClose, onLaunched }) {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
-          {/* STEP 1 — FILTER */}
+          {/* STEP 1, FILTER */}
           {step === 1 && (
             <div className="space-y-5">
               <h3 className="text-base font-semibold text-white">Find unscheduled treatment plans</h3>
@@ -407,7 +407,7 @@ function CampaignBuilder({ practiceId, onClose, onLaunched }) {
             </div>
           )}
 
-          {/* STEP 2 — PREVIEW */}
+          {/* STEP 2, PREVIEW */}
           {step === 2 && (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -440,8 +440,8 @@ function CampaignBuilder({ practiceId, onClose, onLaunched }) {
                         <td className="px-3 py-2 font-medium text-slate-200">{m.patient_name || 'Unknown'}{m.inActive && <span className="ml-1.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-300">in sequence</span>}</td>
                         <td className="px-3 py-2 text-slate-400">{treatmentLabel(m.treatment_type)}</td>
                         <td className="px-3 py-2 text-slate-400">{formatTxDate(m.created_at)}</td>
-                        <td className="px-3 py-2 text-slate-400">{m.patient_phone || '—'}</td>
-                        <td className="px-3 py-2 text-slate-400">{m.patient_email || '—'}</td>
+                        <td className="px-3 py-2 text-slate-400">{m.patient_phone || ', '}</td>
+                        <td className="px-3 py-2 text-slate-400">{m.patient_email || ', '}</td>
                       </tr>
                     ))}
                     {visible.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-slate-500">No patients match.</td></tr>}
@@ -451,12 +451,12 @@ function CampaignBuilder({ practiceId, onClose, onLaunched }) {
             </div>
           )}
 
-          {/* STEP 3 — CHOOSE YOUR SEQUENCE ANGLE */}
+          {/* STEP 3, CHOOSE YOUR SEQUENCE ANGLE */}
           {step === 3 && (
             <div className="space-y-4">
               <div>
                 <h3 className="text-base font-semibold text-white">Choose your sequence angle</h3>
-                <p className="mt-0.5 text-xs text-slate-500">Pick a starting point — then edit any message. Tokens auto-fill with each patient's real data when sent.</p>
+                <p className="mt-0.5 text-xs text-slate-500">Pick a starting point, then edit any message. Tokens auto-fill with each patient's real data when sent.</p>
               </div>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {ANGLES.map((a) => {
@@ -488,7 +488,7 @@ function CampaignBuilder({ practiceId, onClose, onLaunched }) {
             </div>
           )}
 
-          {/* STEP 4 — CONFIRM & LAUNCH */}
+          {/* STEP 4, CONFIRM & LAUNCH */}
           {step === 4 && (
             <div className="space-y-4">
               <h3 className="text-base font-semibold text-white">Confirm &amp; launch</h3>
@@ -523,7 +523,7 @@ function CampaignBuilder({ practiceId, onClose, onLaunched }) {
         </div>
       </div>
 
-      {/* Switching angles discards message edits — confirm first. */}
+      {/* Switching angles discards message edits, confirm first. */}
       {pendingAngle && (
         <div className="absolute inset-0 z-20 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => setPendingAngle(null)} />

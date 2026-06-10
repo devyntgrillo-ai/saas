@@ -1,4 +1,4 @@
-// Dashboard KPI helpers — single source of truth for practice-home metrics.
+// Dashboard KPI helpers, single source of truth for practice-home metrics.
 import { supabase } from './supabase'
 import { isAcceptedConsult } from './attribution'
 import { consultTxValue, isConfirmedSource } from './treatments'

@@ -45,7 +45,7 @@ export function cfgOrThrow(): TwilioConfig {
 }
 
 function publicWebhookBase(): string | null {
-  const base = Deno.env.get("TWILIO_WEBHOOK_BASE_URL") || null;
+  const base = Deno.env.get("TWILIO_WEBHOOK_BASE_URL") || Deno.env.get("SUPABASE_URL") || null;
   if (!base || base.includes("kong") || base.includes("127.0.0.1")) return null;
   return base.replace(/\/$/, "");
 }

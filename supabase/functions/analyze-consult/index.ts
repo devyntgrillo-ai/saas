@@ -20,6 +20,7 @@ import { resolveAuth } from "../_shared/auth.ts";
 import { callerRole, roleCanViewPHI } from "../_shared/roles.ts";
 import { sanitizeAIOutput } from "../_shared/sanitize.ts";
 import { computeScheduledFor, rulesFrom } from "../_shared/sequence.ts";
+import { applyTcSignoff, resolveTcFirstName } from "../_shared/tc-signoff.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -63,7 +64,7 @@ const CADENCE_RULES = `SEQUENCE LENGTH + CADENCE by classification (you decide o
 - HOT: 8-10 messages over ~30 days, FRONT-LOADED. Phase 1 (days 1-14) every 1-2 days, then taper to 1-2/week.
 - WARM: 10-14 messages over ~60 days. Phase 1 (days 1-14) every 2-3 days, then 1-2/week tapering to weekly.
 - NURTURE: 8-10 messages over ~90 days. Phase 1 every 3-5 days, then weekly, then every 2 weeks. The FIRST message gently acknowledges they're still weighing it.
-- LONG_TERM: 6-8 messages over ~90 days. Phase 1 every 5-7 days, then monthly. The FIRST message EXPLICITLY acknowledges their stated timeline ("you mentioned a few months — no rush").
+- LONG_TERM: 6-8 messages over ~90 days. Phase 1 every 5-7 days, then monthly. The FIRST message EXPLICITLY acknowledges their stated timeline ("you mentioned a few months, no rush").
 CHANNEL MIX across the sequence ~ 50% sms, 30% email, 20% call. Lead with sms. Use email for the substantive/educational touches. Use 1-2 call reminders at high-value moments.
 Messages must get progressively LIGHTER and lower-pressure over time, never more aggressive.`;
 
@@ -74,18 +75,18 @@ You will be given a de-identified consult transcript. Do TWO things and return t
 1) Extract structured intelligence about the patient and consult.
 2) Classify urgency, then generate a personalized follow-up sequence.
 
-Identify the ACTUAL treatment from the transcript (don't trust the booking hint). Never use em dashes — use commas or short sentences.
+Identify the ACTUAL treatment from the transcript (don't trust the booking hint). Never use em dashes, use commas or short sentences.
 
 ${CADENCE_RULES}
 
 MESSAGE RULES:
-- sms: aim <=160 chars (320 max), conversational, first-name only, end with a soft question/invitation. Vary the opening — NEVER start two messages the same way, and never start with "Hi [Name]!".
-- email: personal subject (e.g. "Checking in, Robert" / "The financing option we discussed" — never salesy). 150-300 words, ONE clear CTA, education woven in naturally, reference their specific objection, sign off from the TC by first name.
+- sms: aim <=160 chars (320 max), conversational, first-name only, end with a soft question/invitation. Vary the opening, NEVER start two messages the same way, and never start with "Hi [Name]!".
+- email: personal subject (e.g. "Checking in, Robert" / "The financing option we discussed", never salesy). 150-300 words, ONE clear CTA, education woven in naturally, reference their specific objection, sign off from the TC by first name.
 - call: a reminder for the TC to call. Provide 3-4 call_script_bullets referencing their emotional anchor, primary objection, and financing if relevant. No body needed.
 - ALWAYS reference something specific to THIS patient (their name used naturally, their emotional anchor, a detail they shared, or their exact objection).
-- NEVER use placeholders like [FIRSTNAME] — use the real name. Never mention AI, automation, or software.
+- NEVER use placeholders like [FIRSTNAME] or [TC First Name] — use the real patient name and the TC first name provided. Never mention AI, automation, or software.
 - NEVER use these phrases: "I hope this message finds you well", "as per our conversation", "don't hesitate to reach out", "I wanted to follow up", "just checking in", "excited to help you on your journey", "state-of-the-art facility", "revolutionary", "cutting-edge".
-- Weave in 1-2 of the practice USPs/financing options ONLY where naturally relevant to this patient's objection — not as a list or a pitch.`;
+- Weave in 1-2 of the practice USPs/financing options ONLY where naturally relevant to this patient's objection, not as a list or a pitch.`;
 
 const STR = { type: "string" } as const;
 const STRN = { type: ["string", "null"] } as const;
@@ -139,6 +140,20 @@ const TOOL = {
             tone: STR,
           },
           required: ["channel", "offset_hours", "purpose", "tone"],
+        },
+      },
+      // Durable, practice-level facts learned from this consult (knowledge-base
+      // candidates). NOT patient-specific. Filed as pending for human review.
+      practice_facts: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            category: { type: "string", enum: ["USP", "financing", "guarantee", "protocol", "team", "testimonial"] },
+            fact: STR,
+          },
+          required: ["category", "fact"],
         },
       },
     },
@@ -200,7 +215,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: consult } = await admin
       .from("consults")
-      .select("id, practice_id, transcript_deidentified, status, created_at, treatment_type, tx_plan_value, tx_plan_value_source, patient_first")
+      .select("id, practice_id, transcript_deidentified, status, created_at, treatment_type, tx_plan_value, tx_plan_value_source, patient_first, tc_name, outcome_set_by")
       .eq("id", consultId).maybeSingle();
     if (!consult) return json({ error: "Consult not found." }, 404);
     if (!ctx.isServiceRole) {
@@ -230,7 +245,7 @@ Deno.serve(async (req: Request) => {
 
     // ── Knowledge base (Part 5): structured table + legacy JSONB sections. ──
     const { data: kbRows } = await admin
-      .from("practice_knowledge_base").select("category, content").eq("practice_id", practiceId).eq("is_active", true).limit(40);
+      .from("practice_knowledge_base").select("category, content").eq("practice_id", practiceId).eq("is_active", true).eq("status", "approved").limit(40);
     const { data: pr } = await admin
       .from("practices").select("sequence_config, auto_start_followup, timezone, knowledge_base_sections, name")
       .eq("id", practiceId).maybeSingle();
@@ -246,7 +261,7 @@ Deno.serve(async (req: Request) => {
     const kbBlock = kbLines.length ? kbLines.slice(0, 25).join("\n") : "(none on file)";
 
     // ── Learning hint (Part 6): top channel by reply rate for this practice. ──
-    let channelHint = "Not enough data yet — use the standard mix.";
+    let channelHint = "Not enough data yet, use the standard mix.";
     try {
       const { data: outcomes } = await admin
         .from("message_outcomes").select("message_channel, replied").eq("practice_id", practiceId).limit(2000);
@@ -265,15 +280,19 @@ Deno.serve(async (req: Request) => {
 
     const treatmentHint = nn(consult.treatment_type) ?? "unknown (identify from the transcript)";
     const firstName = nn(consult.patient_first) ?? "the patient";
+    const tcFirst = await resolveTcFirstName(admin, consult) ?? "your coordinator";
+    const practiceName = nn(pr?.name) ?? "this practice";
     const userPrompt = `Generate the intelligence + a personalized follow-up sequence for this dental patient from the transcript below.
 
 Patient first name (use this exact name): ${firstName}
+TC first name for email/SMS sign-off (use this exact name, never a placeholder): ${tcFirst}
 Treatment hint (may be wrong, identify the real one): ${treatmentHint}
-Practice: ${nn(pr?.name) ?? "this practice"}
+Practice: ${practiceName}
 Practice USPs / financing / protocols / guarantees / testimonials (weave 1-2 in naturally where relevant):
 ${kbBlock}
 This practice's channel performance: ${channelHint}
 ${note ? `\nExtra guidance from the treatment coordinator: ${note}\n` : ""}
+Also populate practice_facts with any NEW, durable facts about THIS PRACTICE that would help future follow-ups (e.g. services offered, financing/pricing norms, guarantees, scheduling or office policies, doctor specialties). STRICT RULES: practice-level only (NEVER patient-specific details), factual and durable only (no opinions, sentiment, or one-off chatter), and ONLY facts not already covered in the knowledge base listed above. If nothing qualifies, return an empty array.
 De-identified transcript:
 ${deidentified}`;
 
@@ -349,6 +368,40 @@ ${deidentified}`;
     const { error: upErr } = await admin.from("consults").update(record).eq("id", consultId);
     if (upErr) return json({ error: "Could not save the analysis.", detail: upErr.message }, 500);
 
+    // ── Knowledge-base review queue: file any durable practice facts the model
+    // surfaced as PENDING for human approval. Never auto-active; deduped against
+    // existing entries; capped so one consult can't flood the queue. Non-blocking. ──
+    try {
+      const facts = Array.isArray(a.practice_facts) ? a.practice_facts : [];
+      if (facts.length) {
+        const { data: existingKb } = await admin
+          .from("practice_knowledge_base").select("content").eq("practice_id", practiceId).limit(300);
+        const seen = new Set((existingKb || []).map((r) => String(r.content).trim().toLowerCase()));
+        const allowed = ["USP", "financing", "guarantee", "protocol", "team", "testimonial"];
+        const rows: Record<string, unknown>[] = [];
+        for (const f of facts.slice(0, 5)) {
+          const fact = nn((f as Record<string, unknown>)?.fact);
+          if (!fact) continue;
+          const key = fact.trim().toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const rawCat = String((f as Record<string, unknown>)?.category ?? "");
+          rows.push({
+            practice_id: practiceId,
+            category: allowed.includes(rawCat) ? rawCat : "protocol",
+            content: fact.trim(),
+            is_active: false,
+            source: "consult",
+            status: "pending",
+            source_consult_id: consultId,
+          });
+        }
+        if (rows.length) await admin.from("practice_knowledge_base").insert(rows);
+      }
+    } catch (e) {
+      console.error("KB fact extraction (non-blocking) failed:", (e as Error)?.message ?? e);
+    }
+
     if (regenerate) await admin.from("messages").delete().eq("consult_id", consultId).eq("status", "draft");
 
     // Build message rows from the generated dynamic sequence.
@@ -368,8 +421,8 @@ ${deidentified}`;
           practice_id: practiceId,
           type: i === 0 ? "followup" : "nurture",
           channel,
-          subject: channel === "email" ? scrubBanned(nn(m.subject)) : null,
-          body: channel === "call" ? null : scrubBanned(nn(m.body)),
+          subject: channel === "email" ? applyTcSignoff(scrubBanned(nn(m.subject)), tcFirst, practiceName) : null,
+          body: channel === "call" ? null : applyTcSignoff(scrubBanned(nn(m.body)), tcFirst, practiceName),
           call_script: channel === "call" && bullets.length ? bullets : null,
           purpose: nn(m.purpose),
           tone: nn(m.tone),

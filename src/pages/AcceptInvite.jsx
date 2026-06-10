@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2, ShieldCheck, KeyRound } from 'lucide-react'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
 import { logAudit, AUDIT } from '../lib/audit'
 import { useUpdatePassword } from '../lib/queries'
 
-// Landing page for Supabase auth invite / recovery / magic links.
+// Landing page for every Supabase auth invite / recovery / magic link.
 // detectSessionInUrl establishes the session from the URL hash; the user sets
 // (or resets) their password here, then continues into the app.
 export default function AcceptInvite() {
-  const { session, loading } = useAuth()
+  const { session, loading, signIn, refreshProfile, refreshAgency } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const invitationToken = searchParams.get('invitation')
   const updatePassword = useUpdatePassword()
+  const [submitting, setSubmitting] = useState(false)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
@@ -23,6 +27,7 @@ export default function AcceptInvite() {
     return params.get('type') || 'invite'
   }, [])
   const isRecovery = linkType === 'recovery'
+  const mustSetPassword = isRecovery || linkType === 'invite' || linkType === 'signup' || Boolean(invitationToken)
 
   const [checked, setChecked] = useState(false)
   useEffect(() => {
@@ -35,6 +40,38 @@ export default function AcceptInvite() {
     setError('')
     if (password.length < 6) return setError('Password must be at least 6 characters.')
     if (password !== confirm) return setError('Passwords do not match.')
+
+    // Invitation-token path: completes server-side from the token alone, so it
+    // works even when the Supabase one-time link was consumed by an email
+    // scanner or expired (no active session required). The token in the query
+    // param is only spent by this POST, never by a link pre-fetch.
+    if (invitationToken) {
+      setSubmitting(true)
+      try {
+        const { data, error: fnErr } = await supabase.functions.invoke('accept-invite', {
+          body: { token: invitationToken, password },
+        })
+        if (fnErr || data?.error || !data?.ok) {
+          throw new Error(data?.error || fnErr?.message || 'Could not accept the invitation.')
+        }
+        // Establish a session with the password they just set.
+        const { error: siErr } = await signIn(data.email, password)
+        if (siErr) {
+          setError('Password set — please sign in to continue.')
+          return
+        }
+        logAudit(AUDIT.PASSWORD_CHANGED, { resourceType: 'auth', details: { context: 'invite_accept' } })
+        await Promise.all([refreshProfile?.(), refreshAgency?.()])
+        navigate('/', { replace: true })
+      } catch (err) {
+        setError(err?.message || 'Could not accept the invitation.')
+      } finally {
+        setSubmitting(false)
+      }
+      return
+    }
+
+    // Recovery / signup link with an active session: update password directly.
     try {
       await updatePassword.mutateAsync({ password })
       logAudit(AUDIT.PASSWORD_CHANGED, {
@@ -47,7 +84,11 @@ export default function AcceptInvite() {
     }
   }
 
-  const noSession = checked && !loading && !session
+  // With an invitation token we can complete WITHOUT a session, so a consumed/
+  // expired Supabase link is no longer a dead end — only show "expired" when
+  // there's no token to fall back on.
+  const noSession = checked && !loading && !session && !invitationToken
+  const busy = updatePassword.isPending || submitting
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface px-4 py-10">
@@ -81,7 +122,9 @@ export default function AcceptInvite() {
               <p className="mt-1 text-sm text-slate-400">
                 {isRecovery
                   ? 'Enter a new password for your account.'
-                  : 'Create a password to finish activating your account.'}
+                  : invitationToken
+                    ? 'Create a password to finish joining your team.'
+                    : 'Create a password to finish activating your account.'}
               </p>
 
               <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -101,13 +144,13 @@ export default function AcceptInvite() {
                     {error}
                   </p>
                 )}
-                <button type="submit" disabled={updatePassword.isPending || (checked && !session)} className="btn-primary w-full">
-                  {updatePassword.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {updatePassword.isPending ? 'Saving…' : isRecovery ? 'Update password & continue' : 'Set password & continue'}
+                <button type="submit" disabled={busy || (checked && !session && !invitationToken)} className="btn-primary w-full">
+                  {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {busy ? 'Saving…' : isRecovery ? 'Update password & continue' : 'Set password & continue'}
                 </button>
               </form>
 
-              {!isRecovery && session && (
+              {!mustSetPassword && session && (
                 <button
                   type="button"
                   onClick={() => navigate('/', { replace: true })}

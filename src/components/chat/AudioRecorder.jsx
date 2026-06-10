@@ -9,7 +9,7 @@ function fmt(s) {
 }
 
 // Inline voice-memo recorder. Records with a live waveform, then drops into a
-// review state (replay / re-record / send) — nothing sends until the user hits
+// review state (replay / re-record / send), nothing sends until the user hits
 // Send. onSend(blob, durationSec).
 export default function AudioRecorder({ onSend, onCancel, isSending = false }) {
   const [phase, setPhase] = useState('recording') // recording | review

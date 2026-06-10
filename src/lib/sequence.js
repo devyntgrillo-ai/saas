@@ -151,7 +151,11 @@ export function computeScheduledFor(createdAtIso, day, rules) {
   const tz = rules.timezone || DEFAULT_RULES.timezone
   const created = new Date(createdAtIso).getTime()
   const holdMs = (rules.holdHours || 24) * 3600 * 1000
-  let at = new Date(Math.max(created + day * 86400000, created + holdMs))
+  const dayMs = day * 86400000
+  // Sub-day touchpoints (e.g. 5-min test cadence): offset from post-hold activation.
+  let at = day < 1
+    ? new Date(created + holdMs + dayMs)
+    : new Date(Math.max(created + dayMs, created + holdMs))
 
   const [qs, qsm] = String(rules.quietStart || '08:00').split(':').map(Number)
   const [qe, qem] = String(rules.quietEnd || '18:00').split(':').map(Number)
@@ -189,20 +193,28 @@ export function computeScheduledFor(createdAtIso, day, rules) {
 export async function scheduleConsultMessages(supabase, { consultId, createdAt, sequenceConfig, practiceTimezone, timingPreset }) {
   const rules = rulesFromConfig(sequenceConfig, practiceTimezone)
   const touchpoints = resolveTouchpoints(sequenceConfig, timingPreset)
+  const { count: sentCount } = await supabase
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('consult_id', consultId)
+    .eq('status', 'sent')
+  const startIdx = sentCount || 0
+
   const { data: msgs } = await supabase
     .from('messages')
-    .select('id, status, channel')
+    .select('id, status, channel, sequence_position')
     .eq('consult_id', consultId)
     .in('status', ['draft', 'scheduled', 'pending'])
-    .order('created_at', { ascending: true })
+    .order('sequence_position', { ascending: true })
 
   const unsent = msgs || []
-  for (let i = 0; i < unsent.length && i < touchpoints.length; i++) {
-    const tp = touchpoints[i]
+  for (let i = 0; i < unsent.length && startIdx + i < touchpoints.length; i++) {
+    const tp = touchpoints[startIdx + i]
     const scheduled_for = computeScheduledFor(createdAt, tp.day, rules)
+    const sendDay = tp.day < 1 ? Math.round(tp.day * 1440) : Math.round(tp.day)
     await supabase
       .from('messages')
-      .update({ send_day: tp.day, scheduled_for, status: 'scheduled' })
+      .update({ send_day: sendDay, scheduled_for, status: 'scheduled' })
       .eq('id', unsent[i].id)
   }
 

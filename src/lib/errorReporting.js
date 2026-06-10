@@ -6,7 +6,7 @@
 // the request silently fail from the browser. We send it as a CORS-"simple"
 // request (no custom Content-Type → text/plain) which skips the preflight; Slack
 // still parses the JSON body. The webhook URL is a VITE_ var, so it ships in the
-// bundle — fine for a dedicated error channel, but rotate it if it leaks.
+// bundle, fine for a dedicated error channel, but rotate it if it leaks.
 
 const WEBHOOK = import.meta.env.VITE_SLACK_ERROR_WEBHOOK_URL
 const RATE_MS = 60_000

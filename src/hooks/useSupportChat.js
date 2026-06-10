@@ -161,7 +161,7 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
       })
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
         // Broadcast never echoes to the same client (self:false), so anything we
-        // receive is from someone else — no need to filter by user id (that broke
+        // receive is from someone else, no need to filter by user id (that broke
         // the case where the same person is in the practice + admin view).
         if (!payload) return
         setTyping((prev) => {
@@ -254,7 +254,7 @@ export function useSupportChat({ chatId, practiceId, senderType, currentUser }) 
     [reactions, me, addReaction, removeReaction],
   )
 
-  // Ephemeral typing over Realtime Broadcast (Slack-style — no DB rows / RLS).
+  // Ephemeral typing over Realtime Broadcast (Slack-style, no DB rows / RLS).
   const stopTyping = useCallback(
     (threadParentId = null) => {
       if (!me) return

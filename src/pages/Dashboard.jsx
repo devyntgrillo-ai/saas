@@ -2,15 +2,16 @@ import { lazy, Suspense, useMemo } from 'react'
 import {
   Clock,
   Award,
-  TrendingUp,
   Network,
   Plug,
   DollarSign,
   Info,
   ArrowRight,
+  ClipboardList,
 } from 'lucide-react'
 import { Link, Navigate } from 'react-router-dom'
 import AILearningFeed from '../components/AILearningFeed'
+import LaunchpadCard from '../components/LaunchpadCard'
 import TodaysAppointmentsSnapshot from '../components/TodaysAppointmentsSnapshot'
 import { SkeletonStatGrid } from '../components/Skeleton'
 const RecordingRateCard = lazy(() => import('../components/RecordingRateCard'))
@@ -46,14 +47,14 @@ function startOfMonth() {
 }
 
 function CompareRow({ label, you, network, suffix = '' }) {
-  const better = you >= network
+  const hasYou = you != null
+  const better = hasYou && you >= network
   return (
     <div className="rounded-lg border border-surface-700 bg-surface-800/40 p-3">
       <p className="text-xs text-slate-500">{label}</p>
       <div className="mt-1 flex items-baseline justify-between gap-2">
-        <span className={`text-lg font-bold ${better ? 'text-emerald-400' : 'text-rose-400'}`}>
-          {you}
-          {suffix}
+        <span className={`text-lg font-bold ${!hasYou ? 'text-slate-500' : better ? 'text-emerald-400' : 'text-rose-400'}`}>
+          {hasYou ? `${you}${suffix}` : '-'}
         </span>
         <span className="text-xs text-slate-500">
           net {network}
@@ -149,8 +150,18 @@ export default function Dashboard() {
 
   const kpis = useMemo(() => {
     const monthStart = startOfMonth()
-    const avgSetting = Number(practice?.avg_case_value) || 30000
-    const pipelineValue = activity.active * avgSetting
+    // Unscheduled treatment plans = recorded consults whose plan was presented
+    // but not yet scheduled/accepted (outcome 'pending'). This is the app's
+    // canonical "unscheduled treatment plan" (same definition the Reactivation
+    // campaign audience uses).
+    const unscheduledPlans = consults.filter((c) => c.outcome === 'pending')
+    const unscheduledTxPlans = unscheduledPlans.length
+    // Total dollar value of those unscheduled plans (PMS/recorded tx plan value,
+    // falling back to the consult's case value).
+    const unscheduledTxValue = unscheduledPlans.reduce(
+      (sum, c) => sum + (Number(c.tx_plan_value) || Number(c.case_value) || 0),
+      0,
+    )
     const minPerFollowup = 5
     const messagesSent = countSentMessages(messages)
     const hoursSaved = Math.round((messagesSent * minPerFollowup / 60) * 10) / 10
@@ -165,7 +176,8 @@ export default function Dashboard() {
       : 0
 
     return {
-      pipelineValue,
+      unscheduledTxPlans,
+      unscheduledTxValue,
       hoursSaved,
       messagesSent,
       minPerFollowup,
@@ -175,7 +187,7 @@ export default function Dashboard() {
       replyRate,
       closeRate: closeRateThisMonth,
     }
-  }, [consults, messages, activity, practice, implantApptsWeek, dashExtras.inboundRepliesWeek, prodMetrics.roi, closeRateThisMonth])
+  }, [consults, messages, activity, implantApptsWeek, dashExtras.inboundRepliesWeek, prodMetrics.roi, closeRateThisMonth])
 
   if (isAgencyUser && !practiceId) {
     return <Navigate to="/agency" replace />
@@ -185,6 +197,8 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
+      {/* Setup-in-progress nudge, disappears once the Launchpad is complete. */}
+      <LaunchpadCard />
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-white">
           Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}. Here's what CaseLift has been working on.
@@ -194,7 +208,7 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Live "being analyzed" notice — hidden when nothing is processing. */}
+      {/* Live "being analyzed" notice, hidden when nothing is processing. */}
       {analyzingCount > 0 && (
         <Link
           to="/consults"
@@ -259,7 +273,7 @@ export default function Dashboard() {
                 </p>
                 <p className="mt-0.5 text-xs text-slate-500">CaseLift-assisted</p>
               </div>
-              <KpiCard icon={TrendingUp} accent="primary" label="Pipeline Value" value={formatMoney(kpis.pipelineValue)} sub={`${activity.active} patients nurtured`} />
+              <KpiCard icon={ClipboardList} accent="primary" label="Pipeline Value" value={formatMoney(kpis.unscheduledTxValue)} sub={`${kpis.unscheduledTxPlans} unscheduled tx plans`} />
               <KpiCard icon={Clock} accent="violet" label="Hours Saved" value={`${kpis.hoursSaved}h`} sub={`${kpis.messagesSent} auto follow-ups`} />
               <KpiCard icon={Award} accent="green" label="ROI This Month" value={kpis.roi ? `${kpis.roi}x ROI` : '-'} sub="Production ÷ Subscription" />
             </div>
@@ -271,7 +285,7 @@ export default function Dashboard() {
                 <RecordingRateCard practiceId={practiceId} />
               </Suspense>
 
-              {comparison && comparison.practice && (
+              {comparison && (
                 <div className="card p-5">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
                 <Network className="h-4 w-4 text-primary-400" /> You vs the network
@@ -281,30 +295,41 @@ export default function Dashboard() {
               </p>
 
               <div className="mt-4 rounded-xl border border-surface-700 bg-surface-800/50 p-4 text-center">
-                <p className="text-sm text-slate-400">Your sequences are performing</p>
-                <p
-                  className={`mt-1 text-3xl font-bold tracking-tight ${
-                    comparison.score >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                  }`}
-                >
-                  {comparison.score >= 0 ? '+' : ''}
-                  {comparison.score}%
-                </p>
-                <p className="text-sm text-slate-400">
-                  {comparison.score >= 0 ? 'above' : 'below'} similar practices
-                </p>
+                {comparison.hasData && comparison.score != null ? (
+                  <>
+                    <p className="text-sm text-slate-400">Your sequences are performing</p>
+                    <p
+                      className={`mt-1 text-3xl font-bold tracking-tight ${
+                        comparison.score >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                      }`}
+                    >
+                      {comparison.score >= 0 ? '+' : ''}
+                      {comparison.score}%
+                    </p>
+                    <p className="text-sm text-slate-400">
+                      {comparison.score >= 0 ? 'above' : 'below'} similar practices
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-slate-300">Not enough data yet</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Benchmarks appear after your first sequence messages go out.
+                    </p>
+                  </>
+                )}
               </div>
 
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <CompareRow
                   label="Reply rate"
-                  you={Math.round((comparison.practice.replyRate || 0) * 100)}
+                  you={comparison.hasData ? Math.round((comparison.practice.replyRate || 0) * 100) : null}
                   network={Math.round((comparison.network.replyRate || 0) * 100)}
                   suffix="%"
                 />
                 <CompareRow
                   label="Close rate"
-                  you={Math.round((comparison.practice.closeRate || 0) * 100)}
+                  you={comparison.hasData ? Math.round((comparison.practice.closeRate || 0) * 100) : null}
                   network={Math.round((comparison.network.closeRate || 0) * 100)}
                   suffix="%"
                 />
@@ -340,7 +365,7 @@ export default function Dashboard() {
         </>
       )}
 
-      {/* Learning-system insight (Part 6) — what's getting replies. Placed at the
+      {/* Learning-system insight (Part 6), what's getting replies. Placed at the
           bottom so it sits below the fold under the main metrics. */}
       {practice?.channel_performance?.top_insight && (
         <div className="flex items-start gap-2.5 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm">

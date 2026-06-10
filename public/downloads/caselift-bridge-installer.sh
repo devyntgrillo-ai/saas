@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# CaseLift PMS Bridge — macOS installer (PLACEHOLDER)
+# CaseLift PMS Bridge, macOS installer (PLACEHOLDER)
 #
 # This is a placeholder build, not the production installer. The real bridge
 # installs a small local service that securely syncs your on-premise PMS
@@ -10,5 +10,5 @@
 set -euo pipefail
 
 echo "CaseLift PMS Bridge installer (placeholder)."
-echo "The production bridge is coming soon — this file made no changes to your system."
+echo "The production bridge is coming soon, this file made no changes to your system."
 exit 0

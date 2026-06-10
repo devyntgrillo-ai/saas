@@ -91,12 +91,18 @@ export async function fetchNetworkComparison(practiceId) {
     .map(([k, v]) => ({ position: Number(k), rate: v.sum / v.n, channel: Object.entries(v.channel).sort((a, b) => b[1] - a[1])[0]?.[0] || '' }))
     .sort((a, b) => b.rate - a.rate)[0] || null
 
-  const replyDelta = networkReply ? Math.round(((stats?.replyRate || 0) - networkReply) / networkReply * 100) : 0
+  const sample = stats?.sample || 0
+  const hasData = sample > 0
+  // Don't score practices with no sequence outcomes — 0% vs the network avg reads as -100%.
+  const replyDelta = hasData && networkReply
+    ? Math.round(((stats.replyRate || 0) - networkReply) / networkReply * 100)
+    : null
 
   return {
     practice: stats,
     network: { replyRate: networkReply, closeRate: networkClose, best: networkBest },
     score: replyDelta,
+    hasData,
   }
 }
 

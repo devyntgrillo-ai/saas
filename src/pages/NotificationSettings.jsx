@@ -167,7 +167,7 @@ export default function NotificationSettings() {
                   {CHANNELS.map((c) => (
                     <td key={c} className="py-2.5 text-center">
                       {e.emailOnly && c !== 'email'
-                        ? <span className="text-slate-600">—</span>
+                        ? <span className="text-slate-600">, </span>
                         : <span className="inline-flex"><Switch checked={Boolean(prefs[e.key]?.[c])} onChange={() => toggleCell(e.key, c)} /></span>}
                     </td>
                   ))}

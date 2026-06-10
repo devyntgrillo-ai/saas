@@ -15,12 +15,13 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // (sequence_config.rules.holdHours, default 24).
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "@supabase/supabase-js";
-import { holdHoursFor, computeScheduledFor, rulesFrom } from "../_shared/sequence.ts";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { holdHoursFor, computeScheduledFor, rulesFrom, scheduleConsultMessages } from "../_shared/sequence.ts";
+import { serviceRoleClient } from "../_shared/service-role.ts";
 
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
 
-async function cancelMessages(admin: ReturnType<typeof createClient>, consultId: string) {
+async function cancelMessages(admin: SupabaseClient, consultId: string) {
   await admin.from("messages").update({ status: "cancelled" })
     .eq("consult_id", consultId).in("status", ["draft", "scheduled", "pending"]);
 }
@@ -28,9 +29,7 @@ async function cancelMessages(admin: ReturnType<typeof createClient>, consultId:
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   try {
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const admin = serviceRoleClient(req);
 
     // Per-practice activation hold.
     const { data: practices } = await admin.from("practices").select("id, sequence_config, auto_start_followup, timezone");
@@ -46,10 +45,10 @@ Deno.serve(async (req: Request) => {
     // Consults still "in flight" (sequence not yet cancelled).
     const { data: consults } = await admin
       .from("consults")
-      .select("id, practice_id, outcome, created_at, sequence_activated_at, sequence_cancelled_at, sequence_status, followup_approved_at, consecutive_no_reply")
+      .select("id, practice_id, outcome, created_at, sequence_activated_at, sequence_cancelled_at, sequence_status, followup_approved_at, consecutive_no_reply, sequence_timing_preset")
       .is("sequence_cancelled_at", null);
 
-    let activated = 0, cancelled = 0, rescheduledTrimmed = 0, adapted = 0;
+    let activated = 0, cancelled = 0, rescheduledTrimmed = 0, adapted = 0, scheduled = 0;
     const nowMs = Date.now();
 
     for (const c of consults || []) {
@@ -80,6 +79,19 @@ Deno.serve(async (req: Request) => {
           rescheduledTrimmed++;
         }
         continue;
+      }
+
+      // Approved but still-draft messages → schedule from practice touchpoints.
+      if (outcome === "pending" && c.followup_approved_at) {
+        const pr = prById[c.practice_id];
+        const n = await scheduleConsultMessages(admin, {
+          consultId: c.id,
+          createdAt: c.created_at,
+          sequenceConfig: pr?.sequence_config,
+          practiceTimezone: pr?.timezone,
+          timingPreset: null,
+        });
+        if (n) scheduled += n;
       }
 
       // pending → activate once hold elapsed and follow-up is approved (or auto-start on).
@@ -128,7 +140,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    return json({ ok: true, activated, cancelled, rescheduled_trimmed: rescheduledTrimmed, adapted });
+    return json({ ok: true, activated, cancelled, rescheduled_trimmed: rescheduledTrimmed, adapted, scheduled });
   } catch (e) {
     await reportEdgeError("process-sequences", e);
     console.error("process-sequences error:", e);

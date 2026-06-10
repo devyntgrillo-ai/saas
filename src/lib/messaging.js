@@ -108,7 +108,7 @@ export async function sendTestSms(practiceId, to, { body } = {}) {
     to: to.trim(),
     body:
       body ||
-      'Hope AI test SMS — if you received this, your practice number and SMS registration are working. Reply STOP to opt out.',
+      'Hope AI test SMS, if you received this, your practice number and SMS registration are working. Reply STOP to opt out.',
   })
 }
 
@@ -117,7 +117,7 @@ export async function sendTestEmail(practiceId, to, { subject, body } = {}) {
   return invokeEdgeFunction('mailgun-send', {
     practice_id: practiceId,
     to: to.trim(),
-    subject: subject || 'Hope AI — test email',
+    subject: subject || 'Hope AI, test email',
     body: body || 'This is a test email from Hope AI. If you received this, Mailgun is configured correctly.',
   })
 }

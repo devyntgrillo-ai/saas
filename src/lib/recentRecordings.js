@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 // DB-driven "processing" cards (status analyzing/transcribed) can flash by
 // before the user even navigates to a list. This guarantees the animated
 // "AI is analyzing…" card shows for a short, satisfying window after recording,
-// on whatever page they land on — then it hands back to the real DB state.
+// on whatever page they land on, then it hands back to the real DB state.
 const KEY = 'ciq_recent_recordings'
 const STORE_TTL_MS = 60_000 // keep entries in storage at most a minute
 const EVENT = 'ciq-recent-recordings'
@@ -35,13 +35,13 @@ export function markRecording({ id, practiceId }) {
   if (!id) return
   const now = Date.now()
   const list = read().filter((r) => r.id !== id && now - r.ts < STORE_TTL_MS)
-  // Only id/practiceId/ts — never the patient name (PHI must not hit localStorage).
+  // Only id/practiceId/ts, never the patient name (PHI must not hit localStorage).
   // Consumers key off id and ts only; the name was never read.
   list.push({ id, practiceId: practiceId || null, ts: now })
   write(list)
 }
 
-// The timestamp (ms) a consult was recorded, if we still have it locally — used
+// The timestamp (ms) a consult was recorded, if we still have it locally, used
 // as an instant anchor for the processing-screen progress bar before the DB
 // created_at loads. Returns null when unknown.
 export function recordingStartedAt(id) {

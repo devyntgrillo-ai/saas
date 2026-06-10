@@ -1,7 +1,7 @@
 import { AlertTriangle, Info } from 'lucide-react'
 
 /**
- * Surfaces admin data load failures or an empty database — never silent demo blending.
+ * Surfaces admin data load failures or an empty database, never silent demo blending.
  */
 export default function AdminStatusBanner({ data }) {
   if (!data) return null

@@ -1,4 +1,4 @@
-# Twilio posts here when a call recording is ready — no Supabase JWT.
+# Twilio posts here when a call recording is ready, no Supabase JWT.
 # Auth is handled via X-Twilio-Signature HMAC verification.
 [functions.twilio-recording-callback]
 verify_jwt = false

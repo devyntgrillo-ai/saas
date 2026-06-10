@@ -27,7 +27,7 @@ export async function updateMyProfile({ displayName, avatarUrl, jobTitle }) {
     p_job_title: jobTitle ?? null,
   })
   // Back-compat: if the job_title migration hasn't run yet, the 3-arg function
-  // doesn't exist — fall back to the 2-arg version so name/avatar still save.
+  // doesn't exist, fall back to the 2-arg version so name/avatar still save.
   if (error && (error.code === 'PGRST202' || /update_my_profile|function/i.test(error.message || ''))) {
     ;({ error } = await supabase.rpc('update_my_profile', {
       p_display_name: displayName ?? null,

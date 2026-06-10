@@ -56,7 +56,7 @@ export function usePermissions() {
 
     // ── HIPAA "minimum necessary" PHI gates ───────────────────────────────
     // A practice_viewer (rank 0, e.g. office manager) sees aggregate metrics
-    // and sequence counts only — never individual patient PHI. practice_member
+    // and sequence counts only, never individual patient PHI. practice_member
     // (TC) and above get full PHI access within their practice. Agency/super
     // roles rank higher, so they pass too.
     canViewPHI: rank >= ACCESS_LEVELS.practice_member,

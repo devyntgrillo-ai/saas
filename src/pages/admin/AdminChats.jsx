@@ -24,7 +24,7 @@ function jumpToMessage(id) {
 }
 
 const ONLINE_MS = 5 * 60 * 1000
-// Only currently-subscribed subaccounts appear in the inbox — not trials or
+// Only currently-subscribed subaccounts appear in the inbox, not trials or
 // churned accounts.
 const ACTIVE_STATUSES = new Set(['active', 'past_due'])
 

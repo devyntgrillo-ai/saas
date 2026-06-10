@@ -180,7 +180,7 @@ export default function PmsSyncApproval({ onApproved }) {
 
       {showSpinner && !hasRules && (
         <p className="text-xs text-slate-400">
-          Scanning appointments and classifying types with AI — this can take 1–2 minutes. Appointment types will appear below when ready.
+          Scanning appointments and classifying types with AI, this can take 1–2 minutes. Appointment types will appear below when ready.
         </p>
       )}
 

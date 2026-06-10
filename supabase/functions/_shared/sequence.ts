@@ -36,7 +36,7 @@ export const DEFAULT_RULES: SequenceRules = {
   timezone: "America/Chicago",
 };
 
-/** Smart-timing presets — days/channels used when consult.sequence_timing_preset is set. */
+/** Smart-timing presets, days/channels used when consult.sequence_timing_preset is set. */
 export const TIMING_PRESETS: Record<string, { label: string; days: number[]; channels: string[] }> = {
   hot: { label: "Hot", days: [0, 1, 3, 5, 7, 14], channels: ["sms", "email", "sms", "sms", "email", "sms"] },
   warm: { label: "Warm", days: [0, 3, 7, 14, 30, 60], channels: ["sms", "email", "sms", "email", "sms", "email"] },
@@ -127,7 +127,11 @@ export function computeScheduledFor(createdAtIso: string, day: number, rules: Se
   const tz = rules.timezone || DEFAULT_RULES.timezone;
   const created = new Date(createdAtIso).getTime();
   const holdMs = (rules.holdHours || 24) * 3600 * 1000;
-  let at = new Date(Math.max(created + day * 86400000, created + holdMs));
+  const dayMs = day * 86400000;
+  // Sub-day touchpoints (e.g. 5-min test cadence): offset from post-hold activation.
+  let at = day < 1
+    ? new Date(created + holdMs + dayMs)
+    : new Date(Math.max(created + dayMs, created + holdMs));
 
   const [qs, qsm] = String(rules.quietStart || "08:00").split(":").map(Number);
   const [qe, qem] = String(rules.quietEnd || "18:00").split(":").map(Number);
@@ -211,5 +215,55 @@ export function buildMessageRowsFromAnalysis(
 
 export function holdHoursFor(cfg: unknown): number {
   const h = rulesFrom(cfg).holdHours;
-  return typeof h === "number" && h >= 1 && h <= 72 ? h : 24;
+  return typeof h === "number" && h >= 0 && h <= 72 ? h : 24;
+}
+
+function sendDayForTouchpoint(day: number): number {
+  return day < 1 ? Math.round(day * 1440) : Math.round(day);
+}
+
+/** Schedule unsent messages from practice touchpoints (cron backup for manual approve). */
+export async function scheduleConsultMessages(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  opts: {
+    consultId: string;
+    createdAt: string;
+    sequenceConfig: unknown;
+    practiceTimezone?: string | null;
+    timingPreset?: string | null;
+  },
+): Promise<number> {
+  const rules = rulesFrom(opts.sequenceConfig, opts.practiceTimezone);
+  const touchpoints = resolveTouchpoints(opts.sequenceConfig, opts.timingPreset ?? null);
+
+  const { count: sentCount } = await admin
+    .from("messages")
+    .select("id", { count: "exact", head: true })
+    .eq("consult_id", opts.consultId)
+    .eq("status", "sent");
+  const startIdx = sentCount || 0;
+
+  const { data: msgs } = await admin
+    .from("messages")
+    .select("id, status, scheduled_for, sequence_position")
+    .eq("consult_id", opts.consultId)
+    .in("status", ["draft", "scheduled", "pending"])
+    .order("sequence_position", { ascending: true });
+
+  let scheduled = 0;
+  const unsent = msgs || [];
+  for (let i = 0; i < unsent.length && startIdx + i < touchpoints.length; i++) {
+    const row = unsent[i];
+    if (row.status === "scheduled" && row.scheduled_for) continue;
+    const tp = touchpoints[startIdx + i];
+    const scheduled_for = computeScheduledFor(opts.createdAt, tp.day, rules);
+    const { error } = await admin.from("messages").update({
+      send_day: sendDayForTouchpoint(tp.day),
+      scheduled_for,
+      status: "scheduled",
+    }).eq("id", row.id);
+    if (!error) scheduled++;
+  }
+  return scheduled;
 }

@@ -77,7 +77,7 @@ export default function GetFreeMonth({ practice }) {
     draftSeeded.current = true
     setDraft({
       subject: `${practiceName} recommends CaseLift`,
-      // No greeting here — the edge function prepends a personalized "Hi {friend},"
+      // No greeting here, the edge function prepends a personalized "Hi {friend},"
       // at send time, since the friend's name isn't known when this draft is seeded.
       message:
         `I wanted to share a tool we have been using at ${practiceName}, called CaseLift. It records our treatment consults and automatically follows up with patients by text and email, and it has helped us recover cases that used to slip through the cracks.\n\n` +
@@ -282,10 +282,10 @@ export default function GetFreeMonth({ practice }) {
 
       <StepCard n={2} icon={Video} title="Record a video testimonial" done={videoDone}>
         {videoDone ? (
-          <p className="text-sm text-slate-400">Got it — thank you for the testimonial!</p>
+          <p className="text-sm text-slate-400">Got it, thank you for the testimonial!</p>
         ) : (
           <>
-            <p className="text-sm text-slate-400">Hold your phone vertically. Take up to 2 minutes — we’ll give you a 20-second heads-up before it ends. Hit on these specifics — real numbers are what make it land:</p>
+            <p className="text-sm text-slate-400">Hold your phone vertically. Take up to 2 minutes, we’ll give you a 20-second heads-up before it ends. Hit on these specifics, real numbers are what make it land:</p>
             <ul className="mt-2 space-y-1.5 text-sm text-slate-300">
               <li className="flex gap-2"><span className="text-emerald-400">•</span> How much production or how many cases CaseLift has helped you recover (e.g. “$42k in our first 60 days”).</li>
               <li className="flex gap-2"><span className="text-emerald-400">•</span> How many hours a week it saves your team on follow-up.</li>
@@ -350,7 +350,7 @@ export default function GetFreeMonth({ practice }) {
 
       <StepCard n={3} icon={UserPlus} title="Tell one friend about CaseLift" done={referralDone}>
         {referralDone ? (
-          <p className="text-sm text-slate-400">Invite sent{fm.referral_email ? ` to ${fm.referral_email}` : ''} — thank you for spreading the word!</p>
+          <p className="text-sm text-slate-400">Invite sent{fm.referral_email ? ` to ${fm.referral_email}` : ''}, thank you for spreading the word!</p>
         ) : (
           <>
             <p className="text-sm text-slate-400">Know another practice that would benefit? Edit the note below and we’ll send it from your account with your referral link attached.</p>

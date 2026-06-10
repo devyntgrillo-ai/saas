@@ -1,11 +1,11 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
-// helcim-webhook — receives Helcim transaction events and reconciles the
+// helcim-webhook, receives Helcim transaction events and reconciles the
 // practice's billing status. Registered in the Helcim dashboard:
 //   https://eymgqjeudrmeofytnwgs.supabase.co/functions/v1/helcim-webhook
 //
 // verify_jwt=false (Helcim won't send a Supabase JWT). We match the event to a
 // practice by its stored helcim_customer_code / transaction id and only flip
-// billing state — no money movement happens here.
+// billing state, no money movement happens here.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 

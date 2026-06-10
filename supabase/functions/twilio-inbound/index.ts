@@ -50,7 +50,7 @@ Deno.serve(async (req: Request) => {
 
     const cfg = getTwilioConfig();
     const publicBase = Deno.env.get("TWILIO_WEBHOOK_BASE_URL") || cfg?.webhookBase || null;
-    // Dev tunnels rewrite paths — skip signature check locally (still enforced in prod).
+    // Dev tunnels rewrite paths, skip signature check locally (still enforced in prod).
     const skipSignature =
       Deno.env.get("TWILIO_SKIP_WEBHOOK_SIGNATURE") === "true" ||
       !!publicBase?.match(/devtunnels|ngrok|localhost\.run/i);

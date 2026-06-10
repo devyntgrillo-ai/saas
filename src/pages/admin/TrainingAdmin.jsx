@@ -20,7 +20,7 @@ import {
 
 // Lessons live in the single shared training_modules table. status drives the
 // publish model: 'draft' (never live), 'published' ('Live'), 'updated' (edited
-// since last push — hidden from practices until re-pushed). RLS lets the super
+// since last push, hidden from practices until re-pushed). RLS lets the super
 // admin see/manage everything; practices only see 'published'.
 const CATEGORIES = ['TC Certification', 'Front Desk', 'Sales & Objections']
 
@@ -63,7 +63,7 @@ export default function TrainingAdmin() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [...queryKeys.admin.training(), 'page'] })
 
   const groupName = useCallback(
-    (key) => groups.find((g) => g.key === key)?.name || key || '—',
+    (key) => groups.find((g) => g.key === key)?.name || key || ', ',
     [groups],
   )
 
@@ -224,7 +224,7 @@ export default function TrainingAdmin() {
             <GraduationCap className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">Training — TC Certification</h1>
+            <h1 className="text-xl font-bold text-white">Training, TC Certification</h1>
             <p className="text-sm text-slate-500">Manage every course lesson from one place.</p>
           </div>
         </div>
@@ -275,7 +275,7 @@ export default function TrainingAdmin() {
             <h2 className="text-sm font-semibold text-white">Module Tabs</h2>
             <button onClick={addGroup} className="btn-ghost !py-1.5 text-xs"><Plus className="h-3.5 w-3.5" /> Add module</button>
           </div>
-          <p className="mb-3 text-xs text-slate-500">These are the horizontal tabs practices see. Rename or reorder them — lessons are grouped under their module.</p>
+          <p className="mb-3 text-xs text-slate-500">These are the horizontal tabs practices see. Rename or reorder them, lessons are grouped under their module.</p>
           <div className="space-y-2">
             {[...groups].sort((a, b) => (a.order_index || 0) - (b.order_index || 0)).map((g, i, arr) => (
               <div key={g.id} className="flex items-center gap-2 rounded-lg border border-surface-700 bg-surface-800/40 px-3 py-2">
@@ -293,7 +293,7 @@ export default function TrainingAdmin() {
                 <button onClick={() => deleteGroup(g)} className="shrink-0 rounded-md border border-surface-700 bg-surface-800 p-1.5 text-rose-300 hover:bg-surface-700" title="Delete tab"><Trash2 className="h-3.5 w-3.5" /></button>
               </div>
             ))}
-            {groups.length === 0 && <p className="text-sm text-slate-500">No module tabs yet — add one.</p>}
+            {groups.length === 0 && <p className="text-sm text-slate-500">No module tabs yet, add one.</p>}
           </div>
         </div>
       )}
@@ -428,7 +428,7 @@ function InlineEdit({ value, onSave, className = '', placeholder = '', textarea 
   }
   return (
     <button onClick={() => setEditing(true)} className={`block w-full cursor-text truncate text-left hover:underline decoration-dotted ${className}`} title="Click to edit">
-      {(value ?? '') === '' ? <span className="text-slate-600">{placeholder || '—'}</span> : value}
+      {(value ?? '') === '' ? <span className="text-slate-600">{placeholder || ', '}</span> : value}
     </button>
   )
 }

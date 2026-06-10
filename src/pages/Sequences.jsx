@@ -76,7 +76,7 @@ const STATUS_DOT = {
 }
 function StatusDot({ sk }) {
   const meta = STATUS[sk]
-  if (!meta) return <span className="text-[13px] text-gray-400">—</span>
+  if (!meta) return <span className="text-[13px] text-gray-400">, </span>
   return (
     <span className="inline-flex items-center gap-1.5 text-[13px] text-gray-700">
       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[sk] || 'bg-gray-300'}`} />
@@ -116,14 +116,14 @@ function fmtRemaining(ms) {
   return `${m}m`
 }
 
-// Objection badge — Timing (blue), Price (amber), Fear (red); others neutral.
+// Objection badge, Timing (blue), Price (amber), Fear (red); others neutral.
 const OBJ_BADGE = {
   timing: 'bg-blue-50 text-blue-700',
   price: 'bg-amber-50 text-amber-700',
   fear: 'bg-rose-50 text-rose-700',
 }
 function ObjectionBadge({ objection, label }) {
-  if (!objection) return <span className="text-[13px] text-gray-400">—</span>
+  if (!objection) return <span className="text-[13px] text-gray-400">, </span>
   const cls = OBJ_BADGE[objection] || 'bg-gray-100 text-gray-600'
   return <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${cls}`}>{label}</span>
 }
@@ -255,7 +255,7 @@ function deriveRow(c, holdMs, now) {
   }
 }
 
-// Minimal stat card — number + label only. 8px radius, no shadow/gradient.
+// Minimal stat card, number + label only. 8px radius, no shadow/gradient.
 function SummaryCard({ label, value }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -503,7 +503,7 @@ function SequenceDrawer({ row, practice, onClose, onChanged, onReload }) {
                 <button onClick={() => setEditingTiming(true)} className="inline-flex items-center gap-1 text-xs font-medium text-primary-300 hover:underline"><Sliders className="h-3.5 w-3.5" /> Change timing</button>
               </div>
               <p className="mt-1.5 text-xs text-slate-400">
-                CaseLift is following up with {row.name} — {msgs.length} message{msgs.length === 1 ? '' : 's'}
+                CaseLift is following up with {row.name}, {msgs.length} message{msgs.length === 1 ? '' : 's'}
                 {msgs.length > 0 && (
                   <> through day {Math.max(...msgs.map((m) => dayOf(m, new Date(c.created_at).getTime())))}</>
                 )}.
@@ -663,7 +663,7 @@ function PendingSequenceCard({ c }) {
       className="block rounded-xl border border-amber-400/25 bg-amber-400/[0.04] p-4 transition hover:bg-amber-400/[0.08]"
     >
       <div className="flex items-center justify-between gap-3">
-        <p className="truncate text-sm font-semibold text-slate-100">{name} — Building Sequence</p>
+        <p className="truncate text-sm font-semibold text-slate-100">{name}, Building Sequence</p>
         <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/15 px-2.5 py-1 text-[11px] font-medium text-amber-300">
           <span className="psq-dot h-1.5 w-1.5 rounded-full bg-amber-400" /> ⚡ Building sequence...
         </span>
@@ -687,7 +687,7 @@ export default function Sequences() {
   const { data: rows = [], isLoading: loading, refetch } = useSequences(practiceId)
   useSequencesRealtime(practiceId)
   // Consults still being analyzed have no messages yet, so they're excluded from
-  // the sequence list — surface them as "pending" cards at the top instead.
+  // the sequence list, surface them as "pending" cards at the top instead.
   const { data: processing = [] } = useProcessingConsults(practiceId)
   useConsultsRealtime(practiceId)
   // Just-recorded consults (client-side) so the "Generating sequence…" card
@@ -712,7 +712,7 @@ export default function Sequences() {
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useState('')
   const [filter, setFilter] = useState('all')
-  // Fixed sort (soonest next-touchpoint first) — no sortable column headers in
+  // Fixed sort (soonest next-touchpoint first), no sortable column headers in
   // the minimal layout.
   const sort = 'next'
   const dir = 'asc'
@@ -759,7 +759,7 @@ export default function Sequences() {
     let list = derived
     if (filter !== 'all') list = list.filter((r) => r.bucket === filter)
     if (debounced && canPHI) {
-      // Name/contact search is gated to PHI roles — a viewer must not be able
+      // Name/contact search is gated to PHI roles, a viewer must not be able
       // to probe for a patient by name, phone, or email.
       list = list.filter((r) =>
         `${r.name} ${r.phone} ${r.email}`.toLowerCase().includes(debounced)
@@ -807,7 +807,7 @@ export default function Sequences() {
 
   return (
     <div className="space-y-5">
-      {/* Header — 20px title, no tabs (Active Sequences is the view). */}
+      {/* Header, 20px title, no tabs (Active Sequences is the view). */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[20px] font-semibold tracking-tight text-gray-900">Active Sequences</h1>
@@ -839,7 +839,7 @@ export default function Sequences() {
         <SequenceSettings />
       ) : (
       <div className="space-y-5">
-      {/* Stat cards — minimal, number + label */}
+      {/* Stat cards, minimal, number + label */}
       {loading ? (
         <SkeletonStatGrid count={4} />
       ) : (
@@ -875,7 +875,7 @@ export default function Sequences() {
         </div>
       </div>
 
-      {/* Pending sequences — consults still being analyzed (no messages yet). */}
+      {/* Pending sequences, consults still being analyzed (no messages yet). */}
       {pendingCards.length > 0 && (
         <div className="space-y-2">
           <style>{PENDING_SEQ_CSS}</style>
@@ -885,7 +885,7 @@ export default function Sequences() {
         </div>
       )}
 
-      {/* Table — Patient · Objection · Progress · Status · Toggle */}
+      {/* Table, Patient · Objection · Progress · Status · Toggle */}
       {loading ? (
         <SkeletonTable rows={6} cols={5} />
       ) : derived.length === 0 ? (
@@ -913,7 +913,7 @@ export default function Sequences() {
             {visible.map((r) => (
               <div
                 key={r.id}
-                // Viewers (no PHI) see status only — the drawer reveals message
+                // Viewers (no PHI) see status only, the drawer reveals message
                 // bodies, so it doesn't open for them.
                 onClick={canPHI ? () => setDrawerRow(r) : undefined}
                 className={`grid grid-cols-1 gap-2 px-4 py-3 text-[13px] transition lg:grid-cols-12 lg:items-center lg:gap-4 ${canPHI ? 'cursor-pointer hover:bg-gray-50' : ''}`}

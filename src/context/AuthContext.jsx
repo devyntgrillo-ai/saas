@@ -34,7 +34,7 @@ export function AuthProvider({ children }) {
 
   const [profile, setProfile] = useState(null) // users row (+ practice + practice.agency)
   const [profileLoading, setProfileLoading] = useState(true)
-  // User id we last finished loadProfile for — prevents a one-frame BAA redirect
+  // User id we last finished loadProfile for, prevents a one-frame BAA redirect
   // between getSession() returning and loadProfile() completing.
   const [profileResolvedUserId, setProfileResolvedUserId] = useState(null)
 
@@ -49,7 +49,7 @@ export function AuthProvider({ children }) {
   const [activePractice, setActivePractice] = useState(null)
   // Which viewingPracticeId the current activePractice record reflects. Lets the
   // guards tell "impersonation target still loading" apart from "loaded, but the
-  // practice has no record" — see impersonationPending below.
+  // practice has no record", see impersonationPending below.
   const [activePracticeFor, setActivePracticeFor] = useState(null)
 
   // Reseller-level impersonation: a super-admin "viewing as" an agency (reseller).
@@ -75,7 +75,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   // Bootstrap via onAuthStateChange only (INITIAL_SESSION replaces getSession).
-  // Never call auth APIs inside this callback — use the provided session.
+  // Never call auth APIs inside this callback, use the provided session.
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
       if (event === 'TOKEN_REFRESHED') {
@@ -120,7 +120,7 @@ export function AuthProvider({ children }) {
     let row = data
     if (row?.practice_id) {
       let practice = normalizePractice(row.practice)
-      // Embedded join can be null (RLS/timing) while practice_id is set — fetch directly.
+      // Embedded join can be null (RLS/timing) while practice_id is set, fetch directly.
       if (!practice) {
         const { data: practiceRow } = await supabase
           .from('practices')
@@ -157,7 +157,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   // Load profile/agency when the signed-in user changes. TOKEN_REFRESHED only
-  // updates the session token above — this effect does not re-run for that.
+  // updates the session token above, this effect does not re-run for that.
   const sessionUserId = session?.user?.id ?? null
   useEffect(() => {
     if (!sessionUserId) return
@@ -187,7 +187,7 @@ export function AuthProvider({ children }) {
   const isAgencyUser = Boolean(agency)
 
   // The designated super-admin email always resolves as super_admin, ahead of
-  // any DB value — this is the role spec's source of truth for super-admin.
+  // any DB value, this is the role spec's source of truth for super-admin.
   const isSuperAdminEmail =
     (session?.user?.email || '').toLowerCase() === SUPER_ADMIN_EMAIL
 
@@ -207,7 +207,7 @@ export function AuthProvider({ children }) {
   const isSuperAdmin = accessLevel === 'super_admin'
   const canImpersonate = isAgencyUser || isSuperAdmin
   // A practice user who belongs to more than one practice (multi-location). They
-  // switch their active location the same way admins impersonate — but it's not
+  // switch their active location the same way admins impersonate, but it's not
   // impersonation, so no banner.
   const isMultiPractice = !canImpersonate && accessiblePractices.length > 1
 
@@ -334,7 +334,7 @@ export function AuthProvider({ children }) {
   const impersonatingReseller = isSuperAdmin && Boolean(viewingAgencyId)
   const isImpersonating = canImpersonate && (Boolean(viewingPracticeId) || Boolean(viewingAgencyId))
   // While viewing AS a reseller (no sub-account drilled in), there is no current
-  // practice — null it so the shell renders the reseller portal (sidebar nav,
+  // practice, null it so the shell renders the reseller portal (sidebar nav,
   // no Record Consult / practice Settings) rather than the super-admin's own.
   const practice = switchingPractice
     ? activePractice
@@ -352,7 +352,7 @@ export function AuthProvider({ children }) {
   // is what the /agency dashboard + its query hooks should scope to.
   // Impersonation wins: when a super-admin is "viewing as" a reseller,
   // activeAgency is that reseller and must take precedence over the super-admin's
-  // OWN agency membership (if any) — otherwise the dashboard scopes to the wrong
+  // OWN agency membership (if any), otherwise the dashboard scopes to the wrong
   // reseller. activeAgency is only ever set during reseller impersonation.
   const effectiveAgency = activeAgency || agency || practice?.agency || null
   const effectiveAgencyId = effectiveAgency?.id ?? null
@@ -360,7 +360,7 @@ export function AuthProvider({ children }) {
 
   // An ordinary user whose practice is archived is locked out (-> /suspended).
   // Super admins and resellers can still open archived accounts (they impersonate,
-  // so canImpersonate is true) — see the red banner in ImpersonationBanner.
+  // so canImpersonate is true), see the red banner in ImpersonationBanner.
   const isSuspended = !canImpersonate && Boolean(practice?.archived_at)
 
   // Keep route guards in a loading state until the practice row that drives
@@ -466,7 +466,7 @@ export function AuthProvider({ children }) {
     isAgencyUser,
     agencyLoading,
     // Effective agency context (own / impersonated reseller / impersonated
-    // practice's reseller) — what the /agency dashboard scopes to.
+    // practice's reseller), what the /agency dashboard scopes to.
     effectiveAgency,
     effectiveAgencyId,
     isAgencyView,
@@ -481,7 +481,7 @@ export function AuthProvider({ children }) {
       agencyLoading ||
       practiceContextPending ||
       agencyContextPending,
-    // App shell only — avoids unmounting the tree on token refresh / impersonation fetch.
+    // App shell only, avoids unmounting the tree on token refresh / impersonation fetch.
     appShellLoading,
 
     // access
@@ -547,7 +547,7 @@ export function AuthProvider({ children }) {
           ])
         : Promise.resolve(null),
     // Reload the user's own agency AND, when a super-admin is impersonating a
-    // reseller, that reseller's record — so editing white-label settings (name,
+    // reseller, that reseller's record, so editing white-label settings (name,
     // logo, color) re-applies branding immediately instead of staying stale.
     refreshAgency: () =>
       session?.user
@@ -560,7 +560,7 @@ export function AuthProvider({ children }) {
     signIn: async (email, password) => {
       const res = await supabase.auth.signInWithPassword({ email, password })
       if (res?.error) {
-        // Audit the failed attempt — email + reason only. The attempted password
+        // Audit the failed attempt, email + reason only. The attempted password
         // is NEVER logged. phi_accessed is false (enforced by the edge function).
         logAuthEvent(AUDIT.LOGIN_FAILURE, { email, details: { email, reason: res.error.message } })
       } else {

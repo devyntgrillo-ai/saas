@@ -124,7 +124,7 @@ export default function AssignmentModal({ presetAppointment = null, onCancel, on
         email: form.email,
         appointmentId: null,
         pmsApptId: null,
-        // Set when chosen via "Select Patient" — links the consult to the PMS
+        // Set when chosen via "Select Patient", links the consult to the PMS
         // patient record for attribution. Null for a manually added patient.
         pmsPatientId: pmsPatient?.id || null,
         pmsPatientExternalId: pmsPatient?.external_id || null,
@@ -161,7 +161,7 @@ export default function AssignmentModal({ presetAppointment = null, onCancel, on
         </div>
 
         <div className="max-h-[70vh] overflow-y-auto p-5">
-          {/* Consent reminder — shown only on the confirm panel, right before
+          {/* Consent reminder, shown only on the confirm panel, right before
               recording starts (not on the patient-selection panel). */}
           {mode === 'confirm' && (
             <div

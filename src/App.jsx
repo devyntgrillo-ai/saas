@@ -13,6 +13,7 @@ import Layout from './components/Layout'
 import AdminShell from './components/admin/AdminShell'
 import LoadingScreen from './components/LoadingScreen'
 import SessionSecurity from './components/SessionSecurity'
+import AuthHashRedirect from './components/AuthHashRedirect'
 
 // ── Eagerly loaded: auth flow + the core routes a TC hits immediately on login
 //    (Dashboard shell, Consults, Conversations) so they paint without a chunk
@@ -60,6 +61,7 @@ const AdminReferrals = lazy(() => import('./pages/admin/Referrals'))
 const AdminCommissions = lazy(() => import('./pages/admin/Commissions'))
 const AdminChats = lazy(() => import('./pages/admin/AdminChats'))
 const Chat = lazy(() => import('./pages/Chat'))
+const Launchpad = lazy(() => import('./pages/Launchpad'))
 
 // get.caselift.io is a signup landing host: visiting its root sends people
 // straight into the signup funnel. Hostname is stable per page load, so this is
@@ -74,6 +76,7 @@ export default function App() {
       <AuthProvider>
         <BrandingProvider>
           <BrowserRouter>
+            <AuthHashRedirect />
             <AppContent />
           </BrowserRouter>
         </BrandingProvider>
@@ -88,7 +91,7 @@ export default function App() {
 // with a 1.2s minimum so it never flashes. Impersonation / route guards use
 // contextLoading locally without unmounting the whole tree.
 function AppContent() {
-  const { appShellLoading } = useAuth()
+  const { appShellLoading, user } = useAuth()
   const [minDone, setMinDone] = useState(false)
   useEffect(() => {
     const t = setTimeout(() => setMinDone(true), 1200)
@@ -101,9 +104,11 @@ function AppContent() {
     <Suspense fallback={<LoadingScreen />}>
             <Routes>
               {/* get.caselift.io root → signup funnel (preserving ?plan=/?ref=).
-                  Defined first so it wins the "/" match; otherwise the gated app
-                  shell matches "/" and ProtectedRoute bounces visitors to /login. */}
-              {ON_GO_SUBDOMAIN && (
+                  ONLY for logged-out visitors: a signed-in user's "/" must render
+                  their Dashboard (otherwise the Dashboard tab on get.caselift.io
+                  loops back into /signup). Auth is already resolved here because
+                  appShellLoading gates this whole tree above. */}
+              {ON_GO_SUBDOMAIN && !user && (
                 <Route
                   path="/"
                   element={
@@ -138,7 +143,7 @@ function AppContent() {
                 {/* Lockout screen for archived practices (ProtectedRoute redirects here). */}
                 <Route path="/suspended" element={<Suspended />} />
                 {/* Onboarding handles payment + BAA + A2P + invites as its own steps,
-                    so it sits behind the session only — NOT behind the BAA gate. */}
+                    so it sits behind the session only, NOT behind the BAA gate. */}
                 <Route path="/onboarding" element={<Onboarding />} />
 
                 {/* Super-admin portal - standalone shell, outside BAA/onboarding.
@@ -173,6 +178,8 @@ function AppContent() {
                   }
                 >
                   <Route path="/" element={<Dashboard />} />
+                  {/* Launchpad setup checklist, open during trial (not behind billing). */}
+                  <Route path="/launchpad" element={<Launchpad />} />
                   <Route path="/agency" element={<Agency />} />
                   <Route path="/agency/analytics" element={<AgencyAnalytics />} />
                   <Route path="/agency/knowledge-base" element={<AgencyKnowledgeBase />} />
@@ -183,7 +190,7 @@ function AppContent() {
                   <Route element={<RequireActiveBilling />}>
                     <Route path="/knowledge-base" element={<Navigate to="/settings/knowledge-base" replace />} />
                     {/* Consult LIST stays open to viewers (patient names masked
-                        inside). Detail pages + conversations are PHI — blocked
+                        inside). Detail pages + conversations are PHI, blocked
                         for practice_viewer via RequirePermission. */}
                     <Route path="/consults" element={<Consults />} />
                     <Route element={<RequirePermission perm="canViewConsultDetail" resource="consult" />}>

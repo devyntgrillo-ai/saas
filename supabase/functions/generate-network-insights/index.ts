@@ -23,7 +23,7 @@ For each meaningful pattern you find, generate:
 Also echo back the grouping keys for each insight so they can be matched: objection_type, exit_intent, message_position, message_channel, cta_type, and a confidence_score between 0 and 1.
 
 Only include insights where the pattern is clear and sample size is meaningful.
-Never use em dashes (—) in any generated content. Use short sentences, commas, or periods instead.
+Never use em dashes (, ) in any generated content. Use short sentences, commas, or periods instead.
 Return as JSON array of insight objects with keys: objection_type, exit_intent, message_position, message_channel, cta_type, finding, recommendation, confidence_score.
 No markdown, no explanation, just the JSON.`
 

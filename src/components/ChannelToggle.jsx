@@ -8,7 +8,7 @@ import { Mail, MessageSquare } from 'lucide-react'
 // NOTE: the active text color is set inline (#fff) rather than via the
 // `text-white` utility, because index.css has a light-mode override
 // (`:root:not(.dark) .text-white { color: var(--text-primary) }`) that would
-// otherwise flip it to near-black — i.e. dark text on the blue fill.
+// otherwise flip it to near-black, i.e. dark text on the blue fill.
 const OPTIONS = [
   { value: 'sms', label: 'SMS', Icon: MessageSquare },
   { value: 'email', label: 'Email', Icon: Mail },

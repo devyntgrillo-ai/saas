@@ -3,5 +3,5 @@
 // Call this on every AI-produced string before persisting it.
 export function sanitizeAIOutput(text: string): string {
   if (typeof text !== "string") return text;
-  return text.replace(/—/g, "-").replace(/–/g, "-");
+  return text.replace(/, /g, "-").replace(/–/g, "-");
 }

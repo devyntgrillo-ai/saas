@@ -73,8 +73,9 @@ export default function PerformanceInsights({ consults = [], messageOutcomes = [
     return out
   }, [consults])
 
-  const youClose = Math.round((comparison?.practice?.closeRate || 0) * 100)
-  const netClose = Math.round((comparison?.network?.closeRate || 28) * 100)
+  const hasComparisonData = (comparison?.practice?.sample || 0) > 0
+  const youClose = hasComparisonData ? Math.round((comparison?.practice?.closeRate || 0) * 100) : null
+  const netClose = Math.round((comparison?.network?.closeRate || 0) * 100)
   const axis = { fontSize: 11, fill: 'var(--text-muted)' }
 
   return (
@@ -140,13 +141,19 @@ export default function PerformanceInsights({ consults = [], messageOutcomes = [
       {/* Network comparison row */}
       <div className="card flex flex-wrap items-center gap-x-2 gap-y-1 p-4 text-sm">
         <Network className="h-4 w-4 text-primary-400" />
-        <span className="text-slate-300">Your close rate <span className="font-bold text-white">{youClose}%</span></span>
-        <span className="text-slate-600">·</span>
-        <span className="text-slate-400">Network avg {netClose}%</span>
-        <span className="text-slate-600">·</span>
-        <span className={`font-semibold ${youClose >= netClose ? 'text-emerald-400' : 'text-amber-400'}`}>
-          {youClose >= netClose ? "You're above average" : 'Room to grow'}
-        </span>
+        {hasComparisonData ? (
+          <>
+            <span className="text-slate-300">Your close rate <span className="font-bold text-white">{youClose}%</span></span>
+            <span className="text-slate-600">·</span>
+            <span className="text-slate-400">Network avg {netClose}%</span>
+            <span className="text-slate-600">·</span>
+            <span className={`font-semibold ${youClose >= netClose ? 'text-emerald-400' : 'text-amber-400'}`}>
+              {youClose >= netClose ? "You're above average" : 'Room to grow'}
+            </span>
+          </>
+        ) : (
+          <span className="text-slate-400">Run sequences to unlock close-rate benchmarks against the network.</span>
+        )}
       </div>
 
       {/* AI coaching tip */}

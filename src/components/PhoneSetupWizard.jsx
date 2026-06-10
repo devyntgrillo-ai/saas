@@ -84,7 +84,7 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
         ) {
           setStep(4)
         } else if (data.twilio_phone_number) {
-          // number_only, campaign_needed, failed, or partial — business info + register/resubmit
+          // number_only, campaign_needed, failed, or partial, business info + register/resubmit
           setStep(3)
         }
         const stateMatch = addr.match(/\b([A-Z]{2})\s+\d{5}\b/)
@@ -176,7 +176,7 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
     <>
       <div className={`flex items-center justify-between ${embedded ? '' : 'border-b border-surface-700 px-5 py-3.5'}`}>
         <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-          <Phone className="h-4 w-4 text-primary-400" /> Set up texting{practiceName ? ` — ${practiceName}` : ''}
+          <Phone className="h-4 w-4 text-primary-400" /> Set up texting{practiceName ? `, ${practiceName}` : ''}
         </h2>
         {onClose && (
           <button type="button" onClick={onClose} className="rounded-md p-1.5 text-slate-400 hover:bg-surface-800 hover:text-white">
@@ -487,7 +487,7 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
               </div>
             </div>
             <button type="button" onClick={onClose} className="btn-secondary mt-6">
-              Close — we will email you when approved
+              Close, we will email you when approved
             </button>
           </div>
         )}

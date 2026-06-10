@@ -5,7 +5,7 @@
 // which would send real invitees to localhost. We therefore ignore the client
 // origin entirely for redirects and always build links from a server-controlled
 // canonical URL (APP_URL secret, or the production default). This also closes an
-// open-redirect vector — invitees can never be sent to an attacker-supplied host.
+// open-redirect vector, invitees can never be sent to an attacker-supplied host.
 const DEFAULT_APP_URL = "https://app.caselift.io";
 
 /** The trusted production app origin, e.g. "https://app.caselift.io". */
@@ -26,7 +26,7 @@ export function safeRedirect(candidate: string | undefined | null, defaultPath: 
       const u = new URL(candidate);
       path = `${u.pathname}${u.search}` || defaultPath;
     } catch {
-      // Not a full URL — treat it as a path if it looks like one.
+      // Not a full URL, treat it as a path if it looks like one.
       if (candidate.startsWith("/")) path = candidate;
     }
   }

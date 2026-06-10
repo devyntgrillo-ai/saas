@@ -1,6 +1,6 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
-// mailgun-webhook — Mailgun Routes target for patient replies + open tracking.
+// mailgun-webhook, Mailgun Routes target for patient replies + open tracking.
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";

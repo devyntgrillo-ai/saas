@@ -1,7 +1,7 @@
 // Shared helpers for the agency referral-commission model. Single source of
 // truth for commission economics across the agency dashboard, the admin
 // Resellers table, the admin Commissions payout sheet, and the notification
-// email — so the numbers can never drift.
+// email, so the numbers can never drift.
 
 // Subaccount statuses that count as "active" for commission.
 const ACTIVE_STATUSES = new Set(['active', 'trial', 'trialing'])

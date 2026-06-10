@@ -133,7 +133,7 @@ export default function Agencies() {
               <Avatar name={a.name} color={a.white_label?.primary_color} />
               <span className="font-medium text-slate-100">{a.name}</span>
             </div>,
-            a.owner_email || '—',
+            a.owner_email || ', ',
             <span className="text-primary-300">{a.active || 0}</span>,
             `${money(a.commission_rate)}/mo`,
             <span className="font-medium text-emerald-300">{money(a.commissionOwed || 0)}</span>,
@@ -364,7 +364,7 @@ function EditRateModal({ agency, onClose, onSaved }) {
 
   return (
     <Modal
-      title={`Commission rate — ${agency.name}`}
+      title={`Commission rate, ${agency.name}`}
       onClose={onClose}
       maxWidth="max-w-md"
       footer={

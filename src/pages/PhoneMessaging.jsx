@@ -388,7 +388,7 @@ export default function PhoneMessaging() {
               </button>
             </div>
             {testSmsState === 'ok' && (
-              <p className="mt-2 text-xs text-emerald-300">Test SMS queued — check the handset.</p>
+              <p className="mt-2 text-xs text-emerald-300">Test SMS queued, check the handset.</p>
             )}
             {testSmsState === 'err' && (
               <p className="mt-2 text-xs text-rose-300">{testSmsError}</p>
@@ -492,7 +492,7 @@ export default function PhoneMessaging() {
             </button>
           </div>
           {testEmailState === 'ok' && (
-            <p className="mt-2 text-xs text-emerald-300">Test email queued — check the inbox (and spam).</p>
+            <p className="mt-2 text-xs text-emerald-300">Test email queued, check the inbox (and spam).</p>
           )}
           {testEmailState === 'err' && (
             <p className="mt-2 text-xs text-rose-300">{testEmailError}</p>
@@ -583,10 +583,10 @@ function PhoneNumberCard({ phoneNumber, hasNumber, provStatus, practice, onSetup
                     }`}
                   />
                   {provStatus === 'active'
-                    ? 'Active — SMS enabled'
+                    ? 'Active, SMS enabled'
                     : provStatus === 'campaign_needed'
-                      ? 'Brand approved — finish campaign setup'
-                      : 'Number active — registration pending'}
+                      ? 'Brand approved, finish campaign setup'
+                      : 'Number active, registration pending'}
                 </span>
               </div>
             </div>
@@ -607,7 +607,7 @@ function PhoneNumberCard({ phoneNumber, hasNumber, provStatus, practice, onSetup
           </div>
           {(provStatus === 'number_only' || provStatus === 'campaign_needed') && (
             <button type="button" onClick={onSetup} className="btn-secondary">
-              {provStatus === 'campaign_needed' ? 'Continue setup — register campaign' : 'Continue setup'}
+              {provStatus === 'campaign_needed' ? 'Continue setup, register campaign' : 'Continue setup'}
             </button>
           )}
         </div>

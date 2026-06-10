@@ -182,7 +182,7 @@ Deno.serve(async (req: Request) => {
 
     // --- 3) Generate a shareable link, then email it. Prefer "invite"; fall back
     //         to magiclink when the email already belongs to an auth user. ---
-    const redirectTo = acceptInviteRedirectUrl(body.app_origin as string | undefined);
+    const redirectTo = acceptInviteRedirectUrl();
     async function makeLink(type: "invite" | "magiclink") {
       const { data, error } = await admin.auth.admin.generateLink({
         type,

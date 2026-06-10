@@ -3,6 +3,7 @@
 // SUPABASE_SERVICE_ROLE_KEY. User JWT calls are validated against GoTrue.
 
 import { createClient } from "@supabase/supabase-js";
+import { isServiceRoleJwt, serviceRoleClient } from "./service-role.ts";
 
 export interface AuthContext {
   /** The authenticated user (undefined for service-role calls). */
@@ -30,13 +31,11 @@ export async function resolveAuth(
 ): Promise<{ ctx?: AuthContext; error?: Response }> {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
   const authHeader = req.headers.get("Authorization") || "";
   const token = authHeader.replace(/^Bearer\s+/i, "");
 
-  // Create the admin client for DB operations in service-role mode.
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+  const admin = serviceRoleClient(req);
 
   if (!token) {
     if (required) {
@@ -47,9 +46,7 @@ export async function resolveAuth(
     return { ctx: { practiceId: "", isServiceRole: true, client: admin } };
   }
 
-  // Service-role: verify the raw token against the actual service_role key,
-  // rather than trusting the decoded payload alone (audit finding 1).
-  if (SERVICE_KEY && token === SERVICE_KEY) {
+  if (isServiceRoleJwt(token)) {
     const practiceId = (body.practice_id as string) ?? "";
     if (!practiceId && required) {
       return { error: new Response(JSON.stringify({ error: "practice_id required for service calls" }), {
@@ -110,24 +107,9 @@ export async function resolveAuth(
  *
  * Returns an error Response when unauthorized, or undefined to continue.
  */
-function jwtRole(token: string): string | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const payload = JSON.parse(atob(b64));
-    return typeof payload.role === "string" ? payload.role : null;
-  } catch {
-    return null;
-  }
-}
-
 /** True when Authorization carries the service-role key (cron / internal calls). */
 export function isServiceRoleBearer(authHeader: string): boolean {
-  const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
-  if (!bearer) return false;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  return bearer === serviceKey || jwtRole(bearer) === "service_role";
+  return isServiceRoleJwt(authHeader.replace(/^Bearer\s+/i, "").trim());
 }
 
 export type PracticeAccessResult =
@@ -174,8 +156,7 @@ export function requireServiceRole(req: Request): Response | undefined {
       headers: { "Content-Type": "application/json" },
     });
   }
-  const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!SERVICE_KEY || token !== SERVICE_KEY) {
+  if (!isServiceRoleJwt(token)) {
     return new Response(JSON.stringify({ error: "Forbidden: service_role required" }), {
       status: 403,
       headers: { "Content-Type": "application/json" },

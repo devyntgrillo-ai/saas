@@ -16,7 +16,8 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // Transport: invokes `mailgun-send` (email) / `twilio-send` (sms).
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "@supabase/supabase-js";
+import { holdHoursFor } from "../_shared/sequence.ts";
+import { invokeEdgeFunction, serviceRoleClient } from "../_shared/service-role.ts";
 
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
 
@@ -26,14 +27,12 @@ const STALE_HOURS = 24;
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   try {
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const admin = serviceRoleClient(req);
     const nowIso = new Date().toISOString();
     const nowMs = Date.now();
 
     // HIPAA audit: record each successful send as a PHI transmission. IDs +
-    // metadata only — NEVER the subject/body content. Best-effort (service role
+    // metadata only, NEVER the subject/body content. Best-effort (service role
     // bypasses RLS); a logging failure must not stop the sender.
     // deno-lint-ignore no-explicit-any
     const auditSent = async (mm: any, cc: any) => {
@@ -63,9 +62,13 @@ Deno.serve(async (req: Request) => {
 
     const practiceIds = [...new Set((due || []).map((m) => m.consult?.practice_id).filter(Boolean))] as string[];
     const autoStartByPractice: Record<string, boolean> = {};
+    const holdByPractice: Record<string, number> = {};
     if (practiceIds.length) {
-      const { data: prs } = await admin.from("practices").select("id, auto_start_followup").in("id", practiceIds);
-      (prs || []).forEach((p) => { autoStartByPractice[p.id] = p.auto_start_followup === true; });
+      const { data: prs } = await admin.from("practices").select("id, auto_start_followup, sequence_config").in("id", practiceIds);
+      (prs || []).forEach((p) => {
+        autoStartByPractice[p.id] = p.auto_start_followup === true;
+        holdByPractice[p.id] = holdHoursFor(p.sequence_config);
+      });
     }
 
     let sent = 0, failed = 0, skipped = 0;
@@ -82,10 +85,20 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      // Activation hold: process-sequences sets sequence_activated_at after hold.
+      // Activation hold: process-sequences normally sets sequence_activated_at. When
+      // cron missed it but hold elapsed and follow-up is approved, activate inline.
       if (outcome === "pending" && !c?.sequence_activated_at) {
-        skipped++;
-        continue;
+        const hold = holdByPractice[c?.practice_id] ?? 24;
+        const holdElapsed = c?.created_at &&
+          nowMs - new Date(c.created_at).getTime() >= hold * 3600 * 1000;
+        if (holdElapsed && (autoStart || c?.followup_approved_at)) {
+          const activatedAt = new Date().toISOString();
+          await admin.from("consults").update({ sequence_activated_at: activatedAt }).eq("id", m.consult_id);
+          c.sequence_activated_at = activatedAt;
+        } else {
+          skipped++;
+          continue;
+        }
       }
 
       // Paused: leave the message in place but don't send.
@@ -116,7 +129,7 @@ Deno.serve(async (req: Request) => {
         }).then(() => {}, () => {});
       };
 
-      // Call reminders are NOT outbound sends — they notify the TC with a script (Part 3).
+      // Call reminders are NOT outbound sends, they notify the TC with a script (Part 3).
       if (m.channel === "call") {
         const who = c.patient_first || c.patient_name || "the patient";
         const bullets = Array.isArray(m.call_script) ? m.call_script : [];
@@ -151,17 +164,14 @@ Deno.serve(async (req: Request) => {
 
       const transport = m.channel === "email" ? "mailgun-send" : "twilio-send";
       try {
-        const { error: tErr } = await admin.functions.invoke(transport, {
-          body: {
-            to,
-            subject: m.subject,
-            body: m.body,
-            consult_id: m.consult_id,
-            message_id: m.id,
-            practice_id: c.practice_id,
-          },
-        });
-        if (tErr) throw tErr;
+        await invokeEdgeFunction(transport, {
+          to,
+          subject: m.subject,
+          body: m.body,
+          consult_id: m.consult_id,
+          message_id: m.id,
+          practice_id: c.practice_id,
+        }, req);
         await admin.from("messages").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", m.id);
         await logPerf();
         await auditSent(m, c);

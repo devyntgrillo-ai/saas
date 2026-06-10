@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
       }
       const brand = await resolveBrand(supabase, p);
       const html = buildHtml(p, d, brand);
-      const subject = `Your ${brand.companyName} Weekly Report — ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
+      const subject = `Your ${brand.companyName} Weekly Report, ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
       const text =
         `Here's what ${brand.companyName} did for you this week.\n\n` +
         `Consults Recorded: ${d.consults}\n` +

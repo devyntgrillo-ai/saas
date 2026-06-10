@@ -49,7 +49,6 @@ function AddPracticeModal({ agencyId, onClose, onAdded }) {
         doctor_first: form.doctor_first,
         doctor_last: form.doctor_last,
         email: form.email,
-        redirect_to: `${window.location.origin}/accept-invite`,
       },
     })
     setSubmitting(false)

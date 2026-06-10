@@ -16,7 +16,7 @@ function messageTime(ts) {
 
 function cleanBody(text) {
   if (!text) return ''
-  return String(text).replace(/\s*—\s*/g, ', ')
+  return String(text).replace(/\s*, \s*/g, ', ')
 }
 
 function bodyPreview(text, max = 96) {

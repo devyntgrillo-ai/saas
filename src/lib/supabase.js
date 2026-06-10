@@ -3,7 +3,7 @@ import { verifySupabaseRegion } from './regionCheck'
 
 // SECURITY (HIPAA): this is the ONLY Supabase client the frontend uses, and it is
 // initialized with the *anon* (publishable) key only. The service-role key must
-// NEVER be imported into any frontend file — it bypasses RLS. It lives solely in
+// NEVER be imported into any frontend file, it bypasses RLS. It lives solely in
 // edge-function secrets (SUPABASE_SERVICE_ROLE_KEY). Verified: no `service_role`
 // reference exists anywhere under src/.
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL

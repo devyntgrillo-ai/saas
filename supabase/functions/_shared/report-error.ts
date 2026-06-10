@@ -1,6 +1,6 @@
 // Shared edge-function error reporter → #caselift-errors Slack channel.
 // Uses the server-side SLACK_ERROR_WEBHOOK_URL secret (no CORS concerns on the
-// server). Never throws — safe to call from any catch block.
+// server). Never throws, safe to call from any catch block.
 import { redactPhi } from "./phi.ts";
 
 const SLACK_ERROR_WEBHOOK = Deno.env.get("SLACK_ERROR_WEBHOOK_URL");

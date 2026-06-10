@@ -1,4 +1,4 @@
-// Admin data layer — loads real agency_accounts / practices; no silent demo blending.
+// Admin data layer, loads real agency_accounts / practices; no silent demo blending.
 // Use loadAdminDemoData() or VITE_ADMIN_SHOW_DEMO=true for local previews only.
 import { isAcceptedConsult } from './attribution'
 import { isActiveSubaccount, commissionRate, commissionOwed } from './resellerSaas'
@@ -332,7 +332,7 @@ function buildActivity({ consults, cancellations, practices, learning, wins }) {
       tone: 'good',
       ts: w.won_at || w.created_at,
       text: value
-        ? `${patient} converted — $${value.toLocaleString()} at ${practiceName}`
+        ? `${patient} converted, $${value.toLocaleString()} at ${practiceName}`
         : `${patient} converted at ${practiceName}`,
     })
   })
@@ -367,7 +367,7 @@ function buildActivity({ consults, cancellations, practices, learning, wins }) {
       type: 'cancellation',
       tone: 'bad',
       ts: c.date,
-      text: `${c.practice} cancelled — ${(c.reason_label || 'unknown').toLowerCase()} ($${Number(c.mrr_lost || 0).toLocaleString()} MRR lost)`,
+      text: `${c.practice} cancelled, ${(c.reason_label || 'unknown').toLowerCase()} ($${Number(c.mrr_lost || 0).toLocaleString()} MRR lost)`,
     })
   })
 
@@ -427,7 +427,7 @@ export function computeOverview(data) {
   const activePractices = practices.filter((p) => p.subscription_status === 'active')
   const directActive = activePractices.filter((p) => !p.agency_id)
   const agencyActivePractices = activePractices.filter((p) => p.agency_id)
-  // Every practice — agency-referred or direct — bills CaseLift $997 directly.
+  // Every practice, agency-referred or direct, bills CaseLift $997 directly.
   const planMrr = (p) => Number(p.plan_amount) || PRICING.directPractice
   const directRevenue = directActive.reduce((s, p) => s + planMrr(p), 0)
   const agencyFees = agencyActivePractices.reduce((s, p) => s + planMrr(p), 0)

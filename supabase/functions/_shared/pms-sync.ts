@@ -157,7 +157,7 @@ export function syncWindow(historyYears: number, forwardYears: number): { start:
   return { start, end };
 }
 
-/** Sikka allows ~1 year per appointments request — chunk the full window. */
+/** Sikka allows ~1 year per appointments request, chunk the full window. */
 export function dateRangeChunks(start: Date, end: Date): { startdate: string; enddate: string }[] {
   const chunks: { startdate: string; enddate: string }[] = [];
   let cur = new Date(start);
@@ -263,7 +263,7 @@ export function clusterAppointments(raw: any[]): Map<string, PmsSyncCluster> {
     if (c.samples.length < 3) {
       c.samples.push({
         date: fields.appointment_date,
-        patient: fields.patient_name || "—",
+        patient: fields.patient_name || ", ",
         description: fields.description || fields.type_label,
       });
     }

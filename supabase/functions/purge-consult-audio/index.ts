@@ -58,7 +58,7 @@ Deno.serve(async (req: Request) => {
       if (upErr) { failed++; continue; }
       deleted++;
 
-      // HIPAA audit trail: record every PHI (audio) deletion. Best-effort —
+      // HIPAA audit trail: record every PHI (audio) deletion. Best-effort, 
       // recordAudit never throws, so a logging failure can't block the purge.
       // No request context (cron job), so attribute to the system actor.
       const ageDays = Math.floor((now - new Date(r.created_at as string).getTime()) / DAY_MS);

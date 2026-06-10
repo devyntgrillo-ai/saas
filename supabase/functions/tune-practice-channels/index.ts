@@ -70,7 +70,7 @@ Deno.serve(async (req: Request) => {
         if (!top || rate > top.rate) top = { pos, ch: c, rate };
       }
       const topInsight = top
-        ? `Your message #${top.pos} (${chLabel(top.ch)}) has a ${(top.rate * 100).toFixed(0)}% reply rate — your highest. We're weighting new sequences toward what's working.`
+        ? `Your message #${top.pos} (${chLabel(top.ch)}) has a ${(top.rate * 100).toFixed(0)}% reply rate, your highest. We're weighting new sequences toward what's working.`
         : (bestChannel ? `${chLabel(bestChannel)} is your strongest channel (${(ch[bestChannel].rate * 100).toFixed(0)}% reply rate). New sequences lean into it.` : null);
 
       await admin.from("practices").update({

@@ -6,7 +6,7 @@
 // through the service-role client (bypasses RLS), so callers must pass the
 // admin client they already created via _shared/auth.ts.
 //
-// Never throws — an audit failure must not break the request it accompanies.
+// Never throws, an audit failure must not break the request it accompanies.
 //
 // Do NOT log raw PHI in `details`: identifiers and metadata only.
 // ============================================================================

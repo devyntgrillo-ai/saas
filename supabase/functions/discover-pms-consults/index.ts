@@ -1,5 +1,5 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
-// discover-pms-consults — scan PMS appointments across configured year windows,
+// discover-pms-consults, scan PMS appointments across configured year windows,
 // cluster types, classify with AI (always), save draft rules for admin approval.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
@@ -31,7 +31,7 @@ Deno.serve(async (req: Request) => {
   try {
     getAppCreds();
   } catch {
-    return json({ error: "PMS discovery unavailable — Sikka app credentials are not set.", code: "sikka_not_configured" }, 503);
+    return json({ error: "PMS discovery unavailable, Sikka app credentials are not set.", code: "sikka_not_configured" }, 503);
   }
 
   let practiceIdForReset: string | null = null;

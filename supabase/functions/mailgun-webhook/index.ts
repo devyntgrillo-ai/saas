@@ -1,4 +1,4 @@
-// mailgun-webhook — inbound email replies (Mailgun Routes) + open tracking.
+// mailgun-webhook, inbound email replies (Mailgun Routes) + open tracking.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const json = (b, s = 200)=>new Response(JSON.stringify(b), {
     status: s,

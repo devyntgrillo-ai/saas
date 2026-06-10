@@ -17,7 +17,7 @@ const STATUS_PILL = {
   active: 'bg-emerald-500/15 text-emerald-300', paused: 'bg-amber-500/15 text-amber-300', completed: 'bg-slate-500/15 text-slate-400',
 }
 const STEP_DAYS = [1, 4, 10] // Msg 1 / 2 / 3 day offsets
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—')
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ', ')
 const fmtDateTime = (d) => (d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '')
 
 export default function ReactivationResults() {

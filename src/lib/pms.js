@@ -135,7 +135,7 @@ export function pmsStatusMeta(practice) {
   return { key: 'connected', label: `Connected to ${pmsLabel(practice.pms_type)}`, dot: 'bg-emerald-400' }
 }
 
-// supabase-js surfaces non-2xx edge responses as a generic message — pull the
+// supabase-js surfaces non-2xx edge responses as a generic message, pull the
 // real `error` field from the response body when present.
 async function edgeErrorMessage(error) {
   try {

@@ -21,9 +21,9 @@ function classify(u) {
   }
   if (u.practice_id || lvl.startsWith('practice_')) {
     const role = lvl.startsWith('practice_') ? lvl.split('_')[1] : u.role || 'member'
-    return { kind: 'practice', label: `Practice ${role}`, cls: 'bg-sky-500/15 text-sky-300', scope: u.practice?.name || '—' }
+    return { kind: 'practice', label: `Practice ${role}`, cls: 'bg-sky-500/15 text-sky-300', scope: u.practice?.name || ', ' }
   }
-  return { kind: 'none', label: 'Deactivated', cls: 'bg-slate-500/15 text-slate-400', scope: '—' }
+  return { kind: 'none', label: 'Deactivated', cls: 'bg-slate-500/15 text-slate-400', scope: ', ' }
 }
 
 const FILTERS = [
@@ -78,9 +78,9 @@ export default function AdminTeam() {
     setBusyId(u.id)
     try {
       // mode: 'deactivate' keeps the account + users row (so they stay listed as
-      // "Deactivated" — a record of who once had access), strips their access, and
+      // "Deactivated", a record of who once had access), strips their access, and
       // bans the auth user so they can't sign in. "Resend invite" un-bans and
-      // re-grants. (Not 'delete' — that would remove them from the records.)
+      // re-grants. (Not 'delete', that would remove them from the records.)
       const { data, error } = await supabase.functions.invoke('admin-users', { body: { action: 'remove', user_id: u.id, mode: 'deactivate' } })
       if (error) throw new Error(data?.error || error.message)
       note(`${u.email} deactivated. They remain in your records and can be re-invited.`)
@@ -235,7 +235,7 @@ function UserAccessModal({ existing, reinvite = false, agencies, practices, onCl
 
   return (
     <Modal
-      title={reinvite ? `Re-invite — ${existing.email}` : isEdit ? `Edit access — ${existing.email}` : 'Add user'}
+      title={reinvite ? `Re-invite, ${existing.email}` : isEdit ? `Edit access, ${existing.email}` : 'Add user'}
       onClose={onClose}
       footer={link ? (
         <button onClick={onClose} className="btn-primary">Done</button>
@@ -251,7 +251,7 @@ function UserAccessModal({ existing, reinvite = false, agencies, practices, onCl
     >
       {link ? (
         <div className="space-y-3">
-          <p className="text-sm text-emerald-200">User created. Email couldn’t be sent automatically — share this sign-in link:</p>
+          <p className="text-sm text-emerald-200">User created. Email couldn’t be sent automatically, share this sign-in link:</p>
           <div className="flex gap-2">
             <input readOnly value={link} className="input font-mono text-xs" />
             <button onClick={() => { navigator.clipboard?.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2000) }} className="btn-ghost shrink-0">
@@ -265,7 +265,7 @@ function UserAccessModal({ existing, reinvite = false, agencies, practices, onCl
             <div>
               <label className="label">Email address</label>
               <input className="input" type="email" value={existing ? existing.email : email} onChange={(e) => setEmail(e.target.value)} placeholder="person@company.com" readOnly={Boolean(existing)} />
-              {reinvite && <p className="mt-1 text-xs text-slate-500">Re-inviting a deactivated user — choose their access below and we’ll send a fresh sign-in link.</p>}
+              {reinvite && <p className="mt-1 text-xs text-slate-500">Re-inviting a deactivated user, choose their access below and we’ll send a fresh sign-in link.</p>}
             </div>
           )}
           <div>

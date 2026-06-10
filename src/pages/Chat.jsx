@@ -116,8 +116,8 @@ export default function Chat() {
         </div>
         <p className="mt-0.5 truncate text-xs text-slate-400">
           {online
-            ? 'Your private 7-figure coaching channel — ask us anything.'
-            : "We're offline right now — send a message and we'll reply soon."}
+            ? 'Your private 7-figure coaching channel, ask us anything.'
+            : "We're offline right now, send a message and we'll reply soon."}
         </p>
       </div>
 
@@ -132,7 +132,7 @@ export default function Chat() {
               <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-xl font-bold !text-white">C</span>
               <h2 className="text-lg font-bold text-white">Welcome to CaseLift Chat</h2>
               <p className="mt-2 max-w-md text-sm text-slate-400">
-                This is your direct line to our team. Ask anything — consult reviews, objection coaching, sequence strategy, or anything else.
+                This is your direct line to our team. Ask anything, consult reviews, objection coaching, sequence strategy, or anything else.
               </p>
               <p className="mt-1 text-xs text-slate-500">We typically respond within a few hours.</p>
               <div className="mt-5 flex flex-wrap justify-center gap-2">

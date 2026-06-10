@@ -1,4 +1,4 @@
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import PageLoader from './PageLoader'
 import {
@@ -18,14 +18,16 @@ import {
   Moon,
   LayoutGrid,
   Rocket,
+  ClipboardList,
 } from 'lucide-react'
 import Logo from './Logo'
 import NotificationBell from './NotificationBell'
 import GlobalSearch from './GlobalSearch'
 import RecordConsultButton from './RecordConsultButton'
+import TeamMemberWelcome from './TeamMemberWelcome'
 import AccountSwitcher from './AccountSwitcher'
 import ImpersonationBanner from './ImpersonationBanner'
-import { RecorderProvider } from '../context/RecorderContext'
+import { RecorderProvider, useRecorder } from '../context/RecorderContext'
 import { VoiceProvider } from '../context/VoiceContext'
 import VoiceCallBar from './VoiceCallBar'
 import { useAuth } from '../context/AuthContext'
@@ -39,7 +41,7 @@ import { needsPaywall } from '../lib/billing'
 const practiceNav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/consults', label: 'Consults', icon: CalendarCheck },
-  { to: '/conversations', label: 'Conversations', icon: MessageSquare },
+  { to: '/conversations', label: 'Inbox', icon: MessageSquare },
   { to: '/sequences', label: 'Sequences', icon: GitBranch },
   { to: '/training', label: 'Training', icon: GraduationCap },
   { to: '/chat', label: 'Coaching', icon: Rocket },
@@ -64,6 +66,22 @@ const navItemClass = ({ isActive }) =>
       ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-15)] font-medium text-[var(--brand-primary)]'
       : 'border-transparent text-slate-400 hover:bg-surface-800 hover:text-slate-200',
   ].join(' ')
+
+// Opens the recorder when we land with ?record=1 (e.g. "Record Now" at the end
+// of onboarding), then strips the param. Lives inside RecorderProvider.
+function RecordParamTrigger() {
+  const { openRecorder } = useRecorder()
+  const [params, setParams] = useSearchParams()
+  useEffect(() => {
+    if (params.get('record') === '1') {
+      openRecorder()
+      const next = new URLSearchParams(params)
+      next.delete('record')
+      setParams(next, { replace: true })
+    }
+  }, [params, openRecorder, setParams])
+  return null
+}
 
 export default function Layout() {
   const {
@@ -113,7 +131,7 @@ export default function Layout() {
   })()
 
   // Reseller portal: ANY /agency route, OR a viewer in reseller context with no
-  // specific practice selected — an agency user at home, or a super-admin
+  // specific practice selected, an agency user at home, or a super-admin
   // impersonating a reseller (both covered by isAgencyView; isAgencyUser alone is
   // false for an impersonating super-admin). Determined first so the practice
   // nav, Record button, and Settings link are suppressed in the reseller portal
@@ -124,7 +142,14 @@ export default function Layout() {
   // The practice sidebar shows only when a practice is in context AND we're not
   // viewing the reseller portal.
   const showPracticeNav = Boolean(practiceId) && !inResellerPortal
-  const nav = showPracticeNav ? practiceNav : []
+  // Launchpad sits ABOVE Dashboard until setup is complete, then disappears for
+  // good (keyed off launchpad_completed_at). The blue dot flags it as pending.
+  const showLaunchpad = showPracticeNav && !practice?.launchpad_completed_at
+  const nav = showPracticeNav
+    ? (showLaunchpad
+        ? [{ to: '/launchpad', label: 'Launchpad', icon: ClipboardList, end: true, dot: true }, ...practiceNav]
+        : practiceNav)
+    : []
   const showSettings = showPracticeNav && perms.canViewSettings
   const chatUnread = useChatUnread(practiceId)
   const agencyActive =
@@ -160,7 +185,7 @@ export default function Layout() {
                 <span className="flex-1">{label}</span>
               </Link>
             ))
-          : nav.map(({ to, label, icon: Icon, end, locked }) => (
+          : nav.map(({ to, label, icon: Icon, end, locked, dot }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -172,6 +197,8 @@ export default function Layout() {
                     brand accent when active. Size 16px, 10px gap (gap-2.5 above). */}
                 {Icon && <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />}
                 <span className="flex-1">{label}</span>
+                {/* Blue dot flags pending setup on the Launchpad item. */}
+                {dot && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
                 {/* Live unread badge for the Chat channel. */}
                 {to === '/chat' && chatUnread > 0 && (
                   <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold !text-white">
@@ -351,6 +378,9 @@ export default function Layout() {
       </div>
       </div>
       <VoiceCallBar />
+      <RecordParamTrigger />
+      {/* One-time welcome for invited recorders (gates itself by role). */}
+      {showPracticeNav && <TeamMemberWelcome />}
       </VoiceProvider>
     </RecorderProvider>
   )

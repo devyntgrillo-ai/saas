@@ -1,7 +1,7 @@
 // Signed-URL access for PRIVATE storage buckets (PHI-bearing attachments).
 //
 // conversation-attachments and chat-attachments hold patient files and are
-// served from PRIVATE buckets — every read goes through a short-lived signed
+// served from PRIVATE buckets, every read goes through a short-lived signed
 // URL instead of a public CDN link. We store the bare object PATH in the DB
 // (e.g. `<conversationId>/169...-ab.png`) and mint signed URLs on demand here.
 //

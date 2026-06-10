@@ -22,7 +22,7 @@ export default function Logo({ collapsed = false, size = 'md', showBeta = true, 
   }
 
   // Mark (matches the favicon): sky-gradient rounded square with an upward
-  // "lift" arrow, shown to the left of the wordmark — "Case" in the primary text
+  // "lift" arrow, shown to the left of the wordmark, "Case" in the primary text
   // color, "Lift" in the sky-blue accent.
   const name = brandName || 'CaseLift'
   const m = name.match(/^(.*?)(Lift|AI)$/)

@@ -1,11 +1,11 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
-// assign-referred-practice — super-admin provisioning. Attaches a practice to a
+// assign-referred-practice, super-admin provisioning. Attaches a practice to a
 // referring agency by setting practices.agency_id (which is BOTH the commission
-// attribution AND the white-label co-brand inheritance — one action), then sends
+// attribution AND the white-label co-brand inheritance, one action), then sends
 // ONE Mailgun commission-notification email to the agency owner.
 //
-// The dollar amount in the email reads from agency_accounts.commission_rate —
-// the same field the admin Commissions payout tally reads — so the email and the
+// The dollar amount in the email reads from agency_accounts.commission_rate, 
+// the same field the admin Commissions payout tally reads, so the email and the
 // actual payout can never drift apart.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
@@ -69,14 +69,14 @@ Deno.serve(async (req: Request) => {
     const { error: upErr } = await admin.from("practices").update({ agency_id: agencyId }).eq("id", practiceId);
     if (upErr) throw upErr;
 
-    // Notify the agency — amount straight from commission_rate.
+    // Notify the agency, amount straight from commission_rate.
     const r = Number(agency.commission_rate);
     const amount = Number.isFinite(r) && r >= 0 ? r : COMMISSION_DEFAULT;
     const practiceName = practice.name || "A new practice";
     let emailed = false;
     if (agency.owner_email) {
       const line = `${practiceName} just signed up. That's +${money(amount)}/mo added to your CaseLift payouts.`;
-      const text = `${line}\n\nYou'll see it on your next monthly commission payout.\n\n— CaseLift`;
+      const text = `${line}\n\nYou'll see it on your next monthly commission payout.\n\n, CaseLift`;
       const html =
         `<p style="font-size:16px;line-height:1.6;color:#0f172a;margin:0 0 14px">` +
         `<strong>${escapeHtml(practiceName)}</strong> just signed up. That's ` +

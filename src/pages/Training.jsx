@@ -42,7 +42,7 @@ export default function Training() {
   const [activeGroup, setActiveGroup] = useState(null) // active module tab (group key)
   const [playing, setPlaying] = useState(null) // module being watched
   const videoRef = useRef(null)
-  // Custom-player UI state — presentational only, all driven off the same <video> ref.
+  // Custom-player UI state, presentational only, all driven off the same <video> ref.
   const [isPlaying, setIsPlaying] = useState(false)
   const [curTime, setCurTime] = useState(0)
   const [dur, setDur] = useState(0)
@@ -268,7 +268,7 @@ export default function Training() {
           <h1 className="text-2xl font-bold tracking-tight text-white">CaseLift Academy</h1>
         </div>
 
-        {/* AI training recommendation — green so it reads as a distinct AI feature
+        {/* AI training recommendation, green so it reads as a distinct AI feature
             rather than matching the sub-account's white-label accent. */}
         <div className="w-full rounded-xl border border-emerald-500/30 border-l-2 border-l-emerald-500 bg-emerald-500/10 p-4 ring-1 ring-emerald-500/10 lg:w-2/3">
           <div className="flex items-start gap-2.5">
@@ -452,7 +452,7 @@ export default function Training() {
                       {m.title}
                     </span>
                     <span className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500">
-                      <Clock className="h-3 w-3" /> {formatDuration(m.duration) || '—'}
+                      <Clock className="h-3 w-3" /> {formatDuration(m.duration) || ', '}
                     </span>
                   </span>
 
