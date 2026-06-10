@@ -14,7 +14,6 @@ import { supabase } from './supabase'
 //   'nav:/path'     → navigate to a route
 //   null (auto)     → no action, auto-checked
 export const LAUNCHPAD_STEPS = [
-  { key: 'account_created', title: 'Account created', description: 'Your CaseLift account is ready to go.', auto: true },
   { key: 'baa_signed', title: 'BAA signed', description: 'Your Business Associate Agreement is on file.', auto: true },
   {
     key: 'team_invited',
@@ -39,7 +38,6 @@ export const LAUNCHPAD_STEPS = [
     time: '10 min',
     action: 'nav:/settings/pms',
     cta: 'Connect',
-    badge: 'Recommended',
   },
   {
     key: 'a2p_registered',
@@ -48,7 +46,6 @@ export const LAUNCHPAD_STEPS = [
     time: '5 min',
     action: 'nav:/settings/messaging',
     cta: 'Register',
-    badge: 'Required for SMS',
   },
   {
     key: 'notifications_configured',
@@ -66,14 +63,6 @@ export const LAUNCHPAD_STEPS = [
     action: 'kb',
     cta: 'Add details',
   },
-  {
-    key: 'team_complete',
-    title: 'Add team members',
-    description: 'Invite your full team.',
-    time: '2 min',
-    action: 'nav:/settings/team',
-    cta: 'Invite',
-  },
 ]
 
 export const LAUNCHPAD_STEP_KEYS = LAUNCHPAD_STEPS.map((s) => s.key)
@@ -81,7 +70,7 @@ export const LAUNCHPAD_TOTAL = LAUNCHPAD_STEPS.length
 
 // Auto-derive which steps are satisfied by existing data. Returns a Set of keys.
 export async function computeAutoComplete(practiceId, practice) {
-  const done = new Set(['account_created'])
+  const done = new Set()
   if (practice?.baa_accepted_at) done.add('baa_signed')
   if (practice?.sikka_connected || practice?.pms_type) done.add('pms_connected')
   if (practice?.a2p_campaign_status === 'approved') done.add('a2p_registered')
@@ -95,7 +84,7 @@ export async function computeAutoComplete(practiceId, practice) {
       supabase.from('consults').select('id', head).eq('practice_id', practiceId),
       supabase.from('practice_knowledge_base').select('id', head).eq('practice_id', practiceId).eq('is_active', true),
     ])
-    if ((members.count || 0) > 1) { done.add('team_invited'); done.add('team_complete') }
+    if ((members.count || 0) > 1) done.add('team_invited')
     if ((consults.count || 0) > 0) done.add('first_consult')
     if ((kb.count || 0) > 0) done.add('knowledge_base_added')
   }
