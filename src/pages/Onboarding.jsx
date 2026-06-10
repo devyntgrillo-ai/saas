@@ -53,7 +53,7 @@ const STEPS = [
 ]
 
 const CONSULTS_PER_WEEK = ['1-2', '3-5', '6-10', '10+']
-const INVITE_ROLES = ['Owner/Doctor', 'Front Desk', 'Office Manager', 'Other']
+const INVITE_ROLES = ['Treatment Coordinator', 'Owner/Doctor', 'Front Desk', 'Office Manager', 'Other']
 
 function Field({ label, children }) {
   return (
@@ -259,7 +259,10 @@ export default function Onboarding() {
 
   async function finish({ record = false } = {}) {
     const ok = await savePatch({ onboarding_completed: true })
-    if (ok) navigate(record ? '/?record=1' : '/', { replace: true })
+    // Land on /launchpad, not '/': on get.caselift.io the root path is redirected
+    // to /signup (ON_GO_SUBDOMAIN), so navigating to '/' would loop back into
+    // onboarding. /launchpad is a normal app route on both hosts.
+    if (ok) navigate(record ? '/launchpad?record=1' : '/launchpad', { replace: true })
   }
 
   const stepKey = STEPS[active].key
@@ -339,7 +342,7 @@ export default function Onboarding() {
                 </div>
               </div>
               {practiceId && (
-                <button type="button" onClick={() => navigate('/', { replace: true })} className="shrink-0 text-xs font-medium text-slate-500 transition hover:text-slate-300">
+                <button type="button" onClick={() => finish()} disabled={saving} className="shrink-0 text-xs font-medium text-slate-500 transition hover:text-slate-300 disabled:opacity-50">
                   Finish later
                 </button>
               )}
