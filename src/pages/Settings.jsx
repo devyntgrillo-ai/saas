@@ -73,7 +73,7 @@ const TABS = [
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'free-month', label: 'Get a Free Month', icon: Sparkles },
   // Only for direct (non-reseller) practices - filtered out below when agency_id is set.
-  { key: 'referrals', label: 'Referrals', icon: Gift, directOnly: true },
+  { key: 'referrals', label: 'Referrals', icon: Gift, directOnly: true, hidden: true }, // hidden for now
   { key: 'billing', label: 'Billing', icon: CreditCard },
   { key: 'audit-log', label: 'Audit Log', icon: ScrollText, adminOnly: true },
   // Reachable via Integrations cards / deep links, hidden from the tab rail.
