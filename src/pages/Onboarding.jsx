@@ -448,13 +448,19 @@ export default function Onboarding() {
               <p className="mt-1.5 text-sm text-slate-400">Your subscription activates your account so CaseLift can start recovering cases.</p>
 
               {done.payment ? (
-                <div className="mt-6 flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-4">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
-                  <div>
-                    <p className="text-sm font-semibold text-emerald-200">Your plan is active</p>
-                    <p className="mt-0.5 text-sm text-emerald-200/80">You’re all set on billing. Continue to the next step.</p>
+                <>
+                  <div className="mt-6 flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-4">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+                    <div>
+                      <p className="text-sm font-semibold text-emerald-200">Your plan is active</p>
+                      <p className="mt-0.5 text-sm text-emerald-200/80">You’re all set on billing. Continue to the next step.</p>
+                    </div>
                   </div>
-                </div>
+                  {/* Continue only appears once payment is confirmed — the charge can't be skipped. */}
+                  <div className="mt-6 flex justify-end">
+                    <button onClick={nextStep} className="btn-primary">Continue <ArrowRight className="h-4 w-4" /></button>
+                  </div>
+                </>
               ) : (
                 <div className="mt-6 rounded-2xl border border-surface-700 bg-surface-900 p-6">
                   <div className="flex items-baseline gap-1.5">
@@ -475,10 +481,6 @@ export default function Onboarding() {
                   <p className="mt-2 text-center text-[11px] text-slate-500">Cancel anytime · no contract.</p>
                 </div>
               )}
-
-              <div className="mt-6 flex justify-end">
-                <button onClick={nextStep} className="btn-ghost">Continue <ArrowRight className="h-4 w-4" /></button>
-              </div>
             </section>
           )}
 
