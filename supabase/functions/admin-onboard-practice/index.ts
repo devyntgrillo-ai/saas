@@ -154,9 +154,13 @@ Deno.serve(async (req: Request) => {
     // The recurring price + the stored plan amount.
     const planAmount = mode === "trial" ? trialAmount : amount;
 
-    // Refuse to hijack an existing account.
-    const { data: existing } = await admin.from("users").select("id").eq("email", ownerEmail).maybeSingle();
-    if (existing?.id) return json({ error: "That email already has an account. Use the admin Users tab to manage it." }, 409);
+    // Look up any existing account for this email. An ACTIVE account blocks reuse
+    // (we never hijack a live login); a DEACTIVATED one is revived in place below
+    // so a deactivated email can always be re-onboarded.
+    const { data: existing } = await admin.from("users").select("id, access_level").eq("email", ownerEmail).maybeSingle();
+    if (existing?.id && existing.access_level !== "deactivated") {
+      return json({ error: "That email already has an active account. Deactivate it first, or use the admin Users tab to manage it." }, 409);
+    }
 
     const TEST_MODE = Deno.env.get("HELCIM_TEST_MODE") === "true";
 
@@ -227,26 +231,46 @@ Deno.serve(async (req: Request) => {
     const { error: upErr } = await admin.from("practices").update(patch).eq("id", practiceId);
     if (upErr) return json({ error: `Charged the card but could not activate the account: ${upErr.message}` }, 500);
 
-    // 4) Create the owner login. email_confirm:true so they can sign in
-    //    immediately with the temp password; the handle_new_user trigger inserts
-    //    the public.users row (role 'owner') which we then scope to the practice.
+    // 4) Create (or REVIVE) the owner login. email_confirm:true so they can sign
+    //    in immediately with the temp password. A previously deactivated account
+    //    is reactivated in place — ban lifted + fresh password — so deactivated
+    //    emails are always re-onboardable; new emails go through createUser (the
+    //    handle_new_user trigger inserts the public.users row we scope below).
     const tempPassword = genTempPassword();
-    const { data: created, error: cuErr } = await admin.auth.admin.createUser({
-      email: ownerEmail,
-      password: tempPassword,
-      email_confirm: true,
-      user_metadata: { practice_name: practiceName },
-    });
-    const ownerUserId = created?.user?.id;
-    if (cuErr || !ownerUserId) {
-      // Charge + practice succeeded; the login didn't. Surface a partial success so
-      // the rep can retry user creation without re-charging.
-      return json({
-        ok: false,
-        partial: true,
-        practice_id: practiceId,
-        error: `Payment captured and practice created, but the owner login could not be created: ${cuErr?.message || "unknown error"}. Contact support to finish provisioning.`,
-      }, 502);
+    let ownerUserId;
+    if (existing?.id) {
+      ownerUserId = existing.id;
+      const { error: rxErr } = await admin.auth.admin.updateUserById(ownerUserId, {
+        password: tempPassword,
+        ban_duration: "none",
+        email_confirm: true,
+      });
+      if (rxErr) {
+        return json({
+          ok: false,
+          partial: true,
+          practice_id: practiceId,
+          error: `Payment captured and practice created, but the previously deactivated login could not be reactivated: ${rxErr.message}. Contact support to finish provisioning.`,
+        }, 502);
+      }
+    } else {
+      const { data: created, error: cuErr } = await admin.auth.admin.createUser({
+        email: ownerEmail,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: { practice_name: practiceName },
+      });
+      if (cuErr || !created?.user?.id) {
+        // Charge + practice succeeded; the login didn't. Surface a partial success
+        // so the rep can retry user creation without re-charging.
+        return json({
+          ok: false,
+          partial: true,
+          practice_id: practiceId,
+          error: `Payment captured and practice created, but the owner login could not be created: ${cuErr?.message || "unknown error"}. Contact support to finish provisioning.`,
+        }, 502);
+      }
+      ownerUserId = created.user.id;
     }
     await admin.from("users").upsert(
       { id: ownerUserId, email: ownerEmail, access_level: "practice_owner", role: "owner", practice_id: practiceId },
