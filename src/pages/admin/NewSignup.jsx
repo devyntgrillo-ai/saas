@@ -241,7 +241,7 @@ export default function NewSignup() {
           key={mode} // re-mount when switching charge/trial so Helcim.js reinitializes
           amount={chargeAmount}
           verify={mode === 'trial'}
-          submitLabel={mode === 'trial' ? 'Save card & start trial' : 'Charge & create account'}
+          submitLabel={mode === 'trial' ? 'Save card & start trial' : 'Subscribe & create account'}
           showAmountInLabel={false}
           disabled={!ready}
           onApproved={handleApproved}
