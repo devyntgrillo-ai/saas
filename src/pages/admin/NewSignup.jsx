@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { UserPlus, CheckCircle2, Copy, Check, Settings2, AlertTriangle, Mail } from 'lucide-react'
+import { UserPlus, CheckCircle2, Copy, Check, Settings2, AlertTriangle, Mail, Loader2 } from 'lucide-react'
 import HelcimCardForm from '../../components/HelcimCardForm'
+import Confetti from '../../components/Confetti'
 import { adminOnboardPractice } from '../../lib/billing'
 
 // Super-admin "close the deal on a sales call" page. The rep collects the
@@ -37,7 +38,6 @@ export default function NewSignup() {
   const [practiceName, setPracticeName] = useState('')
   const [ownerName, setOwnerName] = useState('')
   const [ownerEmail, setOwnerEmail] = useState('')
-  const [ownerPhone, setOwnerPhone] = useState('')
   const [amountStr, setAmountStr] = useState(String(RECOMMENDED_AMOUNT))
 
   const [moreOpen, setMoreOpen] = useState(false)
@@ -70,7 +70,6 @@ export default function NewSignup() {
         practiceName: practiceName.trim(),
         ownerName: ownerName.trim(),
         ownerEmail: ownerEmail.trim().toLowerCase(),
-        ownerPhone: ownerPhone.trim(),
         mode,
         amount: mode === 'charge' ? amount : undefined,
         trialDays: mode === 'trial' ? trialDays : undefined,
@@ -90,46 +89,60 @@ export default function NewSignup() {
   }
 
   function reset() {
-    setPracticeName(''); setOwnerName(''); setOwnerEmail(''); setOwnerPhone('')
+    setPracticeName(''); setOwnerName(''); setOwnerEmail('')
     setAmountStr(String(RECOMMENDED_AMOUNT))
     setMoreOpen(false); setIsTrial(false); setTrialDaysStr('14'); setTrialAmountStr(String(RECOMMENDED_AMOUNT))
     setError(''); setResult(null)
   }
 
-  // ---- Success: show the login handoff for the rep ----
+  // ---- Success: celebrate, then hand the rep the login details ----
   if (result) {
     return (
-      <div className="mx-auto max-w-xl space-y-6">
-        <div className="flex items-center gap-3">
-          <CheckCircle2 className="h-7 w-7 text-emerald-300" />
-          <div>
-            <h1 className="text-xl font-bold text-white">Account created</h1>
-            <p className="text-sm text-slate-400">
+      <>
+        <Confetti />
+        <div className="mx-auto max-w-xl space-y-6">
+          <div className="text-center">
+            <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-300" />
+            <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-white">Welcome aboard!</h1>
+            <p className="mt-2 text-sm text-slate-400">
               {result.mode === 'trial'
                 ? `${result.trial_days}-day trial started — $${Number(result.plan_amount).toLocaleString()}/mo after.`
                 : `Charged $${Number(result.plan_amount).toLocaleString()} — subscription active.`}
             </p>
           </div>
-        </div>
 
-        <div className="card space-y-4 p-6">
-          <div className="flex items-center gap-2 text-sm text-slate-300">
-            <Mail className={`h-4 w-4 ${result.email_sent ? 'text-emerald-300' : 'text-amber-300'}`} />
-            {result.email_sent
-              ? <>Welcome email sent to <span className="font-medium text-white">{result.owner_email}</span>.</>
-              : <>Email could not be sent — share the login below with <span className="font-medium text-white">{result.owner_email}</span> directly.</>}
+          <div className="card space-y-4 p-6">
+            <div className="flex items-center gap-2 text-sm text-slate-300">
+              <Mail className={`h-4 w-4 ${result.email_sent ? 'text-emerald-300' : 'text-amber-300'}`} />
+              {result.email_sent
+                ? <>Welcome email sent to <span className="font-medium text-white">{result.owner_email}</span>.</>
+                : <>Email could not be sent — share the login below with <span className="font-medium text-white">{result.owner_email}</span> directly.</>}
+            </div>
+            <CopyField label="Set-password / login link" value={result.login_link} />
+            <CopyField label="Temporary password (fallback)" value={result.temp_password} />
+            <p className="text-xs text-slate-500">
+              They can click the link to set their own password, or sign in at /login with the temporary password.
+              Either way they'll land in onboarding to sign the BAA and finish setup.
+            </p>
           </div>
-          <CopyField label="Set-password / login link" value={result.login_link} />
-          <CopyField label="Temporary password (fallback)" value={result.temp_password} />
-          <p className="text-xs text-slate-500">
-            They can click the link to set their own password, or sign in at /login with the temporary password.
-            Either way they'll land in onboarding to sign the BAA and finish setup.
-          </p>
-        </div>
 
-        <button onClick={reset} className="btn-primary">
-          <UserPlus className="h-4 w-4" /> Onboard another
-        </button>
+          <div className="text-center">
+            <button onClick={reset} className="btn-primary">
+              <UserPlus className="h-4 w-4" /> Onboard another
+            </button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  // ---- Submitting: full loading state while the charge + provisioning runs ----
+  if (submitting) {
+    return (
+      <div className="mx-auto flex max-w-xl flex-col items-center justify-center gap-4 py-24 text-center">
+        <Loader2 className="h-10 w-10 animate-spin text-primary-300" />
+        <h1 className="text-xl font-bold text-white">Setting up the account…</h1>
+        <p className="text-sm text-slate-400">Processing payment and creating their login. Hang tight — don't close this tab.</p>
       </div>
     )
   }
@@ -137,10 +150,7 @@ export default function NewSignup() {
   // ---- Form ----
   return (
     <div className="mx-auto max-w-xl space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-white">New signup</h1>
-        <p className="text-sm text-slate-500">Close a deal live — collect payment and provision the account on the spot.</p>
-      </div>
+      <h1 className="text-xl font-bold text-white">New signup</h1>
 
       <div className="card space-y-4 p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Customer</h2>
@@ -152,15 +162,9 @@ export default function NewSignup() {
           <label className="label">Owner name</label>
           <input className="input" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="Dr. Jane Smith" />
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="label">Owner email</label>
-            <input className="input" type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} placeholder="jane@practice.com" />
-          </div>
-          <div>
-            <label className="label">Office phone <span className="text-slate-600">(optional)</span></label>
-            <input className="input" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} placeholder="(555) 123-4567" />
-          </div>
+        <div>
+          <label className="label">Owner email</label>
+          <input className="input" type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} placeholder="jane@practice.com" />
         </div>
       </div>
 
@@ -173,7 +177,6 @@ export default function NewSignup() {
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
               <input className="input pl-7" type="number" min={1} value={amountStr} onChange={(e) => setAmountStr(e.target.value)} />
             </div>
-            <p className="mt-1.5 text-xs text-slate-500">Recommended: ${RECOMMENDED_AMOUNT.toLocaleString()}/mo. Card is charged immediately on submit.</p>
           </div>
         )}
 
@@ -235,12 +238,11 @@ export default function NewSignup() {
               amount={chargeAmount}
               verify={mode === 'trial'}
               submitLabel={mode === 'trial' ? 'Save card & start trial' : 'Charge & create account'}
-              showAmountInLabel={mode === 'charge'}
+              showAmountInLabel={false}
               onApproved={handleApproved}
               onDeclined={(res) => setError(res?.message || 'The card was declined. Try a different card.')}
               onError={(msg) => setError(msg || 'Could not start the payment.')}
             />
-            {submitting && <p className="text-center text-xs text-slate-400">Provisioning the account…</p>}
           </>
         )}
         {!ready && detailsValid && (
