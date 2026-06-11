@@ -166,13 +166,15 @@ export default function NewSignup() {
           <label className="label">Practice name</label>
           <input className="input" value={practiceName} onChange={(e) => setPracticeName(e.target.value)} placeholder="Pinnacle Dental" />
         </div>
-        <div>
-          <label className="label">Account Owner Name</label>
-          <input className="input" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="Dr. Jane Smith" />
-        </div>
-        <div>
-          <label className="label">Account Owner Email</label>
-          <input className="input" type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} placeholder="jane@practice.com" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label">Account Owner Name</label>
+            <input className="input" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="Dr. Jane Smith" />
+          </div>
+          <div>
+            <label className="label">Account Owner Email</label>
+            <input className="input" type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} placeholder="jane@practice.com" />
+          </div>
         </div>
       </div>
 
@@ -180,7 +182,7 @@ export default function NewSignup() {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Plan</h2>
         {!isTrial && (
           <div>
-            <label className="label">Monthly charge (USD)</label>
+            <label className="label">Monthly subscription (USD)</label>
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
               <input className="input pl-7" type="number" min={1} value={amountStr} onChange={(e) => setAmountStr(e.target.value)} />
