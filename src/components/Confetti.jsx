@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react'
 //                        the bottom like a confetti cannon, arc to an apex, then
 //                        fall away and fade. Fixed full-screen, on TOP (z-50).
 // Mount to play, unmount to clear.
-const COLORS = ['#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#FBBF24', '#FFFFFF']
+const COLORS = ['#22D3EE', '#38BDF8', '#4ADE80', '#FACC15', '#FB7185', '#C084FC', '#F472B6', '#FB923C', '#FFFFFF']
 
 export default function Confetti({ variant = 'burst', pieces }) {
   const ambient = variant === 'ambient'
@@ -38,20 +38,21 @@ export default function Confetti({ variant = 'burst', pieces }) {
             opacity: 0.18 + Math.random() * 0.24,
           }
         }
-        // burst: launch up from the bottom, arc over, fall away.
-        const x = (Math.random() - 0.5) * 64 // vw horizontal end drift
+        // burst: one cannon from the bottom-CENTER — every flake launches from
+        // left:50% and fans out wide across the whole screen, then arcs down.
+        const x = (Math.random() - 0.5) * 120 // vw horizontal travel from center (±60vw)
         return {
           id: i,
           ambient: false,
-          left: Math.random() * 100,
-          delay: Math.random() * 0.3, // tight stagger so it reads as one pop
-          duration: 2.3 + Math.random() * 2.3,
+          left: 50, // all originate from the center
+          delay: Math.random() * 0.18, // very tight stagger so it reads as one shot
+          duration: 2.3 + Math.random() * 2.4,
           size: 2 + Math.random() * 3.5, // tiny flakes
           color: COLORS[i % COLORS.length],
           x,
-          xMid: x * 0.5,
-          peak: -(48 + Math.random() * 44), // vh up at the apex
-          endY: 10 + Math.random() * 24, // vh below the launch — falls away
+          xMid: x * 0.6, // most of the spread happens on the way up
+          peak: -(30 + Math.random() * 68), // vh up at the apex — varied heights
+          endY: 14 + Math.random() * 32, // vh below the launch — falls away
           rot: (Math.random() - 0.5) * 1440, // lots of spin for tiny flakes
         }
       }),
