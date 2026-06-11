@@ -116,7 +116,7 @@ export default function NewSignup() {
               <Mail className={`h-4 w-4 ${result.email_sent ? 'text-emerald-300' : 'text-amber-300'}`} />
               {result.email_sent
                 ? <>Welcome email sent to <span className="font-medium text-white">{result.owner_email}</span>.</>
-                : <>Email could not be sent. Share the login below with <span className="font-medium text-white">{result.owner_email}</span> directly.</>}
+                : <>Email could not be sent{result.email_reason ? ` (${result.email_reason})` : ''}. Share the login below with <span className="font-medium text-white">{result.owner_email}</span> directly.</>}
             </div>
             <CopyField label="Set-password / login link" value={result.login_link} />
             <CopyField label="Temporary password (fallback)" value={result.temp_password} />

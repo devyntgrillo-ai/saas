@@ -326,6 +326,7 @@ Deno.serve(async (req: Request) => {
       `After you log in: 1) Sign your HIPAA BAA, 2) Confirm practice details, 3) Invite your team, 4) See how it works.\n\n` +
       priceLine;
     let emailSent = false;
+    let emailReason: string | null = null;
     try {
       const r = await sendMailgunMessage({
         to: ownerEmail,
@@ -336,8 +337,13 @@ Deno.serve(async (req: Request) => {
         replyTo: brand.supportEmail,
       });
       emailSent = r.sent === true;
+      if (!emailSent) {
+        emailReason = r.reason ?? "send_failed";
+        console.error("admin-onboard: welcome email NOT sent:", emailReason, JSON.stringify(r));
+      }
     } catch (e) {
-      console.error("admin-onboard: welcome email failed:", (e as Error)?.message);
+      emailReason = (e as Error)?.message || "exception";
+      console.error("admin-onboard: welcome email threw:", emailReason);
     }
 
     // 6) Best-effort: internal Slack alert + audit trail.
@@ -359,6 +365,7 @@ Deno.serve(async (req: Request) => {
       temp_password: tempPassword,
       login_link: loginLink,
       email_sent: emailSent,
+      email_reason: emailReason,
       mode,
       plan_amount: planAmount,
       trial_days: trialDays || null,
