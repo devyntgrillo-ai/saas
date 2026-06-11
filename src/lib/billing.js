@@ -102,6 +102,38 @@ export async function recordHelcimPayment({ cardToken, amount, date, customerCod
   return data
 }
 
+// Super-admin "close the deal on a sales call": the rep tokenized the customer's
+// card via Helcim.js (charge) or verify mode (trial), and this provisions the
+// whole account — verifies the charge, enrolls billing, creates the practice +
+// owner login, and emails a welcome message. Returns { ok, practice_id,
+// owner_email, temp_password, login_link, email_sent, mode }.
+export async function adminOnboardPractice({
+  practiceName, ownerName, ownerEmail, ownerPhone,
+  mode, amount, trialDays, trialAmount,
+  cardToken, customerCode, cardLast4, cardType, date,
+} = {}) {
+  const { data, error } = await supabase.functions.invoke('admin-onboard-practice', {
+    body: {
+      practice_name: practiceName,
+      owner_name: ownerName,
+      owner_email: ownerEmail,
+      owner_phone: ownerPhone || undefined,
+      mode,
+      amount,
+      trial_days: trialDays,
+      trial_amount: trialAmount,
+      card_token: cardToken,
+      customer_code: customerCode,
+      card_last4: cardLast4,
+      card_type: cardType,
+      date,
+    },
+  })
+  if (error) throw new Error(await edgeErrorMessage(error))
+  if (!data?.ok) throw new Error(data?.error || 'Could not create the account. Please try again.')
+  return data
+}
+
 // Start a FREE TRIAL from an offer link: the card was tokenized via Helcim.js
 // verify (no charge); the edge function enrolls a subscription that first bills
 // after the trial and puts the practice on trial. Returns { success, trialEndsAt }.

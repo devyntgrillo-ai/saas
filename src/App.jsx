@@ -60,6 +60,7 @@ const AdminTraining = lazyWithReload(() => import('./pages/admin/TrainingAdmin')
 const AdminWins = lazyWithReload(() => import('./pages/admin/Wins'))
 const AdminReferrals = lazyWithReload(() => import('./pages/admin/Referrals'))
 const AdminCommissions = lazyWithReload(() => import('./pages/admin/Commissions'))
+const AdminNewSignup = lazyWithReload(() => import('./pages/admin/NewSignup'))
 const AdminOffers = lazyWithReload(() => import('./pages/admin/Offers'))
 const AdminChats = lazyWithReload(() => import('./pages/admin/AdminChats'))
 const Chat = lazyWithReload(() => import('./pages/Chat'))
@@ -152,6 +153,7 @@ function AppContent() {
                     AdminShell self-gates on isSuperAdmin and provides AdminProvider. */}
                 <Route path="/admin" element={<AdminShell />}>
                   <Route index element={<AdminDashboard />} />
+                  <Route path="new-signup" element={<AdminNewSignup />} />
                   {/* Overview + Revenue merged into Dashboard - redirect old paths. */}
                   <Route path="dashboard" element={<Navigate to="/admin" replace />} />
                   <Route path="overview" element={<Navigate to="/admin" replace />} />

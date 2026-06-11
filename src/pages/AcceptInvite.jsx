@@ -15,6 +15,10 @@ export default function AcceptInvite() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const invitationToken = searchParams.get('invitation')
+  // Optional post-set-password landing path (e.g. a rep-provisioned owner is sent
+  // to /onboarding). Only same-origin paths are honored; anything else → '/'.
+  const nextParam = searchParams.get('next')
+  const nextPath = nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//') ? nextParam : '/'
   const updatePassword = useUpdatePassword()
   const [submitting, setSubmitting] = useState(false)
   const [password, setPassword] = useState('')
@@ -78,7 +82,7 @@ export default function AcceptInvite() {
         resourceType: 'auth',
         details: { context: isRecovery ? 'password_reset' : 'invite_accept' },
       })
-      navigate('/', { replace: true })
+      navigate(nextPath, { replace: true })
     } catch (err) {
       setError(err?.message || 'Could not update password.')
     }

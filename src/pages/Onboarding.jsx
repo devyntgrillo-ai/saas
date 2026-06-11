@@ -145,7 +145,9 @@ export default function Onboarding() {
     const p = practice || {}
     return {
       account: Boolean(practiceId),
-      payment: p.subscription_status === 'active',
+      // Active, or a trial with a card already on file (e.g. a rep-provisioned
+      // account) — both mean billing is set up, so the payment step is done.
+      payment: p.subscription_status === 'active' || (p.subscription_status === 'trial' && Boolean(p.helcim_card_token)),
       baa: Boolean(p.baa_accepted_at),
       welcome: Boolean((p.name || '').trim() && p.consults_per_week),
       invite: Boolean(p.onboarding_completed) || invited.length > 0,

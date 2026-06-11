@@ -11,6 +11,7 @@ import { AdminProvider, useAdmin } from '../../context/AdminContext'
 
 const TABS = [
   { to: '/admin', label: 'Dashboard', end: true },
+  { to: '/admin/new-signup', label: 'New signup' },
   // Resellers + Commissions are merged into one tab with an in-page toggle, so
   // this entry stays highlighted on both /admin/agencies and /admin/commissions.
   { to: '/admin/agencies', label: 'Resellers', match: ['/admin/agencies', '/admin/commissions'] },
