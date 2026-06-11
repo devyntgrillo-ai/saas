@@ -3,7 +3,7 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // notify-signup - post a Slack message to the internal CaseLift channel when a
 // practice activates a paid subscription.
 //
-// Called server-to-server by ls-webhook (and/or chargebee-webhook) with
+// Called server-to-server by helcim-checkout (and admin-onboard-practice) with
 // { practice_id } and a service-role bearer, on the first activation event.
 // Resolves the practice and posts via the Slack incoming webhook. Best-effort:
 // if the webhook isn't configured it logs and returns ok:false.

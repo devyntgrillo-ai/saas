@@ -15,7 +15,7 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // super-admin, the amount is trusted as-is (no ALLOWED_AMOUNTS clamp).
 //
 // Secrets: HELCIM_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY,
-//          SUPABASE_SERVICE_ROLE_KEY, MAILGUN_*, APP_URL, HELCIM_TEST_MODE.
+//          SUPABASE_SERVICE_ROLE_KEY, MAILGUN_*, APP_URL.
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
@@ -172,11 +172,10 @@ Deno.serve(async (req: Request) => {
       return json({ error: "That email already has an active account. Deactivate it first, or use the admin Users tab to manage it." }, 409);
     }
 
-    const TEST_MODE = Deno.env.get("HELCIM_TEST_MODE") === "true";
-
     // 1) CHARGE MODE: verify the APPROVED charge with Helcim BEFORE creating
     //    anything, so a failed charge never leaves an orphan account. (Trial mode
-    //    has no charge to verify — the card was tokenized at $0.)
+    //    has no charge to verify — the card was tokenized at $0.) Strict: we never
+    //    trust the client-side approval flag.
     let realTxnId: string | null = null;
     let resolvedCustomerCode = customerCode;
     if (mode === "charge") {
@@ -187,14 +186,10 @@ Deno.serve(async (req: Request) => {
       const approved = list.filter((t: Record<string, unknown>) => String(t.status ?? "").toUpperCase() === "APPROVED");
       const match = approved.find((t: Record<string, unknown>) => Math.round(Number(t.amount)) === Math.round(amount))
         || approved.find((t: Record<string, unknown>) => String(t.cardToken ?? "") === cardToken);
-      // Test-mode Helcim.js charges are sandboxed and never appear in the live v2
-      // API, so there's nothing to verify against — trust the client result so a
-      // demo can complete. Production keeps strict server-side verification.
-      if (!match && !TEST_MODE) {
+      if (!match) {
         console.error("admin-onboard verify failed:", JSON.stringify({ helcimStatus: txnRes.status, count: Array.isArray(list) ? list.length : 0, amount }));
         return json({ error: "We could not verify an approved charge on this card. The card may have declined. Try again." }, 400);
       }
-      if (!match) console.warn("admin-onboard: TEST MODE — no live transaction to verify; trusting client result.");
       realTxnId = (match?.transactionId ?? match?.id ?? body.transaction_id) || null;
       resolvedCustomerCode = (match?.customerCode || customerCode) || null;
     }

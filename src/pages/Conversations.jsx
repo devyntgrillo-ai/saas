@@ -655,8 +655,12 @@ export default function Conversations() {
     auditPatientAccessed(activeId)
   }, [activeId])
 
+  // Conversation the user explicitly marked unread — don't let the auto-read effect undo it.
+  const manualUnreadRef = useRef(null)
+
   useEffect(() => {
     if (!activeId || !activeConv || !(activeConv.unread_count > 0) || !practiceId) return
+    if (manualUnreadRef.current === activeId) return
     markReadMutation.mutate({ practiceId, conversationId: activeId })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, activeConv?.unread_count, practiceId])
@@ -812,6 +816,7 @@ export default function Conversations() {
     if (!activeConv || !practiceId || toggleReadMutation.isPending) return
     const makeUnread = !(activeConv.unread_count > 0)
     const next = makeUnread ? Math.max(1, activeConv.unread_count || 0) : 0
+    manualUnreadRef.current = makeUnread ? activeId : null
     toggleReadMutation.mutate(
       { practiceId, conversationId: activeId, unreadCount: next },
       { onSuccess: () => showToast(makeUnread ? 'Marked as unread' : 'Marked as read') },
@@ -1365,6 +1370,7 @@ export default function Conversations() {
                             callLogId={m.call_log_id}
                             hasRecording={hasRecording}
                             recordingDuration={recMeta?.duration_seconds}
+                            callStatus={recMeta?.status}
                             transcriptStatus={recMeta?.transcript_status}
                             transcriptText={recMeta?.transcript_deidentified}
                             transcriptError={recMeta?.transcript_error}

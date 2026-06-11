@@ -2,11 +2,13 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // helcim-checkout, all Helcim payment operations. The API key lives ONLY here
 // (Supabase secret HELCIM_API_KEY), never in the client bundle.
 //
-// Auth model (verify_jwt=false so unauthenticated signup can start a checkout):
-//   • Public (no session): initialize_checkout (amount validated server-side),
-//     create_customer, these are needed before a practice account exists.
-//   • Super-admin only: get_customer, get_transaction, create_invoice, charge,
-//     refund, connection_test, money movement + data lookups.
+// Auth model:
+//   • Self-authenticating (act on the caller's own practice): record_payment,
+//     update_card, manage_subscription, start_trial, upgrade_annual.
+//   • Super-admin only: get_customer, get_transaction, create_invoice, refund,
+//     connection_test — money movement + data lookups.
+// Checkout is Helcim.js inline (card tokenized client-side), so there are no
+// pre-account public actions here.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 
@@ -36,8 +38,8 @@ async function helcim(endpoint: string, method = "GET", body?: object) {
   return { ok: res.ok, status: res.status, data };
 }
 
-// Actions any visitor may call (needed during signup, before an account exists).
-const PUBLIC_ACTIONS = new Set(["initialize_checkout", "create_customer"]);
+// No pre-account public actions: checkout is Helcim.js inline (client-side).
+const PUBLIC_ACTIONS = new Set<string>();
 // Actions that self-authenticate against the caller's own practice (not super-admin).
 const SELF_AUTH_ACTIONS = new Set(["record_payment", "update_card", "manage_subscription", "start_trial", "upgrade_annual"]);
 
@@ -141,17 +143,12 @@ Deno.serve(async (req: Request) => {
         const match = approved.find((t: Record<string, unknown>) => Math.round(Number(t.amount)) === Math.round(expectedAmount))
           || approved.find((t: Record<string, unknown>) => String(t.cardToken ?? "") === cardToken);
 
-        // Test-mode Helcim.js charges are sandboxed and do NOT appear in the live v2
-        // card-transactions API, so there is nothing to verify against. With test mode
-        // on (HELCIM_TEST_MODE secret) we trust the client-approved result so the flow
-        // completes; production keeps strict server-side verification.
-        // TODO: remove the HELCIM_TEST_MODE secret (or set it false) before go-live.
-        const TEST_MODE = Deno.env.get("HELCIM_TEST_MODE") === "true";
-        if (!match && !TEST_MODE) {
+        // Strict server-side verification: we require a matching APPROVED Helcim
+        // transaction before activating. The client's approval flag is never trusted.
+        if (!match) {
           console.error("record_payment verify failed:", JSON.stringify({ helcimStatus: txnRes.status, count: Array.isArray(list) ? list.length : 0, expectedAmount }));
           return json({ error: "We could not verify an approved payment for this card. Please contact support.", detail: { helcimStatus: txnRes.status, transactionsReturned: Array.isArray(list) ? list.length : 0 } }, 400);
         }
-        if (!match) console.warn("record_payment: TEST MODE — no live transaction to verify; trusting client result.");
 
         // The reconcilable Payment-API transactionId (for future refunds/reversals).
         const realTxnId = (match?.transactionId ?? match?.id ?? params.transaction_id) || null;
@@ -204,8 +201,8 @@ Deno.serve(async (req: Request) => {
 
         if (offer) await admin.rpc("increment_signup_offer_use", { p_code: offer.code }).then(() => {}, () => {});
 
-        // Internal Slack alert on a new paid activation (replaces the old
-        // chargebee/ls-webhook trigger). Best-effort — never blocks activation.
+        // Internal Slack alert on a new paid activation. Best-effort — never
+        // blocks activation.
         admin.functions.invoke("notify-signup", { body: { practice_id: caller.practiceId } }).catch(() => {});
 
         return json({ success: true, subscriptionId, transactionId: realTxnId });
@@ -415,7 +412,6 @@ Deno.serve(async (req: Request) => {
 
         const monthly = Number(pr.plan_amount) > 0 ? Number(pr.plan_amount) : 997;
         const annualAmount = monthly * 10; // pay 10 months, get 12
-        const TEST_MODE = Deno.env.get("HELCIM_TEST_MODE") === "true";
 
         // 1) Charge the annual amount once against the stored card.
         const idem = crypto.randomUUID().replace(/-/g, "").slice(0, 25);
@@ -432,11 +428,10 @@ Deno.serve(async (req: Request) => {
         });
         const payData = await payRes.json().catch(() => ({}));
         const approved = payRes.ok && String(payData.status ?? "").toUpperCase() === "APPROVED";
-        if (!approved && !TEST_MODE) {
+        if (!approved) {
           console.error("upgrade_annual purchase failed:", payRes.status, JSON.stringify(payData).slice(0, 300));
           return json({ error: "We couldn't process the annual charge on your card on file. Please update your card and try again." }, 402);
         }
-        if (!approved) console.warn("upgrade_annual: TEST MODE — purchase not confirmed; proceeding.");
         const txnId = (payData.transactionId ?? payData.id) || null;
 
         // 2) Stop the monthly subscription so they aren't also billed monthly.
@@ -469,33 +464,6 @@ Deno.serve(async (req: Request) => {
         if (upErr) return json({ error: `Charged your annual amount but could not update your account — please contact support.` }, 500);
 
         return json({ success: true, amount: annualAmount, nextBillingDate: nextBilling });
-      }
-
-      case "initialize_checkout": {
-        let amount = Number(params.amount);
-        if (!ALLOWED_AMOUNTS.includes(amount)) amount = 997; // never trust a client-supplied price
-        const { data } = await helcim("/helcim-pay/initialize", "POST", {
-          paymentType: params.payment_type === "verify" ? "verify" : "purchase",
-          amount,
-          currency: "USD",
-          customerCode: params.customer_code || undefined,
-          invoiceNumber: params.invoice_number || undefined,
-          orderNumber: params.order_number || undefined,
-        });
-        return json(data);
-      }
-
-      case "create_customer": {
-        const email = String(params.email || "");
-        const code = email.replace(/@/g, "_").replace(/\./g, "_");
-        const { data } = await helcim("/customers", "POST", {
-          customerCode: code,
-          contactName: params.name,
-          businessName: params.practice_name,
-          email,
-          cellPhone: params.phone,
-        });
-        return json(data);
       }
 
       case "get_customer":

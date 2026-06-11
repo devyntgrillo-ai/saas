@@ -11,9 +11,9 @@ import { Loader2, Lock } from 'lucide-react'
 // Config token is a FRONTEND token (tied to a Helcim.js config); set it as
 // VITE_HELCIM_JS_TOKEN. Until then this renders a "not configured" notice.
 
-// TODO: TEST MODE ACTIVE — Helcim.js config 10465 has test:1. Flip to test:0 in the
-// Helcim dashboard before go-live.
-// TODO: enable amount hashing (enforceHashing) in Helcim dashboard config 10465 before go-live.
+// The config token is a FRONTEND token tied to a Helcim.js config (set as
+// VITE_HELCIM_JS_TOKEN). Production: the config must be live (test:0) with
+// amount hashing (enforceHashing) enabled in the Helcim dashboard.
 const HELCIM_JS_TOKEN = import.meta.env.VITE_HELCIM_JS_TOKEN || ''
 // Verify-mode config (transactionType: Verify) — tokenizes a card at $0 WITHOUT
 // charging, used for "update card on file". Set as VITE_HELCIM_JS_VERIFY_TOKEN.

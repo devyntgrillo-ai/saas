@@ -401,11 +401,8 @@ export default function Onboarding() {
                   <p className="truncate text-[11px] text-slate-500">{doneList.filter(Boolean).length} of {STEPS.length} complete</p>
                 </div>
               </div>
-              {practiceId && (
-                <button type="button" onClick={() => finish()} disabled={saving} className="shrink-0 text-xs font-medium text-slate-500 transition hover:text-slate-300 disabled:opacity-50">
-                  Finish later
-                </button>
-              )}
+              {/* No "Finish later" bypass: payment + BAA are required before the
+                  app is reachable (Practice info -> Payment -> BAA -> App). */}
             </div>
             <p className="mt-5 flex items-center gap-1.5 text-[11px] text-slate-500">
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-400/80" /> HIPAA-secure · BAA included

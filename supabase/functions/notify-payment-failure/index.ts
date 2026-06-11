@@ -1,11 +1,14 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
 // ============================================================================
 // notify-payment-failure - email the practice admin, their reseller, and the
-// super admin when a practice's subscription goes past_due / unpaid.
+// super admin when a Helcim payment fails and the practice goes past_due.
 //
-// Called server-to-server by chargebee-webhook with { practice_id } and a
-// service-role bearer. Resolves contacts and sends via Mailgun. Best-effort: if Mailgun
-// isn't configured it logs and returns ok:false rather than failing the webhook.
+// Called server-to-server with { practice_id } and a service-role bearer by:
+//   • helcim-webhook — on a Helcim declined/failed transaction event, and
+//   • process-billing-renewals — when a self-managed renewal charge fails.
+// Resolves contacts and sends via Mailgun. The email links to /settings/billing,
+// where the customer updates their card on file (Helcim). Best-effort: if Mailgun
+// isn't configured it logs and returns ok:false rather than failing the caller.
 //
 // The practice-facing email is white-labeled to the practice's reseller brand
 // (see _shared/brand.ts); internal copies to the reseller owner + super admin

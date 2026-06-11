@@ -404,9 +404,6 @@ verify_jwt = false
 verify_jwt = false
 [functions.sikka-oauth-callback]
 verify_jwt = false
-# Chargebee billing webhook — authenticated via CHARGEBEE_WEBHOOK_SECRET, not a JWT.
-[functions.chargebee-webhook]
-verify_jwt = false
 # Super-admin user management — requires a signed-in caller (gated to super-admins inside).
 [functions.admin-users]
 verify_jwt = true

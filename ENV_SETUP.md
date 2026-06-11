@@ -22,6 +22,33 @@ npm install
 npm run dev
 ```
 
+## Helcim (Payment Processing)
+
+Billing runs on **Helcim** (card processing is Helcim.js inline; the raw card
+never touches our servers).
+
+**Server-side secrets** (Supabase → Edge Functions → Secrets, or via CLI):
+
+- `HELCIM_API_KEY` — Helcim API key. Used by every server-side Helcim call
+  (`helcim-checkout`, `admin-onboard-practice`, `process-billing-renewals`).
+- `HELCIM_WEBHOOK_VERIFIER_TOKEN` — Helcim dashboard → Webhooks → Verifier
+  Token. Required: `helcim-webhook` rejects any delivery whose signature
+  doesn't verify against this.
+
+```bash
+npx supabase secrets set HELCIM_API_KEY="your-key" --project-ref eymgqjeudrmeofytnwgs
+npx supabase secrets set HELCIM_WEBHOOK_VERIFIER_TOKEN="your-verifier-token" --project-ref eymgqjeudrmeofytnwgs
+```
+
+**Frontend tokens** (`.env.local`) — Helcim.js config tokens (frontend-safe):
+
+- `VITE_HELCIM_JS_TOKEN` — purchase config (charges the card).
+- `VITE_HELCIM_JS_VERIFY_TOKEN` — verify config (tokenizes a card at $0 for
+  card-on-file updates and trials).
+
+Production: the Helcim.js config must be **live** (test:0) with amount hashing
+(`enforceHashing`) enabled in the Helcim dashboard.
+
 ## Deploy schema + edge functions to managed
 
 ```bash

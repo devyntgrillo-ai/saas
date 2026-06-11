@@ -352,10 +352,25 @@ function CallTranscript({ callLogId, status: initialStatus, text: initialText, e
 /**
  * GHL-style call log row in the conversation thread (inbound left + avatar, outbound right).
  */
+// Green = answered, red = not answered / voicemail.
+// Outbound disposition text (power dialer) is the most explicit signal — duration alone is
+// unreliable there (a voicemail still logs duration). Otherwise fall back to the call_logs
+// status (inbound) and finally to call duration.
+function isCallAnswered({ outcome, durationSec, status }) {
+  if (outcome) {
+    const o = outcome.toLowerCase()
+    if (o.includes('voicemail') || o.includes('no answer')) return false
+    if (o.includes('reached') || o.includes('spoke')) return true
+  }
+  if (status === 'no_answer' || status === 'failed') return false
+  return (durationSec || 0) > 0
+}
+
 export default function CallMessageBubble({
   inbound,
   sentAt,
   callLogId,
+  callStatus,
   hasRecording,
   recordingDuration,
   transcriptStatus,
@@ -370,7 +385,8 @@ export default function CallMessageBubble({
   const durTxt = durSec != null ? formatPlayerTime(durSec) : meta?.duration_min ? `${meta.duration_min} min` : null
   const extra = [meta?.outcome, durTxt].filter(Boolean).join(' · ')
 
-  const iconWrap = inbound ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white'
+  const answered = isCallAnswered({ outcome: meta?.outcome, durationSec: durSec ?? recordingDuration, status: callStatus })
+  const iconWrap = answered ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
   const Icon = inbound ? PhoneIncoming : PhoneOutgoing
 
   const card = (
