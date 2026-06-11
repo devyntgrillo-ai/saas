@@ -12,6 +12,7 @@ import {
   isMutating,
 } from '../../lib/queries'
 import { StatCard, Table, Badge, Avatar, money, stop } from '../../components/admin/ui'
+import ResellerTabs from '../../components/admin/ResellerTabs'
 import { COMMISSION_DEFAULT } from '../../lib/resellerSaas'
 
 const STATUS_FILTERS = ['all', 'active', 'trial', 'suspended']
@@ -73,13 +74,11 @@ export default function Agencies() {
 
   return (
     <div className="space-y-6">
+      <ResellerTabs />
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-white">Resellers</h1>
-          <p className="text-sm text-slate-500">
-            {agencies.length} total · {money(totals.commission)}/mo commission owed
-          </p>
-        </div>
+        <p className="text-sm text-slate-500">
+          {agencies.length} total · {money(totals.commission)}/mo commission owed
+        </p>
         <button onClick={() => setAdding(true)} className="btn-primary">
           <Plus className="h-4 w-4" /> Add reseller
         </button>

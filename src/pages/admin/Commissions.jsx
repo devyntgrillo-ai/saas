@@ -5,6 +5,7 @@ import { useAdmin } from '../../context/AdminContext'
 import { isActiveSubaccount } from '../../lib/resellerSaas'
 import { statusMeta as subStatusMeta } from '../../lib/billing'
 import { StatCard, Badge, money } from '../../components/admin/ui'
+import ResellerTabs from '../../components/admin/ResellerTabs'
 
 // Manual monthly commission payout sheet: active referred practices grouped by
 // agency, count × the agency's commission_rate. Read off here to pay by ACH.
@@ -50,11 +51,9 @@ export default function Commissions() {
 
   return (
     <div className="space-y-6">
+      <ResellerTabs />
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-white">Commissions</h1>
-          <p className="text-sm text-slate-500">Monthly referral payouts, active practices × each agency's rate. Pay manually by ACH.</p>
-        </div>
+        <p className="text-sm text-slate-500">Monthly referral payouts, active practices × each agency's rate. Pay manually by ACH.</p>
         <button onClick={exportCsv} disabled={!groups.length} className="btn-ghost">
           <Download className="h-4 w-4" /> Export CSV
         </button>

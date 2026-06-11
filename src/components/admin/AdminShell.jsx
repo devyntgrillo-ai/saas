@@ -11,8 +11,9 @@ import { AdminProvider, useAdmin } from '../../context/AdminContext'
 
 const TABS = [
   { to: '/admin', label: 'Dashboard', end: true },
-  { to: '/admin/agencies', label: 'Resellers' },
-  { to: '/admin/commissions', label: 'Commissions' },
+  // Resellers + Commissions are merged into one tab with an in-page toggle, so
+  // this entry stays highlighted on both /admin/agencies and /admin/commissions.
+  { to: '/admin/agencies', label: 'Resellers', match: ['/admin/agencies', '/admin/commissions'] },
   { to: '/admin/practices', label: 'Subaccounts' },
   { to: '/admin/chats', label: 'Chats' },
   { to: '/admin/team', label: 'Users' },
@@ -67,6 +68,7 @@ function Chrome() {
   const { signOut } = useAuth()
   const { data, loading } = useAdmin()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const handleSignOut = async () => {
@@ -86,17 +88,23 @@ function Chrome() {
       <AccountSwitcher />
 
       <nav className="flex-1 space-y-0.5 px-3">
-        {TABS.map((t) => (
-          <NavLink
-            key={t.to}
-            to={t.to}
-            end={t.end}
-            onClick={() => setMobileOpen(false)}
-            className={navItemClass}
-          >
-            {t.label}
-          </NavLink>
-        ))}
+        {TABS.map((t) => {
+          // Tabs spanning multiple routes (e.g. Resellers covers /agencies and
+          // /commissions) compute active state from `match` instead of NavLink's
+          // own `to`-based check.
+          const matched = t.match?.some((m) => pathname === m || pathname.startsWith(`${m}/`))
+          return (
+            <NavLink
+              key={t.to}
+              to={t.to}
+              end={t.end}
+              onClick={() => setMobileOpen(false)}
+              className={t.match ? () => navItemClass({ isActive: matched }) : navItemClass}
+            >
+              {t.label}
+            </NavLink>
+          )
+        })}
       </nav>
 
       <div className="space-y-1 border-t border-white/[0.07] p-3">
