@@ -157,8 +157,18 @@ Deno.serve(async (req: Request) => {
     // Look up any existing account for this email. An ACTIVE account blocks reuse
     // (we never hijack a live login); a DEACTIVATED one is revived in place below
     // so a deactivated email can always be re-onboarded.
-    const { data: existing } = await admin.from("users").select("id, access_level").eq("email", ownerEmail).maybeSingle();
-    if (existing?.id && existing.access_level !== "deactivated") {
+    //
+    // "Active" mirrors the admin Users tab's classification (Team.jsx): a user is
+    // active only with a real scope — super_admin, agency_*, practice_*, or a
+    // practice_id. Everything else is effectively deactivated, whether that's
+    // stored as access_level='deactivated' (the deactivate flow) or null (the
+    // legacy revoke flow) — both should revive.
+    const { data: existing } = await admin.from("users").select("id, access_level, practice_id").eq("email", ownerEmail).maybeSingle();
+    const lvl = String(existing?.access_level || "");
+    const activeAccount = Boolean(existing?.id) && (
+      lvl === "super_admin" || lvl.startsWith("agency_") || lvl.startsWith("practice_") || Boolean(existing.practice_id)
+    );
+    if (activeAccount) {
       return json({ error: "That email already has an active account. Deactivate it first, or use the admin Users tab to manage it." }, 409);
     }
 
