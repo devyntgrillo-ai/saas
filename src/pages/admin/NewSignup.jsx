@@ -139,24 +139,24 @@ export default function NewSignup() {
   // ---- Submitting: full loading state while the charge + provisioning runs ----
   if (submitting) {
     return (
-      <>
+      <div className="relative isolate min-h-[85vh]">
         <Confetti variant="ambient" />
         <div className="relative z-10 mx-auto flex max-w-xl flex-col items-center justify-center gap-4 py-24 text-center">
           <Loader2 className="h-10 w-10 animate-spin text-primary-300" />
           <h1 className="text-xl font-bold text-white">Setting up the account…</h1>
           <p className="text-sm text-slate-400">Processing payment and creating their login. Hang tight — don't close this tab.</p>
         </div>
-      </>
+      </div>
     )
   }
 
   // ---- Form ----
   return (
-    <>
+    <div className="relative isolate min-h-[85vh]">
       <Confetti variant="ambient" />
       <div className="relative z-10 mx-auto max-w-xl space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-white">New signup</h1>
+        <h1 className="text-xl font-bold text-white">New Signup</h1>
         <p className="mt-1 text-sm text-slate-400">Instantly provision your CaseLift account and start growing your production.</p>
       </div>
 
@@ -263,6 +263,6 @@ export default function NewSignup() {
         )}
       </div>
       </div>
-    </>
+    </div>
   )
 }
