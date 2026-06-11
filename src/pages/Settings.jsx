@@ -548,7 +548,7 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
 
       {/* Current plan card */}
       <div className="mt-4 rounded-xl border border-surface-700 bg-surface-800/50 p-4">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-stretch justify-between gap-4">
           {/* Left: plan + status text, all stacked tightly. */}
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current plan</p>
@@ -585,8 +585,8 @@ function BillingPanel({ practice, showSuccess, onCancel, onResume, onRefresh }) 
             </div>
           </div>
 
-          {/* Right: status badge + action, aligned with the text across from it. */}
-          <div className="flex shrink-0 flex-col items-end gap-3">
+          {/* Right: status badge pinned top corner, action pinned bottom corner. */}
+          <div className="flex shrink-0 flex-col items-end justify-between gap-3">
             <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${meta.classes}`}>
               {meta.label}
             </span>
