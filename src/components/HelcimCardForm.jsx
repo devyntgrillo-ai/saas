@@ -40,7 +40,7 @@ function readHelcimResults() {
   }
 }
 
-export default function HelcimCardForm({ amount, submitLabel = 'Pay', onApproved, onDeclined, onError, showAmountInLabel = true, showSecureNote = true, verify = false, customerCode }) {
+export default function HelcimCardForm({ amount, submitLabel = 'Pay', onApproved, onDeclined, onError, showAmountInLabel = true, showSecureNote = true, verify = false, customerCode, disabled = false }) {
   const [processing, setProcessing] = useState(false)
   // Verify mode tokenizes the card at $0 (no charge) for card-on-file updates;
   // otherwise it's a purchase. The chosen config token decides which Helcim does.
@@ -69,6 +69,7 @@ export default function HelcimCardForm({ amount, submitLabel = 'Pay', onApproved
   }, [configured, onApproved, onDeclined])
 
   function pay() {
+    if (disabled) return
     if (typeof window.helcimProcess !== 'function') {
       onError?.('Payment library failed to load — refresh and try again.')
       return
@@ -126,7 +127,7 @@ export default function HelcimCardForm({ amount, submitLabel = 'Pay', onApproved
 
         <div id="helcimResults" style={{ display: 'none' }} />
 
-        <button type="button" id="buttonProcess" onClick={pay} disabled={processing} className="btn-primary w-full justify-center">
+        <button type="button" id="buttonProcess" onClick={pay} disabled={processing || disabled} className="btn-primary w-full justify-center">
           {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
           {processing ? 'Processing…' : `${submitLabel}${showAmountInLabel && amount != null ? ` — $${Number(amount).toLocaleString()}` : ''}`}
         </button>

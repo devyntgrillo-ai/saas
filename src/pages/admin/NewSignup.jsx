@@ -231,33 +231,30 @@ export default function NewSignup() {
 
       <div className="card space-y-4 p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Payment</h2>
-        {!detailsValid ? (
-          <div className="rounded-lg border border-surface-700 bg-surface-800/40 px-4 py-3 text-sm text-slate-400">
-            Fill in the practice name, owner name, and a valid owner email to enter the card.
+        {mode === 'charge' && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            Submitting charges the card <strong>${amount.toLocaleString()}</strong> immediately and creates the account.
           </div>
-        ) : (
-          <>
-            {mode === 'charge' && (
-              <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Submitting charges the card <strong>${amount.toLocaleString()}</strong> immediately and creates the account.
-              </div>
-            )}
-            <HelcimCardForm
-              key={mode} // re-mount when switching charge/trial so Helcim.js reinitializes
-              amount={chargeAmount}
-              verify={mode === 'trial'}
-              submitLabel={mode === 'trial' ? 'Save card & start trial' : 'Charge & create account'}
-              showAmountInLabel={false}
-              onApproved={handleApproved}
-              onDeclined={(res) => setError(res?.message || 'The card was declined. Try a different card.')}
-              onError={(msg) => setError(msg || 'Could not start the payment.')}
-            />
-          </>
         )}
-        {!ready && detailsValid && (
+        <HelcimCardForm
+          key={mode} // re-mount when switching charge/trial so Helcim.js reinitializes
+          amount={chargeAmount}
+          verify={mode === 'trial'}
+          submitLabel={mode === 'trial' ? 'Save card & start trial' : 'Charge & create account'}
+          showAmountInLabel={false}
+          disabled={!ready}
+          onApproved={handleApproved}
+          onDeclined={(res) => setError(res?.message || 'The card was declined. Try a different card.')}
+          onError={(msg) => setError(msg || 'Could not start the payment.')}
+        />
+        {!ready && (
           <p className="text-xs text-amber-300">
-            {mode === 'trial' ? 'Enter a valid trial length and post-trial amount.' : 'Enter a valid charge amount.'}
+            {!detailsValid
+              ? 'Add the practice name, account owner name, and a valid email before submitting.'
+              : mode === 'trial'
+                ? 'Enter a valid trial length and post-trial amount.'
+                : 'Enter a valid charge amount.'}
           </p>
         )}
         {error && (
