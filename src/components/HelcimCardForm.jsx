@@ -71,7 +71,7 @@ export default function HelcimCardForm({ amount, submitLabel = 'Pay', onApproved
   function pay() {
     if (disabled) return
     if (typeof window.helcimProcess !== 'function') {
-      onError?.('Payment library failed to load — refresh and try again.')
+      onError?.('Payment library failed to load. Refresh and try again.')
       return
     }
     setProcessing(true)
@@ -129,7 +129,7 @@ export default function HelcimCardForm({ amount, submitLabel = 'Pay', onApproved
 
         <button type="button" id="buttonProcess" onClick={pay} disabled={processing || disabled} className="btn-primary w-full justify-center">
           {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
-          {processing ? 'Processing…' : `${submitLabel}${showAmountInLabel && amount != null ? ` — $${Number(amount).toLocaleString()}` : ''}`}
+          {processing ? 'Processing…' : `${submitLabel}${showAmountInLabel && amount != null ? ` $${Number(amount).toLocaleString()}` : ''}`}
         </button>
         {showSecureNote && (
           <p className="flex items-center justify-center gap-1 text-[11px] text-slate-500">

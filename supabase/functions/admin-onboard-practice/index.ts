@@ -139,7 +139,7 @@ Deno.serve(async (req: Request) => {
     if (!practiceName) return json({ error: "Practice name is required." }, 400);
     if (!ownerName) return json({ error: "Owner name is required." }, 400);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) return json({ error: "A valid owner email is required." }, 400);
-    if (!cardToken) return json({ error: "Missing card token — the card was not captured." }, 400);
+    if (!cardToken) return json({ error: "Missing card token. The card was not captured." }, 400);
 
     const amount = Math.round(Number(body.amount));
     const trialDays = mode === "trial" ? Math.round(Number(body.trial_days)) : 0;
@@ -192,7 +192,7 @@ Deno.serve(async (req: Request) => {
       // demo can complete. Production keeps strict server-side verification.
       if (!match && !TEST_MODE) {
         console.error("admin-onboard verify failed:", JSON.stringify({ helcimStatus: txnRes.status, count: Array.isArray(list) ? list.length : 0, amount }));
-        return json({ error: "We could not verify an approved charge on this card. The card may have declined — try again." }, 400);
+        return json({ error: "We could not verify an approved charge on this card. The card may have declined. Try again." }, 400);
       }
       if (!match) console.warn("admin-onboard: TEST MODE — no live transaction to verify; trusting client result.");
       realTxnId = (match?.transactionId ?? match?.id ?? body.transaction_id) || null;
@@ -315,7 +315,7 @@ Deno.serve(async (req: Request) => {
         `<li>See how ${brand.companyName} works</li>` +
         `</ol>`,
       button: { label: "Set your password & finish setup", url: loginLink },
-      subtext: `Prefer to log in right now? Use this temporary password at ${appBaseUrl()}/login &mdash; <strong>${escapeHtml(tempPassword)}</strong> (you'll be asked to choose a new one).`,
+      subtext: `Prefer to log in right now? Use this temporary password at ${appBaseUrl()}/login: <strong>${escapeHtml(tempPassword)}</strong> (you'll be asked to choose a new one).`,
       footerNote: priceLine,
     });
     const text =
@@ -329,7 +329,7 @@ Deno.serve(async (req: Request) => {
     try {
       const r = await sendMailgunMessage({
         to: ownerEmail,
-        subject: `Welcome to ${brand.companyName} — your account is ready`,
+        subject: `Welcome to ${brand.companyName}, your account is ready`,
         text,
         html,
         fromName: brand.fromName,

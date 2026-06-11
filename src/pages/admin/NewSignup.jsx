@@ -106,8 +106,8 @@ export default function NewSignup() {
             <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-white">Welcome aboard!</h1>
             <p className="mt-2 text-sm text-slate-400">
               {result.mode === 'trial'
-                ? `${result.trial_days}-day trial started — $${Number(result.plan_amount).toLocaleString()}/mo after.`
-                : `Charged $${Number(result.plan_amount).toLocaleString()} — subscription active.`}
+                ? `${result.trial_days}-day trial started. $${Number(result.plan_amount).toLocaleString()}/mo after.`
+                : `Charged $${Number(result.plan_amount).toLocaleString()}. Subscription active.`}
             </p>
           </div>
 
@@ -116,7 +116,7 @@ export default function NewSignup() {
               <Mail className={`h-4 w-4 ${result.email_sent ? 'text-emerald-300' : 'text-amber-300'}`} />
               {result.email_sent
                 ? <>Welcome email sent to <span className="font-medium text-white">{result.owner_email}</span>.</>
-                : <>Email could not be sent — share the login below with <span className="font-medium text-white">{result.owner_email}</span> directly.</>}
+                : <>Email could not be sent. Share the login below with <span className="font-medium text-white">{result.owner_email}</span> directly.</>}
             </div>
             <CopyField label="Set-password / login link" value={result.login_link} />
             <CopyField label="Temporary password (fallback)" value={result.temp_password} />
@@ -144,7 +144,7 @@ export default function NewSignup() {
         <div className="relative z-10 mx-auto flex max-w-xl flex-col items-center justify-center gap-4 py-24 text-center">
           <Loader2 className="h-10 w-10 animate-spin text-primary-300" />
           <h1 className="text-xl font-bold text-white">Setting up the account…</h1>
-          <p className="text-sm text-slate-400">Processing payment and creating their login. Hang tight — don't close this tab.</p>
+          <p className="text-sm text-slate-400">Processing payment and creating their login. Hang tight, don't close this tab.</p>
         </div>
       </div>
     )

@@ -13,7 +13,7 @@ const COLORS = ['#22D3EE', '#38BDF8', '#4ADE80', '#FACC15', '#FB7185', '#C084FC'
 
 export default function Confetti({ variant = 'burst', pieces }) {
   const ambient = variant === 'ambient'
-  const count = pieces ?? (ambient ? 110 : 460)
+  const count = pieces ?? (ambient ? 550 : 460)
 
   // Randomized pieces are built in an effect (not during render) so generation
   // stays pure per React 19's rules.
