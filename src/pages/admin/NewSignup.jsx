@@ -99,8 +99,8 @@ export default function NewSignup() {
   if (result) {
     return (
       <>
-        <Confetti />
-        <div className="mx-auto max-w-xl space-y-6">
+        <Confetti variant="burst" />
+        <div className="relative z-10 mx-auto max-w-xl space-y-6">
           <div className="text-center">
             <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-300" />
             <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-white">Welcome aboard!</h1>
@@ -139,18 +139,26 @@ export default function NewSignup() {
   // ---- Submitting: full loading state while the charge + provisioning runs ----
   if (submitting) {
     return (
-      <div className="mx-auto flex max-w-xl flex-col items-center justify-center gap-4 py-24 text-center">
-        <Loader2 className="h-10 w-10 animate-spin text-primary-300" />
-        <h1 className="text-xl font-bold text-white">Setting up the account…</h1>
-        <p className="text-sm text-slate-400">Processing payment and creating their login. Hang tight — don't close this tab.</p>
-      </div>
+      <>
+        <Confetti variant="ambient" />
+        <div className="relative z-10 mx-auto flex max-w-xl flex-col items-center justify-center gap-4 py-24 text-center">
+          <Loader2 className="h-10 w-10 animate-spin text-primary-300" />
+          <h1 className="text-xl font-bold text-white">Setting up the account…</h1>
+          <p className="text-sm text-slate-400">Processing payment and creating their login. Hang tight — don't close this tab.</p>
+        </div>
+      </>
     )
   }
 
   // ---- Form ----
   return (
-    <div className="mx-auto max-w-xl space-y-6">
-      <h1 className="text-xl font-bold text-white">New signup</h1>
+    <>
+      <Confetti variant="ambient" />
+      <div className="relative z-10 mx-auto max-w-xl space-y-6">
+      <div>
+        <h1 className="text-xl font-bold text-white">New signup</h1>
+        <p className="mt-1 text-sm text-slate-400">Instantly provision your CaseLift account and start growing your production.</p>
+      </div>
 
       <div className="card space-y-4 p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Customer</h2>
@@ -159,11 +167,11 @@ export default function NewSignup() {
           <input className="input" value={practiceName} onChange={(e) => setPracticeName(e.target.value)} placeholder="Pinnacle Dental" />
         </div>
         <div>
-          <label className="label">Owner name</label>
+          <label className="label">Account Owner Name</label>
           <input className="input" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="Dr. Jane Smith" />
         </div>
         <div>
-          <label className="label">Owner email</label>
+          <label className="label">Account Owner Email</label>
           <input className="input" type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} placeholder="jane@practice.com" />
         </div>
       </div>
@@ -254,6 +262,7 @@ export default function NewSignup() {
           <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>
         )}
       </div>
-    </div>
+      </div>
+    </>
   )
 }
