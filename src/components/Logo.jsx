@@ -21,6 +21,25 @@ export default function Logo({ collapsed = false, size = 'md', showBeta = true, 
     return <img src={themedLogo} alt={brandName} className={`${lg ? 'h-11' : 'h-8'} min-w-0 max-w-[190px] object-contain`} />
   }
 
+  // Default CaseLift brand: on dark surfaces use the full-color image lockup
+  // (its light wordmark only reads on dark backgrounds). Light theme keeps the
+  // text logo below. Collapsed falls through to the standalone mark.
+  if (theme === 'dark' && !collapsed) {
+    return (
+      <div className="flex items-center gap-2.5">
+        <img src="/caselift-logo.png" alt="CaseLift" className={`${lg ? 'h-11' : 'h-8'} w-auto object-contain`} />
+        {showBeta && (
+          <span
+            className="rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider"
+            style={{ color: 'var(--accent)', background: 'var(--accent-subtle)', boxShadow: 'inset 0 0 0 1px var(--accent-border)' }}
+          >
+            Beta
+          </span>
+        )}
+      </div>
+    )
+  }
+
   // Mark (matches the favicon): sky-gradient rounded square with an upward
   // "lift" arrow, shown to the left of the wordmark, "Case" in the primary text
   // color, "Lift" in the sky-blue accent.
