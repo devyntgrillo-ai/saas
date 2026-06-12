@@ -162,9 +162,6 @@ export default function Launchpad() {
                       {step.time && !checked && <span className="text-xs text-slate-500">· {step.time}</span>}
                     </div>
                     <p className="mt-0.5 text-sm text-slate-400">{step.description}</p>
-                    {!checked && (
-                      <p className="mt-1.5 text-xs font-medium text-primary-300/80">Completed during Setup Session</p>
-                    )}
                   </div>
                   {!checked && step.action && (
                     <button onClick={() => handleAction(step)} className={isNext ? 'btn-primary shrink-0' : 'btn-secondary shrink-0'}>

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CalendarCheck } from 'lucide-react'
 import Logo from '../components/Logo'
-import Confetti from '../components/Confetti'
 import { useAuth } from '../context/AuthContext'
 import { useUpdatePractice } from '../lib/queries'
 
@@ -66,8 +65,6 @@ export default function SetupSession() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-surface">
-      <Confetti variant="burst" />
-
       <div className="relative mx-auto flex max-w-2xl flex-col px-5 py-10 sm:px-8 sm:py-16">
         <Logo forceDefault />
 
