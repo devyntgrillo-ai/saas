@@ -407,7 +407,9 @@ verify_jwt = false
 # Helcim billing webhook — Helcim sends no Supabase JWT; authenticated inside via
 # the HMAC signature (HELCIM_WEBHOOK_VERIFIER_TOKEN). Must be verify_jwt=false or
 # the gateway 401s every delivery (and Helcim's save-time URL validation).
-[functions.helcim-webhook]
+# Named "billing-webhook" (not "helcim-webhook") because Helcim's V2 webhook
+# system rejects any Deliver URL containing the word "helcim".
+[functions.billing-webhook]
 verify_jwt = false
 # Super-admin user management — requires a signed-in caller (gated to super-admins inside).
 [functions.admin-users]

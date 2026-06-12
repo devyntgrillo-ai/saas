@@ -1,7 +1,12 @@
 import { reportEdgeError } from "../_shared/report-error.ts";
-// helcim-webhook — receives Helcim transaction events and reconciles the
-// practice's billing status. Registered in the Helcim dashboard:
-//   https://eymgqjeudrmeofytnwgs.supabase.co/functions/v1/helcim-webhook
+// billing-webhook — receives Helcim transaction events and reconciles the
+// practice's billing status. Registered in the Helcim dashboard as the Deliver URL:
+//   https://eymgqjeudrmeofytnwgs.supabase.co/functions/v1/billing-webhook
+//
+// NB on the name: Helcim's V2 webhook system rejects any Deliver URL that
+// contains the word "helcim" anywhere in the string (an anti-spoofing
+// guardrail), so this function is deliberately named "billing-webhook" rather
+// than "helcim-webhook" — the URL must stay vendor-name-free.
 //
 // verify_jwt=false (Helcim won't send a Supabase JWT). Instead every request is
 // authenticated by an HMAC signature: Helcim signs each delivery with the
@@ -97,7 +102,7 @@ Deno.serve(async (req: Request) => {
       // We can't verify, so we DON'T process — but we acknowledge (200) rather
       // than 503 so Helcim can save the endpoint. Set HELCIM_WEBHOOK_VERIFIER_TOKEN
       // to switch on real verification + processing.
-      console.error("helcim-webhook: HELCIM_WEBHOOK_VERIFIER_TOKEN is not set — acknowledging without processing.");
+      console.error("billing-webhook: HELCIM_WEBHOOK_VERIFIER_TOKEN is not set — acknowledging without processing.");
       return json({ ok: true, unverified: true }, 200);
     }
 
@@ -152,7 +157,7 @@ Deno.serve(async (req: Request) => {
 
     return json({ ok: true, matched: Boolean(practice) });
   } catch (e) {
-    await reportEdgeError("helcim-webhook", e);
+    await reportEdgeError("billing-webhook", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }
 });

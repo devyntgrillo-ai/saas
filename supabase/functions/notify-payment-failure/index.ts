@@ -4,7 +4,7 @@ import { reportEdgeError } from "../_shared/report-error.ts";
 // super admin when a Helcim payment fails and the practice goes past_due.
 //
 // Called server-to-server with { practice_id } and a service-role bearer by:
-//   • helcim-webhook — on a Helcim declined/failed transaction event, and
+//   • billing-webhook — on a Helcim declined/failed transaction event, and
 //   • process-billing-renewals — when a self-managed renewal charge fails.
 // Resolves contacts and sends via Mailgun. The email links to /settings/billing,
 // where the customer updates their card on file (Helcim). Best-effort: if Mailgun

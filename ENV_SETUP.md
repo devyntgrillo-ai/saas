@@ -32,8 +32,11 @@ never touches our servers).
 - `HELCIM_API_KEY` — Helcim API key. Used by every server-side Helcim call
   (`helcim-checkout`, `admin-onboard-practice`, `process-billing-renewals`).
 - `HELCIM_WEBHOOK_VERIFIER_TOKEN` — Helcim dashboard → Webhooks → Verifier
-  Token. Required: `helcim-webhook` rejects any delivery whose signature
-  doesn't verify against this.
+  Token. Required: `billing-webhook` rejects any delivery whose signature
+  doesn't verify against this. (The function is named `billing-webhook`, not
+  `helcim-webhook`, because Helcim's V2 webhook system rejects any Deliver URL
+  containing the word "helcim". Deliver URL:
+  `https://eymgqjeudrmeofytnwgs.supabase.co/functions/v1/billing-webhook`.)
 
 ```bash
 npx supabase secrets set HELCIM_API_KEY="your-key" --project-ref eymgqjeudrmeofytnwgs
