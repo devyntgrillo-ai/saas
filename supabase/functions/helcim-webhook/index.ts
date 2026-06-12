@@ -70,11 +70,9 @@ async function verifySignature(secretRaw: string, id: string, ts: string, sigHea
 
 Deno.serve(async (req: Request) => {
   // Helcim validates the Deliver URL when you save it (and health-checks it).
-  // Acknowledge GET/HEAD/OPTIONS and unsigned pings with 200 so the URL can be
-  // saved, without processing anything — real events always carry the signature
-  // headers.
-  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return json({ ok: true }, 200);
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  // Acknowledge any non-POST probe (GET/HEAD/OPTIONS/etc.) with 200 so the URL
+  // can be saved; only POST carries an actual event to process.
+  if (req.method !== "POST") return json({ ok: true }, 200);
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { autoRefreshToken: false, persistSession: false },

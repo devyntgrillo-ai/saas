@@ -19,8 +19,15 @@ import { createClient } from "@supabase/supabase-js";
 import { resolveAuth } from "../_shared/auth.ts";
 import { callerRole, roleCanViewPHI } from "../_shared/roles.ts";
 import { sanitizeAIOutput } from "../_shared/sanitize.ts";
-import { computeScheduledFor, rulesFrom } from "../_shared/sequence.ts";
-import { applyTcSignoff, resolveTcFirstName } from "../_shared/tc-signoff.ts";
+import { rulesFrom } from "../_shared/sequence.ts";
+import { resolveTcFirstName } from "../_shared/tc-signoff.ts";
+import {
+  buildSequenceRows,
+  ctaRules,
+  groundingRules,
+  kbAllowsFrom,
+  messagesHaveBanned,
+} from "../_shared/sequence-gen.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,34 +37,8 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-// Phrases that instantly make copy feel like an AI/marketing bot (Part 4).
-const BANNED = [
-  "i hope this message finds you well",
-  "as per our conversation",
-  "don't hesitate to reach out",
-  "do not hesitate to reach out",
-  "i wanted to follow up",
-  "just checking in",
-  "excited to help you on your journey",
-  "state-of-the-art facility",
-  "state of the art facility",
-  "revolutionary",
-  "cutting-edge",
-  "cutting edge",
-];
-function scrubBanned(s: string | null): string | null {
-  if (!s) return s;
-  let out = s;
-  for (const p of BANNED) {
-    out = out.replace(new RegExp(p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"), "");
-  }
-  return out.replace(/[ \t]{2,}/g, " ").replace(/\s+([.,!?])/g, "$1").trim()
-}
-function hasBanned(s: string | null): boolean {
-  if (!s) return false
-  const l = s.toLowerCase()
-  return BANNED.some((p) => l.includes(p))
-}
+// Banned-phrase handling, grounding, CTA rules, and row building are shared with
+// extend-sequences in _shared/sequence-gen.ts so both paths stay identical.
 
 // Cadence + length rules per classification (given to Claude; Part 2 + Part 3).
 const CADENCE_RULES = `SEQUENCE LENGTH + CADENCE by classification (you decide offset_hours for each message):
@@ -247,7 +228,7 @@ Deno.serve(async (req: Request) => {
     const { data: kbRows } = await admin
       .from("practice_knowledge_base").select("category, content").eq("practice_id", practiceId).eq("is_active", true).eq("status", "approved").limit(40);
     const { data: pr } = await admin
-      .from("practices").select("sequence_config, auto_start_followup, timezone, knowledge_base_sections, name")
+      .from("practices").select("sequence_config, auto_start_followup, timezone, knowledge_base_sections, name, booking_url")
       .eq("id", practiceId).maybeSingle();
     const kbLines: string[] = [];
     for (const r of (kbRows || [])) kbLines.push(`[${r.category}] ${r.content}`);
@@ -282,26 +263,41 @@ Deno.serve(async (req: Request) => {
     const firstName = nn(consult.patient_first) ?? "the patient";
     const tcFirst = await resolveTcFirstName(admin, consult) ?? "your coordinator";
     const practiceName = nn(pr?.name) ?? "this practice";
+    const bookingUrl = nn(pr?.booking_url);
+    // What this practice may actually claim (financing/guarantee/before-after),
+    // derived from the KB + transcript. Drives both the prompt and the post-gen scrub.
+    const allow = kbAllowsFrom(kbBlock, { transcript: String(deidentified) });
     const userPrompt = `Generate the intelligence + a personalized follow-up sequence for this dental patient from the transcript below.
 
 Patient first name (use this exact name): ${firstName}
 TC first name for email/SMS sign-off (use this exact name, never a placeholder): ${tcFirst}
 Treatment hint (may be wrong, identify the real one): ${treatmentHint}
 Practice: ${practiceName}
-Practice USPs / financing / protocols / guarantees / testimonials (weave 1-2 in naturally where relevant):
+Knowledge base (USPs / financing / protocols / guarantees / testimonials on file). Weave 1-2 in ONLY where naturally relevant:
 ${kbBlock}
 This practice's channel performance: ${channelHint}
+
+${groundingRules(allow)}
+
+${ctaRules(bookingUrl)}
 ${note ? `\nExtra guidance from the treatment coordinator: ${note}\n` : ""}
 Also populate practice_facts with any NEW, durable facts about THIS PRACTICE that would help future follow-ups (e.g. services offered, financing/pricing norms, guarantees, scheduling or office policies, doctor specialties). STRICT RULES: practice-level only (NEVER patient-specific details), factual and durable only (no opinions, sentiment, or one-off chatter), and ONLY facts not already covered in the knowledge base listed above. If nothing qualifies, return an empty array.
 De-identified transcript:
 ${deidentified}`;
 
-    // Generate with up to 3 attempts (Part 10). Scrub any banned phrase that slips through.
+    // Generate with up to 3 attempts (Part 10). Prefer a clean re-roll over lossy
+    // scrubbing: if a draft contains banned AI-cliché phrasing, regenerate (until
+    // the last attempt, where we keep it and scrub as a fallback at row-build time).
     let a: Record<string, unknown> | null = null;
     let lastErr = "";
     for (let attempt = 0; attempt < 3; attempt++) {
-      try { a = await generate(anthropic, userPrompt); break; }
-      catch (e) { lastErr = (e as Error)?.message ?? String(e); }
+      try {
+        const draft = await generate(anthropic, userPrompt);
+        a = draft;
+        const msgs = Array.isArray(draft.messages) ? draft.messages : [];
+        if (attempt < 2 && messagesHaveBanned(msgs)) continue; // re-roll on banned phrasing
+        break;
+      } catch (e) { lastErr = (e as Error)?.message ?? String(e); }
     }
     if (!a) {
       await admin.from("consults").update({ status: "needs_manual_sequence" }).eq("id", consultId).then(() => {}, () => {});
@@ -409,29 +405,15 @@ ${deidentified}`;
     const { count: existingMsgs } = await admin.from("messages").select("id", { count: "exact", head: true }).eq("consult_id", consultId);
     if (!existingMsgs) {
       const createdAt = consult.created_at || new Date().toISOString();
-      const gen = Array.isArray(a.messages) ? a.messages : [];
-      const rows = gen.map((mRaw, i) => {
-        const m = mRaw as Record<string, unknown>;
-        const channel = ["sms", "email", "call"].includes(String(m.channel)) ? String(m.channel) : "sms";
-        const offsetHours = Math.max(0, Number(m.offset_hours) || 0);
-        const day = offsetHours / 24;
-        const bullets = arr(m.call_script_bullets);
-        return {
-          consult_id: consultId,
-          practice_id: practiceId,
-          type: i === 0 ? "followup" : "nurture",
-          channel,
-          subject: channel === "email" ? applyTcSignoff(scrubBanned(nn(m.subject)), tcFirst, practiceName) : null,
-          body: channel === "call" ? null : applyTcSignoff(scrubBanned(nn(m.body)), tcFirst, practiceName),
-          call_script: channel === "call" && bullets.length ? bullets : null,
-          purpose: nn(m.purpose),
-          tone: nn(m.tone),
-          sequence_position: i + 1,
-          status: autoStart ? "scheduled" : "draft",
-          send_day: Math.round(day),
-          scheduled_for: autoStart ? computeScheduledFor(createdAt, day, seqRules) : null,
-        };
-      }).filter((r) => r.channel === "call" ? !!r.call_script : !!r.body);
+      // Grounding allow-list also folds in the model's own financing_discussed read.
+      const rowAllow = { ...allow, financing: allow.financing || intelligence.financing_discussed === true };
+      const { rows, removedClaims } = buildSequenceRows(Array.isArray(a.messages) ? a.messages : [], {
+        consultId, practiceId, tcFirst, practiceName, createdAt,
+        rules: seqRules, autoStart, allow: rowAllow,
+      });
+      if (removedClaims.length) {
+        console.warn(`analyze-consult: scrubbed ${removedClaims.length} ungrounded claim(s) for consult ${consultId}:`, removedClaims.slice(0, 5));
+      }
       if (rows.length) {
         const { error } = await admin.from("messages").insert(rows);
         if (error) console.error("Message insert failed (analysis saved):", error.message);
