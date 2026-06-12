@@ -95,7 +95,7 @@ export default function SetupSession() {
           <h1 className="text-3xl font-bold tracking-tight text-white">You're in! Let's get you set up.</h1>
           <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-slate-400">
             Book a 20-minute Setup Session with our team. We'll connect your PMS, configure your
-            messaging, and have you recording consults by the end of the call.
+            messaging, and have you live by the end of the call.
           </p>
         </div>
 
