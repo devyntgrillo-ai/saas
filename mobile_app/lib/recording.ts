@@ -113,6 +113,25 @@ export async function requestAnalysis(consultId: string) {
   return invokeEdgeFunction('analyze-consult', { consult_id: consultId });
 }
 
+/**
+ * Mark a consult as failed-to-transcribe so the (web + mobile) detail screens
+ * surface a recoverable error + Retry instead of spinning on "analyzing" forever.
+ * Mirrors the web RecordingModal's transcribe .catch handler. Retains the audio
+ * path so the retry can re-run transcription. Best-effort; never throws.
+ */
+export async function markTranscriptionError(
+  consultId: string,
+  audioPath: string | null,
+  message?: string | null,
+) {
+  const patch: Record<string, unknown> = {
+    status: 'transcription_error',
+    transcript_error: message || 'Transcription failed',
+  };
+  if (audioPath) patch.audio_storage_path = audioPath;
+  await supabase.from('consults').update(patch).eq('id', consultId);
+}
+
 export async function saveConsultOutcome(consultId: string, outcome: string, userId?: string | null) {
   const patch: Record<string, unknown> = {
     outcome,
