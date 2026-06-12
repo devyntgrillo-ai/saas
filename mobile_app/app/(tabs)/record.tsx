@@ -19,6 +19,7 @@ import {
 import {
   abandonConsult,
   createConsult,
+  markTranscriptionError,
   saveConsultOutcome,
   transcribeRecording,
   uploadRecording,
@@ -144,8 +145,17 @@ export default function RecordScreen() {
       setSavedConsultId(consultId);
       audioPath = await uploadRecording(practiceId, consultId, buffer, contentType);
 
-      void transcribeRecording({ consultId, audioPath, durationSec: seconds, patient }).catch((e) => {
+      // Transcription runs in the background (don't block the outcome prompt). If
+      // it fails, persist a recoverable transcription_error so the consult shows
+      // an error + Retry on the detail screen instead of spinning on "analyzing"
+      // forever (the web RecordingModal does the same).
+      const bgConsultId = consultId;
+      const bgAudioPath = audioPath;
+      void transcribeRecording({ consultId: bgConsultId, audioPath: bgAudioPath, durationSec: seconds, patient }).catch((e) => {
         console.warn('[transcribe] background failed:', e);
+        void markTranscriptionError(bgConsultId, bgAudioPath, e instanceof Error ? e.message : String(e)).catch(
+          (markErr) => console.warn('[transcribe] could not mark error:', markErr),
+        );
       });
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(practiceId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.processingConsults(practiceId) });

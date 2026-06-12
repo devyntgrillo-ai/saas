@@ -28,16 +28,33 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  // Captured for the outer catch so an unexpected throw can still flip an
+  // existing consult off "analyzing" rather than leaving it stuck.
+  let consultIdForError: string | null = null;
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const body = await req.json().catch(() => ({}));
+    if (typeof body.consult_id === "string") consultIdForError = body.consult_id;
     const { ctx, error: authErr } = await resolveAuth(req, body);
     if (authErr || !ctx) return authErr ?? json({ error: "Unauthorized" }, 401);
     const { practiceId } = ctx;
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const auditClient = createClient(SUPABASE_URL, SERVICE_KEY);
+
+    // Safety net: if an EXISTING consult fails to transcribe, flip it to a
+    // recoverable "transcription_error" (retain the audio path so Retry can
+    // re-run) instead of leaving it stuck on its initial "analyzing" status.
+    // The web client does this in its own catch; doing it server-side covers
+    // every caller (mobile fire-and-forget, Plaud, inbound email). Brand-new
+    // consults (no consult_id yet) have no row to mark, so this is a no-op.
+    const failTranscription = async (detail: string) => {
+      if (!body.consult_id) return;
+      const patch: Record<string, unknown> = { status: "transcription_error", transcript_error: detail };
+      if (body.audio_path) patch.audio_storage_path = body.audio_path;
+      await admin.from("consults").update(patch).eq("id", body.consult_id).then(() => {}, () => {});
+    };
 
     // Transcript: text passthrough, or transcribe stored audio into a timestamped,
     // speaker-labeled dialogue (TC vs Patient) so the consult reads as a back-and-forth.
@@ -52,11 +69,13 @@ Deno.serve(async (req: Request) => {
       const { data: file, error: dErr } = await admin.storage.from(BUCKET).download(body.audio_path);
       if (dErr || !file) {
         console.error("Audio download failed:", dErr?.message);
+        await failTranscription("Could not read the uploaded audio from storage.");
         return json({ error: "Could not read the uploaded audio from storage." }, 502);
       }
       try {
         const { text, segments } = await transcribeAudioWhisperVerbose(openaiKey, file as Blob, body.audio_path.split("/").pop());
         if (!text.trim()) {
+          await failTranscription("No transcript could be produced - the recording may be empty or unreadable.");
           return json({ error: "No transcript could be produced - the recording may be empty or unreadable." }, 422);
         }
         // De-identify each segment BEFORE the diarization LLM sees it, so PHI never
@@ -76,10 +95,12 @@ Deno.serve(async (req: Request) => {
       } catch (e) {
         const detail = (e as Error)?.message ?? String(e);
         console.error("Transcription failed:", detail);
+        await failTranscription(`Transcription failed. ${detail}`.trim());
         return json({ error: "Transcription failed.", detail }, 502);
       }
     }
     if (!deidentified || !deidentified.trim()) {
+      await failTranscription("No transcript could be produced - the recording may be empty or unreadable.");
       return json({ error: "No transcript could be produced - the recording may be empty or unreadable." }, 422);
     }
 
@@ -144,6 +165,13 @@ Deno.serve(async (req: Request) => {
   } catch (e) {
     await reportEdgeError("transcribe-consult", e);
     console.error("transcribe-consult error:", e);
+    // Best-effort: don't leave an existing consult stuck on "analyzing".
+    try {
+      if (consultIdForError) {
+        const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+        await admin.from("consults").update({ status: "transcription_error", transcript_error: String((e as Error)?.message ?? e) }).eq("id", consultIdForError).then(() => {}, () => {});
+      }
+    } catch { /* never throw from the error handler */ }
     return json({ error: "Unexpected error while transcribing.", detail: String((e as Error)?.message ?? e) }, 500);
   }
 });
