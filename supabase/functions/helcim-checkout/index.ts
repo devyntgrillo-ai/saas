@@ -16,6 +16,17 @@ const HELCIM_API_KEY = Deno.env.get("HELCIM_API_KEY");
 const HELCIM_BASE = "https://api.helcim.com/v2";
 const SUPER_ADMIN_EMAIL = "devyntgrillo@gmail.com";
 
+// TEST-ONLY escape hatch. Helcim test cards approve client-side but their
+// transactions aren't visible to the live Payment API, so the strict
+// server-side charge verification can never find them. When HELCIM_TEST_MODE is
+// enabled, record_payment activates on the client's approved Helcim.js result
+// WITHOUT a verified charge — so the full signup flow can be walked with test
+// cards. MUST be unset in production: with it on, activation does not require a
+// real verified payment.
+const HELCIM_TEST_MODE = ["1", "true", "yes", "on"].includes(
+  (Deno.env.get("HELCIM_TEST_MODE") || "").trim().toLowerCase(),
+);
+
 // Plan prices a client may request. Anything else falls back to 997 so a
 // tampered request can't set an arbitrary charge.
 const ALLOWED_AMOUNTS = [497, 597, 697, 797, 897, 997, 1497];
@@ -145,13 +156,23 @@ Deno.serve(async (req: Request) => {
 
         // Strict server-side verification: we require a matching APPROVED Helcim
         // transaction before activating. The client's approval flag is never trusted.
+        //   EXCEPTION: HELCIM_TEST_MODE — test cards approve client-side but their
+        //   transactions aren't returned by the live Payment API, so allow
+        //   activation without a verified charge so the flow can be tested. This is
+        //   a single explicit env toggle, loudly logged, and reverts to fully
+        //   strict the moment it's unset. There is NO standing per-user bypass.
+        const allowTestBypass = HELCIM_TEST_MODE;
         if (!match) {
-          console.error("record_payment verify failed:", JSON.stringify({ helcimStatus: txnRes.status, count: Array.isArray(list) ? list.length : 0, expectedAmount }));
-          return json({ error: "We could not verify an approved payment for this card. Please contact support.", detail: { helcimStatus: txnRes.status, transactionsReturned: Array.isArray(list) ? list.length : 0 } }, 400);
+          if (!allowTestBypass) {
+            console.error("record_payment verify failed:", JSON.stringify({ helcimStatus: txnRes.status, count: Array.isArray(list) ? list.length : 0, expectedAmount }));
+            return json({ error: "We could not verify an approved payment for this card. Please contact support.", detail: { helcimStatus: txnRes.status, transactionsReturned: Array.isArray(list) ? list.length : 0 } }, 400);
+          }
+          console.warn(`⚠️ HELCIM_TEST_MODE bypass: activating practice WITHOUT a verified Helcim charge (cardToken=${cardToken}, expected=$${expectedAmount}, helcimStatus=${txnRes.status}, returned=${Array.isArray(list) ? list.length : 0}). DISABLE HELCIM_TEST_MODE in production.`);
         }
+        const testActivation = !match && allowTestBypass;
 
         // The reconcilable Payment-API transactionId (for future refunds/reversals).
-        const realTxnId = (match?.transactionId ?? match?.id ?? params.transaction_id) || null;
+        const realTxnId = (match?.transactionId ?? match?.id ?? params.transaction_id) || (testActivation ? "TEST_MODE_BYPASS" : null);
         const customerCode = (match?.customerCode || params.customer_code) || null;
         const last4 = String(params.card_last4 || match?.cardNumber || "").replace(/\D/g, "").slice(-4) || null;
 
