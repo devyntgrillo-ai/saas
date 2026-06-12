@@ -296,7 +296,15 @@ export default function Onboarding() {
   async function acceptBaa() {
     if (!baaAgree) return
     const ok = await recordBaaAcceptance(practiceId)
-    if (ok) nextStep()
+    if (!ok) return
+    // Streamlined onboarding: the old in-app wizard (welcome / invite / demo) is
+    // bypassed. Once the BAA is signed we mark onboarding complete — so the app
+    // shell (Dashboard) is reachable — and send the practice straight to booking
+    // their Setup Session, where our team configures PMS, messaging, and team
+    // setup together. The wizard steps remain in this file but are no longer
+    // part of the normal flow.
+    await savePatch({ onboarding_completed: true })
+    navigate('/onboarding/setup-session', { replace: true })
   }
 
   async function sendInvite() {

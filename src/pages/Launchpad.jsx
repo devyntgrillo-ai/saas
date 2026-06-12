@@ -115,7 +115,7 @@ export default function Launchpad() {
           <Rocket className="h-6 w-6" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-white">Launchpad</h1>
+          <h1 className="text-xl font-bold text-white">Setup Progress</h1>
           <p className="text-sm text-slate-400">A few quick steps to get the most out of CaseLift.</p>
         </div>
       </div>
@@ -162,6 +162,9 @@ export default function Launchpad() {
                       {step.time && !checked && <span className="text-xs text-slate-500">· {step.time}</span>}
                     </div>
                     <p className="mt-0.5 text-sm text-slate-400">{step.description}</p>
+                    {!checked && (
+                      <p className="mt-1.5 text-xs font-medium text-primary-300/80">Completed during Setup Session</p>
+                    )}
                   </div>
                   {!checked && step.action && (
                     <button onClick={() => handleAction(step)} className={isNext ? 'btn-primary shrink-0' : 'btn-secondary shrink-0'}>
