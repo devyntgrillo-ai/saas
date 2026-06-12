@@ -70,9 +70,10 @@ async function verifySignature(secretRaw: string, id: string, ts: string, sigHea
 
 Deno.serve(async (req: Request) => {
   // Helcim validates the Deliver URL when you save it (and health-checks it).
-  // Acknowledge GET/HEAD and unsigned pings with 200 so the URL can be saved,
-  // without processing anything — real events always carry the signature headers.
-  if (req.method === "GET" || req.method === "HEAD") return json({ ok: true }, 200);
+  // Acknowledge GET/HEAD/OPTIONS and unsigned pings with 200 so the URL can be
+  // saved, without processing anything — real events always carry the signature
+  // headers.
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return json({ ok: true }, 200);
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
@@ -93,9 +94,13 @@ Deno.serve(async (req: Request) => {
     // --- A signed delivery: authenticate before touching its payload. ---
     const secret = Deno.env.get("HELCIM_WEBHOOK_VERIFIER_TOKEN");
     if (!secret) {
-      // Fail closed: without the verifier we can't trust any delivery.
-      console.error("helcim-webhook: HELCIM_WEBHOOK_VERIFIER_TOKEN is not set — refusing to process.");
-      return json({ error: "Webhook verifier not configured" }, 503);
+      // Setup window: the verifier secret isn't configured yet (e.g. Helcim's
+      // save-time test delivery, before the token has been copied into secrets).
+      // We can't verify, so we DON'T process — but we acknowledge (200) rather
+      // than 503 so Helcim can save the endpoint. Set HELCIM_WEBHOOK_VERIFIER_TOKEN
+      // to switch on real verification + processing.
+      console.error("helcim-webhook: HELCIM_WEBHOOK_VERIFIER_TOKEN is not set — acknowledging without processing.");
+      return json({ ok: true, unverified: true }, 200);
     }
 
     if (!id || !ts || !sig) {
