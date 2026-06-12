@@ -109,7 +109,7 @@ export default function Launchpad() {
 
   // ── Checklist ──────────────────────────────────────────────────────────────
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-3xl space-y-4">
       <div className="flex items-start gap-3">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary-300">
           <Rocket className="h-6 w-6" />
@@ -121,12 +121,12 @@ export default function Launchpad() {
       </div>
 
       {/* Progress */}
-      <div className="card p-5">
+      <div className="card p-4">
         <div className="flex items-center justify-between text-sm">
           <span className="font-medium text-slate-200">Setup progress: {completedCount} of {LAUNCHPAD_TOTAL} complete</span>
           <span className="text-slate-500">{pct}%</span>
         </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-800">
+        <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-surface-800">
           <div className="h-full rounded-full bg-emerald-400 transition-all duration-500" style={{ width: `${pct}%` }} />
         </div>
       </div>
@@ -135,7 +135,7 @@ export default function Launchpad() {
       {loading ? (
         <div className="card flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {LAUNCHPAD_STEPS.map((step) => {
             const checked = done.has(step.key)
             const isNext = step.key === nextKey
@@ -143,7 +143,7 @@ export default function Launchpad() {
               <div
                 key={step.key}
                 className={[
-                  'rounded-2xl border bg-surface-900 p-5 transition',
+                  'rounded-xl border bg-surface-900 p-3.5 transition',
                   checked
                     ? 'border-emerald-500/30 opacity-70'
                     : isNext
@@ -151,7 +151,7 @@ export default function Launchpad() {
                     : 'border-surface-700',
                 ].join(' ')}
               >
-                <div className="flex items-start gap-4">
+                <div className="flex items-start gap-3">
                   <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${checked ? 'bg-emerald-500 !text-white' : 'border-2 border-surface-600 bg-surface-800'}`}>
                     {checked && <Check className="h-4 w-4" />}
                   </span>
