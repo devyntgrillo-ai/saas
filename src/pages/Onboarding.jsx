@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   UserCircle,
-  Building2,
   CreditCard,
   ShieldCheck,
   UserPlus,
@@ -12,12 +11,12 @@ import {
   ArrowRight,
   CheckCircle2,
   Mail,
-  Play,
   Mic,
   Sparkles,
   Rocket,
 } from 'lucide-react'
 import Logo from '../components/Logo'
+import Confetti from '../components/Confetti'
 import PasswordField from '../components/PasswordField'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -45,15 +44,13 @@ function parsePlanAmount(searchParams) {
 // Steps are intentionally NOT labeled "Step 1 of 5" anywhere, the sidebar just
 // lists the named stages with quiet completion ticks (Asana/ClickUp feel). Each
 // stage saves independently so a practice can leave and resume any time.
-// Public signup handles account + payment; the in-app onboarding starts at the
-// BAA (required) and then the streamlined Welcome → Invite → Demo steps.
+// Public signup handles account + payment; onboarding finishes at the BAA, then
+// the practice is sent to book their Setup Session (the old in-app wizard —
+// Welcome → Invite → Demo — is bypassed, so those steps no longer appear here).
 const STEPS = [
   { key: 'account', label: 'Create your account', icon: UserCircle, blurb: 'A few details to get started.' },
   { key: 'payment', label: 'Activate your plan', icon: CreditCard, blurb: 'Start your subscription.' },
   { key: 'baa', label: 'Sign the BAA', icon: ShieldCheck, blurb: 'HIPAA business associate agreement.' },
-  { key: 'welcome', label: 'Welcome', icon: Building2, blurb: 'A couple quick details.' },
-  { key: 'invite', label: 'Invite your team', icon: UserPlus, blurb: 'Who will record consults?' },
-  { key: 'demo', label: 'See how it works', icon: Play, blurb: 'A quick walkthrough.' },
 ]
 
 const CONSULTS_PER_WEEK = ['1-2', '3-5', '6-10', '10+']
@@ -80,6 +77,9 @@ export default function Onboarding() {
   const createAccountMutation = useCreateOnboardingAccount()
   const teamInviteMutation = useOnboardingTeamInvite()
   const [paying, setPaying] = useState(false)
+  // Celebratory confetti burst the moment payment succeeds. Cleared after the
+  // burst plays so it doesn't linger on later steps.
+  const [celebrate, setCelebrate] = useState(false)
   const saving = paying || savePatchMutation.isPending || createAccountMutation.isPending
   const [saveError, setSaveError] = useState('')
 
@@ -199,6 +199,13 @@ export default function Onboarding() {
   }
   function nextStep() { goTo(Math.min(active + 1, STEPS.length - 1)) }
 
+  // Fire the confetti burst on payment success, then auto-clear it so it doesn't
+  // carry over onto the BAA step.
+  function celebratePayment() {
+    setCelebrate(true)
+    setTimeout(() => setCelebrate(false), 5000)
+  }
+
   async function savePatch(patch, { refresh = true } = {}) {
     if (!practiceId) { setSaveError('Your account is not linked to a practice yet. Sign out and back in, or contact support.'); return false }
     setSaveError('')
@@ -265,6 +272,7 @@ export default function Onboarding() {
       })
       try { localStorage.removeItem(OFFER_STORAGE_KEY) } catch { /* noop */ }
       await refreshProfile()
+      celebratePayment()
       nextStep()
     } catch (e) {
       setSaveError(e?.message || 'Your card was charged but we could not confirm it — please contact support.')
@@ -286,6 +294,7 @@ export default function Onboarding() {
       })
       try { localStorage.removeItem(OFFER_STORAGE_KEY) } catch { /* noop */ }
       await refreshProfile()
+      celebratePayment()
       nextStep()
     } catch (e) {
       setSaveError(e?.message || 'We could not start your trial — please try again.')
@@ -337,6 +346,7 @@ export default function Onboarding() {
 
   return (
     <div className="flex min-h-screen flex-col bg-surface lg:flex-row">
+      {celebrate && <Confetti variant="burst" />}
       {/* ── Brand panel: premium left rail (gradient wash + value props + proof) ─ */}
       <aside className="relative flex shrink-0 flex-col overflow-hidden border-b border-surface-700 bg-surface-900 px-6 py-8 lg:w-[440px] lg:border-b-0 lg:border-r lg:px-10 lg:py-12">
         {/* Ambient brand glow, fills the rail so it reads as a designed panel. */}
