@@ -466,6 +466,13 @@ Deno.serve(async (req: Request) => {
       await admin.from("conversations").delete().eq("practice_id", prior.id); // cascades conversation_messages
       await admin.from("consults").delete().eq("practice_id", prior.id); // cascades messages
       await admin.from("practice_members").delete().eq("practice_id", prior.id);
+      // support_messages.practice_id is the one FK to practices with ON DELETE
+      // NO ACTION (every other child is cascade or set-null), so leftover
+      // support-chat rows silently blocked the practice delete below. That left
+      // the old practice — and its unique twilio_phone_e164 — in place, so the
+      // practice re-insert failed with a duplicate-key error and aborted the
+      // reseed. Clear them first so the delete (and cascade) can proceed.
+      await admin.from("support_messages").delete().eq("practice_id", prior.id);
       await admin.from("practices").delete().eq("id", prior.id);
     }
 
