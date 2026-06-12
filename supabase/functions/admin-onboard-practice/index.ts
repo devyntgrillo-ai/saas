@@ -301,24 +301,18 @@ Deno.serve(async (req: Request) => {
       heading: `Welcome to ${brand.companyName}, ${escapeHtml(firstName)}!`,
       bodyHtml:
         `<p style="margin:0 0 12px">Your ${brand.companyName} account for <strong>${escapeHtml(practiceName)}</strong> is ready. ` +
-        `Set your password below, then finish a few quick steps to get going.</p>` +
-        `<p style="margin:0 0 6px;color:#cbd5e1"><strong>After you log in:</strong></p>` +
-        `<ol style="margin:0;padding-left:18px;color:#94a3b8;line-height:1.7">` +
-        `<li>Sign your HIPAA Business Associate Agreement</li>` +
-        `<li>Confirm your practice details</li>` +
-        `<li>Invite your team</li>` +
-        `<li>See how ${brand.companyName} works</li>` +
-        `</ol>`,
-      button: { label: "Set your password & finish setup", url: loginLink },
+        `Just set your password below to log in.</p>` +
+        `<p style="margin:0;color:#94a3b8;line-height:1.7">The first time you log in, you'll confirm a one-page HIPAA Business Associate Agreement — that's the only step on your end. ` +
+        `We'll take care of everything else together on your Setup Session.</p>`,
+      button: { label: "Set your password", url: loginLink },
       subtext: `Prefer to log in right now? Use this temporary password at ${appBaseUrl()}/login: <strong>${escapeHtml(tempPassword)}</strong> (you'll be asked to choose a new one).`,
       footerNote: priceLine,
     });
     const text =
       `Welcome to ${brand.companyName}, ${firstName}!\n\n` +
-      `Your account for ${practiceName} is ready.\n\n` +
-      `Set your password & finish setup: ${loginLink}\n\n` +
+      `Your account for ${practiceName} is ready. Just set your password to log in:\n${loginLink}\n\n` +
       `Or log in now at ${appBaseUrl()}/login with this temporary password: ${tempPassword}\n\n` +
-      `After you log in: 1) Sign your HIPAA BAA, 2) Confirm practice details, 3) Invite your team, 4) See how it works.\n\n` +
+      `The first time you log in, you'll confirm a one-page HIPAA BAA — that's the only step on your end. We'll handle everything else together on your Setup Session.\n\n` +
       priceLine;
     let emailSent = false;
     let emailReason: string | null = null;

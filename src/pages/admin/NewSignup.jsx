@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react'
-import { UserPlus, CheckCircle2, Copy, Check, Settings2, AlertTriangle, Mail, Loader2 } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
+import { UserPlus, CheckCircle2, Copy, Check, Settings2, AlertTriangle, Mail, Loader2, CalendarCheck } from 'lucide-react'
 import HelcimCardForm from '../../components/HelcimCardForm'
 import Confetti from '../../components/Confetti'
+import BookingCalendar from '../../components/BookingCalendar'
 import { adminOnboardPractice } from '../../lib/billing'
+import { supabase } from '../../lib/supabase'
 
 // Super-admin "close the deal on a sales call" page. The rep collects the
 // customer's details + card, charges immediately (custom amount, $997 default)
@@ -48,6 +50,19 @@ export default function NewSignup() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [sessionBooked, setSessionBooked] = useState(false)
+
+  // Rep books the Setup Session with the customer on the success screen. Stamp
+  // it on the freshly-provisioned practice so it reflects on their dashboard.
+  // Best-effort — the rep booked it live regardless of whether GHL posts back.
+  const handleSessionBooked = useCallback(async () => {
+    setSessionBooked(true)
+    const pid = result?.practice_id
+    if (!pid) return
+    try {
+      await supabase.from('practices').update({ setup_session_booked_at: new Date().toISOString() }).eq('id', pid)
+    } catch { /* best-effort */ }
+  }, [result])
 
   const amount = Number(amountStr)
   const trialDays = Number(trialDaysStr)
@@ -92,7 +107,7 @@ export default function NewSignup() {
     setPracticeName(''); setOwnerName(''); setOwnerEmail('')
     setAmountStr(String(RECOMMENDED_AMOUNT))
     setMoreOpen(false); setIsTrial(false); setTrialDaysStr('14'); setTrialAmountStr(String(RECOMMENDED_AMOUNT))
-    setError(''); setResult(null)
+    setError(''); setResult(null); setSessionBooked(false)
   }
 
   // ---- Success: celebrate, then hand the rep the login details ----
@@ -122,8 +137,27 @@ export default function NewSignup() {
             <CopyField label="Temporary password (fallback)" value={result.temp_password} />
             <p className="text-xs text-slate-500">
               They can click the link to set their own password, or sign in at /login with the temporary password.
-              Either way they'll land in onboarding to sign the BAA and finish setup.
+              The first time they log in they'll confirm a one-page HIPAA BAA, then they're straight into their account.
             </p>
+          </div>
+
+          {/* Book the Setup Session with the customer right here, live on the call. */}
+          <div className="card space-y-4 p-6">
+            <div className="flex items-center gap-2">
+              <CalendarCheck className="h-5 w-5 shrink-0 text-primary-300" />
+              <div>
+                <h2 className="text-sm font-semibold text-white">Book their Setup Session</h2>
+                <p className="text-sm text-slate-400">
+                  Grab a 20-minute time with {ownerName.trim() || 'them'} now — we'll connect their PMS, messaging, and team together on the call.
+                </p>
+              </div>
+            </div>
+            {sessionBooked && (
+              <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+                <CheckCircle2 className="h-4 w-4 shrink-0" /> Setup Session booked — it'll show on their dashboard.
+              </div>
+            )}
+            <BookingCalendar onBooked={handleSessionBooked} idSuffix="admin_setup" minHeight={680} />
           </div>
 
           <div className="text-center">

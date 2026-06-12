@@ -1,15 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarCheck, Loader2 } from 'lucide-react'
+import { CalendarCheck } from 'lucide-react'
 import Logo from '../components/Logo'
+import BookingCalendar from '../components/BookingCalendar'
 import { useAuth } from '../context/AuthContext'
 import { useUpdatePractice } from '../lib/queries'
-
-// GHL (LeadConnector) booking widget for the post-BAA Setup Session. The embed
-// id is fixed; form_embed.js auto-resizes the iframe to its content height.
-const GHL_CALENDAR_ID = 'yF486V70ALrKsciletAg'
-const GHL_BOOKING_SRC = `https://api.leadconnectorhq.com/widget/booking/${GHL_CALENDAR_ID}`
-const GHL_EMBED_SCRIPT = 'https://link.msgsndr.com/js/form_embed.js'
 
 // Final step of onboarding: BAA is signed, billing is active. We send the
 // practice straight here (the multi-step wizard is bypassed) to book a 20-minute
@@ -20,34 +15,6 @@ export default function SetupSession() {
   const { practiceId, refreshProfile } = useAuth()
   const updatePractice = useUpdatePractice()
   const bookedRef = useRef(false)
-  const [calLoaded, setCalLoaded] = useState(false)
-
-  // Warm up the GHL connection ASAP (DNS + TLS) so the booking iframe — which
-  // can otherwise sit blank for 10-15s — starts painting sooner.
-  useEffect(() => {
-    const hosts = ['https://api.leadconnectorhq.com', 'https://link.msgsndr.com']
-    const links = hosts.flatMap((href) =>
-      ['preconnect', 'dns-prefetch'].map((rel) => {
-        const l = document.createElement('link')
-        l.rel = rel
-        l.href = href
-        l.crossOrigin = 'anonymous'
-        document.head.appendChild(l)
-        return l
-      }),
-    )
-    return () => links.forEach((l) => l.remove())
-  }, [])
-
-  // Load the LeadConnector embed script once so the iframe auto-sizes.
-  useEffect(() => {
-    if (document.querySelector(`script[src="${GHL_EMBED_SCRIPT}"]`)) return
-    const s = document.createElement('script')
-    s.src = GHL_EMBED_SCRIPT
-    s.type = 'text/javascript'
-    s.async = true
-    document.body.appendChild(s)
-  }, [])
 
   const handleBooked = useCallback(async () => {
     if (bookedRef.current) return
@@ -64,22 +31,6 @@ export default function SetupSession() {
     navigate('/', { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [practiceId, navigate])
-
-  // Best-effort booking detection: the GHL widget posts a message to the parent
-  // window when an appointment is booked. Match LeadConnector/msgsndr messages
-  // that look like a booking, stamp setup_session_booked_at, then go to the
-  // dashboard. The "Skip for now" link is the guaranteed path if no event fires.
-  useEffect(() => {
-    function onMessage(e) {
-      const origin = String(e.origin || '')
-      if (!/leadconnectorhq\.com|msgsndr\.com/.test(origin)) return
-      const raw = typeof e.data === 'string' ? e.data : JSON.stringify(e.data || '')
-      if (!/appointment|booking|booked|scheduled/i.test(raw)) return
-      handleBooked()
-    }
-    window.addEventListener('message', onMessage)
-    return () => window.removeEventListener('message', onMessage)
-  }, [handleBooked])
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-surface">
@@ -99,24 +50,8 @@ export default function SetupSession() {
           </p>
         </div>
 
-        {/* GHL booking calendar. The widget can take 10-15s to paint, so show a
-            loading state over the (white) frame until its onLoad fires instead of
-            a blank panel. */}
-        <div className="relative mt-8 overflow-hidden rounded-2xl border border-surface-700 bg-white" style={{ minHeight: 720 }}>
-          {!calLoaded && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white text-slate-500">
-              <Loader2 className="h-7 w-7 animate-spin text-primary" />
-              <p className="text-sm font-medium">Loading your calendar…</p>
-            </div>
-          )}
-          <iframe
-            src={GHL_BOOKING_SRC}
-            title="Book your Setup Session"
-            onLoad={() => setCalLoaded(true)}
-            style={{ width: '100%', minHeight: 720, border: 'none', overflow: 'hidden' }}
-            scrolling="no"
-            id={`${GHL_CALENDAR_ID}_setup_session`}
-          />
+        <div className="mt-8">
+          <BookingCalendar onBooked={handleBooked} idSuffix="setup_session" />
         </div>
 
         <button
