@@ -9,7 +9,19 @@ cd mobile_app
 cp .env.example .env.local
 # Fill EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (same project as the web app)
 npm install
-npx expo start
+```
+
+This app requires a **development build** (not Expo Go). See:
+
+- **[DEV_BUILD_MAC.md](./DEV_BUILD_MAC.md)** — build and run on macOS (simulator or iPhone)
+- After the dev client is installed: `npm run start:dev` to start Metro
+
+Quick start on Mac (simulator):
+
+```bash
+npx expo prebuild --platform ios
+cd ios && pod install && cd ..
+npx expo run:ios
 ```
 
 ## Scope
