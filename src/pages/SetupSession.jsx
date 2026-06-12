@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarCheck } from 'lucide-react'
+import { CalendarCheck, Loader2 } from 'lucide-react'
 import Logo from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
 import { useUpdatePractice } from '../lib/queries'
@@ -12,7 +12,7 @@ const GHL_BOOKING_SRC = `https://api.leadconnectorhq.com/widget/booking/${GHL_CA
 const GHL_EMBED_SCRIPT = 'https://link.msgsndr.com/js/form_embed.js'
 
 // Final step of onboarding: BAA is signed, billing is active. We send the
-// practice straight here (the multi-step wizard is bypassed) to book a 30-minute
+// practice straight here (the multi-step wizard is bypassed) to book a 20-minute
 // Setup Session where our team connects their PMS, configures messaging, and
 // gets them recording. Booking or skipping both land on the Dashboard.
 export default function SetupSession() {
@@ -20,6 +20,24 @@ export default function SetupSession() {
   const { practiceId, refreshProfile } = useAuth()
   const updatePractice = useUpdatePractice()
   const bookedRef = useRef(false)
+  const [calLoaded, setCalLoaded] = useState(false)
+
+  // Warm up the GHL connection ASAP (DNS + TLS) so the booking iframe — which
+  // can otherwise sit blank for 10-15s — starts painting sooner.
+  useEffect(() => {
+    const hosts = ['https://api.leadconnectorhq.com', 'https://link.msgsndr.com']
+    const links = hosts.flatMap((href) =>
+      ['preconnect', 'dns-prefetch'].map((rel) => {
+        const l = document.createElement('link')
+        l.rel = rel
+        l.href = href
+        l.crossOrigin = 'anonymous'
+        document.head.appendChild(l)
+        return l
+      }),
+    )
+    return () => links.forEach((l) => l.remove())
+  }, [])
 
   // Load the LeadConnector embed script once so the iframe auto-sizes.
   useEffect(() => {
@@ -66,7 +84,9 @@ export default function SetupSession() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-surface">
       <div className="relative mx-auto flex max-w-2xl flex-col px-5 py-10 sm:px-8 sm:py-16">
-        <Logo forceDefault />
+        <div className="flex justify-center">
+          <Logo forceDefault />
+        </div>
 
         <div className="mt-10 text-center">
           <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300">
@@ -74,16 +94,25 @@ export default function SetupSession() {
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-white">You're in! Let's get you set up.</h1>
           <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-slate-400">
-            Book a 30-minute Setup Session with our team. We'll connect your PMS, configure your
+            Book a 20-minute Setup Session with our team. We'll connect your PMS, configure your
             messaging, and have you recording consults by the end of the call.
           </p>
         </div>
 
-        {/* GHL booking calendar */}
-        <div className="mt-8 overflow-hidden rounded-2xl border border-surface-700 bg-white">
+        {/* GHL booking calendar. The widget can take 10-15s to paint, so show a
+            loading state over the (white) frame until its onLoad fires instead of
+            a blank panel. */}
+        <div className="relative mt-8 overflow-hidden rounded-2xl border border-surface-700 bg-white" style={{ minHeight: 720 }}>
+          {!calLoaded && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white text-slate-500">
+              <Loader2 className="h-7 w-7 animate-spin text-primary" />
+              <p className="text-sm font-medium">Loading your calendar…</p>
+            </div>
+          )}
           <iframe
             src={GHL_BOOKING_SRC}
             title="Book your Setup Session"
+            onLoad={() => setCalLoaded(true)}
             style={{ width: '100%', minHeight: 720, border: 'none', overflow: 'hidden' }}
             scrolling="no"
             id={`${GHL_CALENDAR_ID}_setup_session`}
