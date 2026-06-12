@@ -206,11 +206,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void loadAgency(sessionUserId);
   }, [sessionUserId, profileResolvedUserId, loadProfile, loadAgency]);
 
-  const loadAccessiblePractices = useCallback(async (prof: UserProfile | null) => {
+  const loadAccessiblePractices = useCallback(
+    async (prof: UserProfile | null, superAdmin = false) => {
     const sel =
       'id, name, address, city, state, agency_id, baa_accepted_at, onboarding_completed, archived_at, subscription_status';
-    if (!prof?.id) return [];
     try {
+      // Super-admin sees a sample of all practices (mirrors the web account
+      // switcher in src/context/AuthContext.jsx), not just practices they are a
+      // member of — so platform sub-accounts like "Demo Dental" are selectable
+      // on mobile too.
+      if (superAdmin) {
+        const { data } = await supabase
+          .from('practices')
+          .select(sel)
+          .is('archived_at', null)
+          .order('name')
+          .limit(50);
+        return (data as Practice[]) || [];
+      }
+      if (!prof?.id) return [];
       const { data: mem } = await supabase
         .from('practice_members')
         .select('practice_id')
@@ -229,17 +243,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       return [];
     }
-  }, []);
+  },
+    [],
+  );
 
   useEffect(() => {
     if (!session?.user || profileLoading) return;
     let active = true;
-    void loadAccessiblePractices(profile).then((list) => {
+    const superAdmin =
+      (session?.user?.email || '').toLowerCase() === SUPER_ADMIN_EMAIL ||
+      profile?.access_level === 'super_admin';
+    void loadAccessiblePractices(profile, superAdmin).then((list) => {
       if (!active) return;
       setAccessiblePractices(list);
       if (viewingPracticeId && !list.some((p) => p.id === viewingPracticeId)) {
         void deviceDeleteItem(VIEW_KEY);
         setViewingPracticeId(null);
+      } else if (!viewingPracticeId && superAdmin) {
+        // Super-admin has no home practice, so the mobile app would otherwise
+        // land on the first practice alphabetically. Default the demo experience
+        // to the "Demo Dental" sub-account (the populated demo data shared with
+        // the web app). Persisted so it sticks, and still overridable via the
+        // practice switcher.
+        const demo = list.find((p) => p.name === 'Demo Dental');
+        if (demo) {
+          setViewingPracticeId(demo.id);
+          void deviceSetItem(VIEW_KEY, demo.id);
+        }
       }
     });
     return () => {
