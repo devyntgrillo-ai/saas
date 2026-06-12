@@ -13,6 +13,9 @@
       "bundleIdentifier": "com.caselift.mobile",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "CaseLift needs microphone access to record patient consults."
+      },
+      "entitlements": {
+        "aps-environment": "development"
       }
     },
     "android": {
@@ -35,6 +38,7 @@
       "expo-dev-client",
       "expo-router",
       "expo-secure-store",
+      "expo-notifications",
       [
         "expo-av",
         {

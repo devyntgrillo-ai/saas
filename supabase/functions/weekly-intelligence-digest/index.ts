@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand, statTiles, winBox } from "../_shared/brand.ts";
 import { isMailgunConfigured, sendMailgunMessage } from "../_shared/mailgun.ts";
+import { resolveDigestEmails } from "../_shared/recipients.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -131,20 +132,21 @@ Deno.serve(async (req) => {
         results.push({ practice: p.id, sent: false, reason: "mailgun_not_configured", preview: d });
         continue;
       }
-      if (!p.email) {
+      // Per-user: members who enabled the weekly digest get it at their own
+      // address; fall back to the practice contact when nobody has opted in.
+      const digestEmails = await resolveDigestEmails(admin, p.id);
+      const recipients = digestEmails.length ? digestEmails : (p.email ? [p.email] : []);
+      if (!recipients.length) {
         results.push({ practice: p.id, sent: false, reason: "No email on file" });
         continue;
       }
-      const send = await sendMailgunMessage({
-        to: p.email,
-        subject,
-        text,
-        html,
-        fromName: brand.fromName,
-        replyTo: brand.supportEmail,
-        fromKind: "digest",
-      });
-      results.push({ practice: p.id, sent: send.sent, reason: send.sent ? undefined : (send as { reason: string }).reason });
+      const sends = await Promise.all(
+        recipients.map((to: string) =>
+          sendMailgunMessage({ to, subject, text, html, fromName: brand.fromName, replyTo: brand.supportEmail, fromKind: "digest" }),
+        ),
+      );
+      const anySent = sends.some((s) => s.sent);
+      results.push({ practice: p.id, sent: anySent, recipients: recipients.length });
     }
     return json({ ok: true, configured, count: results.length, results });
   } catch (e) {

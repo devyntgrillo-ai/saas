@@ -11,8 +11,9 @@
 //      Slack -> CaseLift's internal SLACK_WEBHOOK_URL only (never per-practice).
 //   4. Always inserts a notifications row for the in-app bell.
 //
-// Push is intentionally out of scope. Service-role only (called by detectors,
-// crons, and a DB trigger via pg_net).
+// Fans out per-user: each practice member's own email/SMS/push prefs (from
+// public.user_notification_settings + user_devices) decide delivery. Service-role
+// only (called by detectors, crons, and a DB trigger via pg_net).
 // ============================================================================
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
@@ -22,6 +23,8 @@ import { sendMailgunMessage } from "../_shared/mailgun.ts";
 import { getTwilioConfig, sendSms } from "../_shared/twilio.ts";
 import { resolveTwilioSmsContext } from "../_shared/twilio-sms-context.ts";
 import { patientInitials } from "../_shared/phi.ts";
+import { resolvePracticeRecipients } from "../_shared/recipients.ts";
+import { sendExpoPush } from "../_shared/expo-push.ts";
 
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
@@ -184,13 +187,14 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (!practice) return json({ error: "Practice not found" }, 404);
 
-    const prefs = { ...(DEFAULTS[eventName] || {}), ...((practice.notification_prefs || {})[eventName] || {}) };
     const brand: Brand = await resolveBrand(admin, practice);
     const t = build(eventName, payload, practice.name || "your practice");
-    const results: Record<string, unknown> = { event: eventName, channels: {} as Record<string, unknown> };
-    const ch = results.channels as Record<string, unknown>;
+    const results: Record<string, unknown> = { event: eventName, recipients: [] as unknown[] };
+    const perUser = results.recipients as unknown[];
 
-    // 1) Always insert the in-app bell row.
+    // 1) In-app bell: one practice-wide row (user_id null) — every member's bell
+    // shows it, unchanged from prior behavior.
+    let bell: Record<string, unknown>;
     try {
       await admin.from("notifications").insert({
         practice_id: practiceId,
@@ -200,63 +204,81 @@ Deno.serve(async (req: Request) => {
         message: t.bellMessage,
         link: t.link,
       });
-      ch.bell = { sent: true };
+      bell = { sent: true };
     } catch (e) {
-      ch.bell = { sent: false, error: String((e as Error)?.message ?? e) };
+      bell = { sent: false, error: String((e as Error)?.message ?? e) };
     }
+    results.bell = bell;
 
-    // 2) Email.
-    if (prefs.email) {
-      const to = practice.notify_email_address || practice.email;
-      if (to) {
-        const html = renderBrandedEmail(brand, {
-          heading: t.heading,
-          bodyHtml: t.bodyHtml,
-          button: t.button,
-        });
+    // 2) Per-user fan-out: email / sms / push gated by each member's own prefs.
+    const recipients = await resolvePracticeRecipients(admin, practiceId, eventName);
+    const cfg = getTwilioConfig();
+    // deno-lint-ignore no-explicit-any
+    const smsCtx = cfg ? resolveTwilioSmsContext(practice as any, cfg) : null;
+    const html = renderBrandedEmail(brand, { heading: t.heading, bodyHtml: t.bodyHtml, button: t.button });
+    const invalidTokens: string[] = [];
+
+    for (const r of recipients) {
+      const ch: Record<string, unknown> = {};
+      // Email
+      if (r.prefs.email && r.email) {
         ch.email = await sendMailgunMessage({
-          to,
+          to: r.email,
           subject: t.subject,
           text: `${t.heading}\n\n${t.button.label}: ${t.button.url}`,
           html,
           fromName: brand.fromName,
           replyTo: brand.supportEmail,
         });
-      } else {
+      } else if (r.prefs.email) {
         ch.email = { sent: false, reason: "no_email_address" };
       }
-    }
-
-    // 3) SMS (staff alert via the practice's Twilio number; not logged as a patient convo).
-    if (prefs.sms) {
-      const toSms = practice.notify_sms_number;
-      const cfg = getTwilioConfig();
-      if (!toSms) ch.sms = { sent: false, reason: "no_sms_number" };
-      else if (!cfg) ch.sms = { sent: false, reason: "twilio_not_configured" };
-      else {
-        // deno-lint-ignore no-explicit-any
-        const ctx = resolveTwilioSmsContext(practice as any, cfg);
-        if (!ctx.ok) ch.sms = { sent: false, reason: ctx.code };
+      // SMS (staff alert via the practice's Twilio number; not a patient convo).
+      if (r.prefs.sms && r.sms) {
+        if (!cfg) ch.sms = { sent: false, reason: "twilio_not_configured" };
+        else if (!smsCtx?.ok) ch.sms = { sent: false, reason: smsCtx?.code ?? "no_twilio_context" };
         else {
           try {
-            const r = await sendSms(cfg, {
-              messagingServiceSid: ctx.mode === "messaging_service" ? ctx.messagingServiceSid : undefined,
-              from: ctx.mode !== "messaging_service" ? ctx.from : undefined,
-              to: toSms,
+            const sr = await sendSms(cfg, {
+              messagingServiceSid: smsCtx.mode === "messaging_service" ? smsCtx.messagingServiceSid : undefined,
+              from: smsCtx.mode !== "messaging_service" ? smsCtx.from : undefined,
+              to: r.sms,
               body: t.smsText,
             });
-            ch.sms = { sent: true, sid: r.sid };
+            ch.sms = { sent: true, sid: sr.sid };
           } catch (e) {
             ch.sms = { sent: false, error: String((e as Error)?.message ?? e) };
           }
         }
+      } else if (r.prefs.sms) {
+        ch.sms = { sent: false, reason: "no_sms_number" };
       }
+      // Push (Expo). Initials only — push payloads transit Apple/Google.
+      if (r.prefs.push && r.pushTokens.length) {
+        const pr = await sendExpoPush(r.pushTokens, {
+          title: t.bellTitle,
+          body: t.bellMessage,
+          data: { event: eventName, link: t.link, practice_id: practiceId },
+        });
+        invalidTokens.push(...pr.invalidTokens);
+        ch.push = { sent: pr.sent, errors: pr.errors.length ? pr.errors : undefined };
+      }
+      perUser.push({ user_id: r.userId, channels: ch });
     }
 
-    // 4) Slack, CaseLift's internal channel ONLY (global env webhook). We do not
+    // Prune dead device tokens reported by Expo (DeviceNotRegistered).
+    if (invalidTokens.length) {
+      try {
+        await admin.from("user_devices").delete().in("expo_push_token", invalidTokens);
+      } catch { /* best-effort */ }
+    }
+
+    // 3) Slack, CaseLift's internal channel ONLY (global env webhook). We do not
     // route to per-practice Slack workspaces: PHI must stay inside our own
     // BAA-covered Slack, never a workspace we can't verify is HIPAA-configured.
-    if (prefs.slack) {
+    // Not per-user — fires once per event based on the internal default.
+    const ch = results as Record<string, unknown>;
+    if (DEFAULTS[eventName]?.slack) {
       const webhook = Deno.env.get("SLACK_WEBHOOK_URL");
       if (!webhook) ch.slack = { sent: false, reason: "no_webhook" };
       else {

@@ -180,3 +180,27 @@ The dev build requests microphone permission for consult recording. Grant it whe
 
 - **Bundle ID:** `com.caselift.mobile`
 - **Deep link scheme:** `caselift` / `exp+caselift-mobile` (dev client)
+
+## Push notifications (per-user)
+
+Notification preferences are **per user** (`public.user_notification_settings`) and shared
+with the web app — the in-app **More → Notifications** screen reads/writes the same row, so
+toggles sync both ways. Push tokens live in `public.user_devices`.
+
+**Enabling real push delivery (one-time setup — not done yet):**
+
+1. **DB migration** — apply `supabase/migrations/20260612120000_per_user_notifications.sql`
+   via the Supabase SQL editor (the project's migration history is unreliable, so don't
+   `db push`). It creates the two tables, RLS, and a behavior-preserving backfill.
+2. **EAS project id** — run `eas init` in `mobile_app/`. Add the resulting id to `app.json`
+   under `expo.extra.eas.projectId`. Without it, `registerForPushNotifications()` cleanly
+   no-ops (`reason: no_eas_project_id`).
+3. **APNs key** — `eas credentials` → iOS → set up a Push Notifications key (.p8) for
+   `com.caselift.mobile`. This is what actually authorizes delivery to Apple.
+4. **Rebuild + device** — `npx expo prebuild --platform ios --clean && npx expo run:ios --device`
+   on a **physical iPhone**. The iOS Simulator cannot receive remote push, so token
+   registration only succeeds on a real device.
+
+**How delivery works:** the `notify-staff` edge function resolves every practice member's
+per-user prefs (`_shared/recipients.ts`) and sends email / SMS / push (`_shared/expo-push.ts`)
+per their toggles. Push payloads use patient initials only (they transit Apple/Google).

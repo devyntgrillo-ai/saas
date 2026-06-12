@@ -14,6 +14,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireServiceRole } from "../_shared/auth.ts";
 import { type Brand, escapeHtml, renderBrandedEmail, resolveBrand, statTiles, winBox } from "../_shared/brand.ts";
 import { sendMailgunToMany } from "../_shared/mailgun.ts";
+import { resolveDigestEmails } from "../_shared/recipients.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -109,7 +110,12 @@ Deno.serve(async (req: Request) => {
     for (const p of practices || []) {
       // Skip practices with no contact email or cancelled subscriptions (unless single-run).
       if (!body.practice_id && (p.subscription_status === "cancelled" || p.subscription_status === "canceled")) continue;
-      const to = [p.email, p.email_reply_to].filter((e: string) => e && /@/.test(e));
+      // Per-user: members who enabled the weekly digest get it at their own
+      // address; fall back to the practice contact when nobody has opted in.
+      const digestEmails = await resolveDigestEmails(admin, p.id);
+      const to = digestEmails.length
+        ? digestEmails
+        : [p.email, p.email_reply_to].filter((e: string) => e && /@/.test(e));
       const d = await digestForPractice(admin, p);
       // Low-recording alerting now lives in the check-unrecorded-streak job
       // (internal, consecutive-unrecorded-consults trigger), not this weekly

@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
+  Bell,
   BookOpen,
   ChevronRight,
   GitBranch,
@@ -112,6 +113,12 @@ export default function MoreIndexScreen() {
           label="Sequences"
           subtitle="Desktop only"
           onPress={() => router.push('/more/sequences')}
+        />
+        <MenuRow
+          icon={Bell}
+          label="Notifications"
+          subtitle="Choose how you're alerted"
+          onPress={() => router.push('/more/notifications')}
         />
         <MenuRow icon={Settings} label="Settings" onPress={() => router.push('/more/settings')} />
       </ScrollView>

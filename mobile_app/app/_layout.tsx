@@ -10,6 +10,7 @@ import '../global.css';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { ColorSchemeProvider, useAppTheme } from '@/lib/color-scheme-context';
 import { ReactQueryProvider } from '@/lib/react-query-provider';
+import { registerForPushNotifications } from '@/lib/queries/notifications';
 import { GateScreen } from '@/components/gate-screen';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -49,8 +50,18 @@ function AppShell() {
     onboardingCompleted,
     practiceContextPending,
     isSuspended,
+    user,
+    practiceId,
   } = useAuth();
   const { colors, colorScheme } = useAppTheme();
+
+  // Register this device for push once the user is in the app. No-ops on the
+  // simulator / before EAS is configured (see DEV_BUILD_MAC.md).
+  useEffect(() => {
+    if (isLoggedIn && isMobileSupported && user?.id) {
+      void registerForPushNotifications(user.id, practiceId);
+    }
+  }, [isLoggedIn, isMobileSupported, user?.id, practiceId]);
 
   const onLayout = useCallback(async () => {
     if (isReady) await SplashScreen.hideAsync();

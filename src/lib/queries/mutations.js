@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../supabase'
 import { queryKeys } from './keys'
 import { patchConversationContextConsult } from './conversations'
@@ -26,6 +26,74 @@ export function useUpdatePractice() {
       queryClient.invalidateQueries({ queryKey: queryKeys.practice(practiceId) })
       queryClient.invalidateQueries({ queryKey: ['practice', practiceId] })
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(practiceId) })
+    },
+  })
+}
+
+// ---- Per-user notification settings (public.user_notification_settings) ----
+// Notification prefs are PER USER (shared across web + mobile via the same row).
+
+export function useMyNotificationSettings(userId) {
+  return useQuery({
+    queryKey: ['myNotificationSettings', userId],
+    enabled: Boolean(userId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('user_notification_settings')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle()
+      if (error) throw error
+      return data
+    },
+  })
+}
+
+export function useMyDevices(userId) {
+  return useQuery({
+    queryKey: ['myDevices', userId],
+    enabled: Boolean(userId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('user_devices')
+        .select('id, expo_push_token, platform, created_at, last_seen_at')
+        .eq('user_id', userId)
+        .order('last_seen_at', { ascending: false })
+      if (error) throw error
+      return data || []
+    },
+  })
+}
+
+export function useUpdateMyNotificationSettings() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId, practiceId, patch }) => {
+      const { error } = await supabase
+        .from('user_notification_settings')
+        .upsert(
+          { user_id: userId, practice_id: practiceId ?? null, ...patch, updated_at: new Date().toISOString() },
+          { onConflict: 'user_id' },
+        )
+      if (error) throw error
+      return { userId, patch }
+    },
+    onSuccess: ({ userId }) => {
+      queryClient.invalidateQueries({ queryKey: ['myNotificationSettings', userId] })
+    },
+  })
+}
+
+export function useRemoveDevice() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ deviceId }) => {
+      const { error } = await supabase.from('user_devices').delete().eq('id', deviceId)
+      if (error) throw error
+      return { deviceId }
+    },
+    onSuccess: (_r, { userId }) => {
+      if (userId) queryClient.invalidateQueries({ queryKey: ['myDevices', userId] })
     },
   })
 }
