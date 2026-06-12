@@ -4,7 +4,6 @@ import {
   Clock,
   Award,
   Network,
-  Plug,
   DollarSign,
   Info,
   ArrowRight,
@@ -231,18 +230,6 @@ export default function Dashboard() {
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           Your account isn't linked to a practice yet. Finish setup in{' '}
           <Link to="/settings" className="font-medium underline">Settings</Link>.
-        </div>
-      )}
-
-      {practiceId && !pmsConnected && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-slate-200">
-          <span className="flex items-center gap-2">
-            <Plug className="h-4 w-4 shrink-0 text-primary-300" />
-            Connect your PMS to see appointments and record consults from your schedule.
-          </span>
-          <Link to="/settings/pms" className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold !text-white transition hover:bg-primary-500">
-            Connect your PMS
-          </Link>
         </div>
       )}
 
