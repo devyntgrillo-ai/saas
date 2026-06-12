@@ -41,7 +41,7 @@ export default function SetupSessionBanner() {
       <p className="min-w-0 flex-1 text-sm text-slate-200">
         {booked
           ? "Your Setup Session is coming up. We'll handle PMS, messaging, and team setup together."
-          : "Book your Setup Session — we'll get everything configured together in 30 minutes."}
+          : "Book your Setup Session — we'll get everything configured together in 20 minutes."}
       </p>
       <div className="flex shrink-0 items-center gap-2">
         <button
