@@ -13,6 +13,7 @@ import {
 import { Link, Navigate } from 'react-router-dom'
 import AILearningFeed from '../components/AILearningFeed'
 import LaunchpadCard from '../components/LaunchpadCard'
+import SetupSessionBanner from '../components/SetupSessionBanner'
 import TodaysAppointmentsSnapshot from '../components/TodaysAppointmentsSnapshot'
 import { SkeletonStatGrid } from '../components/Skeleton'
 const RecordingRateCard = lazyWithReload(() => import('../components/RecordingRateCard'))
@@ -198,6 +199,8 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
+      {/* Setup Session nudge — book/upcoming the 30-min onboarding call. */}
+      <SetupSessionBanner />
       {/* Setup-in-progress nudge, disappears once the Launchpad is complete. */}
       <LaunchpadCard />
       <div>

@@ -26,6 +26,7 @@ import Suspended from './pages/Suspended'
 import ReferralRedirect from './components/ReferralRedirect'
 import BAAEntry from './components/BAAEntry'
 import Onboarding from './pages/Onboarding'
+import SetupSession from './pages/SetupSession'
 import AcceptInvite from './pages/AcceptInvite'
 import AcceptInvitation from './pages/AcceptInvitation'
 import Dashboard from './pages/Dashboard'
@@ -148,6 +149,10 @@ function AppContent() {
                 {/* Onboarding handles payment + BAA + A2P + invites as its own steps,
                     so it sits behind the session only, NOT behind the BAA gate. */}
                 <Route path="/onboarding" element={<Onboarding />} />
+                {/* Post-BAA Setup Session booking. Session-gated only (not behind
+                    the onboarding/BAA gate) so it's reachable right after the BAA
+                    is signed and the wizard is bypassed. */}
+                <Route path="/onboarding/setup-session" element={<SetupSession />} />
 
                 {/* Super-admin portal - standalone shell, outside BAA/onboarding.
                     AdminShell self-gates on isSuperAdmin and provides AdminProvider. */}
