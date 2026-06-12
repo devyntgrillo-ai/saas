@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Trash2, Pencil, ArrowUp, ArrowDown, Loader2, Send,
-  ExternalLink, GraduationCap, AlertTriangle,
+  Clock, Video, GraduationCap, AlertTriangle,
 } from 'lucide-react'
 import Modal from '../../components/Modal'
 import { Badge } from '../../components/admin/ui'
@@ -62,17 +62,31 @@ export default function TrainingAdmin() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [...queryKeys.admin.training(), 'page'] })
 
-  const groupName = useCallback(
-    (key) => groups.find((g) => g.key === key)?.name || key || ', ',
-    [groups],
-  )
+  // Curriculum view: lessons grouped under their module, in module order, each
+  // module's lessons by order_index. Honors the module + category filters.
+  // Lessons whose module_group matches no tab fall into an "Unassigned" section
+  // so they're never lost.
+  const sections = useMemo(() => {
+    const byCat = (l) => fCategory === 'all' || l.category === fCategory
+    const sortByOrder = (arr) => arr.sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+    const orderedGroups = [...groups].sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+    const known = new Set(orderedGroups.map((g) => g.key))
+    const result = []
+    for (const g of orderedGroups) {
+      if (fGroup !== 'all' && g.key !== fGroup) continue
+      const ls = sortByOrder(lessons.filter((l) => l.module_group === g.key && byCat(l)))
+      // When narrowing by category, hide modules that have nothing to show.
+      if (ls.length === 0 && fCategory !== 'all') continue
+      result.push({ group: g, lessons: ls })
+    }
+    if (fGroup === 'all') {
+      const orphans = sortByOrder(lessons.filter((l) => !known.has(l.module_group) && byCat(l)))
+      if (orphans.length) result.push({ group: { key: '__unassigned', name: 'Unassigned' }, lessons: orphans, orphan: true })
+    }
+    return result
+  }, [lessons, groups, fGroup, fCategory])
 
-  const rows = useMemo(() => {
-    let list = [...lessons]
-    if (fGroup !== 'all') list = list.filter((l) => l.module_group === fGroup)
-    if (fCategory !== 'all') list = list.filter((l) => l.category === fCategory)
-    return list.sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
-  }, [lessons, fGroup, fCategory])
+  const shownCount = useMemo(() => sections.reduce((n, s) => n + s.lessons.length, 0), [sections])
 
   const unpushed = useMemo(
     () => lessons.filter((l) => l.status === 'draft' || l.status === 'updated').length,
@@ -96,9 +110,9 @@ export default function TrainingAdmin() {
     await patchLesson(l.id, { status: l.status === 'published' ? 'draft' : 'published' })
   }
 
-  async function reorder(l, dir) {
-    const idx = rows.findIndex((r) => r.id === l.id)
-    const swapWith = rows[idx + dir]
+  async function reorder(l, list, dir) {
+    const idx = list.findIndex((r) => r.id === l.id)
+    const swapWith = list[idx + dir]
     if (!swapWith) return
     const a = l.order_index ?? 0
     const b = swapWith.order_index ?? 0
@@ -298,78 +312,92 @@ export default function TrainingAdmin() {
         </div>
       )}
 
-      {/* Table */}
+      {/* Curriculum */}
       {loading ? (
         <div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div>
+      ) : shownCount === 0 ? (
+        <div className="card px-4 py-16 text-center text-slate-400">No lessons match the filters.</div>
       ) : (
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-surface-700 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  <th className="px-3 py-3 w-16">Order</th>
-                  <th className="px-3 py-3">Module</th>
-                  <th className="px-3 py-3">Title</th>
-                  <th className="px-3 py-3">Description</th>
-                  <th className="px-3 py-3 w-20">Min</th>
-                  <th className="px-3 py-3">Video</th>
-                  <th className="px-3 py-3 w-40">Status</th>
-                  <th className="px-3 py-3 w-24"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-700">
-                {rows.map((l, i) => {
-                  const meta = statusMeta(l.status)
-                  return (
-                    <tr key={l.id} className={i % 2 ? 'bg-surface-800/30' : ''}>
-                      <td className="px-3 py-2.5">
-                        <div className="flex items-center gap-1">
-                          <span className="w-5 text-slate-500">{l.order_index}</span>
-                          <div className="flex flex-col">
-                            <button onClick={() => reorder(l, -1)} disabled={i === 0 || isMutating(reorderMutation, (v) => v.lessonId === l.id)} className="text-slate-500 hover:text-slate-200 disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
-                            <button onClick={() => reorder(l, 1)} disabled={i === rows.length - 1 || isMutating(reorderMutation, (v) => v.lessonId === l.id)} className="text-slate-500 hover:text-slate-200 disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
+        <div className="space-y-4">
+          {sections.map(({ group, lessons: ls, orphan }, si) => {
+            const totalMin = ls.reduce((m, l) => m + minsFromSec(l.duration), 0)
+            return (
+              <section key={group.key} className="card p-4">
+                {/* Module header */}
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    {!orphan && (
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary-300">{si + 1}</span>
+                    )}
+                    <h3 className="text-sm font-semibold text-white">{group.name}</h3>
+                    <span className="text-xs text-slate-500">
+                      {ls.length} lesson{ls.length === 1 ? '' : 's'}{totalMin ? ` · ${totalMin} min` : ''}
+                    </span>
+                  </div>
+                  {!orphan && (
+                    <button onClick={() => setEditing({ module_group: group.key })} className="btn-ghost !py-1.5 text-xs">
+                      <Plus className="h-3.5 w-3.5" /> Add lesson
+                    </button>
+                  )}
+                </div>
+
+                {/* Lessons */}
+                {ls.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-surface-700 px-3 py-6 text-center text-sm text-slate-500">No lessons in this module yet.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {ls.map((l, i) => {
+                      const meta = statusMeta(l.status)
+                      const busy = isMutating(reorderMutation, (v) => v.lessonId === l.id)
+                      return (
+                        <li key={l.id} className="flex items-start gap-3 rounded-xl border border-surface-700/70 bg-surface-800/40 px-3 py-2.5 transition hover:border-surface-600 hover:bg-surface-800/70">
+                          {/* Reorder + position */}
+                          <div className="flex flex-col items-center pt-0.5 text-slate-500">
+                            <button onClick={() => reorder(l, ls, -1)} disabled={i === 0 || busy} className="hover:text-slate-200 disabled:opacity-30" title="Move up"><ArrowUp className="h-3.5 w-3.5" /></button>
+                            <span className="my-0.5 text-[11px] tabular-nums">{i + 1}</span>
+                            <button onClick={() => reorder(l, ls, 1)} disabled={i === ls.length - 1 || busy} className="hover:text-slate-200 disabled:opacity-30" title="Move down"><ArrowDown className="h-3.5 w-3.5" /></button>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap">{groupName(l.module_group)}</td>
-                      <td className="px-3 py-2.5 min-w-[200px]">
-                        <InlineEdit value={l.title} onSave={(v) => patchLesson(l.id, { title: v }, { markUpdated: true })} className="font-medium text-slate-100" />
-                      </td>
-                      <td className="px-3 py-2.5 min-w-[220px]">
-                        <InlineEdit value={l.description} textarea placeholder="Add description…" onSave={(v) => patchLesson(l.id, { description: v }, { markUpdated: true })} className="text-slate-400" />
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <InlineEdit value={String(minsFromSec(l.duration))} number onSave={(v) => patchLesson(l.id, { duration: (Number(v) || 0) * 60 }, { markUpdated: true })} className="text-slate-300" />
-                      </td>
-                      <td className="px-3 py-2.5 min-w-[160px]">
-                        {l.video_url ? (
-                          <a href={l.video_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary-300 hover:text-primary-200 truncate max-w-[200px]">
-                            <ExternalLink className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{l.video_url}</span>
-                          </a>
-                        ) : (
-                          <InlineEdit value="" placeholder="No video" onSave={(v) => patchLesson(l.id, { video_url: v.trim() || null }, { markUpdated: true })} className="text-slate-500 italic" />
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <button onClick={() => toggleStatus(l)} title="Toggle publish/draft">
-                          <Badge className={meta.cls}>{meta.label}</Badge>
-                        </button>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex items-center gap-1.5">
-                          <button onClick={() => setEditing(l)} className="rounded-md border border-surface-700 bg-surface-800 p-1.5 text-slate-300 hover:bg-surface-700" title="Edit"><Pencil className="h-3.5 w-3.5" /></button>
-                          <button onClick={() => removeLesson(l)} disabled={isMutating(deleteMutation, (v) => v.id === l.id)} className="rounded-md border border-surface-700 bg-surface-800 p-1.5 text-rose-300 hover:bg-surface-700 disabled:opacity-40" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-                {rows.length === 0 && (
-                  <tr><td colSpan={8} className="px-3 py-12 text-center text-slate-400">No lessons match the filters.</td></tr>
+
+                          {/* Title + description + meta */}
+                          <div className="min-w-0 flex-1">
+                            <InlineEdit value={l.title} onSave={(v) => patchLesson(l.id, { title: v }, { markUpdated: true })} className="font-medium text-slate-100" placeholder="Untitled lesson" />
+                            <InlineEdit value={l.description} textarea placeholder="Add description…" onSave={(v) => patchLesson(l.id, { description: v }, { markUpdated: true })} className="mt-0.5 text-sm text-slate-400" />
+                            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                              <span className="inline-flex items-center gap-1">
+                                <Clock className="h-3.5 w-3.5 shrink-0" />
+                                <InlineEdit value={String(minsFromSec(l.duration))} number inline onSave={(v) => patchLesson(l.id, { duration: (Number(v) || 0) * 60 }, { markUpdated: true })} className="text-slate-400" /> min
+                              </span>
+                              {l.video_url ? (
+                                <a href={l.video_url} target="_blank" rel="noreferrer" className="inline-flex max-w-[280px] items-center gap-1 text-primary-300 hover:text-primary-200">
+                                  <Video className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{l.video_url}</span>
+                                </a>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-slate-500">
+                                  <Video className="h-3.5 w-3.5 shrink-0" />
+                                  <InlineEdit value="" inline placeholder="Add video URL" onSave={(v) => patchLesson(l.id, { video_url: v.trim() || null }, { markUpdated: true })} className="italic" />
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Status + actions */}
+                          <div className="flex shrink-0 flex-col items-end gap-2">
+                            <button onClick={() => toggleStatus(l)} title="Toggle publish/draft">
+                              <Badge className={meta.cls}>{meta.label}</Badge>
+                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button onClick={() => setEditing(l)} className="rounded-md border border-surface-700 bg-surface-800 p-1.5 text-slate-300 hover:bg-surface-700" title="Edit"><Pencil className="h-3.5 w-3.5" /></button>
+                              <button onClick={() => removeLesson(l)} disabled={isMutating(deleteMutation, (v) => v.id === l.id)} className="rounded-md border border-surface-700 bg-surface-800 p-1.5 text-rose-300 hover:bg-surface-700 disabled:opacity-40" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
+                            </div>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
                 )}
-              </tbody>
-            </table>
-          </div>
+              </section>
+            )
+          })}
         </div>
       )}
 
@@ -406,7 +434,9 @@ export default function TrainingAdmin() {
 }
 
 // Click-to-edit cell. Text by default; `textarea`/`number` switch input type.
-function InlineEdit({ value, onSave, className = '', placeholder = '', textarea = false, number = false }) {
+// `inline` renders a compact, in-flow control (for the duration/video meta line)
+// instead of the default full-width block used for the title/description.
+function InlineEdit({ value, onSave, className = '', placeholder = '', textarea = false, number = false, inline = false }) {
   const [editing, setEditing] = useState(false)
   const [val, setVal] = useState(value ?? '')
   useEffect(() => { setVal(value ?? '') }, [value]) // eslint-disable-line react-hooks/set-state-in-effect
@@ -416,18 +446,19 @@ function InlineEdit({ value, onSave, className = '', placeholder = '', textarea 
     if ((val ?? '') !== (value ?? '')) onSave(val)
   }
   if (editing) {
+    const width = number ? 'w-16' : inline ? 'w-48' : 'w-full'
     const common = {
       autoFocus: true,
       value: val,
       onChange: (e) => setVal(e.target.value),
       onBlur: commit,
-      className: 'input w-full !py-1 !text-sm',
+      className: `input ${width} !py-1 !text-sm`,
     }
     if (textarea) return <textarea {...common} rows={2} onKeyDown={(e) => e.key === 'Escape' && setEditing(false)} />
     return <input {...common} type={number ? 'number' : 'text'} onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false) }} />
   }
   return (
-    <button onClick={() => setEditing(true)} className={`block w-full cursor-text truncate text-left hover:underline decoration-dotted ${className}`} title="Click to edit">
+    <button onClick={() => setEditing(true)} className={`${inline ? 'inline-block max-w-full align-baseline' : 'block w-full'} cursor-text truncate text-left hover:underline decoration-dotted ${className}`} title="Click to edit">
       {(value ?? '') === '' ? <span className="text-slate-600">{placeholder || ', '}</span> : value}
     </button>
   )
