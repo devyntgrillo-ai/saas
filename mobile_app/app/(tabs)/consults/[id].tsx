@@ -195,31 +195,17 @@ export default function ConsultDetailScreen() {
         </View>
       </AppCard>
 
-      <SectionHeader>Recording</SectionHeader>
-      <RecordingPlayer
-        consultId={consult.id}
-        hasAudio={Boolean(consult.audio_storage_path)}
-        processing={transcribing && !consult.audio_storage_path}
-      />
-
-      {!transcript && isConsultStillProcessing(consult.status) ? (
-        <>
-          <SectionHeader>Transcript</SectionHeader>
-          <AppCard variant="tinted">
-            <Text style={{ color: c.accent, fontWeight: '600' }}>Transcript is being generated…</Text>
-            <Text style={{ color: c.textSecondary, fontSize: 13, marginTop: 6 }}>
-              This updates automatically — pull to refresh if needed.
-            </Text>
-          </AppCard>
-        </>
-      ) : transcript ? (
-        <>
-          <SectionHeader>Transcript</SectionHeader>
-          <AppCard variant="tinted">
-            <Text style={{ fontSize: 14, color: c.text, lineHeight: 22 }}>{transcript}</Text>
-          </AppCard>
-        </>
-      ) : null}
+      <SectionHeader>Outcome</SectionHeader>
+      <AppCard variant="tinted">
+        <OutcomeControls
+          consult={consult}
+          scheduledCount={scheduledCount}
+          pending={updateOutcome.isPending}
+          onSelect={setOutcome}
+          onStopSequence={stopSequence}
+          onResumeSequence={() => setOutcome('pending')}
+        />
+      </AppCard>
 
       {analyzing && !consult.coaching_insight ? (
         <AppCard variant="tinted" style={{ marginTop: 8 }}>
@@ -243,18 +229,6 @@ export default function ConsultDetailScreen() {
         </>
       )}
 
-      <SectionHeader>Outcome</SectionHeader>
-      <AppCard variant="tinted">
-        <OutcomeControls
-          consult={consult}
-          scheduledCount={scheduledCount}
-          pending={updateOutcome.isPending}
-          onSelect={setOutcome}
-          onStopSequence={stopSequence}
-          onResumeSequence={() => setOutcome('pending')}
-        />
-      </AppCard>
-
       {data.messages.length > 0 ? (
         <>
           <SectionHeader>Sequence Messages</SectionHeader>
@@ -272,6 +246,32 @@ export default function ConsultDetailScreen() {
           <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 4 }}>
             Full sequence editing is available on desktop.
           </Text>
+          </AppCard>
+        </>
+      ) : null}
+
+      <SectionHeader>Recording</SectionHeader>
+      <RecordingPlayer
+        consultId={consult.id}
+        hasAudio={Boolean(consult.audio_storage_path)}
+        processing={transcribing && !consult.audio_storage_path}
+      />
+
+      {!transcript && isConsultStillProcessing(consult.status) ? (
+        <>
+          <SectionHeader>Transcript</SectionHeader>
+          <AppCard variant="tinted">
+            <Text style={{ color: c.accent, fontWeight: '600' }}>Transcript is being generated…</Text>
+            <Text style={{ color: c.textSecondary, fontSize: 13, marginTop: 6 }}>
+              This updates automatically — pull to refresh if needed.
+            </Text>
+          </AppCard>
+        </>
+      ) : transcript ? (
+        <>
+          <SectionHeader>Transcript</SectionHeader>
+          <AppCard variant="tinted">
+            <Text style={{ fontSize: 14, color: c.text, lineHeight: 22 }}>{transcript}</Text>
           </AppCard>
         </>
       ) : null}

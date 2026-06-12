@@ -20,13 +20,16 @@ import {
   abandonConsult,
   createConsult,
   markTranscriptionError,
+  requestAnalysis,
   saveConsultOutcome,
   transcribeRecording,
   uploadRecording,
   type RecordingPatient,
 } from '@/lib/recording';
+import { supabase } from '@/lib/supabase';
 import { AppButton } from '@/components/ui/AppButton';
 import { GateScreen } from '@/components/gate-screen';
+import { NeuralNet } from '@/components/neural-net';
 import { RecordingAssignment } from '@/components/recording-assignment';
 
 type Phase =
@@ -35,8 +38,17 @@ type Phase =
   | 'paused'
   | 'processing'
   | 'outcome'
+  | 'analyzing'
   | 'done'
   | 'error';
+
+const ANALYZE_MESSAGES = [
+  'Transcribing the recording…',
+  'Identifying treatment type and case value…',
+  'Detecting objections raised…',
+  'Building your coaching insights…',
+  'Preparing your follow-up sequence…',
+];
 
 const OUTCOME_OPTIONS = [
   {
@@ -86,7 +98,11 @@ export default function RecordScreen() {
   const [savedConsultId, setSavedConsultId] = useState<string | null>(null);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState('');
+  const [analyzeMsg, setAnalyzeMsg] = useState(0);
+  const [analyzeProgress, setAnalyzeProgress] = useState(8);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const analysisTriggeredRef = useRef(false);
+  const navDoneRef = useRef(false);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -195,19 +211,59 @@ export default function RecordScreen() {
       } catch (e) {
         console.warn('[outcome] save failed', e);
       }
-      setPhase('done');
-      setTimeout(() => {
-        router.push(`/consults/${savedConsultId}` as never);
-      }, 800);
+      setPhase('analyzing');
     },
-    [savedConsultId, user?.id, router],
+    [savedConsultId, user?.id],
   );
 
   const skipOutcome = useCallback(() => {
     if (!savedConsultId) return;
-    setPhase('done');
-    router.push(`/consults/${savedConsultId}` as never);
-  }, [savedConsultId, router]);
+    setPhase('analyzing');
+  }, [savedConsultId]);
+
+  // Analyzing screen: cycle copy, climb a time-based progress bar, and poll the
+  // consult until analysis completes — then open the detail page. Mirrors the web
+  // ProcessingScreen (src/pages/ProcessingScreen.jsx).
+  useEffect(() => {
+    if (phase !== 'analyzing') return;
+    navDoneRef.current = false;
+    analysisTriggeredRef.current = false;
+    setAnalyzeMsg(0);
+    setAnalyzeProgress(8);
+    const consultId = savedConsultId;
+    if (!consultId) return;
+
+    const msgTimer = setInterval(() => setAnalyzeMsg((i) => (i + 1) % ANALYZE_MESSAGES.length), 3000);
+    const progTimer = setInterval(() => setAnalyzeProgress((p) => (p < 95 ? p + Math.max(1, (95 - p) * 0.06) : p)), 500);
+
+    const goToConsult = () => {
+      if (navDoneRef.current) return;
+      navDoneRef.current = true;
+      router.push(`/consults/${consultId}` as never);
+    };
+
+    let active = true;
+    const poll = async () => {
+      const { data } = await supabase.from('consults').select('status').eq('id', consultId).maybeSingle();
+      if (!active || navDoneRef.current || !data) return;
+      const status = data.status;
+      if (status === 'transcription_error') return goToConsult();
+      if (status === 'transcribed' && !analysisTriggeredRef.current) {
+        analysisTriggeredRef.current = true;
+        void requestAnalysis(consultId).catch(() => {});
+      }
+      if (status === 'analyzed') goToConsult();
+    };
+    void poll();
+    const pollTimer = setInterval(() => void poll(), 4000);
+
+    return () => {
+      active = false;
+      clearInterval(msgTimer);
+      clearInterval(progTimer);
+      clearInterval(pollTimer);
+    };
+  }, [phase, savedConsultId, router]);
 
   if (!canRecord) {
     return (
@@ -232,7 +288,39 @@ export default function RecordScreen() {
     <View style={{ flex: 1, backgroundColor: c.pageBg }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          {phase === 'processing' ? (
+          {phase === 'analyzing' ? (
+            <View style={{ width: '100%', alignItems: 'center' }}>
+              <NeuralNet size={300} />
+              <Text style={{ fontSize: 20, fontWeight: '700', color: c.text, marginTop: 12 }}>
+                Analyzing your consultation
+              </Text>
+              <Text style={{ fontSize: 14, color: c.textSecondary, marginTop: 6, textAlign: 'center', minHeight: 20 }}>
+                {ANALYZE_MESSAGES[analyzeMsg]}
+              </Text>
+              <View style={{ width: 240, marginTop: 18 }}>
+                <View style={{ height: 4, borderRadius: 2, backgroundColor: c.border, overflow: 'hidden' }}>
+                  <View style={{ height: 4, borderRadius: 2, width: `${analyzeProgress}%`, backgroundColor: c.accent }} />
+                </View>
+                <Text style={{ fontSize: 12, color: c.accent, marginTop: 8, fontWeight: '600', textAlign: 'center' }}>
+                  {Math.round(analyzeProgress)}% analyzed
+                </Text>
+              </View>
+              <Text style={{ fontSize: 13, color: c.textMuted, marginTop: 18, textAlign: 'center', maxWidth: 320, lineHeight: 19 }}>
+                You can leave — we&apos;ll keep working in the background. Your transcript, insights, and
+                follow-up will be ready on the consult.
+              </Text>
+              <View style={{ marginTop: 20, width: '100%', maxWidth: 320, gap: 6 }}>
+                <AppButton
+                  label="View consult now"
+                  variant="outline"
+                  onPress={() => { if (savedConsultId) router.push(`/consults/${savedConsultId}` as never); }}
+                />
+                <Pressable onPress={() => router.push('/' as never)} style={{ alignItems: 'center', paddingVertical: 10 }}>
+                  <Text style={{ fontSize: 14, color: c.textSecondary }}>Go to dashboard</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : phase === 'processing' ? (
             <>
               <ActivityIndicator size="large" color={c.accent} />
               <Text style={{ fontSize: 18, fontWeight: '600', color: c.text, marginTop: 20 }}>

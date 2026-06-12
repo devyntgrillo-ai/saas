@@ -90,33 +90,6 @@ export default function DashboardScreen() {
               </AppCard>
             ) : null}
 
-            {callQueue.length > 0 ? (
-              <Pressable onPress={() => router.push('/more/power-dialer')}>
-                <View
-                  style={{
-                    flexDirection: 'row', alignItems: 'center', gap: 12,
-                    backgroundColor: c.accentPill, borderRadius: 14, padding: 14,
-                  }}>
-                  <View
-                    style={{
-                      width: 40, height: 40, borderRadius: 20, backgroundColor: c.surface,
-                      alignItems: 'center', justifyContent: 'center',
-                    }}>
-                    <PhoneCall size={20} color={c.accent} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: c.text }}>
-                      {callQueue.length} follow-up call{callQueue.length === 1 ? '' : 's'} due
-                    </Text>
-                    <Text style={{ fontSize: 13, color: c.textSecondary, marginTop: 1 }}>
-                      Tap to start the Power Dialer
-                    </Text>
-                  </View>
-                  <ChevronRight size={20} color={c.accent} />
-                </View>
-              </Pressable>
-            ) : null}
-
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
               <StatCard
                 label="Production Recovered"
@@ -148,6 +121,33 @@ export default function DashboardScreen() {
               />
             </View>
 
+            {callQueue.length > 0 ? (
+              <Pressable onPress={() => router.push('/more/power-dialer')}>
+                <View
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', gap: 12,
+                    backgroundColor: c.accentPill, borderRadius: 14, padding: 14,
+                  }}>
+                  <View
+                    style={{
+                      width: 40, height: 40, borderRadius: 20, backgroundColor: c.surface,
+                      alignItems: 'center', justifyContent: 'center',
+                    }}>
+                    <PhoneCall size={20} color={c.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: c.text }}>
+                      {callQueue.length} follow-up call{callQueue.length === 1 ? '' : 's'} due
+                    </Text>
+                    <Text style={{ fontSize: 13, color: c.textSecondary, marginTop: 1 }}>
+                      Tap to start the Power Dialer
+                    </Text>
+                  </View>
+                  <ChevronRight size={20} color={c.accent} />
+                </View>
+              </Pressable>
+            ) : null}
+
             <View>
               <SectionHeader>Today</SectionHeader>
               <AppCard>
@@ -160,7 +160,7 @@ export default function DashboardScreen() {
                 </View>
                 <View style={{ height: 1, backgroundColor: c.border, marginVertical: 10 }} />
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
-                  <Text style={{ color: c.textSecondary }}>Implant consults this week</Text>
+                  <Text style={{ color: c.textSecondary }}>Consults this week</Text>
                   <Text style={{ fontWeight: '700', color: c.text, fontSize: 17 }}>{metrics.implantApptsWeek}</Text>
                 </View>
               </AppCard>
