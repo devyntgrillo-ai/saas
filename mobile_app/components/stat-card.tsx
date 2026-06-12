@@ -13,12 +13,14 @@ export function StatCard({
   period,
   label,
   value,
+  sub,
   icon: Icon,
   tone = 'blue',
 }: {
-  period: string;
+  period?: string;
   label: string;
   value: string;
+  sub?: string;
   icon: LucideIcon;
   tone?: keyof typeof ICON_TONES;
 }) {
@@ -41,20 +43,25 @@ export function StatCard({
         shadowOffset: { width: 0, height: 2 },
         elevation: 1,
       }}>
-      <View
-        style={{
-          backgroundColor: c.statHeaderBg,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
-          borderBottomWidth: 1,
-          borderBottomColor: c.border,
-        }}>
-        <Text style={{ fontSize: 11, fontWeight: '500', color: c.textMuted }}>{period}</Text>
-      </View>
+      {period ? (
+        <View
+          style={{
+            backgroundColor: c.statHeaderBg,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderBottomWidth: 1,
+            borderBottomColor: c.border,
+          }}>
+          <Text style={{ fontSize: 11, fontWeight: '500', color: c.textMuted }}>{period}</Text>
+        </View>
+      ) : null}
       <View style={{ padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 13, color: c.textSecondary, marginBottom: 6 }}>{label}</Text>
           <Text style={{ fontSize: 26, fontWeight: '700', color: c.text }}>{value}</Text>
+          {sub ? (
+            <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 4 }}>{sub}</Text>
+          ) : null}
         </View>
         <View
           style={{

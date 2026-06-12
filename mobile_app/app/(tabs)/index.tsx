@@ -1,39 +1,19 @@
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
-import {
-  Award,
-  Calendar,
-  ClipboardList,
-  Inbox,
-  Mic,
-  RefreshCw,
-} from 'lucide-react-native';
+import { Award, Calendar, ClipboardList, Clock, DollarSign, RefreshCw } from 'lucide-react-native';
 import { useMemo } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useAppColors } from '@/lib/color-scheme-context';
 import { useDashboard } from '@/lib/queries/dashboard';
 import { useProcessingConsults } from '@/lib/queries/consults';
-import {
-  closeRateForRows,
-  computeRecordingRate,
-  countUnscheduledTxPlans,
-} from '@/lib/dashboard-metrics';
+import { computeAttributedProduction, countSentMessages, formatMoney } from '@/lib/dashboard-metrics';
 import { AppHeader } from '@/components/app-header';
 import { StatCard } from '@/components/stat-card';
 import { AppCard } from '@/components/ui/AppCard';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 
-const QUICK_ACTIONS = [
-  { label: 'Record', icon: Mic, route: '/record', color: '#EF4444' },
-  { label: 'Consults', icon: ClipboardList, route: '/consults', color: '#0EA5E9' },
-  { label: 'Inbox', icon: Inbox, route: '/inbox', color: '#6366F1' },
-  { label: 'Training', icon: Award, route: '/more/training', color: '#10B981' },
-] as const;
-
 export default function DashboardScreen() {
   const c = useAppColors();
-  const router = useRouter();
-  const { practiceId, profile } = useAuth();
+  const { practiceId, practice, profile } = useAuth();
   const { data, isLoading, error, refetch, isRefetching } = useDashboard(practiceId);
   const { data: processing = [] } = useProcessingConsults(practiceId);
 
@@ -42,29 +22,35 @@ export default function DashboardScreen() {
 
   const metrics = useMemo(() => {
     const consults = data?.consults ?? [];
+    const messages = data?.messages ?? [];
     const dashExtras = data?.dashExtras ?? {
       sentConsultIds: new Set<string>(),
       repliedConsultIds: new Set<string>(),
     };
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    const monthConsults = consults.filter((row) => {
-      const d = row.created_at ? new Date(row.created_at) : null;
-      return d && d >= monthStart;
+    // Mirrors the web dashboard KPI grid (src/pages/Dashboard.jsx).
+    const prod = computeAttributedProduction(consults, practice, {
+      sentSet: dashExtras.sentConsultIds,
+      repliedSet: dashExtras.repliedConsultIds,
     });
-    const sentCount = dashExtras.sentConsultIds.size;
-    const repliedCount = dashExtras.repliedConsultIds.size;
-    const replyRate = sentCount ? Math.round((repliedCount / sentCount) * 100) : 0;
+    const unscheduledPlans = consults.filter((row) => row.outcome === 'pending');
+    const unscheduledTxValue = unscheduledPlans.reduce(
+      (sum, row) => sum + (Number(row.tx_plan_value) || Number(row.case_value) || 0),
+      0,
+    );
+    const messagesSent = countSentMessages(messages);
+    const hoursSaved = Math.round((messagesSent * 5) / 60 * 10) / 10;
 
     return {
-      recordingRate: computeRecordingRate(consults),
-      unscheduledPlans: countUnscheduledTxPlans(consults),
-      replyRate,
-      closeRate: closeRateForRows(monthConsults),
+      productionRecovered: prod.confirmed,
+      roi: prod.roi,
+      unscheduledTxValue,
+      unscheduledTxPlans: unscheduledPlans.length,
+      hoursSaved,
+      messagesSent,
       unreadConvos: data?.unreadConvos ?? 0,
       implantApptsWeek: data?.implantApptsWeek ?? 0,
     };
-  }, [data]);
+  }, [data, practice]);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.pageBg }}>
@@ -101,10 +87,34 @@ export default function DashboardScreen() {
             ) : null}
 
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-              <StatCard period="Last 30 days" label="Recording rate" value={`${metrics.recordingRate}%`} icon={Mic} tone="blue" />
-              <StatCard period="Last 30 days" label="Unscheduled plans" value={String(metrics.unscheduledPlans)} icon={ClipboardList} tone="orange" />
-              <StatCard period="Last 30 days" label="Reply rate" value={`${metrics.replyRate}%`} icon={Inbox} tone="violet" />
-              <StatCard period="This month" label="Close rate" value={`${metrics.closeRate}%`} icon={Award} tone="green" />
+              <StatCard
+                label="Production Recovered"
+                value={formatMoney(metrics.productionRecovered)}
+                sub="CaseLift-assisted"
+                icon={DollarSign}
+                tone="green"
+              />
+              <StatCard
+                label="Pipeline Value"
+                value={formatMoney(metrics.unscheduledTxValue)}
+                sub={`${metrics.unscheduledTxPlans} unscheduled tx plans`}
+                icon={ClipboardList}
+                tone="blue"
+              />
+              <StatCard
+                label="Hours Saved"
+                value={`${metrics.hoursSaved}h`}
+                sub={`${metrics.messagesSent} auto follow-ups`}
+                icon={Clock}
+                tone="violet"
+              />
+              <StatCard
+                label="ROI This Month"
+                value={metrics.roi ? `${metrics.roi}x ROI` : '-'}
+                sub="Production ÷ Subscription"
+                icon={Award}
+                tone="green"
+              />
             </View>
 
             <View>
@@ -123,35 +133,6 @@ export default function DashboardScreen() {
                   <Text style={{ fontWeight: '700', color: c.text, fontSize: 17 }}>{metrics.implantApptsWeek}</Text>
                 </View>
               </AppCard>
-            </View>
-
-            <View>
-              <SectionHeader>Quick Actions</SectionHeader>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
-                {QUICK_ACTIONS.map((action) => (
-                  <Pressable
-                    key={action.label}
-                    onPress={() => router.push(action.route as never)}
-                    style={{ flex: 1, alignItems: 'center', gap: 8 }}>
-                    <View
-                      style={{
-                        width: 52,
-                        height: 52,
-                        borderRadius: 26,
-                        borderWidth: 1,
-                        borderColor: c.border,
-                        backgroundColor: c.surface,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}>
-                      <action.icon size={22} color={action.color} />
-                    </View>
-                    <Text style={{ fontSize: 11, fontWeight: '500', color: c.textSecondary, textAlign: 'center' }}>
-                      {action.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
             </View>
           </>
         )}
