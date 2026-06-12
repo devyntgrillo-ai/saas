@@ -6,6 +6,7 @@ import {
   ChevronRight,
   GitBranch,
   MessageCircle,
+  PhoneCall,
   Settings,
 } from 'lucide-react-native';
 import { useAuth } from '@/lib/auth-context';
@@ -108,6 +109,12 @@ export default function MoreIndexScreen() {
         />
 
         <SectionHeader>Practice</SectionHeader>
+        <MenuRow
+          icon={PhoneCall}
+          label="Power Dialer"
+          subtitle="Work through today's follow-up calls"
+          onPress={() => router.push('/more/power-dialer')}
+        />
         <MenuRow
           icon={GitBranch}
           label="Sequences"

@@ -14,6 +14,7 @@ export default function MoreLayout() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+      <Stack.Screen name="power-dialer" options={{ title: 'Power Dialer' }} />
       <Stack.Screen name="training" options={{ headerShown: false }} />
       <Stack.Screen name="coaching" options={{ title: 'Coaching' }} />
       <Stack.Screen name="sequences" options={{ title: 'Sequences' }} />

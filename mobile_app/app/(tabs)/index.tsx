@@ -1,10 +1,12 @@
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { Award, Calendar, ClipboardList, Clock, DollarSign, RefreshCw } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { Award, Calendar, ChevronRight, ClipboardList, Clock, DollarSign, PhoneCall, RefreshCw } from 'lucide-react-native';
 import { useMemo } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useAppColors } from '@/lib/color-scheme-context';
 import { useDashboard } from '@/lib/queries/dashboard';
 import { useProcessingConsults } from '@/lib/queries/consults';
+import { usePowerDialerQueue } from '@/lib/queries/power-dialer';
 import { computeAttributedProduction, countSentMessages, formatMoney } from '@/lib/dashboard-metrics';
 import { AppHeader } from '@/components/app-header';
 import { StatCard } from '@/components/stat-card';
@@ -13,9 +15,11 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 
 export default function DashboardScreen() {
   const c = useAppColors();
+  const router = useRouter();
   const { practiceId, practice, profile } = useAuth();
   const { data, isLoading, error, refetch, isRefetching } = useDashboard(practiceId);
   const { data: processing = [] } = useProcessingConsults(practiceId);
+  const { data: callQueue = [] } = usePowerDialerQueue(practiceId);
 
   const firstName = (profile?.display_name || profile?.full_name || '').trim().split(/\s+/)[0] || null;
   const greeting = firstName ? `Welcome back, ${firstName}` : 'Welcome back';
@@ -84,6 +88,33 @@ export default function DashboardScreen() {
                     : 'AI analysis and follow-up sequence drafting'}
                 </Text>
               </AppCard>
+            ) : null}
+
+            {callQueue.length > 0 ? (
+              <Pressable onPress={() => router.push('/more/power-dialer')}>
+                <View
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', gap: 12,
+                    backgroundColor: c.accentPill, borderRadius: 14, padding: 14,
+                  }}>
+                  <View
+                    style={{
+                      width: 40, height: 40, borderRadius: 20, backgroundColor: c.surface,
+                      alignItems: 'center', justifyContent: 'center',
+                    }}>
+                    <PhoneCall size={20} color={c.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: c.text }}>
+                      {callQueue.length} follow-up call{callQueue.length === 1 ? '' : 's'} due
+                    </Text>
+                    <Text style={{ fontSize: 13, color: c.textSecondary, marginTop: 1 }}>
+                      Tap to start the Power Dialer
+                    </Text>
+                  </View>
+                  <ChevronRight size={20} color={c.accent} />
+                </View>
+              </Pressable>
             ) : null}
 
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>

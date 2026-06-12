@@ -15,4 +15,7 @@ export const queryKeys = {
     progress: (userId: string) => ['training', 'progress', userId] as const,
   },
   supportChat: (chatId: string | null) => ['support-chat', chatId] as const,
+  powerDialer: {
+    queue: (practiceId: string | null) => ['practice', practiceId, 'power-dialer-queue'] as const,
+  },
 };
