@@ -70,6 +70,7 @@ export default function Launchpad() {
     if (a === 'invite') setInviting(true)
     else if (a === 'record') openRecorder()
     else if (a === 'kb') setKbOpen(true)
+    else if (a === 'baa') navigate('/baa', { state: { from: '/launchpad' } })
     else if (a?.startsWith('nav:')) navigate(a.slice(4))
   }
 

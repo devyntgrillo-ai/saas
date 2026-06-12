@@ -11,10 +11,21 @@ import { supabase } from './supabase'
 //   'invite'        → open the practice invite modal
 //   'record'        → open the recorder
 //   'kb'            → open the knowledge-base quick form
+//   'baa'           → open the BAA agreement to review + sign
 //   'nav:/path'     → navigate to a route
 //   null (auto)     → no action, auto-checked
 export const LAUNCHPAD_STEPS = [
-  { key: 'baa_signed', title: 'BAA signed', description: 'Your Business Associate Agreement is on file.', auto: true },
+  {
+    key: 'baa_signed',
+    title: 'BAA signed',
+    description: 'Your Business Associate Agreement is on file.',
+    time: '2 min',
+    action: 'baa',
+    cta: 'Review & Sign',
+    // Still auto-checks the moment baa_accepted_at is set (see computeAutoComplete);
+    // the action only renders while it's incomplete, like the other steps.
+    auto: true,
+  },
   {
     key: 'team_invited',
     title: 'Invite a team member',
