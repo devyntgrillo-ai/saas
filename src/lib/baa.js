@@ -15,7 +15,10 @@ export const BAA_VERSION = 'caselift-baa-2026-06'
 export async function recordBaaAcceptance(practiceId) {
   try {
     const { data, error } = await supabase.functions.invoke('accept-baa', {
-      body: { version: BAA_VERSION },
+      // Send the target practice so acceptance lands on the practice currently in
+      // context (incl. one a super-admin / agency is impersonating), not whatever
+      // practice the signer's own account happens to be linked to.
+      body: { version: BAA_VERSION, practice_id: practiceId },
     })
     if (error) throw error
     if (data?.accepted_at) return true

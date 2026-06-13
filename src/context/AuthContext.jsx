@@ -459,6 +459,9 @@ export function AuthProvider({ children }) {
     isSuspended,
     baaAccepted: Boolean(practice?.baa_accepted_at),
     onboardingCompleted: Boolean(practice?.onboarding_completed),
+    // When ALL onboarding tasks (the Launchpad checklist) are complete. Drives
+    // the training course drip — content unlocks relative to this moment.
+    launchpadCompletedAt: practice?.launchpad_completed_at ?? null,
 
     // agency
     agency,
@@ -542,7 +545,14 @@ export function AuthProvider({ children }) {
       session?.user
         ? Promise.all([
             loadProfile(session.user.id, { silent: true }),
-            isAgencyUser && viewingPracticeId ? loadActivePractice(viewingPracticeId) : null,
+            // Reload the impersonated/active practice whenever one is in context —
+            // any impersonator (super-admin or agency) or a multi-location user.
+            // Without this, signing the BAA (or any practice change) wouldn't
+            // reflect for a super-admin until a full reload, since `practice`
+            // resolves to activePractice, not the super-admin's own profile join.
+            (canImpersonate || isMultiPractice) && viewingPracticeId
+              ? loadActivePractice(viewingPracticeId)
+              : null,
             isSuperAdmin && viewingAgencyId ? loadActiveAgency(viewingAgencyId) : null,
           ])
         : Promise.resolve(null),
