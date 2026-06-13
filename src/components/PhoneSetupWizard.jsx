@@ -26,6 +26,7 @@ const DEFAULT_SAMPLES = [
  */
 export default function PhoneSetupWizard({ practiceId, practiceName, onClose, onComplete, embedded = false }) {
   const [step, setStep] = useState(1)
+  const [bootstrapping, setBootstrapping] = useState(true)
   const [brandApproved, setBrandApproved] = useState(false)
   const [resubmitMode, setResubmitMode] = useState(false)
   const [failureReason, setFailureReason] = useState('')
@@ -59,10 +60,11 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
   })
 
   useEffect(() => {
+    setBootstrapping(true)
     supabase
       .from('practices')
       .select(
-        'name, address, doctor_first, doctor_last, email, phone, twilio_phone_number, a2p_brand_status, a2p_campaign_status, a2p_failure_reason, a2p_config',
+        'name, address, doctor_first, doctor_last, email, phone, twilio_phone_number, twilio_campaign_sid, a2p_brand_status, a2p_campaign_status, a2p_failure_reason, a2p_config',
       )
       .eq('id', practiceId)
       .maybeSingle()
@@ -75,20 +77,24 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
         const brandOk = data.a2p_brand_status === 'approved'
         const campaignOk = data.a2p_campaign_status === 'approved'
         const failed = data.a2p_brand_status === 'failed' || data.a2p_campaign_status === 'failed'
+        // Step 4 only when a submission is actively awaiting carrier review — not when
+        // registration failed or the user still needs to fill out / resubmit the form.
+        const awaitingReview =
+          data.a2p_brand_status === 'pending' ||
+          data.a2p_campaign_status === 'pending' ||
+          (brandOk &&
+            Boolean(data.twilio_campaign_sid) &&
+            !campaignOk &&
+            !failed)
         setBrandApproved(brandOk)
         setResubmitMode(failed)
         setFailureReason(data.a2p_failure_reason || '')
         if (data.twilio_phone_number && brandOk && campaignOk) {
           setStep(5)
-        } else if (
-          data.twilio_phone_number &&
-          (data.a2p_brand_status === 'pending' ||
-            data.a2p_campaign_status === 'pending' ||
-            (data.a2p_brand_status === 'approved' && data.a2p_campaign_status !== 'approved'))
-        ) {
+        } else if (data.twilio_phone_number && awaitingReview) {
           setStep(4)
         } else if (data.twilio_phone_number) {
-          // number_only, campaign_needed, failed, or partial, business info + register/resubmit
+          // number_only, campaign_needed, failed — show editable business/campaign form
           setStep(3)
         }
         const stateMatch = addr.match(/\b([A-Z]{2})\s+\d{5}\b/)
@@ -112,6 +118,7 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
           message_samples: cfg.message_samples?.length ? cfg.message_samples : b.message_samples,
         }))
       })
+      .finally(() => setBootstrapping(false))
   }, [practiceId])
 
   useEffect(() => {
@@ -127,6 +134,9 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
           onComplete?.()
           setStep(5)
         } else if (res.brandStatus === 'failed' || res.campaignStatus === 'failed') {
+          setResubmitMode(true)
+          setFailureReason(res.failureReason || '')
+          setStep(3)
           setError(res.failureReason || 'Registration was rejected. Update your business info and resubmit.')
         }
       } catch {
@@ -219,7 +229,12 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
           </div>
         )}
 
-        {step === 1 && (
+        {bootstrapping ? (
+          <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+            <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
+            <p className="mt-3 text-sm">Loading registration details…</p>
+          </div>
+        ) : step === 1 ? (
           <div>
             <h3 className="text-base font-semibold text-white">Search for a local number</h3>
             <p className="mt-1 text-sm text-slate-400">Pick a US area code near your practice. SMS-capable numbers only.</p>
@@ -264,9 +279,7 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
               </div>
             )}
           </div>
-        )}
-
-        {step === 2 && selected && (
+        ) : step === 2 && selected ? (
           <div>
             <h3 className="text-base font-semibold text-white">Confirm your number</h3>
             <div className="mt-4 rounded-xl border border-surface-700 bg-surface-800/50 p-5 text-center">
@@ -285,9 +298,7 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
               </button>
             </div>
           </div>
-        )}
-
-        {step === 3 && (
+        ) : step === 3 ? (
           <div>
             <h3 className="text-base font-semibold text-white">
               {resubmitMode
@@ -471,9 +482,7 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
               </button>
             </div>
           </div>
-        )}
-
-        {step === 4 && (
+        ) : step === 4 ? (
           <div className="text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary-300">
               <Clock className="h-7 w-7" />
@@ -514,9 +523,7 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
               Close, we will email you when approved
             </button>
           </div>
-        )}
-
-        {step === 5 && (
+        ) : step === 5 ? (
           <div className="text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-400">
               <CheckCircle2 className="h-7 w-7" />
@@ -534,7 +541,7 @@ export default function PhoneSetupWizard({ practiceId, practiceName, onClose, on
               Done
             </button>
           </div>
-        )}
+        ) : null}
       </div>
     </>
   )

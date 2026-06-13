@@ -242,10 +242,30 @@ export async function fetchUnlinkedRegistrations() {
   const { data } = await supabase
     .from('sikka_registrations')
     .select('*')
-    .eq('status', 'unlinked')
+    .in('status', ['unlinked', 'pending'])
     .order('created_at', { ascending: false })
     .limit(50)
   return data || []
+}
+
+/** Look up a Sikka office the webhook stored after SPU sync (Settings → PMS). */
+export async function lookupSikkaRegistration(practiceId, sikkaPracticeId) {
+  const { data, error } = await supabase.functions.invoke('link-sikka-practice', {
+    body: { action: 'lookup', practice_id: practiceId, sikka_practice_id: sikkaPracticeId },
+  })
+  if (error) throw new Error(await edgeErrorMessage(error))
+  if (data?.error) throw new Error(data.error)
+  return data.registration
+}
+
+/** Claim a webhook registration and link it to the signed-in practice. */
+export async function linkSikkaRegistration(practiceId, sikkaPracticeId) {
+  const { data, error } = await supabase.functions.invoke('link-sikka-practice', {
+    body: { action: 'link', practice_id: practiceId, sikka_practice_id: sikkaPracticeId },
+  })
+  if (error) throw new Error(await edgeErrorMessage(error))
+  if (data?.error) throw new Error(data.error)
+  return data
 }
 
 export async function linkRegistration(registrationId, practiceId, sikkaPracticeId) {
@@ -259,7 +279,7 @@ export async function disconnectPms(practiceId) {
     .update({
       pms_connected: false,
       pms_status: null,
-      // Revoke the stored Sikka OAuth tokens so a future connect re-authorizes.
+      sikka_practice_id: null,
       sikka_connected: false,
       sikka_request_key: null,
       sikka_refresh_token: null,

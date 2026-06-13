@@ -10,6 +10,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getAppCreds } from "../_shared/sikka.ts";
 import {
   clampYears,
+  enrichAppointmentBatch,
   isSyncApproved,
   jitUpsertPatientsFromAppointments,
   mapAppointmentRow,
@@ -79,8 +80,9 @@ async function syncOnePractice(admin: any, practice: PmsSyncPracticeRow) {
   }
 
   if (rows.length) {
+    const { patientMap } = await enrichAppointmentBatch(requestKey, practice.sikka_practice_id, rows, matchedRaw);
     await upsertAppointments(admin, rows);
-    await jitUpsertPatientsFromAppointments(admin, practice.id, practice.sikka_practice_id, matchedRaw);
+    await jitUpsertPatientsFromAppointments(admin, practice.id, practice.sikka_practice_id, matchedRaw, patientMap);
   }
 
   await admin.from("practices").update({ pms_last_synced_at: new Date().toISOString(), sikka_connected: true }).eq("id", practice.id);

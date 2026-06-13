@@ -80,8 +80,20 @@ async function main() {
   await rest(`pms_appointments?practice_id=eq.${practiceId}`, 'DELETE')
   await rest(`pms_patients?practice_id=eq.${practiceId}`, 'DELETE')
   await rest(`pms_providers?practice_id=eq.${practiceId}`, 'DELETE')
+  await rest(`pms_transactions?practice_id=eq.${practiceId}`, 'DELETE')
+  await rest(`pms_sync_log?practice_id=eq.${practiceId}`, 'DELETE')
 
   await rest(`practices?id=eq.${practiceId}`, 'PATCH', {
+    sikka_practice_id: null,
+    sikka_connected: false,
+    sikka_request_key: null,
+    sikka_refresh_token: null,
+    sikka_token_expires_at: null,
+    sikka_oauth_nonce: null,
+    pms_connected: false,
+    pms_type: null,
+    pms_status: null,
+    pms_last_sync: null,
     pms_sync_approved_at: null,
     pms_sync_rules: null,
     pms_sync_status: 'draft',

@@ -28,8 +28,11 @@ import {
   mapAppointmentRow,
   matchesSyncRules,
   upsertAppointments,
+  enrichAppointmentBatch,
+  PRACTICE_SYNC_COLS,
   type PmsSyncRules,
 } from "../_shared/pms-sync.ts";
+import { ensureFreshToken } from "../_shared/sikka.ts";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -64,18 +67,27 @@ function recordsFrom(payload: any): any[] {
 async function resolvePractice(admin: any, officeId: string | null) {
   if (!officeId) return null;
   const { data } = await admin.from("practices").select(
-    "id, sikka_practice_id, pms_sync_approved_at, pms_sync_rules, pms_sync_status",
+    "id, sikka_practice_id, sikka_request_key, sikka_refresh_token, sikka_token_expires_at, pms_sync_approved_at, pms_sync_rules, pms_sync_status",
   ).eq("sikka_practice_id", officeId).maybeSingle();
   return data ?? null;
 }
 
 // deno-lint-ignore no-explicit-any
 function appointmentTime(rec: any): string | null {
-  if (rec.appointment_datetime) return rec.appointment_datetime;
-  const date = pick(rec, "appointment_date", "date");
+  if (rec.appointment_datetime) {
+    const dt = String(rec.appointment_datetime).trim();
+    if (/^\d{4}-\d{2}-\d{2}T/.test(dt)) return dt.slice(0, 19);
+  }
+  const dateRaw = pick(rec, "appointment_date", "date");
+  const dateOnly = String(dateRaw ?? "").trim().match(/^(\d{4}-\d{2}-\d{2})/)?.[1] ?? null;
   const time = pick(rec, "appointment_time", "start_time", "time");
-  if (date && typeof time === "string" && /^\d{1,2}:\d{2}/.test(time)) return `${date}T${time.length === 5 ? time : time.slice(0, 5)}:00`;
-  if (date) return `${date}T00:00:00`;
+  if (dateOnly && typeof time === "string" && /^\d{1,2}:\d{2}/.test(time.trim())) {
+    const t = time.trim();
+    const hhmm = t.length === 5 ? t : t.slice(0, 5);
+    return `${dateOnly}T${hhmm}:00`;
+  }
+  if (dateOnly) return `${dateOnly}T00:00:00`;
+  if (dateRaw && /T/.test(String(dateRaw))) return String(dateRaw).trim().slice(0, 19);
   return typeof time === "string" ? time : null;
 }
 
@@ -102,6 +114,17 @@ async function upsertAppointmentsFiltered(
     matched.push(r);
   }
   if (!rows.length) return 0;
+  if (practice.sikka_practice_id) {
+    try {
+      const requestKey = await ensureFreshToken(admin, practice);
+      const { patientMap } = await enrichAppointmentBatch(requestKey, practice.sikka_practice_id, rows, matched);
+      await upsertAppointments(admin, rows);
+      await jitUpsertPatientsFromAppointments(admin, practice.id, practice.sikka_practice_id, matched, patientMap);
+      return rows.length;
+    } catch (e) {
+      console.warn("webhook appointment enrich failed, storing basic rows:", (e as Error)?.message);
+    }
+  }
   await upsertAppointments(admin, rows);
   if (practice.sikka_practice_id) {
     await jitUpsertPatientsFromAppointments(admin, practice.id, practice.sikka_practice_id, matched);
@@ -111,18 +134,34 @@ async function upsertAppointmentsFiltered(
 
 // deno-lint-ignore no-explicit-any
 async function upsertPatients(admin: any, practiceId: string, officeId: string, recs: any[]) {
-  const rows = recs.map((r) => ({
-    practice_id: practiceId,
-    office_id: officeId,
-    external_id: str(pick(r, "patient_id", "patient_sr_no", "external_id", "id")),
-    first_name: str(pick(r, "firstname", "first_name")),
-    last_name: str(pick(r, "lastname", "last_name")),
-    phone: str(pick(r, "cell", "mobile_phone", "phone", "home_phone")),
-    email: str(pick(r, "email")),
-    date_of_birth: str(pick(r, "date_of_birth", "dob", "birthdate")),
-    raw: r,
-    updated_at: new Date().toISOString(),
-  })).filter((row) => row.external_id);
+  const rows = recs.map((r) => {
+    const fromParts = {
+      first: str(pick(r, "firstname", "first_name")),
+      last: str(pick(r, "lastname", "last_name")),
+    };
+    const split = !fromParts.first && !fromParts.last
+      ? (() => {
+          const s = String(pick(r, "patient_name", "name") ?? "").trim();
+          if (!s) return { first: null, last: null };
+          const parts = s.split(/\s+/);
+          return parts.length === 1
+            ? { first: parts[0], last: null }
+            : { first: parts[0], last: parts.slice(1).join(" ") };
+        })()
+      : fromParts;
+    return {
+      practice_id: practiceId,
+      office_id: officeId,
+      external_id: str(pick(r, "patient_id", "patient_sr_no", "external_id", "id")),
+      first_name: split.first,
+      last_name: split.last,
+      phone: str(pick(r, "cell", "mobile_phone", "phone", "home_phone")),
+      email: str(pick(r, "email")),
+      date_of_birth: str(pick(r, "birthdate", "date_of_birth", "dob")),
+      raw: r,
+      updated_at: new Date().toISOString(),
+    };
+  }).filter((row) => row.external_id);
   if (!rows.length) return 0;
   const { error } = await admin.from("pms_patients").upsert(rows, { onConflict: "practice_id,external_id" });
   if (error) throw error;
@@ -267,7 +306,8 @@ async function updatePracticeInfo(admin: any, practiceId: string, recs: any[]) {
   return 1;
 }
 
-// Legacy: practice registration auto-link (no recognized data event).
+// Registration / connect payload from Sikka (SPU sync complete). Store only —
+// the practice claims their office_id on Settings → PMS (link-sikka-practice).
 // deno-lint-ignore no-explicit-any
 async function legacyRegister(admin: any, payload: any) {
   const sikkaPracticeId = str(pick(payload, "sikka_practice_id", "practice_id", "office_id", "id"));
@@ -275,24 +315,38 @@ async function legacyRegister(admin: any, payload: any) {
   const npi = str(payload.npi) ?? "";
   if (!sikkaPracticeId) return json({ error: "Missing sikka_practice_id" }, 400);
 
+  // Already claimed by a CaseLift practice — refresh connected flag only.
   const { data: existing } = await admin.from("practices").select("id").eq("sikka_practice_id", sikkaPracticeId).maybeSingle();
   if (existing) {
     await admin.from("practices").update({ sikka_connected: true }).eq("id", existing.id);
-    return json({ ok: true, linked: true, practice_id: existing.id, already_linked: true });
+    return json({ ok: true, stored: true, sikka_practice_id: sikkaPracticeId, already_linked: true, practice_id: existing.id });
   }
-  let match: { id: string } | null = null;
-  if (npi) { const { data } = await admin.from("practices").select("id").eq("npi", npi).maybeSingle(); match = data ?? null; }
-  if (!match && practiceName) {
-    const { data } = await admin.from("practices").select("id, name").ilike("name", `%${practiceName}%`).limit(2);
-    if (data && data.length === 1) match = { id: data[0].id };
+
+  const row = {
+    sikka_practice_id: sikkaPracticeId,
+    practice_name: practiceName || null,
+    npi: npi || null,
+    raw: payload,
+    status: "pending",
+    matched_practice_id: null,
+  };
+
+  const { data: openReg } = await admin
+    .from("sikka_registrations")
+    .select("id")
+    .eq("sikka_practice_id", sikkaPracticeId)
+    .in("status", ["pending", "unlinked"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (openReg?.id) {
+    await admin.from("sikka_registrations").update(row).eq("id", openReg.id);
+    return json({ ok: true, stored: true, sikka_practice_id: sikkaPracticeId, updated: true });
   }
-  if (match) {
-    await admin.from("practices").update({ sikka_practice_id: sikkaPracticeId, sikka_connected: true }).eq("id", match.id);
-    await admin.from("sikka_registrations").insert({ sikka_practice_id: sikkaPracticeId, practice_name: practiceName, npi: npi || null, raw: payload, matched_practice_id: match.id, status: "linked" });
-    return json({ ok: true, linked: true, practice_id: match.id });
-  }
-  await admin.from("sikka_registrations").insert({ sikka_practice_id: sikkaPracticeId, practice_name: practiceName, npi: npi || null, raw: payload, status: "unlinked" });
-  return json({ ok: true, linked: false, reason: "no confident match - logged for admin review" });
+
+  await admin.from("sikka_registrations").insert(row);
+  return json({ ok: true, stored: true, sikka_practice_id: sikkaPracticeId });
 }
 
 const KNOWN = new Set(["data_refresh", "appointment", "patient", "treatment_plan", "transaction", "provider", "practice"]);

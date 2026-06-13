@@ -27,6 +27,7 @@ export const SIKKA_AUTHORIZE_URL = Deno.env.get("SIKKA_AUTHORIZE_URL") || "https
 // Resource paths (relative to SIKKA_BASE) - overridable.
 export const SIKKA_APPOINTMENTS_PATH = Deno.env.get("SIKKA_APPOINTMENTS_PATH") || "/appointments";
 export const SIKKA_AUTHORIZED_PRACTICES_PATH = Deno.env.get("SIKKA_AUTHORIZED_PRACTICES_PATH") || "/authorized_practices";
+export const SIKKA_PRACTICE_LOCATION_PATH = Deno.env.get("SIKKA_PRACTICE_LOCATION_PATH") || "/practice_location";
 // Full OAuth token endpoint URL. Defaults to {base}/token but is independently
 // overridable since the token endpoint may live off the versioned API base.
 export const SIKKA_TOKEN_URL = Deno.env.get("SIKKA_TOKEN_URL") || `${SIKKA_BASE}${Deno.env.get("SIKKA_TOKEN_PATH") || "/token"}`;
@@ -46,6 +47,87 @@ export function getAppCreds(): { id: string; secret: string } {
   const secret = Deno.env.get("SIKKA_APP_SECRET");
   if (!id || !secret) throw new Error("sikka_app_not_configured");
   return { id, secret };
+}
+
+function appAuthHeaders(): Record<string, string> {
+  const { id, secret } = getAppCreds();
+  return { Accept: "application/json", "App-Id": id, "App-Key": secret };
+}
+
+// GET with partner app credentials (authorized_practices, practice_location, …).
+// deno-lint-ignore no-explicit-any
+export async function sikkaAppGet(path: string, params: Record<string, string> = {}): Promise<any> {
+  const q = new URLSearchParams(params);
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  const res = await fetch(`${SIKKA_BASE}${path}${suffix}`, { headers: appAuthHeaders() });
+  const text = await res.text();
+  if (res.status === 204 || !text.trim()) return null;
+  if (!res.ok) throw new Error(`sikka_app_${res.status}: ${text.slice(0, 300)}`);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`sikka_app_parse: ${text.slice(0, 200)}`);
+  }
+}
+
+// POST with partner app credentials.
+// deno-lint-ignore no-explicit-any
+async function sikkaAppPost(path: string, body: Record<string, unknown>): Promise<any> {
+  const res = await fetch(`${SIKKA_BASE}${path}`, {
+    method: "POST",
+    headers: { ...appAuthHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`sikka_app_${res.status}: ${text.slice(0, 300)}`);
+  if (!text.trim()) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`sikka_app_parse: ${text.slice(0, 200)}`);
+  }
+}
+
+/** Partner enables API access for a registered office (billing-controlled). */
+export async function enablePracticeLocation(officeId: string, practiceId = "1"): Promise<void> {
+  await sikkaAppPost(SIKKA_PRACTICE_LOCATION_PATH, {
+    office_id: officeId,
+    practice_id: String(practiceId),
+    access: "ON",
+  });
+}
+
+/** Read secret_key for an office after location access is ON. */
+export async function authorizedPracticeSecret(officeId: string): Promise<string> {
+  const data = await sikkaAppGet(`${SIKKA_AUTHORIZED_PRACTICES_PATH}/${officeId}`);
+  const items = unwrapList(data, "items");
+  const secret = items[0]?.secret_key;
+  if (!secret) throw new Error(`sikka_office_not_authorized:${officeId}`);
+  return String(secret);
+}
+
+/** Enable location (if needed), then exchange for request_key + refresh_key. */
+export async function issuePracticeTokens(officeId: string, practiceId = "1"): Promise<SikkaTokens> {
+  await enablePracticeLocation(officeId, practiceId);
+  const secretKey = await authorizedPracticeSecret(officeId);
+  const { id, secret } = getAppCreds();
+  const path = Deno.env.get("SIKKA_REQUEST_KEY_PATH") || "/request_key";
+  const res = await fetch(`${SIKKA_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      grant_type: "request_key",
+      office_id: officeId,
+      secret_key: secretKey,
+      app_id: id,
+      app_key: secret,
+    }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`sikka_request_key_${res.status}: ${text.slice(0, 300)}`);
+  let data: unknown;
+  try { data = JSON.parse(text); } catch { throw new Error(`sikka_request_key_parse: ${text.slice(0, 200)}`); }
+  return toTokens(data);
 }
 
 // The OAuth redirect_uri must be identical in the authorize request, the token
@@ -257,6 +339,7 @@ export function pickTxValue(o: any): number | null {
   if (!o) return null;
   const raw = o.treatment_plan_amount ?? o.treatment_value ?? o.tx_plan_value ??
     o.estimated_value ?? o.estimate ?? o.total ?? o.production ??
+    o.procedure_code1_amount ?? o.procedure_code2_amount ?? o.procedure_code3_amount ??
     o.amount ?? o.case_value ?? o.treatment_amount ?? o.fee;
   const v = Number(typeof raw === "string" ? raw.replace(/[^0-9.]/g, "") : raw);
   return Number.isFinite(v) && v > 0 ? v : null;

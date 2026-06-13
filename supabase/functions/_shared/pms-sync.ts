@@ -179,6 +179,132 @@ const pick = (o: any, ...keys: string[]) => {
   return null;
 };
 
+/** Sikka OpenDental often sends a single `patient_name` string, not first/last. */
+function splitPatientName(name: unknown): { first: string | null; last: string | null } {
+  const s = String(name ?? "").trim();
+  if (!s) return { first: null, last: null };
+  const parts = s.split(/\s+/);
+  if (parts.length === 1) return { first: parts[0], last: null };
+  return { first: parts[0], last: parts.slice(1).join(" ") };
+}
+
+function patientNamesFromAppt(a: Record<string, unknown>, p: Record<string, unknown>) {
+  const fromParts = {
+    first: pick(p, "first_name", "firstname") ?? pick(a, "patient_first_name", "firstname", "first_name"),
+    last: pick(p, "last_name", "lastname") ?? pick(a, "patient_last_name", "lastname", "last_name"),
+  };
+  if (fromParts.first || fromParts.last) {
+    return { first: fromParts.first ? String(fromParts.first) : null, last: fromParts.last ? String(fromParts.last) : null };
+  }
+  const split = splitPatientName(pick(a, "patient_name", "patient", "guarantor_name"));
+  return { first: split.first, last: split.last };
+}
+
+/** OpenDental appointments omit phone/email; provider is usually provider_id only. */
+function contactFromPatientRecord(p: Record<string, unknown>) {
+  return {
+    phone: pick(p, "cell", "mobile_phone", "phone", "home_phone"),
+    email: pick(p, "email"),
+  };
+}
+
+function providerLabelFromAppt(a: Record<string, unknown>, providerMap?: Map<string, string>): string | null {
+  const provId = String(pick(a, "provider_id", "provider_sr_no") ?? "").trim();
+  if (provId && providerMap?.has(provId)) return providerMap.get(provId) ?? null;
+  const nested = (a.provider as Record<string, unknown>) || {};
+  const name = pick(nested, "name") ?? pick(a, "provider_name", "provider");
+  if (name) return String(name);
+  return provId || null;
+}
+
+/** Load Sikka providers for office_id → display name. */
+export async function fetchSikkaProviderMap(requestKey: string, officeId: string): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const data = await sikkaGet("/providers", requestKey, { office_id: officeId, limit: "500" });
+  for (const p of unwrapList(data, "providers")) {
+    const id = String(pick(p, "provider_id", "provider_sr_no", "id") ?? "").trim();
+    if (!id) continue;
+    const name = [pick(p, "firstname", "first_name"), pick(p, "lastname", "last_name")]
+      .filter(Boolean).join(" ").trim() || String(pick(p, "name", "provider_name") ?? "").trim();
+    map.set(id, name || id);
+  }
+  return map;
+}
+
+/** Fetch patient contact/name fields for the given Sikka patient_ids (paginated list scan). */
+export async function fetchSikkaPatientMap(
+  requestKey: string,
+  officeId: string,
+  neededIds: Set<string>,
+): Promise<Map<string, Record<string, unknown>>> {
+  const map = new Map<string, Record<string, unknown>>();
+  if (!neededIds.size) return map;
+  let offset = 0;
+  const limit = 500;
+  while (map.size < neededIds.size) {
+    const data = await sikkaGet("/patients", requestKey, {
+      office_id: officeId,
+      offset: String(offset),
+      limit: String(limit),
+      fields: "patient_id,firstname,lastname,cell,email,phone,home_phone",
+    });
+    const items = unwrapList(data, "patients");
+    if (!items.length) break;
+    for (const p of items) {
+      const id = String(pick(p, "patient_id", "patient_sr_no", "id") ?? "").trim();
+      if (neededIds.has(id)) map.set(id, p as Record<string, unknown>);
+    }
+    if (items.length < limit) break;
+    offset += 1;
+  }
+  return map;
+}
+
+/** Enrich mapped appointment rows with Sikka patients + providers APIs. */
+// deno-lint-ignore no-explicit-any
+export function applySikkaEnrichment(
+  rows: Record<string, unknown>[],
+  rawAppts: any[],
+  providerMap: Map<string, string>,
+  patientMap: Map<string, Record<string, unknown>>,
+) {
+  for (let i = 0; i < rows.length; i++) {
+    const a = rawAppts[i] as Record<string, unknown>;
+    const row = rows[i];
+    const pid = String(pick(a, "patient_id", "patient_sr_no") ?? "").trim();
+    const patient = pid ? patientMap.get(pid) : undefined;
+    if (patient) {
+      const names = patientNamesFromAppt(a, patient);
+      if (names.first) row.patient_first = names.first;
+      if (names.last) row.patient_last = names.last;
+      const contact = contactFromPatientRecord(patient);
+      if (contact.phone) row.patient_phone = contact.phone;
+      if (contact.email) row.patient_email = contact.email;
+    }
+    row.provider = providerLabelFromAppt(a, providerMap);
+  }
+}
+
+export async function enrichAppointmentBatch(
+  requestKey: string,
+  officeId: string,
+  rows: Record<string, unknown>[],
+  // deno-lint-ignore no-explicit-any
+  rawAppts: any[],
+) {
+  const patientIds = new Set<string>();
+  for (const a of rawAppts) {
+    const id = String(pick(a, "patient_id", "patient_sr_no") ?? "").trim();
+    if (id) patientIds.add(id);
+  }
+  const [providerMap, patientMap] = await Promise.all([
+    fetchSikkaProviderMap(requestKey, officeId),
+    fetchSikkaPatientMap(requestKey, officeId, patientIds),
+  ]);
+  applySikkaEnrichment(rows, rawAppts, providerMap, patientMap);
+  return { providerMap, patientMap };
+}
+
 function normType(s: unknown): string {
   return String(s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 }
@@ -399,7 +525,7 @@ export function combineAppointmentDateTime(a: any): string | null {
   }
   const dateRaw = a.appointment_date ?? a.date;
   const dateOnly = normalizeDateOnly(dateRaw);
-  const time = a.appointment_time ?? a.start_time;
+  const time = pick(a, "appointment_time", "start_time", "time");
   if (dateOnly && typeof time === "string" && /^\d{1,2}:\d{2}/.test(time.trim())) {
     const t = time.trim();
     const hhmm = t.length === 5 ? t : t.slice(0, 5);
@@ -418,17 +544,18 @@ export function mapAppointmentRow(
   rules?: PmsSyncRules | null,
 ) {
   const p = a.patient || {};
+  const names = patientNamesFromAppt(a as Record<string, unknown>, p as Record<string, unknown>);
   const appointmentType = resolveAppointmentTypeLabel(a as Record<string, unknown>, matchRule, rules);
   return {
     practice_id: practiceId,
     pms_appointment_id: String(a.sikka_appointment_id ?? a.appointment_sr_no ?? a.id ?? a.appointment_id ?? ""),
-    patient_first: p.first_name ?? a.patient_first_name ?? a.firstname ?? null,
-    patient_last: p.last_name ?? a.patient_last_name ?? a.lastname ?? null,
-    patient_phone: p.mobile_phone ?? p.phone ?? a.patient_phone ?? a.cell ?? null,
-    patient_email: p.email ?? a.patient_email ?? a.email ?? null,
+    patient_first: names.first,
+    patient_last: names.last,
+    patient_phone: pick(p, "cell", "mobile_phone", "phone", "home_phone") ?? pick(a, "cell", "patient_phone", "phone"),
+    patient_email: pick(p, "email") ?? pick(a, "patient_email", "email"),
     appointment_time: combineAppointmentDateTime(a),
     appointment_type: appointmentType,
-    provider: a.provider?.name ?? a.provider_name ?? a.provider ?? null,
+    provider: providerLabelFromAppt(a as Record<string, unknown>),
     duration_minutes: toIntOrNull(pick(a, "duration_minutes", "length", "appointment_length")),
     is_implant_consult: true,
     treatment_type: normalizeTreatment(a.treatment_type ?? appointmentType),
@@ -467,22 +594,30 @@ export async function upsertAppointments(admin: any, rows: Record<string, unknow
 
 // JIT patient upsert from matched appointment payloads only.
 // deno-lint-ignore no-explicit-any
-export async function jitUpsertPatientsFromAppointments(admin: any, practiceId: string, officeId: string, rawAppts: any[]) {
+export async function jitUpsertPatientsFromAppointments(
+  admin: any,
+  practiceId: string,
+  officeId: string,
+  rawAppts: any[],
+  patientMap?: Map<string, Record<string, unknown>>,
+) {
   const seen = new Set<string>();
   const rows: Record<string, unknown>[] = [];
   for (const a of rawAppts) {
     const extId = String(pick(a, "patient_id", "patient_sr_no", "external_id") ?? "").trim();
     if (!extId || seen.has(extId)) continue;
     seen.add(extId);
-    const p = a.patient || {};
+    const p = (patientMap?.get(extId) as Record<string, unknown>) || a.patient || {};
+    const names = patientNamesFromAppt(a as Record<string, unknown>, p as Record<string, unknown>);
+    const contact = contactFromPatientRecord(p as Record<string, unknown>);
     rows.push({
       practice_id: practiceId,
       office_id: officeId,
       external_id: extId,
-      first_name: pick(p, "first_name", "firstname") ?? pick(a, "patient_first_name", "firstname"),
-      last_name: pick(p, "last_name", "lastname") ?? pick(a, "patient_last_name", "lastname"),
-      phone: pick(p, "cell", "mobile_phone", "phone") ?? pick(a, "cell", "patient_phone"),
-      email: pick(p, "email") ?? pick(a, "patient_email", "email"),
+      first_name: names.first,
+      last_name: names.last,
+      phone: contact.phone ?? pick(a, "cell", "patient_phone"),
+      email: contact.email ?? pick(a, "patient_email", "email"),
       raw: a,
       updated_at: new Date().toISOString(),
     });
@@ -520,12 +655,17 @@ export async function syncMatchedAppointments(
     matchedRaw.push(a);
   }
 
+  if (!rows.length) return { synced: 0, patients: 0, scanned: raw.length };
+
+  const { patientMap } = await enrichAppointmentBatch(requestKey, practice.sikka_practice_id, rows, matchedRaw);
+
   await upsertAppointments(admin, rows);
   const patients = await jitUpsertPatientsFromAppointments(
     admin,
     practice.id,
     practice.sikka_practice_id,
     matchedRaw,
+    patientMap,
   );
 
   await admin.from("practices").update({
@@ -536,6 +676,9 @@ export async function syncMatchedAppointments(
   return { synced: rows.length, patients, scanned: raw.length };
 }
 
+// Access levels that may manage practice settings (mirrors src/lib/permissions.js).
+const PRACTICE_ADMIN_LEVELS = new Set(["practice_owner", "agency_owner", "agency_admin"]);
+
 // Practice admin gate for calibration endpoints. Mirrors AuthContext: role=owner
 // counts as practice_owner when access_level is unset (legacy rows).
 // deno-lint-ignore no-explicit-any
@@ -544,23 +687,43 @@ export async function assertPracticeAdmin(
   userId: string,
   practiceId: string,
   userEmail?: string | null,
+  // deno-lint-ignore no-explicit-any
+  adminClient?: any,
 ) {
   const { data: prof } = await userClient
     .from("users")
     .select("practice_id, access_level, role")
     .eq("id", userId)
     .maybeSingle();
-  if (!prof?.practice_id && !isSuperAdminUser({ email: userEmail }, prof?.access_level)) {
+  const isSuperAdmin = isSuperAdminUser({ email: userEmail }, prof?.access_level);
+  if (!prof?.practice_id && !isSuperAdmin && !PRACTICE_ADMIN_LEVELS.has(prof?.access_level ?? "")) {
     return { ok: false as const, error: "No practice in context." };
   }
-  const isSuperAdmin = isSuperAdminUser({ email: userEmail }, prof?.access_level);
-  if (prof.practice_id !== practiceId && !isSuperAdmin) {
-    return { ok: false as const, error: "Practice mismatch." };
+
+  let practiceOk = prof?.practice_id === practiceId || isSuperAdmin;
+  if (!practiceOk && adminClient && PRACTICE_ADMIN_LEVELS.has(prof?.access_level ?? "")) {
+    const { data: pr } = await adminClient
+      .from("practices")
+      .select("agency_id")
+      .eq("id", practiceId)
+      .maybeSingle();
+    if (pr?.agency_id) {
+      const { data: mem } = await adminClient
+        .from("agency_members")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("agency_id", pr.agency_id)
+        .maybeSingle();
+      if (mem && ["owner", "admin"].includes(mem.role)) practiceOk = true;
+    }
   }
+  if (!practiceOk) return { ok: false as const, error: "Practice mismatch." };
+
   const isAdmin =
-    prof.access_level === "practice_owner" ||
-    prof.role === "owner" ||
+    PRACTICE_ADMIN_LEVELS.has(prof?.access_level ?? "") ||
+    prof?.role === "owner" ||
+    prof?.role === "admin" ||
     isSuperAdmin;
   if (!isAdmin) return { ok: false as const, error: "Only practice admins can manage PMS sync settings." };
-  return { ok: true as const, accessLevel: prof.access_level || "practice_owner" };
+  return { ok: true as const, accessLevel: prof?.access_level || "practice_owner" };
 }

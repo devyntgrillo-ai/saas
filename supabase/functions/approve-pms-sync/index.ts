@@ -64,7 +64,7 @@ Deno.serve(async (req: Request) => {
     if (!practiceId) return json({ error: "No practice in context." }, 400);
     practiceIdForReset = practiceId;
 
-    const gate = await assertPracticeAdmin(userClient, user.id, practiceId, user.email);
+    const gate = await assertPracticeAdmin(userClient, user.id, practiceId, user.email, admin);
     if (!gate.ok) return json({ error: gate.error }, gate.error.includes("admin") ? 403 : 400);
 
     const { data: practice, error: prErr } = await admin
